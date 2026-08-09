@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Obsidian
+.obsidian/
+
+# Exports (user-generated data)
+CS2-Coach/exports/
+CS2-Coach/Konzepte/
+CS2-Coach/Maps/
+CS2-Coach/_graph/
+CS2-Coach/*.md
+
+# Graphify output
+graphify-out/
+
+# Temp JSON exports
+*.json
+!config.yaml
+
+# Claude
+.claudian/

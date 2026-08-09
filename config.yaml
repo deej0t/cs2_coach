@@ -1,0 +1,15 @@
+# CS2-Coach Konfiguration
+# Passe den Pfad zu deinem Obsidian-Vault an:
+obsidian_vault_path: "C:/Users/Home/Desktop/cs2-coach"
+
+# Unterordner im Vault für Coach-Notizen
+coach_subfolder: "CS2-Coach"
+
+# Dein Steam-Name (wird für die Spielererkennung verwendet)
+player_name: "deej0t"
+
+# Deine SteamID64 (alternativ zur Namens-Erkennung)
+steam_id: ""
+
+# Sprache für Coach-Feedback: "de" oder "en"
+language: "de"
