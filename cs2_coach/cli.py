@@ -353,6 +353,23 @@ def setup(ctx):
     console.print(f"[bold]SteamID:[/bold] {cfg.get('steam_id', '(nicht gesetzt)')}")
 
 
+@cli.command()
+@click.option("--host", default="127.0.0.1", help="Host (default: 127.0.0.1)")
+@click.option("--port", "-p", default=5000, help="Port (default: 5000)")
+@click.option("--debug", is_flag=True, help="Debug-Modus")
+@click.pass_context
+def web(ctx, host, port, debug):
+    """Starte das Web-Interface."""
+    from .web.app import create_app
+    app = create_app()
+    console.print(Panel(
+        f"[bold cyan]CS2 Coach — Web-Interface[/bold cyan]\n"
+        f"URL: http://{host}:{port}",
+        border_style="cyan",
+    ))
+    app.run(host=host, port=port, debug=debug)
+
+
 class _nullcontext:
     def __enter__(self): return self
     def __exit__(self, *_): pass

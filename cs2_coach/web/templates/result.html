@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — {{ result.map_name }} {{ result.score_team1 }}:{{ result.score_team2 }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+    <a href="{{ url_for('index') }}" class="btn">Zurueck</a>
+    <h1 style="margin: 0;">
+        {{ result.map_name }} —
+        <span class="{% if result.result_str == 'Sieg' %}win{% elif result.result_str == 'Niederlage' %}loss{% else %}draw{% endif %}">
+            {{ result.result_str }}
+        </span>
+        ({{ result.score_team1 }}:{{ result.score_team2 }})
+    </h1>
+</div>
+
+<!-- Key Stats -->
+<div class="grid-3" style="margin-bottom: 1.5rem;">
+    <div class="stat-box">
+        <div class="value">{{ "%.2f"|format(stats.kd_ratio) }}</div>
+        <div class="label">K/D ({{ stats.kills }}/{{ stats.deaths }}/{{ stats.assists }})</div>
+    </div>
+    <div class="stat-box">
+        <div class="value">{{ "%.1f"|format(stats.adr) }}</div>
+        <div class="label">ADR</div>
+    </div>
+    <div class="stat-box">
+        <div class="value">{{ result.rating }}</div>
+        <div class="label">Rating</div>
+    </div>
+    <div class="stat-box">
+        <div class="value">{{ "%.0f"|format(stats.kast_pct) }}%</div>
+        <div class="label">KAST%</div>
+    </div>
+    <div class="stat-box">
+        <div class="value">{{ "%.0f"|format(stats.headshot_pct) }}%</div>
+        <div class="label">HS%</div>
+    </div>
+    <div class="stat-box">
+        <div class="value">{{ "%.0f"|format(stats.counter_strafe_score) }}%</div>
+        <div class="label">Counter-Strafe</div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+    <div class="tab active" onclick="switchTab('stats')">Statistiken</div>
+    <div class="tab" onclick="switchTab('report')">Coach-Report</div>
+    <div class="tab" onclick="switchTab('scoreboard')">Scoreboard</div>
+</div>
+
+<!-- Stats Tab -->
+<div id="tab-stats" class="tab-content active">
+    <div class="grid-2">
+        <div class="card">
+            <h3>Kampf</h3>
+            <table>
+                <tr><td>K/D/A</td><td>{{ stats.kills }}/{{ stats.deaths }}/{{ stats.assists }}</td></tr>
+                <tr><td>K/D Ratio</td><td>{{ "%.2f"|format(stats.kd_ratio) }}</td></tr>
+                <tr><td>ADR</td><td>{{ "%.1f"|format(stats.adr) }}</td></tr>
+                <tr><td>HS%</td><td>{{ "%.0f"|format(stats.headshot_pct) }}%</td></tr>
+                <tr><td>Accuracy</td><td>{{ "%.1f"|format(stats.accuracy) }}%</td></tr>
+                <tr><td>Opening Duels</td><td>{{ stats.opening_kills }}W / {{ stats.opening_deaths }}L</td></tr>
+                <tr><td>Trade Kills</td><td>{{ stats.trade_kills }}</td></tr>
+                <tr><td>Multi-Kills</td><td>{{ stats.multikill_str }}</td></tr>
+                <tr><td>KAST%</td><td>{{ "%.0f"|format(stats.kast_pct) }}%</td></tr>
+                <tr><td>Survival</td><td>{{ "%.0f"|format(stats.survival_rate) }}%</td></tr>
+            </table>
+        </div>
+        <div class="card">
+            <h3>Mechanik</h3>
+            <table>
+                <tr><td>Counter-Strafe</td><td>{{ "%.0f"|format(stats.counter_strafe_score) }}%</td></tr>
+                <tr><td>Spray-Control</td><td>{{ stats.burst_spray_ratio }}</td></tr>
+                <tr><td>Avg Recoil-Index</td><td>{{ "%.1f"|format(stats.avg_recoil_index) }}</td></tr>
+                <tr><td>Waffen-Split</td><td>{{ stats.awp_rifle_split }}</td></tr>
+                <tr><td>Kampfdistanz</td><td>avg {{ "%.0f"|format(stats.avg_fight_distance) }}u</td></tr>
+                <tr><td>Nah/Mittel/Weit</td><td>{{ stats.close_range_kills }}/{{ stats.mid_range_kills }}/{{ stats.long_range_kills }}</td></tr>
+            </table>
+        </div>
+        <div class="card">
+            <h3>Utility</h3>
+            <table>
+                {% set util_total = stats.flashes_thrown + stats.smokes_thrown + stats.he_thrown + stats.molotovs_thrown %}
+                <tr><td>Gesamt</td><td>{{ util_total }} ({{ "%.1f"|format(stats.utility_per_round) }}/Runde)</td></tr>
+                <tr><td>Flashes</td><td>{{ stats.flashes_thrown }}</td></tr>
+                <tr><td>Smokes</td><td>{{ stats.smokes_thrown }}</td></tr>
+                <tr><td>HE</td><td>{{ stats.he_thrown }}</td></tr>
+                <tr><td>Molotovs</td><td>{{ stats.molotovs_thrown }}</td></tr>
+                <tr><td>Flash-Effektivitaet</td><td>{{ stats.flash_effectiveness }}</td></tr>
+            </table>
+        </div>
+        <div class="card">
+            <h3>Situationen</h3>
+            <table>
+                {% if stats.clutch_attempts > 0 %}
+                <tr><td>Clutches</td><td>{{ stats.clutch_rate }}</td></tr>
+                {% endif %}
+                <tr><td>CT/T-Split</td><td>{{ stats.ct_t_split }}</td></tr>
+                <tr><td>Death-Timing</td><td>{{ stats.death_timing_str }}</td></tr>
+                {% if stats.kills_thru_smoke > 0 %}
+                <tr><td>Kills through Smoke</td><td>{{ stats.kills_thru_smoke }}</td></tr>
+                {% endif %}
+                {% if stats.kills_penetrated > 0 %}
+                <tr><td>Wallbangs</td><td>{{ stats.kills_penetrated }}</td></tr>
+                {% endif %}
+                {% if stats.kills_noscope > 0 %}
+                <tr><td>Noscopes</td><td>{{ stats.kills_noscope }}</td></tr>
+                {% endif %}
+                {% if stats.rank_old > 0 %}
+                {% set change = stats.rank_change %}
+                <tr><td>Rank</td><td>{{ stats.rank_old }} -> {{ stats.rank_new }} ({{ "+%.0f"|format(change) if change >= 0 else "%.0f"|format(change) }})</td></tr>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Coach Report Tab -->
+<div id="tab-report" class="tab-content">
+    <div class="card coach-report">{{ report }}</div>
+</div>
+
+<!-- Scoreboard Tab -->
+<div id="tab-scoreboard" class="tab-content">
+    <div class="card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Spieler</th>
+                    <th>K</th>
+                    <th>D</th>
+                    <th>A</th>
+                    <th>ADR</th>
+                    <th>K/D</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in result.all_players|sort(attribute='kills', reverse=True) %}
+                <tr{% if p.steam_id == stats.steam_id %} style="background: var(--bg3); font-weight: 600;"{% endif %}>
+                    <td>{{ p.name }}{% if p.steam_id == stats.steam_id %} (Du){% endif %}</td>
+                    <td>{{ p.kills }}</td>
+                    <td>{{ p.deaths }}</td>
+                    <td>{{ p.assists }}</td>
+                    <td>{{ "%.0f"|format(p.adr) }}</td>
+                    <td>{{ "%.2f"|format(p.kd_ratio) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if obsidian_path %}
+<p style="margin-top: 1rem; color: var(--text2); font-size: 0.85rem;">
+    Obsidian-Notiz exportiert: {{ obsidian_path }}
+</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+}
+</script>
+{% endblock %}

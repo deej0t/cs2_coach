@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Demo-Analyse{% endblock %}
+
+{% block content %}
+<h1>Demo analysieren</h1>
+
+<div class="grid-2">
+    <div class="card">
+        <h2>Demo hochladen</h2>
+        <form action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data">
+            <div class="form-group">
+                <label>Demo-Datei (.dem)</label>
+                <input type="file" name="demo" accept=".dem" required>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Spieler-Name</label>
+                    <input type="text" name="player" value="{{ config.get('player_name', '') }}" placeholder="deej0t">
+                </div>
+                <div class="form-group">
+                    <label>SteamID64 (optional)</label>
+                    <input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" placeholder="76561198...">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Analysieren</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Lokaler Pfad</h2>
+        <form action="{{ url_for('analyze_path') }}" method="post">
+            <div class="form-group">
+                <label>Pfad zur Demo-Datei</label>
+                <input type="text" name="demo_path" placeholder="D:/SteamLibrary/.../replays/match730_xxx.dem">
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Spieler-Name</label>
+                    <input type="text" name="player" value="{{ config.get('player_name', '') }}">
+                </div>
+                <div class="form-group">
+                    <label>SteamID64 (optional)</label>
+                    <input type="text" name="steamid" value="{{ config.get('steam_id', '') }}">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Analysieren</button>
+        </form>
+    </div>
+</div>
+
+{% if exports %}
+<div class="card">
+    <h2>Letzte Analysen</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Map</th>
+                <th>Score</th>
+                <th>Ergebnis</th>
+                <th>K/D</th>
+                <th>ADR</th>
+                <th>KAST%</th>
+                <th>Rating</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in exports[:10] %}
+            <tr>
+                <td>{{ e.map }}</td>
+                <td>{{ e.score }}</td>
+                <td>
+                    {% if e.result == 'Sieg' %}<span class="badge badge-win">Sieg</span>
+                    {% elif e.result == 'Niederlage' %}<span class="badge badge-loss">Niederlage</span>
+                    {% else %}<span class="badge badge-draw">{{ e.result }}</span>{% endif %}
+                </td>
+                <td>{{ e.kd }}</td>
+                <td>{{ e.adr }}</td>
+                <td>{{ e.kast }}%</td>
+                <td>{{ e.rating }}</td>
+                <td><a href="{{ url_for('view_export', filename=e.filename) }}" class="btn">Details</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if exports|length > 10 %}
+    <p style="margin-top: 0.75rem;"><a href="{{ url_for('exports') }}" style="color: var(--accent);">Alle {{ exports|length }} Exports anzeigen</a></p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

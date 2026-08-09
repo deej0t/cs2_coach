@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Exports{% endblock %}
+
+{% block content %}
+<h1>Alle Exports ({{ exports|length }})</h1>
+
+{% if exports %}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Datei</th>
+                <th>Map</th>
+                <th>Score</th>
+                <th>Ergebnis</th>
+                <th>K/D</th>
+                <th>ADR</th>
+                <th>KAST%</th>
+                <th>Rating</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in exports %}
+            <tr>
+                <td style="font-size: 0.8rem; color: var(--text2);">{{ e.filename[:20] }}...</td>
+                <td>{{ e.map }}</td>
+                <td>{{ e.score }}</td>
+                <td>
+                    {% if e.result == 'Sieg' %}<span class="badge badge-win">Sieg</span>
+                    {% elif e.result == 'Niederlage' %}<span class="badge badge-loss">Niederlage</span>
+                    {% else %}<span class="badge badge-draw">{{ e.result }}</span>{% endif %}
+                </td>
+                <td>{{ e.kd }}</td>
+                <td>{{ e.adr }}</td>
+                <td>{{ e.kast }}%</td>
+                <td>{{ e.rating }}</td>
+                <td><a href="{{ url_for('view_export', filename=e.filename) }}" class="btn">Details</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p style="color: var(--text2);">Noch keine Exports vorhanden. Analysiere eine Demo, um den ersten Export zu erstellen.</p>
+</div>
+{% endif %}
+{% endblock %}
