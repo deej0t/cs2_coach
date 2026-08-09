@@ -54,6 +54,7 @@
     <table>
         <thead>
             <tr>
+                <th>Datum</th>
                 <th>Map</th>
                 <th>Score</th>
                 <th>Ergebnis</th>
@@ -67,6 +68,7 @@
         <tbody>
             {% for e in exports[:10] %}
             <tr>
+                <td style="color: var(--text2);">{{ e.date }}</td>
                 <td>{{ e.map }}</td>
                 <td>{{ e.score }}</td>
                 <td>

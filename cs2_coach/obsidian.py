@@ -16,12 +16,13 @@ def export_match(result: MatchResult, coach_report: str, vault_path: str,
 
     _ensure_concept_notes(vault, subfolder)
 
-    today = datetime.now().strftime("%Y-%m-%d")
-    time_str = datetime.now().strftime("%H%M")
-    filename = f"{today}_{result.map_name}_Match_{time_str}.md"
+    match_date = result.match_date or datetime.now().strftime("%Y-%m-%d")
+    time_str = result.match_datetime.split(" ")[1].replace(":", "") if result.match_datetime else datetime.now().strftime("%H%M")
+    score = f"{result.score_team1}-{result.score_team2}"
+    filename = f"{match_date}_{result.map_name}_{score}_{time_str}.md"
     filepath = coach_dir / filename
 
-    content = _build_markdown(result, coach_report, today)
+    content = _build_markdown(result, coach_report, match_date)
     filepath.write_text(content, encoding="utf-8")
 
     return filepath

@@ -189,6 +189,7 @@ def _get_exports(cfg: dict) -> list[dict]:
             player = data.get("player", {})
             exports.append({
                 "filename": f.name,
+                "date": match.get("date", match.get("datetime", "?")),
                 "map": match.get("map", "?"),
                 "score": f"{match.get('score_own', '?')}:{match.get('score_enemy', '?')}",
                 "result": match.get("result", "?"),

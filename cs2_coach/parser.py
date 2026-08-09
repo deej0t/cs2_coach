@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 from demoparser2 import DemoParser
@@ -210,6 +212,8 @@ class MatchResult:
     player_stats: PlayerStats
     all_players: list[PlayerStats] = field(default_factory=list)
     demo_path: str = ""
+    match_date: str = ""  # YYYY-MM-DD from demo file mtime
+    match_datetime: str = ""  # YYYY-MM-DD HH:MM
 
     @property
     def result_str(self) -> str:
@@ -273,6 +277,12 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
     path = Path(demo_path)
     if not path.exists():
         raise FileNotFoundError(f"Demo-Datei nicht gefunden: {demo_path}")
+
+    # Match-Datum aus Datei-Modifikationszeit
+    mtime = os.path.getmtime(path)
+    match_dt = datetime.fromtimestamp(mtime)
+    match_date = match_dt.strftime("%Y-%m-%d")
+    match_datetime = match_dt.strftime("%Y-%m-%d %H:%M")
 
     parser = DemoParser(str(path))
     header = parser.parse_header()
@@ -400,6 +410,8 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
         player_stats=target_stats,
         all_players=list(player_lookup.values()),
         demo_path=demo_path,
+        match_date=match_date,
+        match_datetime=match_datetime,
     )
 
 

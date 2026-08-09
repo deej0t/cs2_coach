@@ -32,12 +32,13 @@ def generate_report(result: MatchResult) -> str:
 
 
 def _header(r: MatchResult) -> str:
+    date_str = f" — {r.match_date}" if r.match_date else ""
     return (
         f"## Coach-Report\n\n"
         f"**{r.result_str}** auf [[{r.map_name}]] — "
         f"**{r.score_team1}:{r.score_team2}** "
         f"({r.total_rounds} Runden) — "
-        f"Rating: **{r.rating}**\n"
+        f"Rating: **{r.rating}**{date_str}\n"
     )
 
 

@@ -9,7 +9,7 @@
     <table>
         <thead>
             <tr>
-                <th>Datei</th>
+                <th>Datum</th>
                 <th>Map</th>
                 <th>Score</th>
                 <th>Ergebnis</th>
@@ -23,7 +23,7 @@
         <tbody>
             {% for e in exports %}
             <tr>
-                <td style="font-size: 0.8rem; color: var(--text2);">{{ e.filename[:20] }}...</td>
+                <td style="color: var(--text2);">{{ e.date }}</td>
                 <td>{{ e.map }}</td>
                 <td>{{ e.score }}</td>
                 <td>

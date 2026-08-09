@@ -100,6 +100,7 @@ def analyze(ctx, demo_path, player, steamid, no_export, raw, raw_out, raw_stdout
         return
 
     console.print(f"\n[bold]Map:[/bold] {result.map_name}")
+    console.print(f"[bold]Datum:[/bold] {result.match_datetime}")
     console.print(
         f"[bold]Ergebnis:[/bold] {result.result_str} "
         f"({result.score_team1}:{result.score_team2})"
@@ -181,6 +182,7 @@ def batch(ctx, demo_dir, player, steamid):
             s = result.player_stats
             results_summary.append({
                 "file": dem.name,
+                "date": result.match_date,
                 "map": result.map_name,
                 "score": f"{result.score_team1}:{result.score_team2}",
                 "result": result.result_str,
@@ -193,7 +195,7 @@ def batch(ctx, demo_dir, player, steamid):
             })
 
             console.print(
-                f"  {result.map_name} {result.score_team1}:{result.score_team2} "
+                f"  [{result.match_date}] {result.map_name} {result.score_team1}:{result.score_team2} "
                 f"({result.result_str}) | "
                 f"K/D {s.kills}/{s.deaths} | ADR {s.adr:.0f} | "
                 f"Rating {result.rating} | KAST {s.kast_pct:.0f}%"
@@ -206,6 +208,7 @@ def batch(ctx, demo_dir, player, steamid):
     # Summary-Tabelle
     console.print("\n")
     summary_table = Table(title=f"Batch-Zusammenfassung ({len(results_summary)}/{len(dem_files)} Demos)", border_style="green")
+    summary_table.add_column("Datum", style="dim")
     summary_table.add_column("Map", style="cyan")
     summary_table.add_column("Score")
     summary_table.add_column("K/D")
@@ -229,6 +232,7 @@ def batch(ctx, demo_dir, player, steamid):
         rank_str = f"{r['rank_change']:+.0f}" if r["rank_change"] is not None else "-"
         result_color = "green" if r["result"] == "Sieg" else ("red" if r["result"] == "Niederlage" else "yellow")
         summary_table.add_row(
+            r["date"],
             r["map"],
             f"[{result_color}]{r['score']}[/{result_color}]",
             f"{r['kd']:.2f}",
@@ -240,7 +244,7 @@ def batch(ctx, demo_dir, player, steamid):
 
     n = max(len(results_summary), 1)
     summary_table.add_row(
-        f"[bold]AVG ({wins}W/{losses}L)[/bold]", "",
+        "", f"[bold]AVG ({wins}W/{losses}L)[/bold]", "",
         "", "",
         f"[bold]{total_kast/n:.0f}%[/bold]",
         f"[bold]{total_rating/n:.2f}[/bold]",
@@ -427,11 +431,12 @@ mechanischem Instinkt. Berücksichtige das in deinem Feedback.\
 
 
 def _auto_filename(result: MatchResult) -> str:
-    date = datetime.now().strftime("%Y-%m-%d")
-    time = datetime.now().strftime("%H%M")
+    date = result.match_date or datetime.now().strftime("%Y-%m-%d")
     map_name = result.map_name.lower()
     score = f"{result.score_team1}-{result.score_team2}"
-    return f"{date}_{map_name}_{score}_{time}_coach.json"
+    # Use match datetime for uniqueness
+    time_part = result.match_datetime.split(" ")[1].replace(":", "") if result.match_datetime else datetime.now().strftime("%H%M")
+    return f"{date}_{map_name}_{score}_{time_part}_coach.json"
 
 
 def _build_raw_json(result: MatchResult) -> dict:
@@ -443,6 +448,8 @@ def _build_raw_json(result: MatchResult) -> dict:
     return {
         "prompt": COACH_PROMPT,
         "match": {
+            "date": result.match_date,
+            "datetime": result.match_datetime,
             "map": result.map_name,
             "score_own": result.score_team1,
             "score_enemy": result.score_team2,
