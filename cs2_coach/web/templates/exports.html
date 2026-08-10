@@ -1,49 +1,48 @@
 {% extends "base.html" %}
 {% block title %}CS2 Coach — Exports{% endblock %}
+{% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h1>Alle Exports ({{ exports|length }})</h1>
+<h2>Alle Exports <span class="tag tag-neutral" style="vertical-align: middle;">{{ exports|length }}</span></h2>
 
 {% if exports %}
-<div class="card">
-    <table>
-        <thead>
-            <tr>
-                <th>Datum</th>
-                <th>Map</th>
-                <th>Score</th>
-                <th>Ergebnis</th>
-                <th>K/D</th>
-                <th>ADR</th>
-                <th>KAST%</th>
-                <th>Rating</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for e in exports %}
-            <tr>
-                <td style="color: var(--text2);">{{ e.date }}</td>
-                <td>{{ e.map }}</td>
-                <td>{{ e.score }}</td>
-                <td>
-                    {% if e.result == 'Sieg' %}<span class="badge badge-win">Sieg</span>
-                    {% elif e.result == 'Niederlage' %}<span class="badge badge-loss">Niederlage</span>
-                    {% else %}<span class="badge badge-draw">{{ e.result }}</span>{% endif %}
-                </td>
-                <td>{{ e.kd }}</td>
-                <td>{{ e.adr }}</td>
-                <td>{{ e.kast }}%</td>
-                <td>{{ e.rating }}</td>
-                <td><a href="{{ url_for('view_export', filename=e.filename) }}" class="btn">Details</a></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Datum</th>
+            <th>Map</th>
+            <th>Score</th>
+            <th>Ergebnis</th>
+            <th>K/D</th>
+            <th>ADR</th>
+            <th>KAST%</th>
+            <th>Rating</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for e in exports %}
+        <tr>
+            <td style="color: var(--color-neutral-500);">{{ e.date }}</td>
+            <td>{{ e.map }}</td>
+            <td>{{ e.score }}</td>
+            <td>
+                {% if e.result == 'Sieg' %}<span class="tag tag-win">Sieg</span>
+                {% elif e.result == 'Niederlage' %}<span class="tag tag-loss">Niederlage</span>
+                {% else %}<span class="tag tag-draw">{{ e.result }}</span>{% endif %}
+            </td>
+            <td>{{ e.kd }}</td>
+            <td>{{ e.adr }}</td>
+            <td>{{ e.kast }}%</td>
+            <td>{{ e.rating }}</td>
+            <td><a href="{{ url_for('view_export', filename=e.filename) }}" class="btn btn-ghost">Details →</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
 {% else %}
-<div class="card">
-    <p style="color: var(--text2);">Noch keine Exports vorhanden. Analysiere eine Demo, um den ersten Export zu erstellen.</p>
+<div class="card elev-sm">
+    <p class="card-body">Noch keine Exports vorhanden. Analysiere eine Demo, um den ersten Export zu erstellen.</p>
 </div>
 {% endif %}
 {% endblock %}

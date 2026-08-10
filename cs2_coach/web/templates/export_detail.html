@@ -1,59 +1,67 @@
 {% extends "base.html" %}
 {% block title %}CS2 Coach — {{ data.match.map }} {{ data.match.score_own }}:{{ data.match.score_enemy }}{% endblock %}
+{% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
-    <a href="{{ url_for('exports') }}" class="btn">Zurueck</a>
-    <h1 style="margin: 0;">
-        {{ data.match.map }} —
-        <span class="{% if data.match.result == 'Sieg' %}win{% elif data.match.result == 'Niederlage' %}loss{% else %}draw{% endif %}">
-            {{ data.match.result }}
-        </span>
-        ({{ data.match.score_own }}:{{ data.match.score_enemy }})
-        <span style="font-size: 0.9rem; color: var(--text2); font-weight: 400;">{{ data.match.get('date', '') }}</span>
-    </h1>
+<div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-6);">
+    <a href="{{ url_for('exports') }}" class="btn btn-ghost">← Zurück</a>
+    <div>
+        <h2 style="margin:0;">
+            {{ data.match.map }}
+            <span class="{% if data.match.result == 'Sieg' %}win{% elif data.match.result == 'Niederlage' %}loss{% else %}draw{% endif %}">
+                {{ data.match.score_own }}:{{ data.match.score_enemy }}
+            </span>
+        </h2>
+        <div style="display:flex;gap:var(--space-3);margin-top:var(--space-1);">
+            {% if data.match.result == 'Sieg' %}<span class="tag tag-win">Sieg</span>
+            {% elif data.match.result == 'Niederlage' %}<span class="tag tag-loss">Niederlage</span>
+            {% else %}<span class="tag tag-draw">{{ data.match.result }}</span>{% endif %}
+            {% if data.match.get('date', '') %}
+            <span style="font-size:13px;color:var(--color-neutral-500);">{{ data.match.get('date', '') }}</span>
+            {% endif %}
+        </div>
+    </div>
 </div>
 
 {% set p = data.player %}
 
-<div class="grid-3" style="margin-bottom: 1.5rem;">
-    <div class="stat-box">
-        <div class="value">{{ p.kd }}</div>
-        <div class="label">K/D ({{ p.kills }}/{{ p.deaths }}/{{ p.assists }})</div>
+<!-- Stats overview -->
+<div class="grid-3" style="margin-bottom:var(--space-6);">
+    <div class="card elev-sm" style="align-items:center;text-align:center;">
+        <span class="card-kicker">K/D</span>
+        <span style="font-size:28px;font-weight:600;font-family:var(--font-heading);letter-spacing:-0.02em;">{{ p.kd }}</span>
+        <span style="font-size:12px;color:var(--color-neutral-500);">{{ p.kills }} / {{ p.deaths }} / {{ p.assists }}</span>
     </div>
-    <div class="stat-box">
-        <div class="value">{{ p.adr }}</div>
-        <div class="label">ADR</div>
+    <div class="card elev-sm" style="align-items:center;text-align:center;">
+        <span class="card-kicker">ADR</span>
+        <span style="font-size:28px;font-weight:600;font-family:var(--font-heading);letter-spacing:-0.02em;">{{ p.adr }}</span>
     </div>
-    <div class="stat-box">
-        <div class="value">{{ p.get('rating', '-') }}</div>
-        <div class="label">Rating</div>
+    <div class="card elev-sm" style="align-items:center;text-align:center;">
+        <span class="card-kicker">Rating</span>
+        <span style="font-size:28px;font-weight:600;font-family:var(--font-heading);letter-spacing:-0.02em;">{{ p.get('rating', '-') }}</span>
     </div>
-    <div class="stat-box">
-        <div class="value">{{ p.kast_pct }}%</div>
-        <div class="label">KAST%</div>
+</div>
+<div class="grid-3" style="margin-bottom:var(--space-6);">
+    <div class="card elev-sm" style="align-items:center;text-align:center;">
+        <span class="card-kicker">KAST%</span>
+        <span style="font-size:28px;font-weight:600;font-family:var(--font-heading);">{{ p.kast_pct }}%</span>
     </div>
-    <div class="stat-box">
-        <div class="value">{{ p.hs_pct }}%</div>
-        <div class="label">HS%</div>
+    <div class="card elev-sm" style="align-items:center;text-align:center;">
+        <span class="card-kicker">HS%</span>
+        <span style="font-size:28px;font-weight:600;font-family:var(--font-heading);">{{ p.hs_pct }}%</span>
     </div>
-    <div class="stat-box">
-        <div class="value">{{ p.counter_strafe_pct }}%</div>
-        <div class="label">Counter-Strafe</div>
+    <div class="card elev-sm" style="align-items:center;text-align:center;">
+        <span class="card-kicker">Counter-Strafe</span>
+        <span style="font-size:28px;font-weight:600;font-family:var(--font-heading);">{{ p.counter_strafe_pct }}%</span>
     </div>
 </div>
 
-<div class="tabs">
-    <div class="tab active" onclick="switchTab('details')">Details</div>
-    <div class="tab" onclick="switchTab('scoreboard')">Scoreboard</div>
-    <div class="tab" onclick="switchTab('raw')">Raw JSON</div>
-</div>
-
-<div id="tab-details" class="tab-content active">
-    <div class="grid-2">
-        <div class="card">
-            <h3>Kampf</h3>
-            <table>
+<!-- Detail sections -->
+<div class="grid-2" style="margin-bottom:var(--space-6);">
+    <div class="card elev-sm">
+        <span class="card-kicker">Kampf</span>
+        <table class="table">
+            <tbody>
                 <tr><td>Opening Duels</td><td>{{ p.opening_kills }}W / {{ p.opening_deaths }}L</td></tr>
                 <tr><td>Trade Kills</td><td>{{ p.trade_kills }}</td></tr>
                 <tr><td>Accuracy</td><td>{{ p.accuracy }}%</td></tr>
@@ -61,11 +69,13 @@
                 {% if p.multikills %}
                 <tr><td>Multi-Kills</td><td>2k:{{ p.multikills['2k'] }} 3k:{{ p.multikills['3k'] }} 4k:{{ p.multikills['4k'] }} 5k:{{ p.multikills['5k'] }}</td></tr>
                 {% endif %}
-            </table>
-        </div>
-        <div class="card">
-            <h3>Mechanik</h3>
-            <table>
+            </tbody>
+        </table>
+    </div>
+    <div class="card elev-sm">
+        <span class="card-kicker">Mechanik</span>
+        <table class="table">
+            <tbody>
                 <tr><td>Counter-Strafe</td><td>{{ p.counter_strafe_pct }}% (inacc: {{ p.avg_inaccuracy_move }})</td></tr>
                 {% if p.spray_control %}
                 <tr><td>Spray-Control</td><td>Burst {{ p.spray_control.burst_kills }} / Spray {{ p.spray_control.spray_kills }}</td></tr>
@@ -79,11 +89,13 @@
                 {% if p.engagement_distance %}
                 <tr><td>Kampfdistanz</td><td>avg {{ p.engagement_distance.avg }}u (N:{{ p.engagement_distance.close }}/M:{{ p.engagement_distance.mid }}/W:{{ p.engagement_distance.long }})</td></tr>
                 {% endif %}
-            </table>
-        </div>
-        <div class="card">
-            <h3>Utility</h3>
-            <table>
+            </tbody>
+        </table>
+    </div>
+    <div class="card elev-sm">
+        <span class="card-kicker">Utility</span>
+        <table class="table">
+            <tbody>
                 {% if p.utility %}
                 <tr><td>Gesamt</td><td>{{ p.utility.total }} ({{ p.utility.per_round }}/Runde)</td></tr>
                 <tr><td>Flashes</td><td>{{ p.utility.flashes }}</td></tr>
@@ -96,11 +108,13 @@
                 <tr><td>Team geblindet</td><td>{{ p.flash_effectiveness.teammates_blinded }}</td></tr>
                 <tr><td>Avg Duration</td><td>{{ p.flash_effectiveness.avg_enemy_duration }}s</td></tr>
                 {% endif %}
-            </table>
-        </div>
-        <div class="card">
-            <h3>Situationen</h3>
-            <table>
+            </tbody>
+        </table>
+    </div>
+    <div class="card elev-sm">
+        <span class="card-kicker">Situationen</span>
+        <table class="table">
+            <tbody>
                 {% if p.clutches %}
                 <tr><td>Clutches</td><td>{{ p.clutches.wins }}/{{ p.clutches.attempts }}</td></tr>
                 {% endif %}
@@ -117,51 +131,42 @@
                 {% if p.kill_context.noscope > 0 %}<tr><td>Noscopes</td><td>{{ p.kill_context.noscope }}</td></tr>{% endif %}
                 {% endif %}
                 {% if p.rank %}
-                <tr><td>Rank</td><td>{{ p.rank.old }} -> {{ p.rank.new }} ({{ p.rank.change }})</td></tr>
+                <tr><td>Rank</td><td>{{ p.rank.old }} → {{ p.rank.new }} ({{ p.rank.change }})</td></tr>
                 {% endif %}
-            </table>
-        </div>
-    </div>
-</div>
-
-<div id="tab-scoreboard" class="tab-content">
-    <div class="card">
-        <table>
-            <thead>
-                <tr><th>Spieler</th><th>K</th><th>D</th><th>A</th><th>ADR</th><th>K/D</th></tr>
-            </thead>
-            <tbody>
-                {% for s in data.scoreboard %}
-                <tr{% if s.is_target %} style="background: var(--bg3); font-weight: 600;"{% endif %}>
-                    <td>{{ s.name }}{% if s.is_target %} (Du){% endif %}</td>
-                    <td>{{ s.kills }}</td>
-                    <td>{{ s.deaths }}</td>
-                    <td>{{ s.assists }}</td>
-                    <td>{{ s.adr }}</td>
-                    <td>{{ s.kd }}</td>
-                </tr>
-                {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
 
-<div id="tab-raw" class="tab-content">
-    <div class="card">
-        <pre style="font-size: 0.8rem; overflow-x: auto; white-space: pre-wrap; max-height: 600px; overflow-y: auto;">{{ data|tojson(indent=2) }}</pre>
+<!-- Scoreboard -->
+<details>
+    <summary>Scoreboard anzeigen</summary>
+    <table class="table" style="margin-top:var(--space-3);">
+        <thead>
+            <tr><th>Spieler</th><th>K</th><th>D</th><th>A</th><th>ADR</th><th>K/D</th></tr>
+        </thead>
+        <tbody>
+            {% for s in data.scoreboard %}
+            <tr{% if s.is_target %} style="background:color-mix(in srgb, var(--color-accent) 10%, transparent);"{% endif %}>
+                <td>{{ s.name }}{% if s.is_target %} <span class="tag tag-accent" style="margin-left:4px;">Du</span>{% endif %}</td>
+                <td>{{ s.kills }}</td>
+                <td>{{ s.deaths }}</td>
+                <td>{{ s.assists }}</td>
+                <td>{{ s.adr }}</td>
+                <td>{{ s.kd }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</details>
+
+<!-- Raw JSON -->
+<details style="margin-top:var(--space-4);">
+    <summary>Raw JSON anzeigen</summary>
+    <div class="card" style="margin-top:var(--space-3);">
+        <pre style="font-size:12px;overflow-x:auto;white-space:pre-wrap;max-height:600px;overflow-y:auto;color:var(--color-neutral-400);">{{ data|tojson(indent=2) }}</pre>
     </div>
-</div>
+</details>
 
-<p style="margin-top: 1rem; color: var(--text2); font-size: 0.85rem;">Datei: {{ filename }}</p>
-{% endblock %}
-
-{% block scripts %}
-<script>
-function switchTab(name) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
-    document.getElementById('tab-' + name).classList.add('active');
-}
-</script>
+<p style="margin-top:var(--space-6);color:var(--color-neutral-600);font-size:12px;">Datei: {{ filename }}</p>
 {% endblock %}

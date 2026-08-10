@@ -2,169 +2,262 @@
 {% block title %}CS2 Coach — {{ result.map_name }} {{ result.score_team1 }}:{{ result.score_team2 }}{% endblock %}
 
 {% block content %}
-<div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
-    <a href="{{ url_for('index') }}" class="btn">Zurueck</a>
-    <h1 style="margin: 0;">
-        {{ result.map_name }} —
-        <span class="{% if result.result_str == 'Sieg' %}win{% elif result.result_str == 'Niederlage' %}loss{% else %}draw{% endif %}">
-            {{ result.result_str }}
-        </span>
-        ({{ result.score_team1 }}:{{ result.score_team2 }})
-        <span style="font-size: 0.9rem; color: var(--text2); font-weight: 400;">{{ result.match_date }}</span>
-    </h1>
+<style>
+    .match-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-5); }
+    .match-header .subtitle { font-size: 12px; color: var(--color-neutral-300); margin-bottom: 4px; }
+    .match-header h2 { margin: 0; }
+    .top-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
+    .rating-big { font-family: var(--font-heading); font-size: 40px; font-weight: 500; color: var(--color-text); }
+    .rating-sub { color: var(--color-neutral-300); font-size: 12px; }
+    .compare-row { display: flex; align-items: center; justify-content: space-between; }
+    .compare-label { font-size: 13px; color: var(--color-neutral-300); }
+    .compare-value { font-size: 13px; color: var(--color-text); }
+    .compare-delta { color: var(--color-neutral-300); }
+    .focus-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+    .coach-card { padding: 14px 16px !important; }
+    .coach-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .bar-wrap { position: relative; height: 6px; background: var(--color-neutral-800); border-radius: 3px; }
+    .bar-avg { position: absolute; top: 0; left: 0; height: 6px; border-radius: 3px; background: var(--color-accent-700); }
+    .bar-you { position: absolute; top: 0; left: 0; height: 6px; border-radius: 3px; background: var(--color-accent); }
+    .bar-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--color-neutral-300); margin-bottom: 4px; }
+    .checklist-item { display: flex; align-items: flex-start; gap: 10px; }
+    .checklist-box { width: 14px; height: 14px; margin-top: 2px; border: 1px solid var(--color-accent-300); border-radius: 3px; flex: none; }
+    .checklist-text { font-size: 13px; color: var(--color-text); }
+    .scoreboard-highlight { background: var(--color-surface); font-weight: 600; }
+</style>
+
+<div style="display: flex; align-items: center; gap: 10px; margin-bottom: var(--space-2);">
+    <a href="{{ url_for('index') }}" class="btn btn-ghost" style="padding: 4px 10px; font-size: 12px;">← Zurueck</a>
+    <span style="color: var(--color-neutral-300); font-size: 13px;">
+        {{ result.map_name }} · {{ result.score_team1 }}:{{ result.score_team2 }} ·
+        <span class="{% if result.result_str == 'Sieg' %}win{% elif result.result_str == 'Niederlage' %}loss{% else %}draw{% endif %}">{{ result.result_str }}</span>
+        {% if result.match_date %} · {{ result.match_date }}{% endif %}
+    </span>
+</div>
+<div class="match-header">
+    <h2>Match-Analyse</h2>
+    <span class="tag tag-outline">{{ result.total_rounds }} Runden</span>
 </div>
 
-<!-- Key Stats -->
-<div class="grid-3" style="margin-bottom: 1.5rem;">
-    <div class="stat-box">
-        <div class="value">{{ "%.2f"|format(stats.kd_ratio) }}</div>
-        <div class="label">K/D ({{ stats.kills }}/{{ stats.deaths }}/{{ stats.assists }})</div>
-    </div>
-    <div class="stat-box">
-        <div class="value">{{ "%.1f"|format(stats.adr) }}</div>
-        <div class="label">ADR</div>
-    </div>
-    <div class="stat-box">
-        <div class="value">{{ result.rating }}</div>
-        <div class="label">Rating</div>
-    </div>
-    <div class="stat-box">
-        <div class="value">{{ "%.0f"|format(stats.kast_pct) }}%</div>
-        <div class="label">KAST%</div>
-    </div>
-    <div class="stat-box">
-        <div class="value">{{ "%.0f"|format(stats.headshot_pct) }}%</div>
-        <div class="label">HS%</div>
-    </div>
-    <div class="stat-box">
-        <div class="value">{{ "%.0f"|format(stats.counter_strafe_score) }}%</div>
-        <div class="label">Counter-Strafe</div>
-    </div>
-</div>
-
-<!-- Tabs -->
-<div class="tabs">
-    <div class="tab active" onclick="switchTab('stats')">Statistiken</div>
-    <div class="tab" onclick="switchTab('report')">Coach-Report</div>
-    <div class="tab" onclick="switchTab('scoreboard')">Scoreboard</div>
-</div>
-
-<!-- Stats Tab -->
-<div id="tab-stats" class="tab-content active">
-    <div class="grid-2">
-        <div class="card">
-            <h3>Kampf</h3>
-            <table>
-                <tr><td>K/D/A</td><td>{{ stats.kills }}/{{ stats.deaths }}/{{ stats.assists }}</td></tr>
-                <tr><td>K/D Ratio</td><td>{{ "%.2f"|format(stats.kd_ratio) }}</td></tr>
-                <tr><td>ADR</td><td>{{ "%.1f"|format(stats.adr) }}</td></tr>
-                <tr><td>HS%</td><td>{{ "%.0f"|format(stats.headshot_pct) }}%</td></tr>
-                <tr><td>Accuracy</td><td>{{ "%.1f"|format(stats.accuracy) }}%</td></tr>
-                <tr><td>Opening Duels</td><td>{{ stats.opening_kills }}W / {{ stats.opening_deaths }}L</td></tr>
-                <tr><td>Trade Kills</td><td>{{ stats.trade_kills }}</td></tr>
-                <tr><td>Multi-Kills</td><td>{{ stats.multikill_str }}</td></tr>
-                <tr><td>KAST%</td><td>{{ "%.0f"|format(stats.kast_pct) }}%</td></tr>
-                <tr><td>Survival</td><td>{{ "%.0f"|format(stats.survival_rate) }}%</td></tr>
-            </table>
+<!-- Top Cards: Rating + Comparison -->
+<div class="top-grid">
+    <div class="card elev-sm" style="display: flex; flex-direction: column; gap: 6px;">
+        <div class="card-kicker">Match-Rating</div>
+        <div style="display: flex; align-items: baseline; gap: 10px;">
+            <div class="rating-big">{{ result.rating }}</div>
         </div>
-        <div class="card">
-            <h3>Mechanik</h3>
-            <table>
-                <tr><td>Counter-Strafe</td><td>{{ "%.0f"|format(stats.counter_strafe_score) }}%</td></tr>
-                <tr><td>Spray-Control</td><td>{{ stats.burst_spray_ratio }}</td></tr>
-                <tr><td>Avg Recoil-Index</td><td>{{ "%.1f"|format(stats.avg_recoil_index) }}</td></tr>
-                <tr><td>Waffen-Split</td><td>{{ stats.awp_rifle_split }}</td></tr>
-                <tr><td>Kampfdistanz</td><td>avg {{ "%.0f"|format(stats.avg_fight_distance) }}u</td></tr>
-                <tr><td>Nah/Mittel/Weit</td><td>{{ stats.close_range_kills }}/{{ stats.mid_range_kills }}/{{ stats.long_range_kills }}</td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <h3>Utility</h3>
-            <table>
-                {% set util_total = stats.flashes_thrown + stats.smokes_thrown + stats.he_thrown + stats.molotovs_thrown %}
-                <tr><td>Gesamt</td><td>{{ util_total }} ({{ "%.1f"|format(stats.utility_per_round) }}/Runde)</td></tr>
-                <tr><td>Flashes</td><td>{{ stats.flashes_thrown }}</td></tr>
-                <tr><td>Smokes</td><td>{{ stats.smokes_thrown }}</td></tr>
-                <tr><td>HE</td><td>{{ stats.he_thrown }}</td></tr>
-                <tr><td>Molotovs</td><td>{{ stats.molotovs_thrown }}</td></tr>
-                <tr><td>Flash-Effektivitaet</td><td>{{ stats.flash_effectiveness }}</td></tr>
-            </table>
-        </div>
-        <div class="card">
-            <h3>Situationen</h3>
-            <table>
-                {% if stats.clutch_attempts > 0 %}
-                <tr><td>Clutches</td><td>{{ stats.clutch_rate }}</td></tr>
-                {% endif %}
-                <tr><td>CT/T-Split</td><td>{{ stats.ct_t_split }}</td></tr>
-                <tr><td>Death-Timing</td><td>{{ stats.death_timing_str }}</td></tr>
-                {% if stats.kills_thru_smoke > 0 %}
-                <tr><td>Kills through Smoke</td><td>{{ stats.kills_thru_smoke }}</td></tr>
-                {% endif %}
-                {% if stats.kills_penetrated > 0 %}
-                <tr><td>Wallbangs</td><td>{{ stats.kills_penetrated }}</td></tr>
-                {% endif %}
-                {% if stats.kills_noscope > 0 %}
-                <tr><td>Noscopes</td><td>{{ stats.kills_noscope }}</td></tr>
-                {% endif %}
-                {% if stats.rank_old > 0 %}
-                {% set change = stats.rank_change %}
-                <tr><td>Rank</td><td>{{ stats.rank_old }} -> {{ stats.rank_new }} ({{ "+%.0f"|format(change) if change >= 0 else "%.0f"|format(change) }})</td></tr>
-                {% endif %}
-            </table>
+        <div style="display: flex; gap: 16px; margin-top: 4px;">
+            <span style="font-size: 12px; color: var(--color-neutral-300);">K/D {{ "%.2f"|format(stats.kd_ratio) }}</span>
+            <span style="font-size: 12px; color: var(--color-neutral-300);">ADR {{ "%.1f"|format(stats.adr) }}</span>
+            <span style="font-size: 12px; color: var(--color-neutral-300);">KAST {{ "%.0f"|format(stats.kast_pct) }}%</span>
         </div>
     </div>
-</div>
-
-<!-- Coach Report Tab -->
-<div id="tab-report" class="tab-content">
-    <div class="card coach-report">{{ report }}</div>
-</div>
-
-<!-- Scoreboard Tab -->
-<div id="tab-scoreboard" class="tab-content">
-    <div class="card">
-        <table>
-            <thead>
-                <tr>
-                    <th>Spieler</th>
-                    <th>K</th>
-                    <th>D</th>
-                    <th>A</th>
-                    <th>ADR</th>
-                    <th>K/D</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for p in result.all_players|sort(attribute='kills', reverse=True) %}
-                <tr{% if p.steam_id == stats.steam_id %} style="background: var(--bg3); font-weight: 600;"{% endif %}>
-                    <td>{{ p.name }}{% if p.steam_id == stats.steam_id %} (Du){% endif %}</td>
-                    <td>{{ p.kills }}</td>
-                    <td>{{ p.deaths }}</td>
-                    <td>{{ p.assists }}</td>
-                    <td>{{ "%.0f"|format(p.adr) }}</td>
-                    <td>{{ "%.2f"|format(p.kd_ratio) }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="card elev-sm" style="display: flex; flex-direction: column; justify-content: center; gap: 10px;">
+        <div class="card-kicker">Kern-Statistiken</div>
+        <div class="compare-row"><span class="compare-label">K/D/A</span><span class="compare-value">{{ stats.kills }}/{{ stats.deaths }}/{{ stats.assists }}</span></div>
+        <div class="compare-row"><span class="compare-label">HS%</span><span class="compare-value">{{ "%.0f"|format(stats.headshot_pct) }}%</span></div>
+        <div class="compare-row"><span class="compare-label">Counter-Strafe</span><span class="compare-value">{{ "%.0f"|format(stats.counter_strafe_score) }}%</span></div>
+        <div class="compare-row"><span class="compare-label">Survival</span><span class="compare-value">{{ "%.0f"|format(stats.survival_rate) }}%</span></div>
     </div>
 </div>
+
+<!-- Focus Tags -->
+{% set focus_areas = [] %}
+{% if stats.counter_strafe_score < 80 %}{% set _ = focus_areas.append('Counter-Strafing') %}{% endif %}
+{% if stats.opening_deaths > stats.opening_kills %}{% set _ = focus_areas.append('Opening Duels') %}{% endif %}
+{% if stats.utility_per_round < 1.5 %}{% set _ = focus_areas.append('Utility-Usage') %}{% endif %}
+{% if stats.adr < 75 %}{% set _ = focus_areas.append('Positionierung') %}{% endif %}
+{% if stats.flash_teammates_blinded > stats.flash_enemies_blinded and stats.flashes_thrown > 3 %}{% set _ = focus_areas.append('Flash-Technik') %}{% endif %}
+{% if stats.avg_recoil_index > 4 %}{% set _ = focus_areas.append('Spray-Control') %}{% endif %}
+{% if stats.kd_ratio < 0.9 %}{% set _ = focus_areas.append('Clutch-Disziplin') %}{% endif %}
+
+{% if focus_areas %}
+<div style="margin-bottom: var(--space-5);">
+    <div class="card-kicker" style="margin-bottom: 8px;">Fokus-Bereiche fuers naechste Training</div>
+    <div class="focus-tags">
+        {% for area in focus_areas %}
+        <span class="tag tag-accent">{{ area }}</span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Coach Cards -->
+<div style="margin-bottom: var(--space-5);">
+    <div class="card-kicker" style="margin-bottom: 8px;">Coach sagt</div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+        {% if stats.opening_kills + stats.opening_deaths > 0 %}
+        <div class="card coach-card">
+            <div class="coach-card-header">
+                <span class="card-title" style="font-size: 14px;">Opening Duels: {{ stats.opening_kills }}W / {{ stats.opening_deaths }}L</span>
+                {% if stats.opening_deaths > stats.opening_kills %}
+                <span class="tag tag-accent">Prioritaet</span>
+                {% elif stats.opening_kills > stats.opening_deaths %}
+                <span class="tag tag-neutral">Staerke</span>
+                {% else %}
+                <span class="tag tag-neutral">Beobachten</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if stats.opening_deaths > stats.opening_kills %}
+                Du verlierst die Mehrzahl der Opening Duels. Flash + Shoulder-Peek fuer Info, dann erst committen.
+                {% else %}
+                Gute Opening-Duel-Bilanz. Weiter so, aber variiere deine Peek-Timings.
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card coach-card">
+            <div class="coach-card-header">
+                <span class="card-title" style="font-size: 14px;">Counter-Strafing: {{ "%.0f"|format(stats.counter_strafe_score) }}%</span>
+                {% if stats.counter_strafe_score < 80 %}
+                <span class="tag tag-accent">Prioritaet</span>
+                {% elif stats.counter_strafe_score >= 90 %}
+                <span class="tag tag-neutral">Staerke</span>
+                {% else %}
+                <span class="tag tag-neutral">Beobachten</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if stats.counter_strafe_score < 80 %}
+                Zu oft in Bewegung geschossen. Gegenrichtung antippen, dann feuern — muss ins Muskelgedaechtnis.
+                {% elif stats.counter_strafe_score >= 90 %}
+                Sauberes Counter-Strafing. Gelegentlich noch Running-Shots in Panik-Situationen.
+                {% else %}
+                Ordentlich, aber noch Luft nach oben. Fokus: Auch unter Druck sauber stoppen.
+                {% endif %}
+            </div>
+        </div>
+
+        {% set util_total = stats.flashes_thrown + stats.smokes_thrown + stats.he_thrown + stats.molotovs_thrown %}
+        <div class="card coach-card">
+            <div class="coach-card-header">
+                <span class="card-title" style="font-size: 14px;">Utility: {{ "%.1f"|format(stats.utility_per_round) }}/Runde</span>
+                {% if stats.utility_per_round < 1.5 %}
+                <span class="tag tag-accent">Prioritaet</span>
+                {% else %}
+                <span class="tag tag-neutral">Staerke</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if stats.utility_per_round < 1.5 %}
+                Zu wenig Vorbereitung durch Nades. Ziel: 2-3 Standard-Lineups pro Map konsequent werfen.
+                {% else %}
+                Gute Utility-Nutzung. Du bereitest Peeks und Positionskaempfe mit Nades vor.
+                {% endif %}
+            </div>
+        </div>
+
+        {% if stats.flash_teammates_blinded > stats.flash_enemies_blinded and stats.flashes_thrown > 3 %}
+        <div class="card coach-card">
+            <div class="coach-card-header">
+                <span class="card-title" style="font-size: 14px;">Flash-Technik</span>
+                <span class="tag tag-accent">Prioritaet</span>
+            </div>
+            <div class="card-body">
+                Du blindest dein eigenes Team oefter als den Gegner ({{ stats.flash_teammates_blinded }} vs. {{ stats.flash_enemies_blinded }}). Pop-Flashes ueber Hindernisse ueben.
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card coach-card">
+            <div class="coach-card-header">
+                <span class="card-title" style="font-size: 14px;">ADR: {{ "%.1f"|format(stats.adr) }}</span>
+                {% if stats.adr >= 80 %}
+                <span class="tag tag-neutral">Staerke</span>
+                {% elif stats.adr >= 65 %}
+                <span class="tag tag-neutral">Beobachten</span>
+                {% else %}
+                <span class="tag tag-accent">Prioritaet</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if stats.adr >= 80 %}
+                Starker ADR-Wert. Du dominierst die Fights.
+                {% elif stats.adr >= 65 %}
+                Solide, aber such dir mehr Kontakt in der Rundenmitte.
+                {% else %}
+                Zu wenig Schadensbeitrag. Du musst aktiver Fights suchen.
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card coach-card">
+            <div class="coach-card-header">
+                <span class="card-title" style="font-size: 14px;">Waffen-Split: {{ stats.awp_rifle_split }}</span>
+                <span class="tag tag-neutral">Staerke</span>
+            </div>
+            <div class="card-body">Pistol-Kills: {{ stats.pistol_kills }}. {% if stats.awp_kills > 0 and stats.rifle_kills > 0 %}Ausgewogener Mix.{% elif stats.awp_kills == 0 %}Reine Rifle-Performance.{% else %}AWP-fokussiert.{% endif %}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Collapsible Raw Data -->
+<details style="margin-bottom: var(--space-5);">
+    <summary>Alle Rohdaten anzeigen</summary>
+    <table class="table" style="margin-top: 10px;">
+        <tbody>
+            <tr><td>K/D/A</td><td>{{ stats.kills }}/{{ stats.deaths }}/{{ stats.assists }}</td></tr>
+            <tr><td>K/D Ratio</td><td>{{ "%.2f"|format(stats.kd_ratio) }}</td></tr>
+            <tr><td>ADR</td><td>{{ "%.1f"|format(stats.adr) }}</td></tr>
+            <tr><td>HS%</td><td>{{ "%.0f"|format(stats.headshot_pct) }}%</td></tr>
+            <tr><td>Accuracy</td><td>{{ "%.1f"|format(stats.accuracy) }}%</td></tr>
+            <tr><td>KAST%</td><td>{{ "%.0f"|format(stats.kast_pct) }}%</td></tr>
+            <tr><td>Survival</td><td>{{ "%.0f"|format(stats.survival_rate) }}%</td></tr>
+            <tr><td>Opening Duels</td><td>{{ stats.opening_kills }}W / {{ stats.opening_deaths }}L</td></tr>
+            <tr><td>Trade Kills</td><td>{{ stats.trade_kills }}</td></tr>
+            <tr><td>Multi-Kills</td><td>{{ stats.multikill_str }}</td></tr>
+            <tr><td>Counter-Strafe</td><td>{{ "%.0f"|format(stats.counter_strafe_score) }}% (inacc: {{ "%.4f"|format(stats.avg_inaccuracy_move) }})</td></tr>
+            <tr><td>Spray-Control</td><td>{{ stats.burst_spray_ratio }} (avg recoil: {{ "%.1f"|format(stats.avg_recoil_index) }})</td></tr>
+            <tr><td>Waffen-Split</td><td>{{ stats.awp_rifle_split }}</td></tr>
+            <tr><td>Kampfdistanz</td><td>avg {{ "%.0f"|format(stats.avg_fight_distance) }}u (N:{{ stats.close_range_kills }}/M:{{ stats.mid_range_kills }}/W:{{ stats.long_range_kills }})</td></tr>
+            <tr><td>Utility</td><td>{{ util_total }} ({{ "%.1f"|format(stats.utility_per_round) }}/Runde)</td></tr>
+            <tr><td>Flashes</td><td>{{ stats.flashes_thrown }} ({{ stats.flash_effectiveness }})</td></tr>
+            <tr><td>Smokes / HE / Molotovs</td><td>{{ stats.smokes_thrown }} / {{ stats.he_thrown }} / {{ stats.molotovs_thrown }}</td></tr>
+            {% if stats.clutch_attempts > 0 %}
+            <tr><td>Clutches</td><td>{{ stats.clutch_rate }}</td></tr>
+            {% endif %}
+            <tr><td>CT/T-Split</td><td>{{ stats.ct_t_split }}</td></tr>
+            <tr><td>Death-Timing</td><td>{{ stats.death_timing_str }}</td></tr>
+            {% if stats.kills_thru_smoke > 0 %}<tr><td>Smoke Kills</td><td>{{ stats.kills_thru_smoke }}</td></tr>{% endif %}
+            {% if stats.kills_penetrated > 0 %}<tr><td>Wallbangs</td><td>{{ stats.kills_penetrated }}</td></tr>{% endif %}
+            {% if stats.kills_noscope > 0 %}<tr><td>Noscopes</td><td>{{ stats.kills_noscope }}</td></tr>{% endif %}
+            {% if stats.rank_old > 0 %}
+            {% set change = stats.rank_change %}
+            <tr><td>Rank</td><td>{{ stats.rank_old }} -> {{ stats.rank_new }} ({{ "+%.0f"|format(change) if change >= 0 else "%.0f"|format(change) }})</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</details>
+
+<!-- Collapsible Coach Report -->
+<details style="margin-bottom: var(--space-5);">
+    <summary>Volltext-Report (Rohtext)</summary>
+    <div style="white-space: pre-wrap; font-size: 12.5px; line-height: 1.7; color: var(--color-neutral-300); margin-top: 10px;">{{ report }}</div>
+</details>
+
+<!-- Scoreboard -->
+<div class="card-kicker" style="margin-bottom: 8px;">Scoreboard</div>
+<table class="table">
+    <thead><tr><th>Spieler</th><th>K</th><th>D</th><th>A</th><th>ADR</th><th>K/D</th></tr></thead>
+    <tbody>
+        {% for p in result.all_players|sort(attribute='kills', reverse=True) %}
+        <tr{% if p.steam_id == stats.steam_id %} class="scoreboard-highlight"{% endif %}>
+            <td>{{ p.name }}{% if p.steam_id == stats.steam_id %} (Du){% endif %}</td>
+            <td>{{ p.kills }}</td>
+            <td>{{ p.deaths }}</td>
+            <td>{{ p.assists }}</td>
+            <td>{{ "%.0f"|format(p.adr) }}</td>
+            <td>{{ "%.2f"|format(p.kd_ratio) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
 
 {% if obsidian_path %}
-<p style="margin-top: 1rem; color: var(--text2); font-size: 0.85rem;">
+<p style="margin-top: var(--space-5); color: var(--color-neutral-600); font-size: 11px;">
     Obsidian-Notiz exportiert: {{ obsidian_path }}
 </p>
 {% endif %}
-{% endblock %}
-
-{% block scripts %}
-<script>
-function switchTab(name) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
-    document.getElementById('tab-' + name).classList.add('active');
-}
-</script>
 {% endblock %}
