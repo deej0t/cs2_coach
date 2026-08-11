@@ -390,6 +390,10 @@ Deine Analyse soll auf Deutsch sein und folgende Punkte abdecken:
 Kontext: Score, Rating, Scoreboard-Platzierung.
 
 2. **Mechanik-Analyse**:
+   - Crosshair Placement (crosshair_placement.avg_degrees): \
+Gemessen als Winkel in Grad zwischen Fadenkreuz-Position 0.5s vor dem Kill und \
+Gegner-Position. Unter 5° = exzellent (Pro-Level Pre-Aim). 5-15° = gut. \
+15-30° = durchschnittlich. Über 30° = schlecht (zu viel Nachkorrektur nötig).
    - Counter-Strafing (counter_strafe_pct + avg_inaccuracy_move): \
 Unter 80% = Arena-Shooter-Gewohnheiten. Über 90% = sauber. inaccuracy_move > 0.01 = Problem.
    - Spray-Control (avg_recoil_index): Unter 3 = gute Burst-Disziplin. \
@@ -476,6 +480,15 @@ def _player_to_dict(p, is_target: bool, include_rating: float | None = None) -> 
         "opening_kills": p.opening_kills,
         "opening_deaths": p.opening_deaths,
         "trade_kills": p.trade_kills,
+        "crosshair_placement": {
+            "avg_degrees": round(p.crosshair_placement_avg, 1),
+            "kills_analyzed": p.crosshair_placement_kills,
+            "rating": p.crosshair_placement_rating,
+            "excellent_under_5": p.crosshair_placement_excellent,
+            "good_5_15": p.crosshair_placement_good,
+            "average_15_30": p.crosshair_placement_average,
+            "poor_over_30": p.crosshair_placement_poor,
+        },
         "counter_strafe_pct": round(p.counter_strafe_score, 1),
         "avg_inaccuracy_move": round(p.avg_inaccuracy_move, 5),
         "spray_control": {
@@ -561,6 +574,8 @@ def _print_stats_table(result):
     table.add_row("HS%", f"{s.headshot_pct:.0f}%")
     table.add_row("Opening Duels", f"{s.opening_kills}W / {s.opening_deaths}L ({s.opening_duel_rating})")
     table.add_row("Trade Kills", str(s.trade_kills))
+    if s.crosshair_placement_kills > 0:
+        table.add_row("Crosshair Placement", f"{s.crosshair_placement_avg:.1f}° ({s.crosshair_placement_rating})")
     table.add_row("Counter-Strafe", f"{s.counter_strafe_score:.0f}% (inacc: {s.avg_inaccuracy_move:.4f})")
     table.add_row("Spray-Control", f"{s.burst_spray_ratio} (avg recoil: {s.avg_recoil_index:.1f})")
     table.add_row("Waffen-Split", s.awp_rifle_split)

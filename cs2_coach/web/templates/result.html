@@ -56,6 +56,7 @@
         <div class="card-kicker">Kern-Statistiken</div>
         <div class="compare-row"><span class="compare-label">K/D/A</span><span class="compare-value">{{ stats.kills }}/{{ stats.deaths }}/{{ stats.assists }}</span></div>
         <div class="compare-row"><span class="compare-label">HS%</span><span class="compare-value">{{ "%.0f"|format(stats.headshot_pct) }}%</span></div>
+        <div class="compare-row"><span class="compare-label">Crosshair Placement</span><span class="compare-value">{% if stats.crosshair_placement_kills > 0 %}{{ "%.1f"|format(stats.crosshair_placement_avg) }}°{% else %}-{% endif %}</span></div>
         <div class="compare-row"><span class="compare-label">Counter-Strafe</span><span class="compare-value">{{ "%.0f"|format(stats.counter_strafe_score) }}%</span></div>
         <div class="compare-row"><span class="compare-label">Survival</span><span class="compare-value">{{ "%.0f"|format(stats.survival_rate) }}%</span></div>
     </div>
@@ -63,6 +64,7 @@
 
 <!-- Focus Tags -->
 {% set focus_areas = [] %}
+{% if stats.crosshair_placement_kills > 0 and stats.crosshair_placement_avg > 15 %}{% set _ = focus_areas.append('Crosshair Placement') %}{% endif %}
 {% if stats.counter_strafe_score < 80 %}{% set _ = focus_areas.append('Counter-Strafing') %}{% endif %}
 {% if stats.opening_deaths > stats.opening_kills %}{% set _ = focus_areas.append('Opening Duels') %}{% endif %}
 {% if stats.utility_per_round < 1.5 %}{% set _ = focus_areas.append('Utility-Usage') %}{% endif %}
@@ -104,6 +106,37 @@
                 {% else %}
                 Gute Opening-Duel-Bilanz. Weiter so, aber variiere deine Peek-Timings.
                 {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if stats.crosshair_placement_kills > 0 %}
+        <div class="card coach-card">
+            <div class="coach-card-header">
+                <span class="card-title" style="font-size: 14px;">Crosshair Placement: {{ "%.1f"|format(stats.crosshair_placement_avg) }}° ({{ stats.crosshair_placement_rating }})</span>
+                {% if stats.crosshair_placement_avg > 15 %}
+                <span class="tag tag-accent">Prioritaet</span>
+                {% elif stats.crosshair_placement_avg <= 5 %}
+                <span class="tag tag-neutral">Staerke</span>
+                {% else %}
+                <span class="tag tag-neutral">Beobachten</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if stats.crosshair_placement_avg > 25 %}
+                Fadenkreuz fast nie auf Gegner-Position. Massive Nachkorrekturen bei jedem Fight — immer auf Kopfhoehe, immer auf den naechsten Angle pre-aimen.
+                {% elif stats.crosshair_placement_avg > 15 %}
+                Zu weit vom Gegner entfernt. Beim Bewegen das Crosshair auf die naechste gefaehrliche Ecke richten, auf Kopfhoehe.
+                {% elif stats.crosshair_placement_avg > 8 %}
+                Solide Crosshair Placement, aber noch nicht tight genug. Feinschliff: Tighter an die Angles kleben.
+                {% elif stats.crosshair_placement_avg > 4 %}
+                Gute Crosshair Placement — die meisten Positionen sauber pre-aimed. Minimale Korrekturen noetig.
+                {% else %}
+                Exzellente Crosshair Placement. Fadenkreuz sitzt fast immer genau da, wo der Gegner auftaucht. Pro-Level Pre-Aim.
+                {% endif %}
+            </div>
+            <div style="margin-top: 4px; font-size: 12px; color: var(--color-neutral-500);">
+                {{ stats.crosshair_placement_excellent }}× &lt;5° | {{ stats.crosshair_placement_good }}× 5-15° | {{ stats.crosshair_placement_average }}× 15-30° | {{ stats.crosshair_placement_poor }}× &gt;30°
             </div>
         </div>
         {% endif %}
@@ -208,6 +241,9 @@
             <tr><td>Opening Duels</td><td>{{ stats.opening_kills }}W / {{ stats.opening_deaths }}L</td></tr>
             <tr><td>Trade Kills</td><td>{{ stats.trade_kills }}</td></tr>
             <tr><td>Multi-Kills</td><td>{{ stats.multikill_str }}</td></tr>
+            {% if stats.crosshair_placement_kills > 0 %}
+            <tr><td>Crosshair Placement</td><td>{{ stats.crosshair_placement_str }}</td></tr>
+            {% endif %}
             <tr><td>Counter-Strafe</td><td>{{ "%.0f"|format(stats.counter_strafe_score) }}% (inacc: {{ "%.4f"|format(stats.avg_inaccuracy_move) }})</td></tr>
             <tr><td>Spray-Control</td><td>{{ stats.burst_spray_ratio }} (avg recoil: {{ "%.1f"|format(stats.avg_recoil_index) }})</td></tr>
             <tr><td>Waffen-Split</td><td>{{ stats.awp_rifle_split }}</td></tr>

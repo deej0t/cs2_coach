@@ -90,6 +90,13 @@ class PlayerStats:
     deaths_early: int = 0         # first third of round
     deaths_mid: int = 0           # middle third
     deaths_late: int = 0          # final third
+    # Crosshair Placement
+    crosshair_placement_sum: float = 0.0   # sum of angular errors in degrees
+    crosshair_placement_kills: int = 0     # number of kills analyzed
+    crosshair_placement_excellent: int = 0 # < 5°
+    crosshair_placement_good: int = 0      # 5-15°
+    crosshair_placement_average: int = 0   # 15-30°
+    crosshair_placement_poor: int = 0      # > 30°
 
     @property
     def kd_ratio(self) -> float:
@@ -193,6 +200,38 @@ class PlayerStats:
         )
 
     @property
+    def crosshair_placement_avg(self) -> float:
+        """Average crosshair placement error in degrees (lower = better)."""
+        if self.crosshair_placement_kills == 0:
+            return 0.0
+        return self.crosshair_placement_sum / self.crosshair_placement_kills
+
+    @property
+    def crosshair_placement_rating(self) -> str:
+        avg = self.crosshair_placement_avg
+        if self.crosshair_placement_kills == 0:
+            return "Keine Daten"
+        if avg < 5:
+            return "Exzellent"
+        if avg < 15:
+            return "Gut"
+        if avg < 30:
+            return "Durchschnittlich"
+        return "Schwach"
+
+    @property
+    def crosshair_placement_str(self) -> str:
+        if self.crosshair_placement_kills == 0:
+            return "Keine Daten"
+        avg = self.crosshair_placement_avg
+        return (
+            f"{avg:.1f}° avg ({self.crosshair_placement_excellent}× <5° | "
+            f"{self.crosshair_placement_good}× 5-15° | "
+            f"{self.crosshair_placement_average}× 15-30° | "
+            f"{self.crosshair_placement_poor}× >30°)"
+        )
+
+    @property
     def death_timing_str(self) -> str:
         total = self.deaths_early + self.deaths_mid + self.deaths_late
         if total == 0:
@@ -270,6 +309,17 @@ def _get_event_df(parser: DemoParser, event_name: str):
     if results and len(results) > 0:
         _, df = results[0]
         return df
+    return None
+
+
+def _get_enriched_event_df(parser: DemoParser, event_name: str, player_props: list[str]):
+    """Holt ein Event mit per-Tick Spieler-Props (Position, Blickwinkel etc.)."""
+    try:
+        df = parser.parse_event(event_name, player=player_props)
+        if df is not None and len(df) > 0:
+            return df
+    except Exception:
+        pass
     return None
 
 
@@ -379,7 +429,10 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
             if sid in player_lookup:
                 player_lookup[sid].shots_fired += 1
 
-    # 10) Per-Round-Analyse: KAST, Survival, Multi-Kills, CT/T-Split, Death-Timing
+    # 10) Crosshair Placement
+    _process_crosshair_placement(parser, player_lookup)
+
+    # 11) Per-Round-Analyse: KAST, Survival, Multi-Kills, CT/T-Split, Death-Timing
     if kills_df is not None and rounds_df is not None:
         _process_per_round(
             kills_df, rounds_df, freeze_ticks,
@@ -806,6 +859,172 @@ def _process_per_round(kills_df, rounds_df, freeze_ticks, player_lookup, team_by
                         stats.deaths_mid += 1
                     else:
                         stats.deaths_late += 1
+
+
+# -- Crosshair Placement --
+
+# Weapons to exclude from crosshair placement analysis
+_EXCLUDE_CP_WEAPONS = {
+    "weapon_knife", "knife", "weapon_knife_t", "knife_t",
+    "weapon_bayonet", "bayonet",
+    "weapon_hegrenade", "hegrenade",
+    "weapon_molotov", "molotov",
+    "weapon_incgrenade", "incgrenade",
+    "weapon_inferno", "inferno",
+    "weapon_c4", "c4",
+    "weapon_taser", "taser",
+}
+
+
+def _angular_error(
+    att_x: float, att_y: float, att_z: float,
+    att_yaw: float, att_pitch: float,
+    vic_x: float, vic_y: float, vic_z: float,
+) -> float:
+    """Berechnet den Winkel in Grad zwischen Blickrichtung und Zielposition.
+
+    Niedrigerer Wert = bessere Crosshair Placement.
+    """
+    dx = vic_x - att_x
+    dy = vic_y - att_y
+    dz = vic_z - att_z
+
+    dist_2d = math.sqrt(dx * dx + dy * dy)
+    if dist_2d < 1.0:
+        return 0.0  # Basically on top of each other
+
+    # Ideal angles to look directly at victim
+    ideal_yaw = math.degrees(math.atan2(dy, dx))
+    ideal_pitch = -math.degrees(math.atan2(dz, dist_2d))  # Source: negative = up
+
+    # Yaw difference (handle wrap-around at ±180°)
+    dyaw = att_yaw - ideal_yaw
+    dyaw = (dyaw + 180) % 360 - 180
+
+    # Pitch difference
+    dpitch = att_pitch - ideal_pitch
+
+    # Total angular error (spherical)
+    return math.sqrt(dyaw * dyaw + dpitch * dpitch)
+
+
+PRE_AIM_OFFSET_TICKS = 32  # ~0.5s before kill (64 ticks/s)
+
+
+def _process_crosshair_placement(parser: DemoParser, player_lookup: dict[str, "PlayerStats"]):
+    """Analysiert Crosshair Placement: Blickwinkel ~0.5s VOR dem Kill.
+
+    Misst den Winkel zwischen der Pre-Aim-Position des Fadenkreuzes und
+    der tatsächlichen Gegner-Position. Niedriger = bessere Vorausrichtung.
+    """
+    # 1) Get kills with victim positions at kill time
+    df = _get_enriched_event_df(
+        parser, "player_death",
+        ["X", "Y", "Z", "pitch", "yaw"],
+    )
+    if df is None:
+        return
+
+    required_cols = {"attacker_steamid", "attacker_pitch", "attacker_yaw",
+                     "user_X", "user_Y", "user_Z"}
+    if not required_cols.issubset(set(df.columns)):
+        return
+
+    # 2) Collect kill info and pre-aim ticks
+    kill_infos = []
+    pre_aim_ticks = set()
+
+    for _, row in df.iterrows():
+        attacker_id = str(row.get("attacker_steamid", ""))
+        if attacker_id not in player_lookup:
+            continue
+
+        weapon = str(row.get("weapon", "")).lower()
+        if weapon in _EXCLUDE_CP_WEAPONS:
+            continue
+        if int(row.get("penetrated", 0)) > 0:
+            continue
+
+        tick = int(row.get("tick", 0))
+        pre_tick = max(tick - PRE_AIM_OFFSET_TICKS, 0)
+
+        try:
+            vic_x = float(row["user_X"])
+            vic_y = float(row["user_Y"])
+            vic_z = float(row["user_Z"])
+        except (ValueError, KeyError):
+            continue
+
+        kill_infos.append({
+            "attacker_id": attacker_id,
+            "tick": tick,
+            "pre_tick": pre_tick,
+            "vic_x": vic_x,
+            "vic_y": vic_y,
+            "vic_z": vic_z,
+        })
+        pre_aim_ticks.add(pre_tick)
+
+    if not kill_infos:
+        return
+
+    # 3) Fetch attacker view angles at pre-aim ticks via parse_ticks
+    try:
+        tick_df = parser.parse_ticks(
+            ["pitch", "yaw", "X", "Y", "Z"],
+            ticks=sorted(pre_aim_ticks),
+        )
+    except Exception:
+        return
+
+    if tick_df is None or len(tick_df) == 0:
+        return
+
+    # Build lookup: (steamid, tick) -> (pitch, yaw, x, y, z)
+    tick_lookup: dict[tuple[str, int], tuple[float, float, float, float, float]] = {}
+    for _, trow in tick_df.iterrows():
+        sid = str(trow.get("steamid", ""))
+        t = int(trow.get("tick", 0))
+        try:
+            tick_lookup[(sid, t)] = (
+                float(trow["pitch"]),
+                float(trow["yaw"]),
+                float(trow["X"]),
+                float(trow["Y"]),
+                float(trow["Z"]),
+            )
+        except (ValueError, KeyError):
+            continue
+
+    # 4) Compute angular error for each kill
+    for ki in kill_infos:
+        key = (ki["attacker_id"], ki["pre_tick"])
+        if key not in tick_lookup:
+            continue
+
+        pre_pitch, pre_yaw, pre_x, pre_y, pre_z = tick_lookup[key]
+
+        error = _angular_error(
+            pre_x, pre_y, pre_z,
+            pre_yaw, pre_pitch,
+            ki["vic_x"], ki["vic_y"], ki["vic_z"],
+        )
+
+        if error > 180:
+            continue
+
+        stats = player_lookup[ki["attacker_id"]]
+        stats.crosshair_placement_sum += error
+        stats.crosshair_placement_kills += 1
+
+        if error < 5:
+            stats.crosshair_placement_excellent += 1
+        elif error < 15:
+            stats.crosshair_placement_good += 1
+        elif error < 30:
+            stats.crosshair_placement_average += 1
+        else:
+            stats.crosshair_placement_poor += 1
 
 
 def _clean_map_name(raw: str) -> str:

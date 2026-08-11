@@ -13,6 +13,7 @@ def generate_report(result: MatchResult) -> str:
         _adr_section(s),
         _kast_section(s),
         _opening_duels(s),
+        _crosshair_placement(s),
         _counter_strafe(s),
         _spray_control(s),
         _weapon_split(s),
@@ -127,6 +128,57 @@ def _opening_duels(s: PlayerStats) -> str:
             "Gute Opening-Duel-Bilanz. Du verschaffst deinem Team "
             "regelmäßig den Mannvorteil. Weiter so — aber variiere "
             "deine Peek-Timings, damit du nicht predictable wirst."
+        )
+
+    return "\n".join(lines) + "\n"
+
+
+def _crosshair_placement(s: PlayerStats) -> str:
+    if s.crosshair_placement_kills == 0:
+        return ""
+
+    avg = s.crosshair_placement_avg
+    lines = [
+        f"### Crosshair Placement: {avg:.1f}° avg ({s.crosshair_placement_rating})",
+        f"Verteilung: {s.crosshair_placement_str}",
+    ]
+
+    if avg > 25:
+        lines.append(
+            "**Dein Crosshair zeigt fast nie dahin, wo der Gegner auftaucht.** "
+            "Das bedeutet massive Nachkorrekturen bei jedem Fight — "
+            "du gibst dem Gegner einen Zeitvorteil, bevor du überhaupt schießen kannst. "
+            "[[Crosshair Placement]]: Fadenkreuz IMMER auf Kopfhöhe, "
+            "IMMER auf den nächsten erwarteten Gegner-Angle gerichtet. "
+            "Nicht auf den Boden schauen, nicht in die Luft — Head-Level, Pre-Aim."
+        )
+    elif avg > 15:
+        lines.append(
+            "Dein Fadenkreuz steht regelmäßig zu weit vom Gegner entfernt. "
+            "Du musst vor jedem Kill deutlich nachjustieren — das kostet Zeit. "
+            "[[Crosshair Placement]]: Beim Bewegen durch die Map das Crosshair "
+            "immer auf die nächste gefährliche Ecke richten, auf Kopfhöhe. "
+            "Üb das bewusst auf leeren Servern: Durch die Map laufen, "
+            "jede Ecke pre-aimen."
+        )
+    elif avg > 8:
+        lines.append(
+            "Solide Crosshair Placement. Dein Fadenkreuz ist meistens "
+            "in der Nähe des Gegners, aber noch nicht tight genug für sofortige "
+            "Head-Level-Kills. Feinschliff: Tighter an den Angle kleben, "
+            "weniger 'offene' Crosshair-Position in der Map-Mitte."
+        )
+    elif avg > 4:
+        lines.append(
+            "Gute Crosshair Placement. Du pre-aimst die meisten Positionen sauber. "
+            "Die kleinen Korrekturen, die du noch brauchst, sind minimal — "
+            "das gibt dir einen echten Zeitvorteil in Duellen."
+        )
+    else:
+        lines.append(
+            "Exzellente Crosshair Placement. Dein Fadenkreuz sitzt fast immer "
+            "genau da, wo der Gegner auftaucht. Minimale Mausbewegung nötig — "
+            "das ist Pro-Level Pre-Aim."
         )
 
     return "\n".join(lines) + "\n"
@@ -489,6 +541,8 @@ def _overall_verdict(r: MatchResult) -> str:
     lines = ["### Gesamtbewertung\n"]
 
     weaknesses = []
+    if s.crosshair_placement_kills > 0 and s.crosshair_placement_avg > 15:
+        weaknesses.append("[[Crosshair Placement]]")
     if s.counter_strafe_score < 70:
         weaknesses.append("[[Counter-Strafing]]")
     if s.opening_deaths > s.opening_kills:

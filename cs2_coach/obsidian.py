@@ -90,6 +90,7 @@ def _build_stats_table(s: PlayerStats) -> str:
         f"| HS% | {s.headshot_pct:.0f}% |",
         f"| Opening Duels | {s.opening_kills}W / {s.opening_deaths}L |",
         f"| Trade Kills | {s.trade_kills} |",
+        f"| Crosshair Placement | {s.crosshair_placement_avg:.1f}° ({s.crosshair_placement_rating}) |",
         f"| Counter-Strafe | {s.counter_strafe_score:.0f}% |",
         f"| Spray-Control | {s.burst_spray_ratio} |",
         f"| Waffen-Split | {s.awp_rifle_split} |",
@@ -142,6 +143,8 @@ def _generate_tags(result: MatchResult) -> list[str]:
     elif result.result_str == "Niederlage":
         tags.append("niederlage")
 
+    if s.crosshair_placement_kills > 0 and s.crosshair_placement_avg > 15:
+        tags.append("crosshair-placement-schwach")
     if s.counter_strafe_score < 70:
         tags.append("counter-strafe-problem")
     if s.adr < 70:
@@ -169,6 +172,8 @@ def _build_links_section(result: MatchResult) -> str:
     if s.rifle_kills > 0:
         links.add("[[Rifle]]")
 
+    if s.crosshair_placement_kills > 0 and s.crosshair_placement_avg > 15:
+        links.add("[[Crosshair Placement]]")
     if s.counter_strafe_score < 80:
         links.add("[[Counter-Strafing]]")
     if s.opening_deaths > s.opening_kills:
@@ -197,6 +202,28 @@ def _build_links_section(result: MatchResult) -> str:
 
 
 CONCEPT_NOTES = {
+    "Crosshair Placement": (
+        "# Crosshair Placement\n\n"
+        "Die Position deines Fadenkreuzes BEVOR ein Fight beginnt.\n\n"
+        "## Prinzip\n"
+        "Das Crosshair muss immer auf Kopfhöhe zeigen und auf den "
+        "nächsten erwarteten Gegner-Angle gerichtet sein. Je weniger "
+        "Mausbewegung nötig ist, desto schneller der Kill.\n\n"
+        "## Messung\n"
+        "- Gemessen in Grad (°): Winkel zwischen Fadenkreuz-Position "
+        "0.5s vor dem Kill und Gegner-Position\n"
+        "- < 5° = Exzellent (Pro-Level)\n"
+        "- 5-15° = Gut\n"
+        "- 15-30° = Durchschnittlich (zu viel Nachkorrektur)\n"
+        "- > 30° = Schwach (Crosshair zeigt komplett woanders hin)\n\n"
+        "## Training\n"
+        "- Auf leeren Servern durch die Map laufen und jeden Angle pre-aimen\n"
+        "- Workshop: Prefire Maps (Yprac)\n"
+        "- Deathmatch: Bewusst Kopfhöhe halten\n"
+        "- Beim Bewegen nie auf den Boden schauen\n\n"
+        "## Verwandte Konzepte\n"
+        "[[Counter-Strafing]] · [[Opening Duels]] · [[Positionierung]]\n"
+    ),
     "Counter-Strafing": (
         "# Counter-Strafing\n\n"
         "Die Grundmechanik für präzises Schießen in CS2.\n\n"
