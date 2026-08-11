@@ -4,16 +4,21 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import sys
 import tempfile
 from pathlib import Path
 
 import yaml
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, stream_with_context
 from werkzeug.utils import secure_filename
+
+from demoparser2 import DemoParser
 
 from ..parser import parse_demo, MatchResult
 from ..coach import generate_report
 from ..obsidian import export_match
+from ..maps import MAP_RADAR_DATA, game_to_radar
 
 CONFIG_PATH = Path(__file__).parent.parent.parent / "config.yaml"
 UPLOAD_FOLDER = tempfile.mkdtemp(prefix="cs2coach_")
@@ -32,6 +37,8 @@ def create_app() -> Flask:
     app.secret_key = os.urandom(24)
     app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
     app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500MB max
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # no static file caching in dev
 
     cfg = load_config()
 
@@ -80,6 +87,7 @@ def create_app() -> Flask:
                 report=report,
                 stats=result.player_stats,
                 obsidian_path=obsidian_path,
+                kill_map_data=_build_kill_map_data(result),
                 config=cfg,
             )
         except Exception as e:
@@ -116,6 +124,7 @@ def create_app() -> Flask:
                 report=report,
                 stats=result.player_stats,
                 obsidian_path=obsidian_path,
+                kill_map_data=_build_kill_map_data(result),
                 config=cfg,
             )
         except Exception as e:
@@ -149,6 +158,90 @@ def create_app() -> Flask:
             if os.path.exists(filepath):
                 os.remove(filepath)
 
+    @app.route("/api/players", methods=["POST"])
+    def api_players():
+        """Return player list from a demo file (upload or local path)."""
+        demo_path = request.form.get("demo_path", "").strip()
+
+        if demo_path and Path(demo_path).exists():
+            filepath = demo_path
+            cleanup = False
+        elif "demo" in request.files and request.files["demo"].filename:
+            file = request.files["demo"]
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            file.save(filepath)
+            cleanup = True
+        else:
+            return jsonify({"error": "Keine Demo angegeben"}), 400
+
+        try:
+            p = DemoParser(str(filepath))
+            info = p.parse_player_info()
+            players = []
+            for _, row in info.iterrows():
+                name = str(row.get("name", ""))
+                sid = str(row.get("steamid", ""))
+                if name and sid:
+                    players.append({"name": name, "steamid": sid})
+            return jsonify({"players": players})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+        finally:
+            if cleanup and os.path.exists(filepath):
+                os.remove(filepath)
+
+    @app.route("/batch", methods=["GET"])
+    def batch():
+        return render_template("batch.html", config=cfg)
+
+    @app.route("/api/batch-stream")
+    def batch_stream():
+        """SSE endpoint: streams progress for each demo in a folder."""
+        folder = request.args.get("folder", "").strip()
+        player_name = request.args.get("player", cfg.get("player_name", ""))
+        steam_id = request.args.get("steamid", cfg.get("steam_id", ""))
+
+        folder_path = Path(folder)
+        if not folder_path.is_dir():
+            def err():
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Ordner nicht gefunden'})}\n\n"
+            return Response(err(), mimetype="text/event-stream")
+
+        demos = sorted(folder_path.glob("*.dem"))
+        if not demos:
+            def err():
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Keine .dem-Dateien gefunden'})}\n\n"
+            return Response(err(), mimetype="text/event-stream")
+
+        def generate():
+            total = len(demos)
+            yield f"data: {json.dumps({'type': 'init', 'total': total})}\n\n"
+
+            for i, demo in enumerate(demos):
+                try:
+                    result = parse_demo(str(demo), player_name, steam_id)
+                    report = generate_report(result)
+
+                    vault_path = cfg.get("obsidian_vault_path", "")
+                    sub = cfg.get("coach_subfolder", "CS2-Coach")
+                    if vault_path:
+                        export_match(result, report, vault_path, sub)
+
+                    s = result.player_stats
+                    yield f"data: {json.dumps({'type': 'result', 'current': i + 1, 'total': total, 'demo_path': str(demo), 'filename': demo.name, 'map': result.map_name, 'date': result.match_date, 'score': f'{result.score_team1}:{result.score_team2}', 'result_str': result.result_str, 'kills': s.kills, 'deaths': s.deaths, 'assists': s.assists, 'adr': round(s.adr, 1), 'hs_pct': round(s.headshot_pct, 1), 'kast_pct': round(s.kast_pct, 1), 'rating': result.rating})}\n\n"
+                except Exception as e:
+                    yield f"data: {json.dumps({'type': 'error_item', 'current': i + 1, 'total': total, 'filename': demo.name, 'message': str(e)})}\n\n"
+
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+    @app.route("/trends")
+    def trends():
+        export_list = _get_exports(cfg)
+        return render_template("trends.html", exports=export_list, config=cfg)
+
     @app.route("/exports")
     def exports():
         export_list = _get_exports(cfg)
@@ -167,6 +260,112 @@ def create_app() -> Flask:
 
         data = json.loads(filepath.read_text(encoding="utf-8"))
         return render_template("export_detail.html", data=data, filename=filename, config=cfg)
+
+    @app.route("/settings")
+    def settings():
+        # Always reload config from disk
+        current = load_config()
+        # Count exports
+        vault_path = current.get("obsidian_vault_path", "")
+        subfolder = current.get("coach_subfolder", "CS2-Coach")
+        export_dir = Path(vault_path) / subfolder / "exports" if vault_path else None
+        export_count = len(list(export_dir.glob("*_coach.json"))) if export_dir and export_dir.exists() else 0
+        notes_dir = Path(vault_path) / subfolder / "matches" if vault_path else None
+        notes_count = len(list(notes_dir.glob("*.md"))) if notes_dir and notes_dir.exists() else 0
+        # Count pycache
+        project_root = Path(__file__).parent.parent.parent
+        pycache_dirs = list(project_root.rglob("__pycache__"))
+        pyc_count = sum(len(list(d.glob("*.pyc"))) for d in pycache_dirs)
+        return render_template(
+            "settings.html",
+            config=current,
+            config_path=str(CONFIG_PATH),
+            export_count=export_count,
+            notes_count=notes_count,
+            pyc_count=pyc_count,
+            pycache_count=len(pycache_dirs),
+        )
+
+    @app.route("/settings/save", methods=["POST"])
+    def settings_save():
+        new_cfg = {
+            "obsidian_vault_path": request.form.get("obsidian_vault_path", "").strip(),
+            "coach_subfolder": request.form.get("coach_subfolder", "CS2-Coach").strip(),
+            "player_name": request.form.get("player_name", "").strip(),
+            "steam_id": request.form.get("steam_id", "").strip(),
+            "language": request.form.get("language", "de").strip(),
+        }
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            f.write("# CS2-Coach Konfiguration\n")
+            yaml.dump(new_cfg, f, default_flow_style=False, allow_unicode=True)
+        # Reload into running app
+        cfg.clear()
+        cfg.update(new_cfg)
+        flash("Einstellungen gespeichert.", "success")
+        return redirect(url_for("settings"))
+
+    @app.route("/settings/clear-cache", methods=["POST"])
+    def settings_clear_cache():
+        project_root = Path(__file__).parent.parent.parent
+        cleared = 0
+        for d in project_root.rglob("__pycache__"):
+            shutil.rmtree(d, ignore_errors=True)
+            cleared += 1
+        flash(f"{cleared} __pycache__-Ordner geloescht. Neustart empfohlen.", "success")
+        return redirect(url_for("settings"))
+
+    @app.route("/settings/reset-exports", methods=["POST"])
+    def settings_reset_exports():
+        vault_path = cfg.get("obsidian_vault_path", "")
+        subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+        if not vault_path:
+            flash("Kein Vault-Pfad konfiguriert.", "error")
+            return redirect(url_for("settings"))
+        removed = 0
+        export_dir = Path(vault_path) / subfolder / "exports"
+        if export_dir.exists():
+            for f in export_dir.glob("*_coach.json"):
+                f.unlink()
+                removed += 1
+        flash(f"{removed} Export-Dateien geloescht.", "success")
+        return redirect(url_for("settings"))
+
+    @app.route("/settings/reset-notes", methods=["POST"])
+    def settings_reset_notes():
+        vault_path = cfg.get("obsidian_vault_path", "")
+        subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+        if not vault_path:
+            flash("Kein Vault-Pfad konfiguriert.", "error")
+            return redirect(url_for("settings"))
+        removed = 0
+        notes_dir = Path(vault_path) / subfolder / "matches"
+        if notes_dir.exists():
+            for f in notes_dir.glob("*.md"):
+                f.unlink()
+                removed += 1
+        flash(f"{removed} Obsidian-Notizen geloescht.", "success")
+        return redirect(url_for("settings"))
+
+    @app.route("/settings/reset-all", methods=["POST"])
+    def settings_reset_all():
+        vault_path = cfg.get("obsidian_vault_path", "")
+        subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+        removed = 0
+        if vault_path:
+            base = Path(vault_path) / subfolder
+            for subdir in ["exports", "matches", "concepts"]:
+                d = base / subdir
+                if d.exists():
+                    for f in d.iterdir():
+                        if f.is_file():
+                            f.unlink()
+                            removed += 1
+        # Also clear pycache
+        project_root = Path(__file__).parent.parent.parent
+        for d in project_root.rglob("__pycache__"):
+            shutil.rmtree(d, ignore_errors=True)
+        flash(f"Komplett-Reset: {removed} Dateien + __pycache__ geloescht.", "success")
+        return redirect(url_for("settings"))
 
     return app
 
@@ -197,6 +396,12 @@ def _get_exports(cfg: dict) -> list[dict]:
                 "adr": player.get("adr", 0),
                 "rating": player.get("rating", 0),
                 "kast": player.get("kast_pct", 0),
+                "hs_pct": player.get("hs_pct", 0),
+                "kills": player.get("kills", 0),
+                "deaths": player.get("deaths", 0),
+                "crosshair_placement": player.get("crosshair_placement", {}).get("avg_degrees", 0),
+                "counter_strafe": player.get("counter_strafe_score", 0),
+                "utility_per_round": player.get("utility_per_round", 0),
             })
         except (json.JSONDecodeError, KeyError):
             continue
@@ -239,4 +444,43 @@ def _build_api_json(result: MatchResult) -> dict:
         },
         "report": generate_report(result),
         "scoreboard": scoreboard,
+    }
+
+
+def _build_kill_map_data(result: MatchResult) -> dict | None:
+    """Build kill map JSON for canvas rendering. Returns None if map not supported."""
+    map_key = result.map_name.lower()
+    if map_key not in MAP_RADAR_DATA:
+        return None
+    if not result.kill_positions:
+        return None
+
+    target_id = result.player_stats.steam_id
+    dots = []
+    for kp in result.kill_positions:
+        att_pos = game_to_radar(kp["attacker_x"], kp["attacker_y"], map_key)
+        vic_pos = game_to_radar(kp["victim_x"], kp["victim_y"], map_key)
+        if not att_pos or not vic_pos:
+            continue
+
+        is_attacker = kp["attacker_id"] == target_id
+        is_victim = kp["victim_id"] == target_id
+
+        if is_attacker:
+            dots.append({
+                "x": round(att_pos[0], 1), "y": round(att_pos[1], 1),
+                "type": "kill", "weapon": kp["weapon"],
+                "headshot": kp["headshot"],
+                "label": f"Kill: {kp['victim_name']}",
+            })
+        if is_victim:
+            dots.append({
+                "x": round(vic_pos[0], 1), "y": round(vic_pos[1], 1),
+                "type": "death", "weapon": kp["weapon"],
+                "label": f"Death by {kp['attacker_name']}",
+            })
+
+    return {
+        "map": map_key,
+        "dots": dots,
     }

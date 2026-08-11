@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Batch-Analyse{% endblock %}
+
+{% block content %}
+<style>
+    .sort-header { cursor: pointer; user-select: none; }
+    .sort-header:hover { color: var(--color-accent); }
+    .sort-header::after { content: ''; display: inline-block; width: 12px; margin-left: 4px; }
+    .sort-header.sort-asc::after { content: '\25B2'; font-size: 8px; vertical-align: middle; }
+    .sort-header.sort-desc::after { content: '\25BC'; font-size: 8px; vertical-align: middle; }
+</style>
+
+<h2>Batch-Analyse</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Analysiere alle .dem-Dateien in einem Ordner auf einmal.
+</p>
+
+<!-- Form -->
+<div id="batch-form-card" class="card elev-sm" style="max-width: 600px; margin-bottom: var(--space-5);">
+    <span class="card-kicker">Ordner</span>
+    <h3 class="card-title">Demos aus Ordner analysieren</h3>
+    <form id="batch-form" style="display:flex;flex-direction:column;gap:var(--space-3);">
+        <div class="field">
+            <label>Ordner-Pfad</label>
+            <input type="text" name="folder_path" id="batch-folder" placeholder="D:/SteamLibrary/.../replays/" required class="input">
+        </div>
+        <div class="grid-2">
+            <div class="field">
+                <label>Spieler-Name</label>
+                <input type="text" name="player" id="batch-player" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input">
+            </div>
+            <div class="field">
+                <label>SteamID64 (optional)</label>
+                <input type="text" name="steamid" id="batch-steamid" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input">
+            </div>
+        </div>
+        <div style="display: flex; gap: var(--space-3); align-items: center;">
+            <button type="submit" id="batch-submit" class="btn btn-primary">Alle analysieren</button>
+            <button type="button" id="batch-reset" class="btn btn-secondary" style="display:none;">Reset</button>
+        </div>
+    </form>
+</div>
+
+<!-- Progress (hidden initially) -->
+<div id="batch-progress" style="display:none; margin-bottom: var(--space-5);">
+    <div class="card elev-sm" style="padding: var(--space-4);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span class="card-kicker" id="progress-label">Analysiere...</span>
+            <span style="font-size: 13px; color: var(--color-neutral-300);" id="progress-count">0 / 0</span>
+        </div>
+        <div style="position: relative; height: 8px; background: var(--color-neutral-800); border-radius: 4px; overflow: hidden;">
+            <div id="progress-bar" style="position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: var(--color-accent); border-radius: 4px; transition: width 0.3s ease;"></div>
+        </div>
+        <div id="progress-file" style="margin-top: 6px; font-size: 11px; color: var(--color-neutral-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></div>
+    </div>
+</div>
+
+<!-- Errors -->
+<div id="batch-errors" style="display:none; margin-bottom: var(--space-5);"></div>
+
+<!-- Summary (hidden initially) -->
+<div id="batch-summary" style="display:none; margin-bottom: var(--space-5);">
+    <div class="grid-3">
+        <div class="card elev-sm">
+            <div class="card-kicker">Bilanz</div>
+            <div id="summary-record" style="font-size: 28px; font-weight: 500;"></div>
+        </div>
+        <div class="card elev-sm">
+            <div class="card-kicker">Avg Rating</div>
+            <div id="summary-rating" style="font-size: 28px; font-weight: 500;"></div>
+        </div>
+        <div class="card elev-sm">
+            <div class="card-kicker">Gesamt K/D</div>
+            <div id="summary-kd" style="font-size: 28px; font-weight: 500;"></div>
+            <div id="summary-kd-ratio" style="font-size: 12px; color: var(--color-neutral-500);"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Results Table (hidden initially) -->
+<div id="batch-results" style="display:none;">
+    <table class="table" id="results-table">
+        <thead>
+            <tr>
+                <th class="sort-header" data-sort="date">Datum</th>
+                <th class="sort-header" data-sort="map">Map</th>
+                <th>Score</th>
+                <th class="sort-header" data-sort="result">Ergebnis</th>
+                <th class="sort-header" data-sort="kills">K/D/A</th>
+                <th class="sort-header" data-sort="adr">ADR</th>
+                <th class="sort-header" data-sort="hs_pct">HS%</th>
+                <th class="sort-header" data-sort="kast_pct">KAST%</th>
+                <th class="sort-header" data-sort="rating">Rating</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var form = document.getElementById('batch-form');
+    var submitBtn = document.getElementById('batch-submit');
+    var resetBtn = document.getElementById('batch-reset');
+    var progressDiv = document.getElementById('batch-progress');
+    var progressBar = document.getElementById('progress-bar');
+    var progressCount = document.getElementById('progress-count');
+    var progressLabel = document.getElementById('progress-label');
+    var progressFile = document.getElementById('progress-file');
+    var errorsDiv = document.getElementById('batch-errors');
+    var summaryDiv = document.getElementById('batch-summary');
+    var resultsDiv = document.getElementById('batch-results');
+    var resultsBody = document.getElementById('results-body');
+
+    var allResults = [];
+    var allErrors = [];
+    var currentES = null;
+
+    // ---- Reset ----
+    resetBtn.addEventListener('click', function() {
+        if (currentES) { currentES.close(); currentES = null; }
+        allResults = [];
+        allErrors = [];
+        resultsBody.innerHTML = '';
+        errorsDiv.innerHTML = '';
+        errorsDiv.style.display = 'none';
+        summaryDiv.style.display = 'none';
+        resultsDiv.style.display = 'none';
+        progressDiv.style.display = 'none';
+        progressBar.style.width = '0%';
+        progressBar.style.background = 'var(--color-accent)';
+        resetBtn.style.display = 'none';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Alle analysieren';
+        // Clear sort indicators
+        document.querySelectorAll('.sort-header').forEach(function(th) {
+            th.classList.remove('sort-asc', 'sort-desc');
+        });
+    });
+
+    // ---- Batch submit ----
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        var folder = document.getElementById('batch-folder').value.trim();
+        var player = document.getElementById('batch-player').value.trim();
+        var steamid = document.getElementById('batch-steamid').value.trim();
+
+        if (!folder) return;
+
+        // Reset UI
+        allResults = [];
+        allErrors = [];
+        resultsBody.innerHTML = '';
+        errorsDiv.innerHTML = '';
+        errorsDiv.style.display = 'none';
+        summaryDiv.style.display = 'none';
+        progressDiv.style.display = '';
+        resultsDiv.style.display = '';
+        progressBar.style.width = '0%';
+        progressBar.style.background = 'var(--color-accent)';
+        progressCount.textContent = '0 / ?';
+        progressLabel.textContent = 'Analysiere...';
+        progressFile.textContent = '';
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Laeuft...';
+        resetBtn.style.display = '';
+
+        var params = new URLSearchParams({folder: folder, player: player, steamid: steamid});
+        var es = new EventSource('{{ url_for("batch_stream") }}?' + params.toString());
+        currentES = es;
+
+        es.onmessage = function(event) {
+            var d = JSON.parse(event.data);
+
+            if (d.type === 'error') {
+                es.close(); currentES = null;
+                progressLabel.textContent = 'Fehler';
+                progressFile.textContent = d.message;
+                progressBar.style.background = 'var(--color-red)';
+                progressBar.style.width = '100%';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Alle analysieren';
+                return;
+            }
+
+            if (d.type === 'init') {
+                progressCount.textContent = '0 / ' + d.total;
+                return;
+            }
+
+            if (d.type === 'result') {
+                allResults.push(d);
+                var pct = (d.current / d.total * 100).toFixed(1);
+                progressBar.style.width = pct + '%';
+                progressCount.textContent = d.current + ' / ' + d.total;
+                progressFile.textContent = d.filename;
+                addResultRow(d);
+                return;
+            }
+
+            if (d.type === 'error_item') {
+                allErrors.push(d);
+                var pct = (d.current / d.total * 100).toFixed(1);
+                progressBar.style.width = pct + '%';
+                progressCount.textContent = d.current + ' / ' + d.total;
+                progressFile.textContent = d.filename + ' (Fehler)';
+
+                errorsDiv.style.display = '';
+                var div = document.createElement('div');
+                div.className = 'flash error';
+                div.style.marginBottom = '4px';
+                div.textContent = d.filename + ': ' + d.message;
+                errorsDiv.appendChild(div);
+                return;
+            }
+
+            if (d.type === 'done') {
+                es.close(); currentES = null;
+                progressLabel.textContent = 'Fertig';
+                progressBar.style.width = '100%';
+                progressBar.style.background = 'var(--color-green)';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Alle analysieren';
+                updateSummary();
+                return;
+            }
+        };
+
+        es.onerror = function() {
+            es.close(); currentES = null;
+            progressLabel.textContent = 'Verbindung verloren';
+            progressBar.style.background = 'var(--color-red)';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Alle analysieren';
+        };
+    });
+
+    // ---- Add result row ----
+    function addResultRow(d) {
+        var resultClass = d.result_str === 'Sieg' ? 'tag-win' : d.result_str === 'Niederlage' ? 'tag-loss' : 'tag-draw';
+        var resultOrder = d.result_str === 'Sieg' ? 2 : d.result_str === 'Niederlage' ? 0 : 1;
+        var tr = document.createElement('tr');
+        // Store sortable values as data attributes
+        tr.dataset.date = d.date || '';
+        tr.dataset.map = (d.map || '').toLowerCase();
+        tr.dataset.result = resultOrder;
+        tr.dataset.kills = d.kills;
+        tr.dataset.adr = d.adr;
+        tr.dataset.hs_pct = d.hs_pct;
+        tr.dataset.kast_pct = d.kast_pct;
+        tr.dataset.rating = d.rating;
+
+        tr.innerHTML =
+            '<td style="color:var(--color-neutral-500);">' + esc(d.date) + '</td>' +
+            '<td>' + esc(d.map) + '</td>' +
+            '<td>' + esc(d.score) + '</td>' +
+            '<td><span class="tag ' + resultClass + '">' + esc(d.result_str) + '</span></td>' +
+            '<td>' + d.kills + '/' + d.deaths + '/' + d.assists + '</td>' +
+            '<td>' + d.adr + '</td>' +
+            '<td>' + d.hs_pct + '%</td>' +
+            '<td>' + d.kast_pct + '%</td>' +
+            '<td>' + d.rating + '</td>' +
+            '<td>' +
+                '<form action="{{ url_for("analyze_path") }}" method="post" style="display:inline;">' +
+                    '<input type="hidden" name="demo_path" value="' + escAttr(d.demo_path) + '">' +
+                    '<input type="hidden" name="player" value="' + escAttr(document.getElementById('batch-player').value) + '">' +
+                    '<input type="hidden" name="steamid" value="' + escAttr(document.getElementById('batch-steamid').value) + '">' +
+                    '<button type="submit" class="btn btn-ghost" style="font-size:12px;padding:2px 8px;">Details &rarr;</button>' +
+                '</form>' +
+            '</td>';
+        resultsBody.appendChild(tr);
+    }
+
+    // ---- Sortable columns ----
+    var sortState = { key: null, asc: true };
+
+    document.querySelectorAll('.sort-header').forEach(function(th) {
+        th.addEventListener('click', function() {
+            var key = this.dataset.sort;
+            if (sortState.key === key) {
+                sortState.asc = !sortState.asc;
+            } else {
+                sortState.key = key;
+                sortState.asc = true;
+            }
+
+            // Update header indicators
+            document.querySelectorAll('.sort-header').forEach(function(h) {
+                h.classList.remove('sort-asc', 'sort-desc');
+            });
+            this.classList.add(sortState.asc ? 'sort-asc' : 'sort-desc');
+
+            // Sort rows
+            var rows = Array.from(resultsBody.querySelectorAll('tr'));
+            var isNumeric = ['kills', 'adr', 'hs_pct', 'kast_pct', 'rating', 'result'].indexOf(key) !== -1;
+
+            rows.sort(function(a, b) {
+                var va = a.dataset[key] || '';
+                var vb = b.dataset[key] || '';
+                var cmp;
+                if (isNumeric) {
+                    cmp = parseFloat(va) - parseFloat(vb);
+                } else {
+                    cmp = va.localeCompare(vb);
+                }
+                return sortState.asc ? cmp : -cmp;
+            });
+
+            rows.forEach(function(row) { resultsBody.appendChild(row); });
+        });
+    });
+
+    // ---- Summary ----
+    function updateSummary() {
+        if (allResults.length === 0) return;
+        summaryDiv.style.display = '';
+
+        var wins = 0, losses = 0, draws = 0;
+        var totalK = 0, totalD = 0, ratingSum = 0;
+        for (var i = 0; i < allResults.length; i++) {
+            var r = allResults[i];
+            if (r.result_str === 'Sieg') wins++;
+            else if (r.result_str === 'Niederlage') losses++;
+            else draws++;
+            totalK += r.kills;
+            totalD += r.deaths;
+            ratingSum += r.rating;
+        }
+
+        var record = '<span class="win">' + wins + 'W</span> / <span class="loss">' + losses + 'L</span>';
+        if (draws > 0) record += ' / <span class="draw">' + draws + 'D</span>';
+        document.getElementById('summary-record').innerHTML = record;
+        document.getElementById('summary-rating').textContent = (ratingSum / allResults.length).toFixed(2);
+        document.getElementById('summary-kd').textContent = totalK + '/' + totalD;
+        document.getElementById('summary-kd-ratio').textContent = 'Ratio: ' + (totalK / Math.max(totalD, 1)).toFixed(2);
+    }
+
+    // ---- Helpers ----
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = s || '';
+        return d.innerHTML;
+    }
+
+    function escAttr(s) {
+        return (s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+})();
+</script>
+{% endblock %}

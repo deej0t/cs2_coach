@@ -127,7 +127,10 @@
     <nav class="nav">
         <a href="{{ url_for('index') }}" class="nav-brand">CS2 Coach</a>
         <a href="{{ url_for('index') }}">Analyse</a>
+        <a href="{{ url_for('batch') }}">Batch</a>
+        <a href="{{ url_for('trends') }}">Trends</a>
         <a href="{{ url_for('exports') }}">Exports</a>
+        <a href="{{ url_for('settings') }}">Einstellungen</a>
     </nav>
     <div class="{% block container_class %}container{% endblock %}">
         {% with messages = get_flashed_messages(with_categories=true) %}

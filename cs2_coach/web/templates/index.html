@@ -8,19 +8,25 @@
     <div class="card elev-sm">
         <span class="card-kicker">Upload</span>
         <h3 class="card-title">Demo hochladen</h3>
-        <form action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:var(--space-3);">
+        <form id="upload-form" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:var(--space-3);">
             <div class="field">
                 <label>Demo-Datei (.dem)</label>
-                <input type="file" name="demo" accept=".dem" required class="input">
+                <input type="file" name="demo" accept=".dem" required class="input" id="upload-demo-file">
+            </div>
+            <div class="field" id="upload-player-select" style="display:none;">
+                <label>Spieler auswaehlen</label>
+                <select name="player_select" class="input" id="upload-player-dropdown">
+                    <option value="">Spieler werden geladen...</option>
+                </select>
             </div>
             <div class="grid-2">
                 <div class="field">
                     <label>Spieler-Name</label>
-                    <input type="text" name="player" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input">
+                    <input type="text" name="player" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input" id="upload-player-name">
                 </div>
                 <div class="field">
                     <label>SteamID64 (optional)</label>
-                    <input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input">
+                    <input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input" id="upload-steamid">
                 </div>
             </div>
             <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Analysieren</button>
@@ -30,19 +36,25 @@
     <div class="card elev-sm">
         <span class="card-kicker">Lokal</span>
         <h3 class="card-title">Lokaler Pfad</h3>
-        <form action="{{ url_for('analyze_path') }}" method="post" style="display:flex;flex-direction:column;gap:var(--space-3);">
+        <form id="path-form" action="{{ url_for('analyze_path') }}" method="post" style="display:flex;flex-direction:column;gap:var(--space-3);">
             <div class="field">
                 <label>Pfad zur Demo-Datei</label>
-                <input type="text" name="demo_path" placeholder="D:/SteamLibrary/.../replays/match730_xxx.dem" class="input">
+                <input type="text" name="demo_path" placeholder="D:/SteamLibrary/.../replays/match730_xxx.dem" class="input" id="path-demo-input">
+            </div>
+            <div class="field" id="path-player-select" style="display:none;">
+                <label>Spieler auswaehlen</label>
+                <select name="player_select" class="input" id="path-player-dropdown">
+                    <option value="">Spieler werden geladen...</option>
+                </select>
             </div>
             <div class="grid-2">
                 <div class="field">
                     <label>Spieler-Name</label>
-                    <input type="text" name="player" value="{{ config.get('player_name', '') }}" class="input">
+                    <input type="text" name="player" value="{{ config.get('player_name', '') }}" class="input" id="path-player-name">
                 </div>
                 <div class="field">
                     <label>SteamID64 (optional)</label>
-                    <input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" class="input">
+                    <input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" class="input" id="path-steamid">
                 </div>
             </div>
             <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Analysieren</button>
@@ -91,4 +103,93 @@
 <p style="margin-top: var(--space-4);"><a href="{{ url_for('exports') }}" class="btn btn-ghost">Alle {{ exports|length }} Exports anzeigen →</a></p>
 {% endif %}
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    // Upload form: fetch players when file is selected
+    var uploadFile = document.getElementById('upload-demo-file');
+    var uploadSelect = document.getElementById('upload-player-select');
+    var uploadDropdown = document.getElementById('upload-player-dropdown');
+    var uploadName = document.getElementById('upload-player-name');
+    var uploadSteamid = document.getElementById('upload-steamid');
+
+    uploadFile.addEventListener('change', function() {
+        if (!this.files[0]) return;
+        var fd = new FormData();
+        fd.append('demo', this.files[0]);
+        uploadDropdown.innerHTML = '<option value="">Lade Spieler...</option>';
+        uploadSelect.style.display = '';
+        fetch('{{ url_for("api_players") }}', {method: 'POST', body: fd})
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.players) {
+                    uploadDropdown.innerHTML = '<option value="">— Spieler waehlen —</option>';
+                    data.players.forEach(function(p) {
+                        var opt = document.createElement('option');
+                        opt.value = p.steamid;
+                        opt.textContent = p.name + ' (' + p.steamid + ')';
+                        opt.dataset.name = p.name;
+                        uploadDropdown.appendChild(opt);
+                    });
+                }
+            })
+            .catch(function() {
+                uploadDropdown.innerHTML = '<option value="">Fehler beim Laden</option>';
+            });
+    });
+
+    uploadDropdown.addEventListener('change', function() {
+        var opt = this.options[this.selectedIndex];
+        if (opt.value) {
+            uploadName.value = opt.dataset.name || '';
+            uploadSteamid.value = opt.value;
+        }
+    });
+
+    // Path form: fetch players on blur
+    var pathInput = document.getElementById('path-demo-input');
+    var pathSelect = document.getElementById('path-player-select');
+    var pathDropdown = document.getElementById('path-player-dropdown');
+    var pathName = document.getElementById('path-player-name');
+    var pathSteamid = document.getElementById('path-steamid');
+    var lastPathFetched = '';
+
+    pathInput.addEventListener('blur', function() {
+        var val = this.value.trim();
+        if (!val || !val.toLowerCase().endsWith('.dem') || val === lastPathFetched) return;
+        lastPathFetched = val;
+        var fd = new FormData();
+        fd.append('demo_path', val);
+        pathDropdown.innerHTML = '<option value="">Lade Spieler...</option>';
+        pathSelect.style.display = '';
+        fetch('{{ url_for("api_players") }}', {method: 'POST', body: fd})
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.players) {
+                    pathDropdown.innerHTML = '<option value="">— Spieler waehlen —</option>';
+                    data.players.forEach(function(p) {
+                        var opt = document.createElement('option');
+                        opt.value = p.steamid;
+                        opt.textContent = p.name + ' (' + p.steamid + ')';
+                        opt.dataset.name = p.name;
+                        pathDropdown.appendChild(opt);
+                    });
+                }
+            })
+            .catch(function() {
+                pathDropdown.innerHTML = '<option value="">Fehler beim Laden</option>';
+            });
+    });
+
+    pathDropdown.addEventListener('change', function() {
+        var opt = this.options[this.selectedIndex];
+        if (opt.value) {
+            pathName.value = opt.dataset.name || '';
+            pathSteamid.value = opt.value;
+        }
+    });
+})();
+</script>
 {% endblock %}

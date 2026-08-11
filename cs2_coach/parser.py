@@ -250,6 +250,7 @@ class MatchResult:
     score_team2: int
     player_stats: PlayerStats
     all_players: list[PlayerStats] = field(default_factory=list)
+    kill_positions: list[dict] = field(default_factory=list)  # kill/death XY positions for map viz
     demo_path: str = ""
     match_date: str = ""  # YYYY-MM-DD from demo file mtime
     match_datetime: str = ""  # YYYY-MM-DD HH:MM
@@ -432,6 +433,9 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
     # 10) Crosshair Placement
     _process_crosshair_placement(parser, player_lookup)
 
+    # 10b) Kill Positions for 2D Map
+    kill_positions = _extract_kill_positions(parser, player_lookup)
+
     # 11) Per-Round-Analyse: KAST, Survival, Multi-Kills, CT/T-Split, Death-Timing
     if kills_df is not None and rounds_df is not None:
         _process_per_round(
@@ -462,6 +466,7 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
         score_team2=score_t2,
         player_stats=target_stats,
         all_players=list(player_lookup.values()),
+        kill_positions=kill_positions,
         demo_path=demo_path,
         match_date=match_date,
         match_datetime=match_datetime,
@@ -1025,6 +1030,49 @@ def _process_crosshair_placement(parser: DemoParser, player_lookup: dict[str, "P
             stats.crosshair_placement_average += 1
         else:
             stats.crosshair_placement_poor += 1
+
+
+def _extract_kill_positions(
+    parser: DemoParser, player_lookup: dict[str, "PlayerStats"],
+) -> list[dict]:
+    """Extract attacker/victim XY positions for each kill (2D map visualization)."""
+    df = _get_enriched_event_df(
+        parser, "player_death",
+        ["X", "Y", "Z"],
+    )
+    if df is None:
+        return []
+
+    positions = []
+    for _, row in df.iterrows():
+        attacker_id = str(row.get("attacker_steamid", ""))
+        victim_id = str(row.get("user_steamid", ""))
+
+        try:
+            att_x = float(row.get("attacker_X", 0))
+            att_y = float(row.get("attacker_Y", 0))
+            vic_x = float(row.get("user_X", 0))
+            vic_y = float(row.get("user_Y", 0))
+        except (ValueError, TypeError):
+            continue
+
+        att_name = player_lookup[attacker_id].name if attacker_id in player_lookup else "?"
+        vic_name = player_lookup[victim_id].name if victim_id in player_lookup else "?"
+
+        positions.append({
+            "attacker_id": attacker_id,
+            "attacker_name": att_name,
+            "victim_id": victim_id,
+            "victim_name": vic_name,
+            "attacker_x": att_x,
+            "attacker_y": att_y,
+            "victim_x": vic_x,
+            "victim_y": vic_y,
+            "weapon": str(row.get("weapon", "")),
+            "headshot": bool(row.get("headshot", False)),
+        })
+
+    return positions
 
 
 def _clean_map_name(raw: str) -> str:

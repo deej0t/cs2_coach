@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Batch-Ergebnis{% endblock %}
+
+{% block content %}
+<div style="display: flex; align-items: center; gap: 10px; margin-bottom: var(--space-2);">
+    <a href="{{ url_for('batch') }}" class="btn btn-ghost" style="padding: 4px 10px; font-size: 12px;">← Zurueck</a>
+    <span style="color: var(--color-neutral-300); font-size: 13px;">{{ results|length }} Demos analysiert aus {{ folder }}</span>
+</div>
+
+<h2>Batch-Ergebnis</h2>
+
+{% if errors %}
+<div style="margin-bottom: var(--space-5);">
+    <div class="card-kicker" style="margin-bottom: 8px; color: var(--color-red);">Fehler ({{ errors|length }})</div>
+    {% for err in errors %}
+    <div class="flash error" style="margin-bottom: 4px;">{{ err.file }}: {{ err.error }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if results %}
+<!-- Summary Stats -->
+{% set total_kills = results|map(attribute='player_stats')|map(attribute='kills')|sum %}
+{% set total_deaths = results|map(attribute='player_stats')|map(attribute='deaths')|sum %}
+{% set avg_rating = (results|map(attribute='rating')|sum / results|length) %}
+{% set wins = results|selectattr('result_str', 'equalto', 'Sieg')|list|length %}
+{% set losses = results|selectattr('result_str', 'equalto', 'Niederlage')|list|length %}
+{% set draws = results|length - wins - losses %}
+
+<div class="grid-3" style="margin-bottom: var(--space-5);">
+    <div class="card elev-sm">
+        <div class="card-kicker">Bilanz</div>
+        <div style="font-size: 28px; font-weight: 500;">
+            <span class="win">{{ wins }}W</span> /
+            <span class="loss">{{ losses }}L</span>
+            {% if draws %} / <span class="draw">{{ draws }}D</span>{% endif %}
+        </div>
+    </div>
+    <div class="card elev-sm">
+        <div class="card-kicker">Avg Rating</div>
+        <div style="font-size: 28px; font-weight: 500;">{{ "%.2f"|format(avg_rating) }}</div>
+    </div>
+    <div class="card elev-sm">
+        <div class="card-kicker">Gesamt K/D</div>
+        <div style="font-size: 28px; font-weight: 500;">{{ total_kills }}/{{ total_deaths }}</div>
+        <div style="font-size: 12px; color: var(--color-neutral-500);">Ratio: {{ "%.2f"|format(total_kills / [total_deaths, 1]|max) }}</div>
+    </div>
+</div>
+
+<!-- Results Table -->
+<table class="table">
+    <thead>
+        <tr>
+            <th>Datum</th>
+            <th>Map</th>
+            <th>Score</th>
+            <th>Ergebnis</th>
+            <th>K/D/A</th>
+            <th>ADR</th>
+            <th>HS%</th>
+            <th>KAST%</th>
+            <th>Rating</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in results|sort(attribute='match_date', reverse=True) %}
+        <tr>
+            <td style="color: var(--color-neutral-500);">{{ r.match_date }}</td>
+            <td>{{ r.map_name }}</td>
+            <td>{{ r.score_team1 }}:{{ r.score_team2 }}</td>
+            <td>
+                {% if r.result_str == 'Sieg' %}<span class="tag tag-win">Sieg</span>
+                {% elif r.result_str == 'Niederlage' %}<span class="tag tag-loss">Niederlage</span>
+                {% else %}<span class="tag tag-draw">{{ r.result_str }}</span>{% endif %}
+            </td>
+            <td>{{ r.player_stats.kills }}/{{ r.player_stats.deaths }}/{{ r.player_stats.assists }}</td>
+            <td>{{ "%.0f"|format(r.player_stats.adr) }}</td>
+            <td>{{ "%.0f"|format(r.player_stats.headshot_pct) }}%</td>
+            <td>{{ "%.0f"|format(r.player_stats.kast_pct) }}%</td>
+            <td>{{ r.rating }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

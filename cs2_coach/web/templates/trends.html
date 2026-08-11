@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Performance Trends{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Performance Trends</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Entwicklung deiner Leistung ueber {{ exports|length }} analysierte Matches.
+</p>
+
+{% if exports|length < 2 %}
+<div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
+    <p style="color: var(--color-neutral-500);">Mindestens 2 analysierte Matches noetig fuer Trends.</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">Demo analysieren</a>
+</div>
+{% else %}
+
+<style>
+    .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
+    .chart-card { padding: var(--space-3) !important; }
+    .chart-card canvas { width: 100% !important; height: 200px !important; }
+    @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
+</style>
+
+<div class="chart-grid">
+    <div class="card elev-sm chart-card">
+        <div class="card-kicker">Rating</div>
+        <canvas id="chart-rating"></canvas>
+    </div>
+    <div class="card elev-sm chart-card">
+        <div class="card-kicker">K/D Ratio</div>
+        <canvas id="chart-kd"></canvas>
+    </div>
+    <div class="card elev-sm chart-card">
+        <div class="card-kicker">ADR</div>
+        <canvas id="chart-adr"></canvas>
+    </div>
+    <div class="card elev-sm chart-card">
+        <div class="card-kicker">KAST%</div>
+        <canvas id="chart-kast"></canvas>
+    </div>
+    <div class="card elev-sm chart-card">
+        <div class="card-kicker">HS%</div>
+        <canvas id="chart-hs"></canvas>
+    </div>
+    <div class="card elev-sm chart-card">
+        <div class="card-kicker">Crosshair Placement (Grad)</div>
+        <canvas id="chart-cp"></canvas>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if exports|length >= 2 %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var exports = {{ exports | tojson }};
+    // Sort by date ascending for timeline
+    exports.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+
+    var labels = exports.map(function(e) {
+        return e.map + ' ' + (e.date || '').slice(5);
+    });
+
+    var resultColors = exports.map(function(e) {
+        if (e.result === 'Sieg') return 'rgba(74, 222, 128, 0.8)';
+        if (e.result === 'Niederlage') return 'rgba(248, 113, 113, 0.8)';
+        return 'rgba(251, 191, 36, 0.8)';
+    });
+
+    var commonOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: '#232532',
+                borderColor: '#3f424d',
+                borderWidth: 1,
+                titleColor: '#e9e9ed',
+                bodyColor: '#e9e9ed',
+                titleFont: { family: 'Inter' },
+                bodyFont: { family: 'Inter' },
+            }
+        },
+        scales: {
+            x: {
+                ticks: { color: '#75798c', font: { size: 10, family: 'Inter' }, maxRotation: 45 },
+                grid: { color: 'rgba(255,255,255,0.04)' },
+            },
+            y: {
+                ticks: { color: '#75798c', font: { size: 11, family: 'Inter' } },
+                grid: { color: 'rgba(255,255,255,0.06)' },
+            }
+        },
+        elements: {
+            point: { radius: 4, hoverRadius: 6, borderWidth: 2 },
+            line: { tension: 0.3, borderWidth: 2 },
+        }
+    };
+
+    function makeChart(id, data, color, opts) {
+        var ctx = document.getElementById(id);
+        var o = JSON.parse(JSON.stringify(commonOpts));
+        if (opts) {
+            if (opts.suggestedMin !== undefined) o.scales.y.suggestedMin = opts.suggestedMin;
+            if (opts.suggestedMax !== undefined) o.scales.y.suggestedMax = opts.suggestedMax;
+            if (opts.reverse) o.scales.y.reverse = true;
+        }
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    borderColor: color,
+                    backgroundColor: color.replace('1)', '0.1)'),
+                    fill: true,
+                    pointBackgroundColor: resultColors,
+                    pointBorderColor: color,
+                }]
+            },
+            options: o,
+        });
+    }
+
+    makeChart('chart-rating',
+        exports.map(function(e) { return e.rating; }),
+        'rgba(145, 132, 217, 1)',
+        { suggestedMin: 0.5, suggestedMax: 1.5 }
+    );
+
+    makeChart('chart-kd',
+        exports.map(function(e) { return e.kd; }),
+        'rgba(145, 132, 217, 1)',
+        { suggestedMin: 0.5 }
+    );
+
+    makeChart('chart-adr',
+        exports.map(function(e) { return e.adr; }),
+        'rgba(74, 222, 128, 1)',
+        { suggestedMin: 40 }
+    );
+
+    makeChart('chart-kast',
+        exports.map(function(e) { return e.kast; }),
+        'rgba(74, 222, 128, 1)',
+        { suggestedMin: 40, suggestedMax: 100 }
+    );
+
+    makeChart('chart-hs',
+        exports.map(function(e) { return e.hs_pct; }),
+        'rgba(251, 191, 36, 1)',
+        { suggestedMin: 0, suggestedMax: 80 }
+    );
+
+    makeChart('chart-cp',
+        exports.map(function(e) { return e.crosshair_placement || 0; }),
+        'rgba(248, 113, 113, 1)',
+        { suggestedMin: 0, reverse: true }
+    );
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Einstellungen{% endblock %}
+
+{% block content %}
+<h2>Einstellungen</h2>
+
+<!-- Config Form -->
+<div class="card elev-sm" style="max-width: 640px; margin-bottom: var(--space-5);">
+    <span class="card-kicker">Konfiguration</span>
+    <h3 class="card-title">config.yaml</h3>
+    <p style="font-size: 11px; color: var(--color-neutral-600); margin-bottom: var(--space-3);">{{ config_path }}</p>
+    <form action="{{ url_for('settings_save') }}" method="post" style="display:flex;flex-direction:column;gap:var(--space-3);">
+        <div class="field">
+            <label>Spieler-Name</label>
+            <input type="text" name="player_name" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input">
+        </div>
+        <div class="field">
+            <label>SteamID64</label>
+            <input type="text" name="steam_id" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input">
+        </div>
+        <div class="field">
+            <label>Obsidian Vault Pfad</label>
+            <input type="text" name="obsidian_vault_path" value="{{ config.get('obsidian_vault_path', '') }}" placeholder="C:/Users/.../ObsidianVault" class="input">
+        </div>
+        <div class="field">
+            <label>Coach-Unterordner im Vault</label>
+            <input type="text" name="coach_subfolder" value="{{ config.get('coach_subfolder', 'CS2-Coach') }}" class="input">
+        </div>
+        <div class="field">
+            <label>Sprache</label>
+            <select name="language" class="input">
+                <option value="de" {% if config.get('language', 'de') == 'de' %}selected{% endif %}>Deutsch</option>
+                <option value="en" {% if config.get('language') == 'en' %}selected{% endif %}>English</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Speichern</button>
+    </form>
+</div>
+
+<!-- Danger Zone -->
+<div class="card elev-sm" style="max-width: 640px; border: 1px solid rgba(248,113,113,0.25);">
+    <span class="card-kicker" style="color: var(--color-red);">Wartung</span>
+    <h3 class="card-title">Cache & Daten</h3>
+
+    <div style="display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-2);">
+
+        <!-- pycache -->
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);">
+            <div>
+                <div style="font-size: 14px;">Python-Cache loeschen</div>
+                <div style="font-size: 12px; color: var(--color-neutral-500);">{{ pycache_count }} __pycache__-Ordner, {{ pyc_count }} .pyc-Dateien. Behebt Probleme mit altem Code nach Updates.</div>
+            </div>
+            <form action="{{ url_for('settings_clear_cache') }}" method="post" style="flex:none;">
+                <button type="submit" class="btn btn-secondary">Cache leeren</button>
+            </form>
+        </div>
+
+        <div class="hr" style="margin: 0;"></div>
+
+        <!-- Exports reset -->
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);">
+            <div>
+                <div style="font-size: 14px;">Export-JSONs loeschen</div>
+                <div style="font-size: 12px; color: var(--color-neutral-500);">{{ export_count }} Export-Dateien. Loescht alle JSON-Exports (Trends werden zurueckgesetzt).</div>
+            </div>
+            <form action="{{ url_for('settings_reset_exports') }}" method="post" style="flex:none;" onsubmit="return confirm('Alle {{ export_count }} Export-JSONs loeschen?');">
+                <button type="submit" class="btn btn-secondary" style="color: var(--color-red);">Exports loeschen</button>
+            </form>
+        </div>
+
+        <div class="hr" style="margin: 0;"></div>
+
+        <!-- Notes reset -->
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);">
+            <div>
+                <div style="font-size: 14px;">Obsidian-Notizen loeschen</div>
+                <div style="font-size: 12px; color: var(--color-neutral-500);">{{ notes_count }} Match-Notizen im Vault.</div>
+            </div>
+            <form action="{{ url_for('settings_reset_notes') }}" method="post" style="flex:none;" onsubmit="return confirm('Alle {{ notes_count }} Obsidian-Notizen loeschen?');">
+                <button type="submit" class="btn btn-secondary" style="color: var(--color-red);">Notizen loeschen</button>
+            </form>
+        </div>
+
+        <div class="hr" style="margin: 0;"></div>
+
+        <!-- Full reset -->
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);">
+            <div>
+                <div style="font-size: 14px; color: var(--color-red);">Komplett-Reset</div>
+                <div style="font-size: 12px; color: var(--color-neutral-500);">Loescht ALLE Exports, Notizen, Concept-Notes und __pycache__.</div>
+            </div>
+            <form action="{{ url_for('settings_reset_all') }}" method="post" style="flex:none;" onsubmit="return confirm('ALLES loeschen? Exports, Notizen, Concepts und Cache werden unwiderruflich entfernt.');">
+                <button type="submit" class="btn btn-primary" style="border-color: var(--color-red); color: var(--color-red);">Alles loeschen</button>
+            </form>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

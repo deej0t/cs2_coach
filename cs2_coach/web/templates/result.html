@@ -226,6 +226,30 @@
     </div>
 </div>
 
+<!-- 2D Kill Map -->
+{% if kill_map_data %}
+<div style="margin-bottom: var(--space-5);">
+    <div class="card-kicker" style="margin-bottom: 8px;">Kill Map — {{ result.map_name }}</div>
+    <div class="card elev-sm" style="padding: var(--space-3);">
+        <div style="display: flex; gap: 12px; margin-bottom: 8px;">
+            <span style="font-size: 11px; display: flex; align-items: center; gap: 4px;">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--color-green);"></span> Kills
+            </span>
+            <span style="font-size: 11px; display: flex; align-items: center; gap: 4px;">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--color-red);"></span> Deaths
+            </span>
+            <span style="font-size: 11px; display: flex; align-items: center; gap: 4px;">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--color-yellow);"></span> HS Kill
+            </span>
+        </div>
+        <div style="position: relative; width: 100%; max-width: 600px;">
+            <canvas id="kill-map" width="600" height="600" style="width:100%;border-radius:var(--radius-md);background:var(--color-bg);"></canvas>
+            <div id="kill-map-tooltip" style="display:none;position:absolute;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-sm);padding:4px 8px;font-size:11px;pointer-events:none;white-space:nowrap;z-index:10;"></div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Collapsible Raw Data -->
 <details style="margin-bottom: var(--space-5);">
     <summary>Alle Rohdaten anzeigen</summary>
@@ -295,5 +319,152 @@
 <p style="margin-top: var(--space-5); color: var(--color-neutral-600); font-size: 11px;">
     Obsidian-Notiz exportiert: {{ obsidian_path }}
 </p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if kill_map_data %}
+<script>
+(function() {
+    var mapData = {{ kill_map_data | tojson }};
+    var canvas = document.getElementById('kill-map');
+    if (!canvas || !mapData || !mapData.dots.length) return;
+
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width;
+    var H = canvas.height;
+    var RADAR_SIZE = 1024;
+    var scale = W / RADAR_SIZE;
+
+    // Load radar image
+    var img = new Image();
+    img.src = '{{ url_for("static", filename="radars/") }}' + mapData.map + '.png';
+
+    function drawMap() {
+        ctx.clearRect(0, 0, W, H);
+
+        // Background
+        ctx.fillStyle = '#0d0f1a';
+        ctx.fillRect(0, 0, W, H);
+
+        // Radar image as map outline
+        if (img.complete && img.naturalWidth > 0) {
+            ctx.globalAlpha = 0.7;
+            ctx.drawImage(img, 0, 0, W, H);
+            ctx.globalAlpha = 1.0;
+        }
+
+        // Draw kill/death dots
+        var dots = mapData.dots;
+
+        // Deaths first (underneath), then kills on top
+        var deaths = [], kills = [];
+        for (var i = 0; i < dots.length; i++) {
+            if (dots[i].type === 'death') deaths.push(dots[i]);
+            else kills.push(dots[i]);
+        }
+
+        function drawDot(d) {
+            var x = d.x * scale;
+            var y = d.y * scale;
+            if (x < 0 || x > W || y < 0 || y > H) return;
+
+            var color, radius;
+            if (d.type === 'kill') {
+                color = d.headshot ? '#fbbf24' : '#4ade80';
+                radius = d.headshot ? 6 : 5;
+            } else {
+                color = '#f87171';
+                radius = 5;
+            }
+
+            // Outer glow
+            var grad = ctx.createRadialGradient(x, y, 0, x, y, radius + 8);
+            grad.addColorStop(0, color.replace('#', 'rgba(') ? colorToRgba(color, 0.35) : 'rgba(255,255,255,0.2)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.beginPath();
+            ctx.arc(x, y, radius + 8, 0, Math.PI * 2);
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // Main dot
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            // White center highlight
+            ctx.beginPath();
+            ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fill();
+
+            // X marker for deaths
+            if (d.type === 'death') {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.7;
+                ctx.beginPath();
+                ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y + 5);
+                ctx.moveTo(x + 5, y - 5); ctx.lineTo(x - 5, y + 5);
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        deaths.forEach(drawDot);
+        kills.forEach(drawDot);
+
+        // Map name label
+        ctx.font = '500 11px Inter, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.textAlign = 'right';
+        ctx.fillText(mapData.map.toUpperCase(), W - 10, H - 10);
+    }
+
+    function colorToRgba(hex, a) {
+        var r = parseInt(hex.slice(1,3), 16);
+        var g = parseInt(hex.slice(3,5), 16);
+        var b = parseInt(hex.slice(5,7), 16);
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+    }
+
+    img.onload = drawMap;
+    img.onerror = drawMap;
+    // Draw immediately if image is cached
+    if (img.complete) drawMap();
+
+    // Tooltip on hover
+    var tooltip = document.getElementById('kill-map-tooltip');
+    canvas.addEventListener('mousemove', function(e) {
+        var rect = canvas.getBoundingClientRect();
+        var mx = (e.clientX - rect.left) * (W / rect.width);
+        var my = (e.clientY - rect.top) * (H / rect.height);
+        var found = null;
+        var dots = mapData.dots;
+        for (var i = 0; i < dots.length; i++) {
+            var d = dots[i];
+            var dx = d.x * scale - mx;
+            var dy = d.y * scale - my;
+            if (dx * dx + dy * dy < 144) {
+                found = d;
+                break;
+            }
+        }
+        if (found) {
+            tooltip.textContent = found.label + (found.weapon ? ' (' + found.weapon + ')' : '');
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+            tooltip.style.top = (e.clientY - rect.top - 20) + 'px';
+        } else {
+            tooltip.style.display = 'none';
+        }
+    });
+
+    canvas.addEventListener('mouseleave', function() {
+        tooltip.style.display = 'none';
+    });
+})();
+</script>
 {% endif %}
 {% endblock %}
