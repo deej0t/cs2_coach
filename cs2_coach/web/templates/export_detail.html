@@ -3,8 +3,103 @@
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
+<style>
+    .sc-green { color: #4ade80; }
+    .sc-yellow { color: #fbbf24; }
+    .sc-red { color: #f87171; }
+    .ed-stat { font-size: 28px; font-weight: 600; font-family: var(--font-heading); letter-spacing: -0.02em; }
+
+    /* Duel table */
+    .ed-duel th { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500); padding: 6px 10px; text-align: left; }
+    .ed-duel td { padding: 7px 10px; border-top: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent); }
+    .ed-duel-bar { display: flex; height: 4px; border-radius: 2px; overflow: hidden; width: 50px; background: var(--color-neutral-800); }
+
+    /* Timeline */
+    .ed-tl { display: flex; flex-direction: column; gap: 2px; }
+    .ed-tl-row {
+        display: grid; grid-template-columns: 42px 28px 1fr 50px; gap: 8px; align-items: center;
+        padding: 4px 10px; border-radius: var(--radius-sm); font-size: 12px;
+        background: var(--color-surface); border-left: 2px solid transparent;
+    }
+    .ed-tl-won { border-left-color: #4ade80; }
+    .ed-tl-lost { border-left-color: #f87171; }
+    .ed-tl-early { background: color-mix(in srgb, #f87171 6%, var(--color-surface)); }
+    .ed-tl-round { font-weight: 600; font-size: 11px; color: var(--color-neutral-400); }
+    .ed-tl-side { font-size: 10px; font-weight: 600; letter-spacing: 0.05em; }
+    .ed-tl-ct { color: #7eaadb; }
+    .ed-tl-t { color: #deb23e; }
+    .ed-tl-ev { display: inline-flex; padding: 1px 5px; border-radius: 3px; font-size: 10px; font-weight: 500; white-space: nowrap; margin-right: 2px; }
+    .ed-tl-kill { background: rgba(74,222,128,0.12); color: #4ade80; }
+    .ed-tl-death { background: rgba(248,113,113,0.12); color: #f87171; }
+    .ed-tl-bomb { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .ed-tl-info { font-size: 11px; text-align: right; color: var(--color-neutral-500); }
+    .ed-tl-mk { color: #4ade80; font-weight: 600; }
+    .ed-tl-ht { text-align: center; font-size: 10px; color: var(--color-neutral-600); letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 0; }
+
+    /* Economy */
+    .ed-econ { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); }
+    .ed-econ-card { padding: 14px !important; text-align: center; border-top: 3px solid var(--color-neutral-700); }
+    .ed-econ-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500); margin-bottom: 8px; }
+    .ed-econ-big { font-family: var(--font-heading); font-size: 22px; font-weight: 600; line-height: 1.1; }
+    .ed-econ-sub { font-size: 12px; color: var(--color-neutral-400); margin-top: 4px; }
+    .ed-econ-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 3px; }
+
+    /* Report rendered */
+    .ed-rp-section { margin-bottom: 2px; }
+    .ed-rp-hdr {
+        display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+        background: var(--color-surface); border-radius: var(--radius-md);
+        cursor: pointer; user-select: none;
+        border: 1px solid color-mix(in srgb, var(--color-text) 5%, transparent);
+        transition: background 0.15s;
+    }
+    .ed-rp-hdr:hover { border-color: color-mix(in srgb, var(--color-text) 12%, transparent); }
+    .ed-rp-hdr.open { border-radius: var(--radius-md) var(--radius-md) 0 0; border-bottom-color: transparent; }
+    .ed-rp-chev { font-size: 10px; color: var(--color-neutral-600); transition: transform 0.2s; width: 16px; text-align: center; }
+    .ed-rp-hdr.open .ed-rp-chev { transform: rotate(90deg); }
+    .ed-rp-title { font-size: 13px; font-weight: 600; flex: 1; }
+    .ed-rp-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 3px; letter-spacing: 0.04em; text-transform: uppercase; }
+    .ed-b-strong { background: rgba(74,222,128,0.12); color: #4ade80; }
+    .ed-b-ok { background: rgba(145,132,217,0.12); color: #9184d9; }
+    .ed-b-weak { background: rgba(248,113,113,0.12); color: #f87171; }
+    .ed-b-info { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .ed-rp-body {
+        display: none; padding: 12px 14px; font-size: 13px; line-height: 1.7;
+        color: var(--color-neutral-300); background: var(--color-surface);
+        border: 1px solid color-mix(in srgb, var(--color-text) 5%, transparent);
+        border-top: none; border-radius: 0 0 var(--radius-md) var(--radius-md);
+    }
+    .ed-rp-hdr.open + .ed-rp-body { display: block; }
+    .ed-rp-body p { margin: 0 0 8px; }
+    .ed-rp-body p:last-child { margin-bottom: 0; }
+    .ed-rp-body strong { color: var(--color-text); }
+    .ed-rp-tip {
+        display: block; margin: 8px 0; padding: 8px 12px;
+        background: rgba(145,132,217,0.06); border-left: 3px solid var(--color-accent);
+        border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 12px;
+    }
+    .ed-rp-verdict {
+        padding: 16px; margin-top: var(--space-3); border-radius: var(--radius-md);
+        border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+        background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface));
+    }
+    .ed-rp-verdict h3 { font-size: 15px; margin: 0 0 8px; color: var(--color-text); }
+    .ed-rp-verdict p { margin: 0 0 6px; font-size: 13px; line-height: 1.7; color: var(--color-neutral-300); }
+    .ed-rp-train {
+        padding: 16px; margin-top: var(--space-3); border-radius: var(--radius-md);
+        border: 1px solid color-mix(in srgb, #4ade80 15%, transparent);
+        background: color-mix(in srgb, #4ade80 3%, var(--color-surface));
+    }
+    .ed-rp-train h3 { font-size: 15px; margin: 0 0 10px; color: #4ade80; }
+    .ed-rp-train ol { margin: 0; padding-left: 20px; }
+    .ed-rp-train li { font-size: 13px; line-height: 1.7; color: var(--color-neutral-300); margin-bottom: 8px; }
+    .ed-rp-train li strong { color: var(--color-text); }
+
+    @media (max-width: 768px) { .ed-econ { grid-template-columns: repeat(2, 1fr); } }
+</style>
+
 <div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-6);">
-    <a href="{{ url_for('exports') }}" class="btn btn-ghost">← Zurück</a>
+    <a href="{{ url_for('exports') }}" class="btn btn-ghost">← Zurueck</a>
     <div>
         <h2 style="margin:0;">
             {{ data.match.map }}
@@ -26,147 +121,272 @@
 {% set p = data.player %}
 
 <!-- Stats overview -->
-<div class="grid-3" style="margin-bottom:var(--space-6);">
+<div class="grid-3" style="margin-bottom:var(--space-4);">
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker">K/D</span>
-        <span style="font-size:28px;font-weight:600;font-family:var(--font-heading);letter-spacing:-0.02em;">{{ p.kd }}</span>
+        <span class="ed-stat {% if p.kd >= 1.2 %}sc-green{% elif p.kd >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.kd }}</span>
         <span style="font-size:12px;color:var(--color-neutral-500);">{{ p.kills }} / {{ p.deaths }} / {{ p.assists }}</span>
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker">ADR</span>
-        <span style="font-size:28px;font-weight:600;font-family:var(--font-heading);letter-spacing:-0.02em;">{{ p.adr }}</span>
+        <span class="ed-stat {% if p.adr >= 80 %}sc-green{% elif p.adr >= 65 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.adr }}</span>
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker">Rating</span>
-        <span style="font-size:28px;font-weight:600;font-family:var(--font-heading);letter-spacing:-0.02em;">{{ p.get('rating', '-') }}</span>
+        <span class="ed-stat {% if p.get('rating', 0) >= 1.1 %}sc-green{% elif p.get('rating', 0) >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.get('rating', '-') }}</span>
     </div>
 </div>
 <div class="grid-3" style="margin-bottom:var(--space-6);">
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker">KAST%</span>
-        <span style="font-size:28px;font-weight:600;font-family:var(--font-heading);">{{ p.kast_pct }}%</span>
+        <span class="ed-stat">{{ p.kast_pct }}%</span>
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker">HS%</span>
-        <span style="font-size:28px;font-weight:600;font-family:var(--font-heading);">{{ p.hs_pct }}%</span>
+        <span class="ed-stat">{{ p.hs_pct }}%</span>
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker">Counter-Strafe</span>
-        <span style="font-size:28px;font-weight:600;font-family:var(--font-heading);">{{ p.counter_strafe_pct }}%</span>
+        <span class="ed-stat">{{ p.counter_strafe_pct }}%</span>
     </div>
 </div>
 
 <!-- Detail sections -->
-<div class="grid-2" style="margin-bottom:var(--space-6);">
+<div class="grid-2" style="margin-bottom:var(--space-5);">
     <div class="card elev-sm">
         <span class="card-kicker">Kampf</span>
-        <table class="table">
-            <tbody>
-                <tr><td>Opening Duels</td><td>{{ p.opening_kills }}W / {{ p.opening_deaths }}L</td></tr>
-                <tr><td>Trade Kills</td><td>{{ p.trade_kills }}</td></tr>
-                <tr><td>Accuracy</td><td>{{ p.accuracy }}%</td></tr>
-                <tr><td>Survival</td><td>{{ p.survival_rate }}%</td></tr>
-                {% if p.multikills %}
-                <tr><td>Multi-Kills</td><td>2k:{{ p.multikills['2k'] }} 3k:{{ p.multikills['3k'] }} 4k:{{ p.multikills['4k'] }} 5k:{{ p.multikills['5k'] }}</td></tr>
-                {% endif %}
-            </tbody>
-        </table>
+        <table class="table"><tbody>
+            <tr><td>Opening Duels</td><td>{{ p.opening_kills }}W / {{ p.opening_deaths }}L</td></tr>
+            <tr><td>Trade Kills</td><td>{{ p.trade_kills }}</td></tr>
+            <tr><td>Accuracy</td><td>{{ p.accuracy }}%</td></tr>
+            <tr><td>Survival</td><td>{{ p.survival_rate }}%</td></tr>
+            {% if p.multikills %}<tr><td>Multi-Kills</td><td>2k:{{ p.multikills['2k'] }} 3k:{{ p.multikills['3k'] }} 4k:{{ p.multikills['4k'] }} 5k:{{ p.multikills['5k'] }}</td></tr>{% endif %}
+        </tbody></table>
     </div>
     <div class="card elev-sm">
         <span class="card-kicker">Mechanik</span>
-        <table class="table">
-            <tbody>
-                <tr><td>Counter-Strafe</td><td>{{ p.counter_strafe_pct }}% (inacc: {{ p.avg_inaccuracy_move }})</td></tr>
-                {% if p.spray_control %}
-                <tr><td>Spray-Control</td><td>Burst {{ p.spray_control.burst_kills }} / Spray {{ p.spray_control.spray_kills }}</td></tr>
-                <tr><td>Avg Recoil-Index</td><td>{{ p.spray_control.avg_recoil_index }}</td></tr>
-                {% endif %}
-                {% if p.weapons %}
-                <tr><td>AWP Kills</td><td>{{ p.weapons.awp_kills }}</td></tr>
-                <tr><td>Rifle Kills</td><td>{{ p.weapons.rifle_kills }}</td></tr>
-                <tr><td>Pistol Kills</td><td>{{ p.weapons.pistol_kills }}</td></tr>
-                {% endif %}
-                {% if p.engagement_distance %}
-                <tr><td>Kampfdistanz</td><td>avg {{ p.engagement_distance.avg }}u (N:{{ p.engagement_distance.close }}/M:{{ p.engagement_distance.mid }}/W:{{ p.engagement_distance.long }})</td></tr>
-                {% endif %}
-            </tbody>
-        </table>
+        <table class="table"><tbody>
+            <tr><td>Counter-Strafe</td><td>{{ p.counter_strafe_pct }}% (inacc: {{ p.avg_inaccuracy_move }})</td></tr>
+            {% if p.spray_control %}<tr><td>Spray-Control</td><td>Burst {{ p.spray_control.burst_kills }} / Spray {{ p.spray_control.spray_kills }}</td></tr>
+            <tr><td>Avg Recoil-Index</td><td>{{ p.spray_control.avg_recoil_index }}</td></tr>{% endif %}
+            {% if p.weapons %}<tr><td>AWP Kills</td><td>{{ p.weapons.awp_kills }}</td></tr>
+            <tr><td>Rifle Kills</td><td>{{ p.weapons.rifle_kills }}</td></tr>
+            <tr><td>Pistol Kills</td><td>{{ p.weapons.pistol_kills }}</td></tr>{% endif %}
+            {% if p.engagement_distance %}<tr><td>Kampfdistanz</td><td>avg {{ p.engagement_distance.avg }}u (N:{{ p.engagement_distance.close }}/M:{{ p.engagement_distance.mid }}/W:{{ p.engagement_distance.long }})</td></tr>{% endif %}
+        </tbody></table>
     </div>
     <div class="card elev-sm">
         <span class="card-kicker">Utility</span>
-        <table class="table">
-            <tbody>
-                {% if p.utility %}
-                <tr><td>Gesamt</td><td>{{ p.utility.total }} ({{ p.utility.per_round }}/Runde)</td></tr>
-                <tr><td>Flashes</td><td>{{ p.utility.flashes }}</td></tr>
-                <tr><td>Smokes</td><td>{{ p.utility.smokes }}</td></tr>
-                <tr><td>HE</td><td>{{ p.utility.he }}</td></tr>
-                <tr><td>Molotovs</td><td>{{ p.utility.molotovs }}</td></tr>
-                {% endif %}
-                {% if p.flash_effectiveness %}
-                <tr><td>Gegner geblindet</td><td>{{ p.flash_effectiveness.enemies_blinded }}</td></tr>
-                <tr><td>Team geblindet</td><td>{{ p.flash_effectiveness.teammates_blinded }}</td></tr>
-                <tr><td>Avg Duration</td><td>{{ p.flash_effectiveness.avg_enemy_duration }}s</td></tr>
-                {% endif %}
-            </tbody>
-        </table>
+        <table class="table"><tbody>
+            {% if p.utility %}<tr><td>Gesamt</td><td>{{ p.utility.total }} ({{ p.utility.per_round }}/Runde)</td></tr>
+            <tr><td>Flashes</td><td>{{ p.utility.flashes }}</td></tr>
+            <tr><td>Smokes</td><td>{{ p.utility.smokes }}</td></tr>
+            <tr><td>HE</td><td>{{ p.utility.he }}</td></tr>
+            <tr><td>Molotovs</td><td>{{ p.utility.molotovs }}</td></tr>{% endif %}
+            {% if p.flash_effectiveness %}<tr><td>Gegner geblindet</td><td>{{ p.flash_effectiveness.enemies_blinded }}</td></tr>
+            <tr><td>Team geblindet</td><td>{{ p.flash_effectiveness.teammates_blinded }}</td></tr>
+            <tr><td>Avg Duration</td><td>{{ p.flash_effectiveness.avg_enemy_duration }}s</td></tr>{% endif %}
+        </tbody></table>
     </div>
     <div class="card elev-sm">
         <span class="card-kicker">Situationen</span>
-        <table class="table">
-            <tbody>
-                {% if p.clutches %}
-                <tr><td>Clutches</td><td>{{ p.clutches.wins }}/{{ p.clutches.attempts }}</td></tr>
-                {% endif %}
-                {% if p.side_split %}
-                <tr><td>CT</td><td>{{ p.side_split.ct_kills }}K / {{ p.side_split.ct_deaths }}D</td></tr>
-                <tr><td>T</td><td>{{ p.side_split.t_kills }}K / {{ p.side_split.t_deaths }}D</td></tr>
-                {% endif %}
-                {% if p.death_timing %}
-                <tr><td>Death-Timing</td><td>Early {{ p.death_timing.early }} | Mid {{ p.death_timing.mid }} | Late {{ p.death_timing.late }}</td></tr>
-                {% endif %}
-                {% if p.kill_context %}
-                {% if p.kill_context.thru_smoke > 0 %}<tr><td>Smoke Kills</td><td>{{ p.kill_context.thru_smoke }}</td></tr>{% endif %}
-                {% if p.kill_context.wallbang > 0 %}<tr><td>Wallbangs</td><td>{{ p.kill_context.wallbang }}</td></tr>{% endif %}
-                {% if p.kill_context.noscope > 0 %}<tr><td>Noscopes</td><td>{{ p.kill_context.noscope }}</td></tr>{% endif %}
-                {% endif %}
-                {% if p.rank %}
-                <tr><td>Rank</td><td>{{ p.rank.old }} → {{ p.rank.new }} ({{ p.rank.change }})</td></tr>
-                {% endif %}
-            </tbody>
-        </table>
+        <table class="table"><tbody>
+            {% if p.clutches %}<tr><td>Clutches</td><td>{{ p.clutches.wins }}/{{ p.clutches.attempts }}</td></tr>{% endif %}
+            {% if p.side_split %}<tr><td>CT</td><td>{{ p.side_split.ct_kills }}K / {{ p.side_split.ct_deaths }}D</td></tr>
+            <tr><td>T</td><td>{{ p.side_split.t_kills }}K / {{ p.side_split.t_deaths }}D</td></tr>{% endif %}
+            {% if p.death_timing %}<tr><td>Death-Timing</td><td>Early {{ p.death_timing.early }} | Mid {{ p.death_timing.mid }} | Late {{ p.death_timing.late }}</td></tr>{% endif %}
+            {% if p.kill_context %}{% if p.kill_context.thru_smoke > 0 %}<tr><td>Smoke Kills</td><td>{{ p.kill_context.thru_smoke }}</td></tr>{% endif %}
+            {% if p.kill_context.wallbang > 0 %}<tr><td>Wallbangs</td><td>{{ p.kill_context.wallbang }}</td></tr>{% endif %}
+            {% if p.kill_context.noscope > 0 %}<tr><td>Noscopes</td><td>{{ p.kill_context.noscope }}</td></tr>{% endif %}{% endif %}
+            {% if p.rank %}<tr><td>Rank</td><td>{{ p.rank.old }} → {{ p.rank.new }} ({{ p.rank.change }})</td></tr>{% endif %}
+        </tbody></table>
     </div>
 </div>
 
+<!-- ══════ Duel Matrix ══════ -->
+{% if data.duel_matrix %}
+<div class="card elev-sm" style="margin-bottom:var(--space-5);padding:var(--space-3);">
+    <div class="card-kicker" style="margin-bottom:10px;">Gegner-Duelle</div>
+    <table class="table ed-duel" style="font-size:13px;">
+        <thead><tr><th>Gegner</th><th style="text-align:center;">Kills</th><th style="text-align:center;">Deaths</th><th style="text-align:center;">Bilanz</th><th>K/D</th><th style="text-align:center;">HS</th><th>Waffen</th></tr></thead>
+        <tbody>
+        {% for d in data.duel_matrix %}
+        <tr>
+            <td style="font-weight:500;">{{ d.name }}</td>
+            <td style="text-align:center;color:#4ade80;">{{ d.kills }}</td>
+            <td style="text-align:center;color:#f87171;">{{ d.deaths }}</td>
+            <td style="text-align:center;">
+                {% set tot = d.kills + d.deaths %}{% if tot > 0 %}
+                <div class="ed-duel-bar" style="margin:0 auto;">
+                    <div style="width:{{ (d.kills / tot * 100)|round }}%;background:#4ade80;height:100%;"></div>
+                    <div style="width:{{ (d.deaths / tot * 100)|round }}%;background:#f87171;height:100%;"></div>
+                </div>{% endif %}
+            </td>
+            <td><span class="{% if d.kd >= 1.5 %}sc-green{% elif d.kd >= 1.0 %}sc-yellow{% else %}sc-red{% endif %}" style="font-weight:600;">{{ d.kd }}</span></td>
+            <td style="text-align:center;">{{ d.hs_kills }}</td>
+            <td style="font-size:11px;color:var(--color-neutral-500);">{{ d.top_weapons|join(', ') }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- ══════ Round Timeline ══════ -->
+{% if data.round_timeline %}
+<div class="card elev-sm" style="margin-bottom:var(--space-5);padding:var(--space-3);">
+    <div class="card-kicker" style="margin-bottom:8px;">Runden-Timeline</div>
+    <div class="ed-tl">
+        {% for r in data.round_timeline %}
+        {% if r.round == 13 %}<div class="ed-tl-ht">— Seitenwechsel —</div>{% endif %}
+        <div class="ed-tl-row {% if r.won %}ed-tl-won{% else %}ed-tl-lost{% endif %} {% if r.died_early %}ed-tl-early{% endif %}">
+            <div class="ed-tl-round">R{{ r.round }}</div>
+            <div class="ed-tl-side {% if r.side == 'CT' %}ed-tl-ct{% else %}ed-tl-t{% endif %}">{{ r.side }}</div>
+            <div>
+                {% for e in r.events %}
+                    {% if e.type == 'kill' %}<span class="ed-tl-ev ed-tl-kill" title="{{ e.target }} ({{ e.weapon }})">✦ {{ e.target[:10] }}</span>
+                    {% elif e.type == 'death' %}<span class="ed-tl-ev ed-tl-death" title="{{ e.killer }} ({{ e.weapon }})">☠ {{ e.killer[:10] }}</span>
+                    {% elif e.type == 'bomb_plant' and e.is_self %}<span class="ed-tl-ev ed-tl-bomb">💣</span>
+                    {% elif e.type == 'bomb_defuse' and e.is_self %}<span class="ed-tl-ev ed-tl-bomb">🔧</span>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <div class="ed-tl-info">{% if r.player_kills >= 3 %}<span class="ed-tl-mk">{{ r.player_kills }}K</span>{% elif r.player_kills > 0 %}{{ r.player_kills }}K{% elif r.player_died %}0K{% endif %}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ══════ Economy ══════ -->
+{% if data.economy %}
+<div style="margin-bottom:var(--space-5);">
+    <div class="card-kicker" style="margin-bottom:8px;">Wirtschafts-Performance</div>
+    <div class="ed-econ">
+        {% set econ_order = [('pistol', 'Pistole', '#a78bfa'), ('eco', 'Eco', '#f87171'), ('force', 'Force', '#fbbf24'), ('fullbuy', 'Fullbuy', '#4ade80')] %}
+        {% for key, label, color in econ_order %}
+        {% set e = data.economy.get(key, {}) %}
+        {% if e %}
+        <div class="card elev-sm ed-econ-card" style="border-top-color:{{ color }};">
+            <div class="ed-econ-label">{{ label }}</div>
+            <div class="ed-econ-big {% if e.kd >= 1.2 %}sc-green{% elif e.kd >= 0.8 %}sc-yellow{% else %}sc-red{% endif %}">{{ e.kd }}</div>
+            <div class="ed-econ-sub">K/D in {{ e.rounds }} Runden</div>
+            <div style="margin-top:10px;">
+                <div class="ed-econ-row"><span style="color:var(--color-neutral-500);">ADR</span><span>{{ e.adr }}</span></div>
+                <div class="ed-econ-row"><span style="color:var(--color-neutral-500);">K / D</span><span>{{ e.kills }} / {{ e.deaths }}</span></div>
+                <div class="ed-econ-row"><span style="color:var(--color-neutral-500);">Win-Rate</span><span class="{% if e.win_rate >= 60 %}sc-green{% elif e.win_rate >= 40 %}sc-yellow{% else %}sc-red{% endif %}">{{ e.win_rate }}%</span></div>
+            </div>
+        </div>
+        {% else %}
+        <div class="card elev-sm ed-econ-card" style="opacity:0.4;"><div class="ed-econ-label">{{ label }}</div><div class="ed-econ-big" style="color:var(--color-neutral-600);">—</div><div class="ed-econ-sub">Keine Runden</div></div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ══════ Coach Report (rendered) ══════ -->
+{% if data.report %}
+<div class="card-kicker" style="margin-bottom:8px;">Coach-Report</div>
+<div id="ed-report-rendered"></div>
+<div id="ed-report-raw" style="display:none;">{{ data.report }}</div>
+{% endif %}
+
 <!-- Scoreboard -->
-<details>
+<details style="margin-top:var(--space-5);">
     <summary>Scoreboard anzeigen</summary>
     <table class="table" style="margin-top:var(--space-3);">
-        <thead>
-            <tr><th>Spieler</th><th>K</th><th>D</th><th>A</th><th>ADR</th><th>K/D</th></tr>
-        </thead>
+        <thead><tr><th>Spieler</th><th>K</th><th>D</th><th>A</th><th>ADR</th><th>K/D</th></tr></thead>
         <tbody>
             {% for s in data.scoreboard %}
             <tr{% if s.is_target %} style="background:color-mix(in srgb, var(--color-accent) 10%, transparent);"{% endif %}>
                 <td>{{ s.name }}{% if s.is_target %} <span class="tag tag-accent" style="margin-left:4px;">Du</span>{% endif %}</td>
-                <td>{{ s.kills }}</td>
-                <td>{{ s.deaths }}</td>
-                <td>{{ s.assists }}</td>
-                <td>{{ s.adr }}</td>
-                <td>{{ s.kd }}</td>
+                <td>{{ s.kills }}</td><td>{{ s.deaths }}</td><td>{{ s.assists }}</td><td>{{ s.adr }}</td><td>{{ s.kd }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </details>
 
-<!-- Raw JSON -->
-<details style="margin-top:var(--space-4);">
-    <summary>Raw JSON anzeigen</summary>
-    <div class="card" style="margin-top:var(--space-3);">
-        <pre style="font-size:12px;overflow-x:auto;white-space:pre-wrap;max-height:600px;overflow-y:auto;color:var(--color-neutral-400);">{{ data|tojson(indent=2) }}</pre>
-    </div>
-</details>
-
 <p style="margin-top:var(--space-6);color:var(--color-neutral-600);font-size:12px;">Datei: {{ filename }}</p>
+{% endblock %}
+
+{% block scripts %}
+{% if data.report %}
+<script>
+(function() {
+    var raw = document.getElementById('ed-report-raw');
+    var container = document.getElementById('ed-report-rendered');
+    if (!raw || !container) return;
+
+    var text = raw.textContent;
+    var parts = text.split(/^### /m);
+    parts.shift(); // skip ## header
+
+    var icons = {
+        'K/D': '⚔', 'ADR': '💥', 'KAST': '📊', 'Opening': '🎯',
+        'Crosshair': '◎', 'Counter': '🦶', 'Spray': '🔫', 'Waffen': '🔧',
+        'Trade': '🤝', 'Utility': '💣', 'Flash': '⚡', 'Clutch': '🏆',
+        'Multi': '🔥', 'CT/T': '↔', 'Kampf': '📏', 'Death': '⏱',
+        'Kill-Highlight': '✨', 'Rank': '📈', 'Gegner': '👥',
+        'Runden': '📋', 'Wirtschaft': '💰',
+    };
+
+    function getIcon(t) { for (var k in icons) { if (t.indexOf(k) === 0) return icons[k]; } return '▸'; }
+
+    function getBadge(t, b) {
+        if (/Exzellent|Stark(?:e[sr]?)?\b|Gute[sr]?\b|Starke/.test(b.substring(0, 150)))
+            return '<span class="ed-rp-badge ed-b-strong">Staerke</span>';
+        if (/Solide|Ordentlich|Ausgeglichen|Sauber/.test(b.substring(0, 150)))
+            return '<span class="ed-rp-badge ed-b-ok">Solide</span>';
+        if (/ALARM|Unter |schwach|schlecht|Nemesis|verlierst|zu oft|zu wenig|zu isoliert|ohne Impact|Tilt/i.test(b.substring(0, 250)))
+            return '<span class="ed-rp-badge ed-b-weak">Baustelle</span>';
+        return '<span class="ed-rp-badge ed-b-info">Info</span>';
+    }
+
+    function fmt(text) {
+        var lines = text.split('\n').filter(function(l) { return l.trim(); });
+        var h = '';
+        for (var i = 0; i < lines.length; i++) {
+            var l = lines[i].trim()
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\[\[(.+?)\]\]/g, '<em>$1</em>');
+            if (/^<strong>Training:|^<strong>Tipp:/.test(l)) h += '<span class="ed-rp-tip">' + l + '</span>';
+            else h += '<p>' + l + '</p>';
+        }
+        return h;
+    }
+
+    var verdict = [], training = [], regular = [];
+    for (var i = 0; i < parts.length; i++) {
+        var s = parts[i].trim(); if (!s) continue;
+        var fl = s.split('\n')[0];
+        if (fl.indexOf('Gesamtbewertung') === 0) verdict.push(s);
+        else if (fl.indexOf('Trainingsplan') === 0) training.push(s);
+        else regular.push(s);
+    }
+
+    var html = '';
+    for (var j = 0; j < regular.length; j++) {
+        var sec = regular[j], lines = sec.split('\n'), title = lines[0].trim(), body = lines.slice(1).join('\n').trim();
+        if (!body) body = '<em style="color:var(--color-neutral-600);">Keine Auffaelligkeiten.</em>';
+        html += '<div class="ed-rp-section"><div class="ed-rp-hdr" onclick="this.classList.toggle(\'open\')"><span class="ed-rp-chev">▶</span><span class="ed-rp-title">' + getIcon(title) + ' ' + title + '</span>' + getBadge(title, body) + '</div><div class="ed-rp-body">' + fmt(body) + '</div></div>';
+    }
+    for (var v = 0; v < verdict.length; v++) {
+        var vl = verdict[v].split('\n'), vb = vl.slice(1).join('\n').trim();
+        html += '<div class="ed-rp-verdict"><h3>Gesamtbewertung</h3>' + fmt(vb) + '</div>';
+    }
+    for (var t = 0; t < training.length; t++) {
+        var tl = training[t].split('\n').filter(function(l) { return l.trim(); });
+        html += '<div class="ed-rp-train"><h3>Trainingsplan</h3><ol>';
+        for (var k = 1; k < tl.length; k++) {
+            var it = tl[k].trim().replace(/^\d+\.\s*/, '').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\[\[(.+?)\]\]/g, '<em>$1</em>');
+            if (it) html += '<li>' + it + '</li>';
+        }
+        html += '</ol></div>';
+    }
+    container.innerHTML = html;
+})();
+</script>
+{% endif %}
 {% endblock %}

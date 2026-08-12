@@ -251,6 +251,9 @@ class MatchResult:
     player_stats: PlayerStats
     all_players: list[PlayerStats] = field(default_factory=list)
     kill_positions: list[dict] = field(default_factory=list)  # kill/death XY positions for map viz
+    duel_matrix: list[dict] = field(default_factory=list)  # per-opponent duel breakdown
+    round_timeline: list[dict] = field(default_factory=list)  # per-round event log
+    economy_performance: dict = field(default_factory=dict)  # eco/force/fullbuy stats
     demo_path: str = ""
     match_date: str = ""  # YYYY-MM-DD from demo file mtime
     match_datetime: str = ""  # YYYY-MM-DD HH:MM
@@ -368,6 +371,9 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
     round_ticks = sorted(rounds_df["tick"].tolist()) if rounds_df is not None else []
     freeze_ticks = sorted(round_freeze_df["tick"].tolist()) if round_freeze_df is not None else []
 
+    # Determine actual starting side per player from kill events
+    _assign_starting_sides(parser, player_lookup, round_ticks)
+
     # Team-Zugehörigkeit
     team_by_player: dict[str, str] = {sid: s.team for sid, s in player_lookup.items()}
 
@@ -460,6 +466,21 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
     target_team = target_stats.team
     score_t1, score_t2 = _extract_scores(rounds_df, target_team)
 
+    # 12) Duel Matrix
+    duel_matrix = _build_duel_matrix(kills_df, round_ticks, player_lookup, target_steam_id)
+
+    # 13) Round Timeline
+    round_timeline = _build_round_timeline(
+        kills_df, bomb_plant_df, bomb_defuse_df, rounds_df,
+        freeze_ticks, round_ticks, player_lookup, target_steam_id, target_team,
+    )
+
+    # 14) Economy Performance
+    economy_performance = _process_economy(
+        parser, kills_df, hurt_df, rounds_df,
+        freeze_ticks, round_ticks, target_steam_id, target_team, player_lookup,
+    )
+
     return MatchResult(
         map_name=_clean_map_name(map_name),
         score_team1=score_t1,
@@ -467,10 +488,104 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
         player_stats=target_stats,
         all_players=list(player_lookup.values()),
         kill_positions=kill_positions,
+        duel_matrix=duel_matrix,
+        round_timeline=round_timeline,
+        economy_performance=economy_performance,
         demo_path=demo_path,
         match_date=match_date,
         match_datetime=match_datetime,
     )
+
+
+# -- Starting Side Detection --
+
+# In-game team_num values from kill events (NOT parse_player_info team_number)
+_INGAME_T = 2
+_INGAME_CT = 3
+
+
+def _assign_starting_sides(parser: DemoParser, player_lookup: dict[str, PlayerStats], round_ticks: list[int]):
+    """Determine each player's starting side from kill event team_num data.
+
+    parse_player_info().team_number is a roster grouping that does NOT correspond
+    to T/CT. Instead, we use parse_event('player_death', player=['team_num'])
+    which gives the actual in-game team_num (2=T, 3=CT) at the time of each kill.
+    We look at first-half kills to determine starting side.
+    """
+    try:
+        enriched_kills = parser.parse_event("player_death", player=["team_num"])
+    except Exception:
+        return
+
+    if enriched_kills is None or len(enriched_kills) == 0:
+        return
+
+    # Half boundary tick: use round 12 end tick if available
+    half_tick = round_ticks[_MR12_HALF - 1] if len(round_ticks) >= _MR12_HALF else float("inf")
+
+    # Collect first-half team_num for each player (as attacker or victim)
+    side_votes: dict[str, int] = {}  # steamid -> team_num seen in first half
+
+    for _, row in enriched_kills.iterrows():
+        tick = int(row.get("tick", 0))
+        if tick > half_tick:
+            break  # Only look at first half
+
+        for role, col in [("attacker", "attacker_team_num"), ("victim", "user_team_num")]:
+            sid_col = "attacker_steamid" if role == "attacker" else "user_steamid"
+            sid = str(row.get(sid_col, ""))
+            team_num = row.get(col)
+            if sid in player_lookup and team_num is not None and not (isinstance(team_num, float) and math.isnan(team_num)):
+                team_num = int(team_num)
+                if team_num in (_INGAME_T, _INGAME_CT):
+                    side_votes[sid] = team_num
+
+    # Assign starting side
+    for sid, team_num in side_votes.items():
+        if sid in player_lookup:
+            player_lookup[sid].team = "CT" if team_num == _INGAME_CT else "T"
+
+    # Players with no kills/deaths in first half: infer from teammates
+    # Group roster teams from parse_player_info (original team field stored before overwrite)
+    # Use already-assigned sides to propagate
+    roster_groups: dict[str, list[str]] = {}
+    for sid, stats in player_lookup.items():
+        # Original roster team was overwritten, but players on same team share the same
+        # team_num in kills. We can use the assigned sides to fill gaps.
+        pass
+
+    # Second pass: players without kills might share a side with assigned teammates
+    # Use kill events to find teammates (same team_num in same round)
+    assigned = {sid for sid in side_votes if sid in player_lookup}
+    unassigned = {sid for sid in player_lookup if sid not in assigned}
+    if unassigned:
+        # Find co-occurrence: if two players have same team_num in same kill event
+        for _, row in enriched_kills.iterrows():
+            att_sid = str(row.get("attacker_steamid", ""))
+            vic_sid = str(row.get("user_steamid", ""))
+            att_team = row.get("attacker_team_num")
+            vic_team = row.get("user_team_num")
+            if att_sid in assigned and vic_sid in unassigned:
+                if att_team is not None and vic_team is not None:
+                    att_t = int(att_team) if not (isinstance(att_team, float) and math.isnan(att_team)) else None
+                    vic_t = int(vic_team) if not (isinstance(vic_team, float) and math.isnan(vic_team)) else None
+                    if att_t and vic_t:
+                        # If victim is on same team as attacker -> same side, else opposite
+                        if vic_t == att_t:
+                            player_lookup[vic_sid].team = player_lookup[att_sid].team
+                        else:
+                            player_lookup[vic_sid].team = "T" if player_lookup[att_sid].team == "CT" else "CT"
+                        unassigned.discard(vic_sid)
+            elif vic_sid in assigned and att_sid in unassigned:
+                if att_team is not None and vic_team is not None:
+                    att_t = int(att_team) if not (isinstance(att_team, float) and math.isnan(att_team)) else None
+                    vic_t = int(vic_team) if not (isinstance(vic_team, float) and math.isnan(vic_team)) else None
+                    if att_t and vic_t:
+                        if att_t == vic_t:
+                            player_lookup[att_sid].team = player_lookup[vic_sid].team
+                        else:
+                            player_lookup[att_sid].team = "T" if player_lookup[vic_sid].team == "CT" else "CT"
+                        unassigned.discard(att_sid)
 
 
 # -- Kill-Processing --
@@ -696,8 +811,7 @@ def _process_clutches(kills_df, rounds_df, freeze_ticks, player_lookup, team_by_
             if round_idx < len(rounds_df):
                 winner = str(rounds_df.iloc[round_idx].get("winner", ""))
                 player_team = team_by_player.get(clutch_player, "")
-                team_to_winner = {"2": "T", "3": "CT"}
-                if team_to_winner.get(player_team, "") == winner:
+                if _is_own_round(round_idx, player_team, winner):
                     player_lookup[clutch_player].clutch_wins += 1
                     player_lookup[clutch_player].clutch_kills += clutch_started_at_kills
 
@@ -733,29 +847,58 @@ def _tick_to_round(tick: int, round_ticks: list[int]) -> int:
     return len(round_ticks)
 
 
+# CS2 MR12 constants
+_MR12_HALF = 12
+_OT_HALF = 3
+
+
+def _own_side_for_round(round_idx: int, starting_side: str) -> str:
+    """Return the side ("T"/"CT") the player is on for a given round.
+
+    starting_side must be "T" or "CT" (the player's side in the first half).
+    CS2 MR12: first 12 rounds on starting side, next 12 on swapped side.
+    Overtime MR3: swap every 3 rounds from starting side again.
+    """
+    start_side = starting_side if starting_side in ("T", "CT") else "T"
+    swap_side = "CT" if start_side == "T" else "T"
+
+    if round_idx < _MR12_HALF:
+        return start_side
+    if round_idx < _MR12_HALF * 2:
+        return swap_side
+    # Overtime
+    ot_idx = round_idx - _MR12_HALF * 2
+    return start_side if (ot_idx // _OT_HALF) % 2 == 0 else swap_side
+
+
+def _is_own_round(round_idx: int, starting_side: str, winner: str) -> bool:
+    """Check if the round winner matches the player's side for that round.
+
+    starting_side: "T" or "CT" (player's first-half side).
+    winner: "T" or "CT" from round_end event.
+    """
+    own_side = _own_side_for_round(round_idx, starting_side)
+    return winner == own_side
+
+
 def _extract_scores(rounds_df, target_team: str) -> tuple[int, int]:
+    """Extract (own_score, enemy_score) with correct halftime handling."""
     if rounds_df is None or len(rounds_df) == 0:
         return 0, 0
 
-    team_scores: dict[str, int] = {}
-    for _, r in rounds_df.iterrows():
+    own_score = 0
+    enemy_score = 0
+
+    for i, (_, r) in enumerate(rounds_df.iterrows()):
         winner = str(r.get("winner", ""))
-        team_scores[winner] = team_scores.get(winner, 0) + 1
+        if not winner or winner == "0":
+            continue
+        if _is_own_round(i, target_team, winner):
+            own_score += 1
+        else:
+            enemy_score += 1
 
-    team_to_winner = {"2": "T", "3": "CT"}
-    target_winner = team_to_winner.get(target_team, target_team)
-
-    scores = sorted(team_scores.values(), reverse=True)
-    if target_winner in team_scores:
-        own = team_scores[target_winner]
-        total = sum(team_scores.values())
-        return own, total - own
-
-    if len(scores) >= 2:
-        return scores[0], scores[1]
-    if len(scores) == 1:
-        return scores[0], 0
-    return 0, 0
+    return own_score, enemy_score
 
 
 def _process_per_round(kills_df, rounds_df, freeze_ticks, player_lookup, team_by_player):
@@ -763,9 +906,6 @@ def _process_per_round(kills_df, rounds_df, freeze_ticks, player_lookup, team_by
     round_ticks = sorted(rounds_df["tick"].tolist())
     kills_sorted = kills_df.sort_values("tick").reset_index(drop=True)
     n_rounds = min(len(freeze_ticks), len(round_ticks))
-
-    # Half-time: first 12 rounds = starting side
-    HALF = 12
 
     for i in range(n_rounds):
         start = freeze_ticks[i]
@@ -834,14 +974,8 @@ def _process_per_round(kills_df, rounds_df, freeze_ticks, player_lookup, team_by
             elif k >= 5:
                 stats.rounds_5k += 1
 
-            # CT/T Side Split
-            is_first_half = i < HALF
-            # Starting side: team 2 starts T, team 3 starts CT
-            starting_team = stats.team
-            if starting_team == "3":  # CT start
-                is_ct = is_first_half
-            else:  # T start
-                is_ct = not is_first_half
+            # CT/T Side Split (handles halftime + overtime)
+            is_ct = _own_side_for_round(i, stats.team) == "CT"
 
             if is_ct:
                 stats.ct_kills += k
@@ -1073,6 +1207,266 @@ def _extract_kill_positions(
         })
 
     return positions
+
+
+# -- Duel Matrix --
+
+def _build_duel_matrix(
+    kills_df, round_ticks: list[int], player_lookup: dict[str, PlayerStats], target_steam_id: str
+) -> list[dict]:
+    """Build per-opponent duel breakdown for the target player."""
+    if kills_df is None or not target_steam_id:
+        return []
+
+    opponents: dict[str, dict] = {}  # opponent_steamid -> stats
+
+    for _, kill in kills_df.iterrows():
+        attacker_id = str(kill.get("attacker_steamid", ""))
+        victim_id = str(kill.get("user_steamid", ""))
+        weapon = str(kill.get("weapon", ""))
+        headshot = bool(kill.get("headshot", False))
+
+        if attacker_id == target_steam_id and victim_id in player_lookup:
+            opp = opponents.setdefault(victim_id, {
+                "name": player_lookup[victim_id].name, "steam_id": victim_id,
+                "kills": 0, "deaths": 0, "hs_kills": 0, "hs_deaths": 0, "weapons_used": {},
+            })
+            opp["kills"] += 1
+            if headshot:
+                opp["hs_kills"] += 1
+            opp["weapons_used"][weapon] = opp["weapons_used"].get(weapon, 0) + 1
+
+        elif victim_id == target_steam_id and attacker_id in player_lookup:
+            opp = opponents.setdefault(attacker_id, {
+                "name": player_lookup[attacker_id].name, "steam_id": attacker_id,
+                "kills": 0, "deaths": 0, "hs_kills": 0, "hs_deaths": 0, "weapons_used": {},
+            })
+            opp["deaths"] += 1
+            if headshot:
+                opp["hs_deaths"] += 1
+
+    result = []
+    for sid, data in opponents.items():
+        k, d = data["kills"], data["deaths"]
+        top_weapons = sorted(data["weapons_used"].items(), key=lambda x: -x[1])[:3]
+        result.append({
+            "name": data["name"],
+            "steam_id": sid,
+            "kills": k,
+            "deaths": d,
+            "kd": round(k / max(d, 1), 2),
+            "hs_kills": data["hs_kills"],
+            "hs_deaths": data["hs_deaths"],
+            "top_weapons": [w[0] for w in top_weapons],
+            "total_duels": k + d,
+        })
+    return sorted(result, key=lambda x: -x["total_duels"])
+
+
+# -- Round Timeline --
+
+def _build_round_timeline(
+    kills_df, bomb_plant_df, bomb_defuse_df, rounds_df, freeze_ticks: list[int],
+    round_ticks: list[int], player_lookup: dict[str, PlayerStats],
+    target_steam_id: str, target_team: str,
+) -> list[dict]:
+    """Build per-round event timeline for the target player."""
+    if kills_df is None or rounds_df is None:
+        return []
+
+    n_rounds = min(len(freeze_ticks), len(round_ticks))
+    kills_sorted = kills_df.sort_values("tick").reset_index(drop=True)
+    timeline = []
+
+    for i in range(n_rounds):
+        start = freeze_ticks[i]
+        end = round_ticks[i]
+        round_dur = max(end - start, 1)
+
+        winner = str(rounds_df.iloc[i].get("winner", "")) if i < len(rounds_df) else ""
+        won = _is_own_round(i, target_team, winner) if winner else False
+        side = _own_side_for_round(i, target_team)
+
+        rk = kills_sorted[(kills_sorted["tick"] >= start) & (kills_sorted["tick"] <= end)]
+
+        events = []
+        player_kills = 0
+        player_died = False
+        player_death_pct = None
+
+        for _, kill in rk.iterrows():
+            tick = int(kill.get("tick", start))
+            elapsed_pct = round((tick - start) / round_dur * 100, 1)
+            attacker_id = str(kill.get("attacker_steamid", ""))
+            victim_id = str(kill.get("user_steamid", ""))
+            weapon = str(kill.get("weapon", ""))
+            headshot = bool(kill.get("headshot", False))
+
+            if attacker_id == target_steam_id:
+                events.append({
+                    "type": "kill", "pct": elapsed_pct, "weapon": weapon,
+                    "headshot": headshot, "target": player_lookup.get(victim_id, PlayerStats("?", "", "")).name,
+                })
+                player_kills += 1
+            elif victim_id == target_steam_id:
+                events.append({
+                    "type": "death", "pct": elapsed_pct, "weapon": weapon,
+                    "headshot": headshot, "killer": player_lookup.get(attacker_id, PlayerStats("?", "", "")).name,
+                })
+                player_died = True
+                player_death_pct = elapsed_pct
+
+        # Bomb events
+        if bomb_plant_df is not None:
+            for _, bp in bomb_plant_df.iterrows():
+                tick = int(bp.get("tick", 0))
+                if start <= tick <= end:
+                    planter_id = str(bp.get("user_steamid", ""))
+                    is_self = planter_id == target_steam_id
+                    events.append({
+                        "type": "bomb_plant", "pct": round((tick - start) / round_dur * 100, 1),
+                        "player": player_lookup.get(planter_id, PlayerStats("?", "", "")).name,
+                        "is_self": is_self,
+                    })
+
+        if bomb_defuse_df is not None:
+            for _, bd in bomb_defuse_df.iterrows():
+                tick = int(bd.get("tick", 0))
+                if start <= tick <= end:
+                    defuser_id = str(bd.get("user_steamid", ""))
+                    is_self = defuser_id == target_steam_id
+                    events.append({
+                        "type": "bomb_defuse", "pct": round((tick - start) / round_dur * 100, 1),
+                        "player": player_lookup.get(defuser_id, PlayerStats("?", "", "")).name,
+                        "is_self": is_self,
+                    })
+
+        events.sort(key=lambda e: e["pct"])
+
+        timeline.append({
+            "round": i + 1,
+            "side": side,
+            "won": won,
+            "events": events,
+            "player_kills": player_kills,
+            "player_died": player_died,
+            "died_early": player_death_pct is not None and player_death_pct < 33,
+        })
+
+    return timeline
+
+
+# -- Economy Performance --
+
+_ECO_THRESHOLD = 1500
+_FORCE_THRESHOLD = 3700
+
+
+def _process_economy(
+    parser: DemoParser, kills_df, hurt_df, rounds_df,
+    freeze_ticks: list[int], round_ticks: list[int],
+    target_steam_id: str, target_team: str,
+    player_lookup: dict[str, PlayerStats],
+) -> dict:
+    """Classify rounds by economy and compute per-category performance."""
+    if not target_steam_id or rounds_df is None or not freeze_ticks:
+        return {}
+
+    n_rounds = min(len(freeze_ticks), len(round_ticks))
+
+    # Get equipment value at freeze-end ticks
+    try:
+        tick_data = parser.parse_ticks(["current_equip_value"], ticks=freeze_ticks[:n_rounds])
+    except Exception:
+        return {}
+
+    if tick_data is None or len(tick_data) == 0:
+        return {}
+
+    # Build per-round equip value for target player
+    player_equip = {}
+    for _, row in tick_data.iterrows():
+        sid = str(row.get("steamid", ""))
+        if sid != target_steam_id:
+            continue
+        tick = int(row.get("tick", 0))
+        val = int(row.get("current_equip_value", 0))
+        # Map tick to round index
+        for ri, ft in enumerate(freeze_ticks[:n_rounds]):
+            if tick == ft:
+                player_equip[ri] = val
+                break
+
+    if not player_equip:
+        return {}
+
+    # Classify each round
+    categories = {"pistol": [], "eco": [], "force": [], "fullbuy": []}
+    for ri in range(n_rounds):
+        equip = player_equip.get(ri, 0)
+        is_pistol = (ri == 0) or (ri == _MR12_HALF)
+        if is_pistol:
+            cat = "pistol"
+        elif equip < _ECO_THRESHOLD:
+            cat = "eco"
+        elif equip < _FORCE_THRESHOLD:
+            cat = "force"
+        else:
+            cat = "fullbuy"
+        categories[cat].append(ri)
+
+    # Compute per-category stats
+    kills_sorted = kills_df.sort_values("tick").reset_index(drop=True) if kills_df is not None else None
+    result = {}
+
+    for cat, round_indices in categories.items():
+        if not round_indices:
+            continue
+
+        total_kills = 0
+        total_deaths = 0
+        total_damage = 0
+        rounds_won = 0
+
+        for ri in round_indices:
+            if ri >= n_rounds:
+                continue
+            start = freeze_ticks[ri]
+            end = round_ticks[ri]
+
+            # Round win
+            winner = str(rounds_df.iloc[ri].get("winner", "")) if ri < len(rounds_df) else ""
+            if winner and _is_own_round(ri, target_team, winner):
+                rounds_won += 1
+
+            # Kills/deaths
+            if kills_sorted is not None:
+                rk = kills_sorted[(kills_sorted["tick"] >= start) & (kills_sorted["tick"] <= end)]
+                for _, kill in rk.iterrows():
+                    if str(kill.get("attacker_steamid", "")) == target_steam_id:
+                        total_kills += 1
+                    if str(kill.get("user_steamid", "")) == target_steam_id:
+                        total_deaths += 1
+
+            # Damage
+            if hurt_df is not None:
+                rd = hurt_df[(hurt_df["tick"] >= start) & (hurt_df["tick"] <= end)]
+                for _, dmg in rd.iterrows():
+                    if str(dmg.get("attacker_steamid", "")) == target_steam_id:
+                        total_damage += int(dmg.get("dmg_health", 0))
+
+        n = len(round_indices)
+        result[cat] = {
+            "rounds": n,
+            "kills": total_kills,
+            "deaths": total_deaths,
+            "kd": round(total_kills / max(total_deaths, 1), 2),
+            "adr": round(total_damage / max(n, 1), 1),
+            "win_rate": round(rounds_won / max(n, 1) * 100, 1),
+            "rounds_won": rounds_won,
+        }
+
+    return result
 
 
 def _clean_map_name(raw: str) -> str:

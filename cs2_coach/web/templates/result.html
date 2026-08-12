@@ -1,68 +1,633 @@
 {% extends "base.html" %}
 {% block title %}CS2 Coach — {{ result.map_name }} {{ result.score_team1 }}:{{ result.score_team2 }}{% endblock %}
+{% block container_class %}container-wide{% endblock %}
 
 {% block content %}
 <style>
-    .match-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-5); }
-    .match-header .subtitle { font-size: 12px; color: var(--color-neutral-300); margin-bottom: 4px; }
-    .match-header h2 { margin: 0; }
-    .top-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
-    .rating-big { font-family: var(--font-heading); font-size: 40px; font-weight: 500; color: var(--color-text); }
-    .rating-sub { color: var(--color-neutral-300); font-size: 12px; }
-    .compare-row { display: flex; align-items: center; justify-content: space-between; }
-    .compare-label { font-size: 13px; color: var(--color-neutral-300); }
-    .compare-value { font-size: 13px; color: var(--color-text); }
-    .compare-delta { color: var(--color-neutral-300); }
+    /* ── Match Banner ── */
+    .match-banner {
+        display: flex; align-items: center; justify-content: center; gap: 32px;
+        padding: 28px 24px 22px; margin-bottom: var(--space-5);
+        background: linear-gradient(135deg, rgba(78,130,200,0.08) 0%, var(--color-surface) 40%, var(--color-surface) 60%, rgba(222,178,62,0.08) 100%);
+        border-radius: var(--radius-lg); position: relative; overflow: hidden;
+        animation: fadeSlideUp 0.4s ease both;
+    }
+    .match-banner::before {
+        content: ''; position: absolute; inset: 0;
+        border: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
+        border-radius: var(--radius-lg); pointer-events: none;
+    }
+    .banner-team { text-align: center; min-width: 80px; }
+    .banner-team-label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
+    .banner-ct .banner-team-label { color: #7eaadb; }
+    .banner-t .banner-team-label { color: #deb23e; }
+    .banner-score-block { display: flex; align-items: center; gap: 16px; }
+    .banner-score {
+        font-family: var(--font-heading); font-size: 52px; font-weight: 700;
+        line-height: 1; letter-spacing: -0.03em;
+    }
+    .banner-ct .banner-score { color: #7eaadb; }
+    .banner-t .banner-score { color: #deb23e; }
+    .banner-vs { font-size: 18px; color: var(--color-neutral-600); font-weight: 500; }
+    .banner-meta { text-align: center; }
+    .banner-map { font-size: 20px; font-weight: 600; color: var(--color-text); margin-bottom: 2px; }
+    .banner-result { font-size: 13px; font-weight: 500; }
+    .banner-date { font-size: 11px; color: var(--color-neutral-600); margin-top: 2px; }
+    .banner-rounds-bar {
+        display: flex; height: 4px; border-radius: 2px; overflow: hidden;
+        width: 160px; margin: 8px auto 0; background: var(--color-neutral-800);
+    }
+    .rounds-ct { background: #7eaadb; }
+    .rounds-t { background: #deb23e; }
+
+    /* ── Stat Hexagons / Big Numbers ── */
+    .stat-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
+    .stat-cell {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 16px 8px; border-radius: var(--radius-md);
+        background: var(--color-surface); border: 1px solid color-mix(in srgb, var(--color-text) 6%, transparent);
+        animation: fadeSlideUp 0.5s ease both;
+    }
+    .stat-cell:nth-child(1) { animation-delay: 0s; }
+    .stat-cell:nth-child(2) { animation-delay: 0.06s; }
+    .stat-cell:nth-child(3) { animation-delay: 0.12s; }
+    .stat-cell:nth-child(4) { animation-delay: 0.18s; }
+    .stat-cell:nth-child(5) { animation-delay: 0.24s; }
+    .stat-cell:nth-child(6) { animation-delay: 0.30s; }
+    @keyframes fadeSlideUp {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .stat-cell-value {
+        font-family: var(--font-heading); font-size: 26px; font-weight: 600;
+        line-height: 1.1; margin-bottom: 4px;
+    }
+    .stat-cell-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500); }
+    .stat-bar-wrap { width: 100%; height: 4px; background: var(--color-neutral-800); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+    .stat-bar-fill { height: 100%; border-radius: 2px; width: 0 !important; animation: barGrow 0.8s ease 0.4s forwards; }
+    @keyframes barGrow { to { width: var(--bar-w); } }
+
+    /* color coding */
+    .sc-green { color: #4ade80; }
+    .sc-yellow { color: #fbbf24; }
+    .sc-red { color: #f87171; }
+    .sc-accent { color: var(--color-accent); }
+    .sb-green { background: #4ade80; }
+    .sb-yellow { background: #fbbf24; }
+    .sb-red { background: #f87171; }
+    .sb-accent { background: var(--color-accent); }
+
+    /* ── Score Bar (horizontal split bar) ── */
+    .score-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .score-bar-label { font-size: 12px; color: var(--color-neutral-400); min-width: 100px; }
+    .score-bar-track { flex: 1; height: 6px; background: var(--color-neutral-800); border-radius: 3px; overflow: hidden; position: relative; }
+    .score-bar-fill { height: 100%; border-radius: 3px; }
+    .score-bar-value { font-size: 13px; font-weight: 500; min-width: 52px; text-align: right; }
+
+    /* ── CS2 Scoreboard ── */
+    .sb-wrapper {
+        margin-bottom: var(--space-5); position: relative;
+        border-radius: var(--radius-lg); overflow: hidden;
+        padding: var(--space-3);
+    }
+    .sb-wrapper-bg {
+        position: absolute; inset: 0; z-index: 0;
+        background-size: cover; background-position: center;
+        opacity: 0.06; pointer-events: none;
+    }
+    .sb-wrapper > :not(.sb-wrapper-bg) { position: relative; z-index: 1; }
+    .sb-team {
+        border-radius: var(--radius-md); overflow: hidden; margin-bottom: var(--space-3);
+        border: 1px solid color-mix(in srgb, var(--color-text) 6%, transparent);
+    }
+    .sb-team-header {
+        display: grid; grid-template-columns: 2.5fr repeat(5, 1fr); gap: 0;
+        padding: 8px 14px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--color-neutral-500);
+    }
+    .sb-ct .sb-team-header { background: rgba(78,130,200,0.1); border-bottom: 2px solid rgba(78,130,200,0.3); }
+    .sb-t .sb-team-header { background: rgba(222,178,62,0.1); border-bottom: 2px solid rgba(222,178,62,0.3); }
+    .sb-row {
+        display: grid; grid-template-columns: 2.5fr repeat(5, 1fr); gap: 0;
+        padding: 7px 14px; font-size: 14px; align-items: center;
+        background: var(--color-surface); transition: background 0.15s;
+    }
+    .sb-row:hover { background: color-mix(in srgb, var(--color-text) 5%, var(--color-surface)); }
+    .sb-row + .sb-row { border-top: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent); }
+    .sb-row-you {
+        background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+        font-weight: 600;
+    }
+    .sb-row-you:hover { background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface)); }
+    .sb-name { display: flex; align-items: center; gap: 8px; }
+    .sb-you-badge {
+        font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+        background: var(--color-accent); color: #fff; padding: 1px 6px; border-radius: 3px; font-weight: 600;
+    }
+    .sb-ct .sb-name { color: #a3c4e8; }
+    .sb-t .sb-name { color: #e8d48a; }
+    .sb-cell { text-align: center; }
+    .sb-cell-kd { font-weight: 500; }
+    .sb-kd-bar { display: inline-block; height: 3px; border-radius: 2px; vertical-align: middle; margin-left: 6px; }
+
+    /* ── Coach Cards ── */
+    .coach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-bottom: var(--space-5); }
+    .coach-card { padding: 14px 16px !important; animation: fadeSlideUp 0.4s ease both; }
+    .coach-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+
+    /* ── Full Report (rendered) ── */
+    .report-section { margin-bottom: 2px; }
+    .report-section-header {
+        display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+        background: var(--color-surface); border-radius: var(--radius-md);
+        cursor: pointer; user-select: none;
+        border: 1px solid color-mix(in srgb, var(--color-text) 5%, transparent);
+        transition: background 0.15s, border-color 0.15s;
+    }
+    .report-section-header:hover { border-color: color-mix(in srgb, var(--color-text) 12%, transparent); }
+    .report-section-header.open { border-radius: var(--radius-md) var(--radius-md) 0 0; border-bottom-color: transparent; }
+    .report-section-chevron {
+        font-size: 10px; color: var(--color-neutral-600); transition: transform 0.2s;
+        flex-shrink: 0; width: 16px; text-align: center;
+    }
+    .report-section-header.open .report-section-chevron { transform: rotate(90deg); }
+    .report-section-title { font-size: 13px; font-weight: 600; flex: 1; }
+    .report-section-badge {
+        font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 3px;
+        letter-spacing: 0.04em; text-transform: uppercase; flex-shrink: 0;
+    }
+    .badge-strong { background: rgba(74,222,128,0.12); color: #4ade80; }
+    .badge-ok { background: rgba(145,132,217,0.12); color: #9184d9; }
+    .badge-weak { background: rgba(248,113,113,0.12); color: #f87171; }
+    .badge-info { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .report-section-body {
+        display: none; padding: 12px 14px; font-size: 13px; line-height: 1.7;
+        color: var(--color-neutral-300); background: var(--color-surface);
+        border: 1px solid color-mix(in srgb, var(--color-text) 5%, transparent);
+        border-top: none; border-radius: 0 0 var(--radius-md) var(--radius-md);
+    }
+    .report-section-header.open + .report-section-body { display: block; }
+    .report-section-body p { margin: 0 0 8px; }
+    .report-section-body p:last-child { margin-bottom: 0; }
+    .report-section-body strong { color: var(--color-text); }
+    .report-section-body .rp-tip {
+        display: block; margin: 8px 0; padding: 8px 12px;
+        background: rgba(145,132,217,0.06); border-left: 3px solid var(--color-accent);
+        border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 12px;
+    }
+    .report-section-body .rp-training {
+        display: block; margin: 8px 0; padding: 8px 12px;
+        background: rgba(74,222,128,0.06); border-left: 3px solid #4ade80;
+        border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 12px;
+    }
+    .report-verdict {
+        padding: 16px; margin-top: var(--space-3); border-radius: var(--radius-md);
+        border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+        background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface));
+    }
+    .report-verdict h3 { font-size: 15px; margin: 0 0 8px; color: var(--color-text); }
+    .report-verdict p { margin: 0 0 6px; font-size: 13px; line-height: 1.7; color: var(--color-neutral-300); }
+    .report-verdict p:last-child { margin-bottom: 0; }
+    .report-training-plan {
+        padding: 16px; margin-top: var(--space-3); border-radius: var(--radius-md);
+        border: 1px solid color-mix(in srgb, #4ade80 15%, transparent);
+        background: color-mix(in srgb, #4ade80 3%, var(--color-surface));
+    }
+    .report-training-plan h3 { font-size: 15px; margin: 0 0 10px; color: #4ade80; }
+    .report-training-plan ol { margin: 0; padding-left: 20px; }
+    .report-training-plan li { font-size: 13px; line-height: 1.7; color: var(--color-neutral-300); margin-bottom: 8px; }
+    .report-training-plan li strong { color: var(--color-text); }
+
+    /* ── Focus Tags ── */
     .focus-tags { display: flex; gap: 8px; flex-wrap: wrap; }
-    .coach-card { padding: 14px 16px !important; }
-    .coach-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-    .bar-wrap { position: relative; height: 6px; background: var(--color-neutral-800); border-radius: 3px; }
-    .bar-avg { position: absolute; top: 0; left: 0; height: 6px; border-radius: 3px; background: var(--color-accent-700); }
-    .bar-you { position: absolute; top: 0; left: 0; height: 6px; border-radius: 3px; background: var(--color-accent); }
-    .bar-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--color-neutral-300); margin-bottom: 4px; }
-    .checklist-item { display: flex; align-items: flex-start; gap: 10px; }
-    .checklist-box { width: 14px; height: 14px; margin-top: 2px; border: 1px solid var(--color-accent-300); border-radius: 3px; flex: none; }
-    .checklist-text { font-size: 13px; color: var(--color-text); }
-    .scoreboard-highlight { background: var(--color-surface); font-weight: 600; }
+
+    /* ── Two Column Layout ── */
+    .result-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
+
+    /* ── Duel Matrix ── */
+    .duel-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .duel-table th { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500); padding: 6px 10px; text-align: left; }
+    .duel-table td { padding: 7px 10px; border-top: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent); }
+    .duel-table tr:hover td { background: color-mix(in srgb, var(--color-text) 3%, transparent); }
+    .duel-weapon { font-size: 11px; color: var(--color-neutral-500); }
+    .duel-bar { display: flex; height: 4px; border-radius: 2px; overflow: hidden; width: 60px; background: var(--color-neutral-800); }
+    .duel-bar-k { background: #4ade80; }
+    .duel-bar-d { background: #f87171; }
+
+    /* ── Round Timeline ── */
+    .tl-grid { display: flex; flex-direction: column; gap: 2px; }
+    .tl-row {
+        display: grid; grid-template-columns: 42px 28px 1fr 60px; gap: 8px; align-items: center;
+        padding: 4px 10px; border-radius: var(--radius-sm); font-size: 12px;
+        background: var(--color-surface); border: 1px solid transparent;
+    }
+    .tl-row:hover { border-color: color-mix(in srgb, var(--color-text) 8%, transparent); }
+    .tl-row-won { border-left: 2px solid #4ade80; }
+    .tl-row-lost { border-left: 2px solid #f87171; }
+    .tl-row-early { background: color-mix(in srgb, #f87171 6%, var(--color-surface)); }
+    .tl-round { font-weight: 600; font-size: 11px; color: var(--color-neutral-400); }
+    .tl-side { font-size: 10px; font-weight: 600; letter-spacing: 0.05em; }
+    .tl-side-ct { color: #7eaadb; }
+    .tl-side-t { color: #deb23e; }
+    .tl-events { display: flex; align-items: center; gap: 3px; min-height: 20px; position: relative; }
+    .tl-event {
+        display: inline-flex; align-items: center; gap: 2px; padding: 1px 5px;
+        border-radius: 3px; font-size: 10px; font-weight: 500; white-space: nowrap;
+    }
+    .tl-kill { background: rgba(74,222,128,0.12); color: #4ade80; }
+    .tl-death { background: rgba(248,113,113,0.12); color: #f87171; }
+    .tl-bomb { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .tl-info { font-size: 11px; text-align: right; color: var(--color-neutral-500); }
+    .tl-multikill { color: #4ade80; font-weight: 600; }
+    .tl-summary { display: flex; gap: var(--space-4); font-size: 13px; color: var(--color-neutral-400); margin-bottom: var(--space-3); }
+    .tl-summary strong { color: var(--color-text); }
+    .tl-halftime { text-align: center; font-size: 10px; color: var(--color-neutral-600); letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 0; }
+
+    /* ── Economy Performance ── */
+    .econ-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); }
+    .econ-card {
+        padding: 14px !important; text-align: center;
+        border-top: 3px solid var(--color-neutral-700);
+    }
+    .econ-card-pistol { border-top-color: #a78bfa; }
+    .econ-card-eco { border-top-color: #f87171; }
+    .econ-card-force { border-top-color: #fbbf24; }
+    .econ-card-fullbuy { border-top-color: #4ade80; }
+    .econ-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500); margin-bottom: 8px; }
+    .econ-big { font-family: var(--font-heading); font-size: 22px; font-weight: 600; line-height: 1.1; }
+    .econ-sub { font-size: 12px; color: var(--color-neutral-400); margin-top: 4px; }
+    .econ-row { display: flex; justify-content: space-between; font-size: 12px; margin-top: 3px; }
+    .econ-row-label { color: var(--color-neutral-500); }
+
+    @media (max-width: 768px) {
+        .stat-grid { grid-template-columns: repeat(3, 1fr); }
+        .coach-grid { grid-template-columns: 1fr; }
+        .result-cols { grid-template-columns: 1fr; }
+        .banner-score { font-size: 36px; }
+        .match-banner { gap: 16px; padding: 20px 14px; }
+        .sb-team-header, .sb-row { grid-template-columns: 2fr repeat(5, 1fr); font-size: 12px; padding: 6px 10px; }
+        .econ-grid { grid-template-columns: repeat(2, 1fr); }
+        .tl-row { grid-template-columns: 38px 24px 1fr 50px; gap: 4px; font-size: 11px; }
+    }
 </style>
 
-<div style="display: flex; align-items: center; gap: 10px; margin-bottom: var(--space-2);">
+<div style="margin-bottom: var(--space-3);">
     <a href="{{ url_for('index') }}" class="btn btn-ghost" style="padding: 4px 10px; font-size: 12px;">← Zurueck</a>
-    <span style="color: var(--color-neutral-300); font-size: 13px;">
-        {{ result.map_name }} · {{ result.score_team1 }}:{{ result.score_team2 }} ·
-        <span class="{% if result.result_str == 'Sieg' %}win{% elif result.result_str == 'Niederlage' %}loss{% else %}draw{% endif %}">{{ result.result_str }}</span>
-        {% if result.match_date %} · {{ result.match_date }}{% endif %}
-    </span>
-</div>
-<div class="match-header">
-    <h2>Match-Analyse</h2>
-    <span class="tag tag-outline">{{ result.total_rounds }} Runden</span>
 </div>
 
-<!-- Top Cards: Rating + Comparison -->
-<div class="top-grid">
-    <div class="card elev-sm" style="display: flex; flex-direction: column; gap: 6px;">
-        <div class="card-kicker">Match-Rating</div>
-        <div style="display: flex; align-items: baseline; gap: 10px;">
-            <div class="rating-big">{{ result.rating }}</div>
+<!-- ══════ Match Banner ══════ -->
+{% set ct_pct = (result.score_team1 / [result.total_rounds, 1]|max * 100)|round|int %}
+{% set t_pct = 100 - ct_pct %}
+<div class="match-banner">
+    <div class="banner-team banner-ct">
+        <div class="banner-team-label">Dein Team</div>
+        <div class="banner-score">{{ result.score_team1 }}</div>
+    </div>
+    <div class="banner-meta">
+        <div class="banner-map">{{ result.map_name }}</div>
+        <div class="banner-result {% if result.result_str == 'Sieg' %}win{% elif result.result_str == 'Niederlage' %}loss{% else %}draw{% endif %}">
+            {{ result.result_str }}
         </div>
-        <div style="display: flex; gap: 16px; margin-top: 4px;">
-            <span style="font-size: 12px; color: var(--color-neutral-300);">K/D {{ "%.2f"|format(stats.kd_ratio) }}</span>
-            <span style="font-size: 12px; color: var(--color-neutral-300);">ADR {{ "%.1f"|format(stats.adr) }}</span>
-            <span style="font-size: 12px; color: var(--color-neutral-300);">KAST {{ "%.0f"|format(stats.kast_pct) }}%</span>
+        <div class="banner-date">{% if result.match_date %}{{ result.match_date }}{% endif %} · {{ result.total_rounds }} Runden</div>
+        <div class="banner-rounds-bar">
+            <div class="rounds-ct" style="width: {{ ct_pct }}%;"></div>
+            <div class="rounds-t" style="width: {{ t_pct }}%;"></div>
         </div>
     </div>
-    <div class="card elev-sm" style="display: flex; flex-direction: column; justify-content: center; gap: 10px;">
-        <div class="card-kicker">Kern-Statistiken</div>
-        <div class="compare-row"><span class="compare-label">K/D/A</span><span class="compare-value">{{ stats.kills }}/{{ stats.deaths }}/{{ stats.assists }}</span></div>
-        <div class="compare-row"><span class="compare-label">HS%</span><span class="compare-value">{{ "%.0f"|format(stats.headshot_pct) }}%</span></div>
-        <div class="compare-row"><span class="compare-label">Crosshair Placement</span><span class="compare-value">{% if stats.crosshair_placement_kills > 0 %}{{ "%.1f"|format(stats.crosshair_placement_avg) }}°{% else %}-{% endif %}</span></div>
-        <div class="compare-row"><span class="compare-label">Counter-Strafe</span><span class="compare-value">{{ "%.0f"|format(stats.counter_strafe_score) }}%</span></div>
-        <div class="compare-row"><span class="compare-label">Survival</span><span class="compare-value">{{ "%.0f"|format(stats.survival_rate) }}%</span></div>
+    <div class="banner-team banner-t">
+        <div class="banner-team-label">Gegner</div>
+        <div class="banner-score">{{ result.score_team2 }}</div>
     </div>
 </div>
 
-<!-- Focus Tags -->
+<!-- ══════ Stat Cells ══════ -->
+{% set rating_color = 'sc-green' if result.rating >= 1.1 else ('sc-yellow' if result.rating >= 0.85 else 'sc-red') %}
+{% set kd_color = 'sc-green' if stats.kd_ratio >= 1.2 else ('sc-yellow' if stats.kd_ratio >= 0.9 else 'sc-red') %}
+{% set adr_color = 'sc-green' if stats.adr >= 80 else ('sc-yellow' if stats.adr >= 65 else 'sc-red') %}
+{% set hs_color = 'sc-green' if stats.headshot_pct >= 50 else ('sc-yellow' if stats.headshot_pct >= 35 else 'sc-red') %}
+{% set kast_color = 'sc-green' if stats.kast_pct >= 75 else ('sc-yellow' if stats.kast_pct >= 60 else 'sc-red') %}
+
+{% set rating_bar = 'sb-green' if result.rating >= 1.1 else ('sb-yellow' if result.rating >= 0.85 else 'sb-red') %}
+{% set kd_bar = 'sb-green' if stats.kd_ratio >= 1.2 else ('sb-yellow' if stats.kd_ratio >= 0.9 else 'sb-red') %}
+{% set adr_bar = 'sb-green' if stats.adr >= 80 else ('sb-yellow' if stats.adr >= 65 else 'sb-red') %}
+{% set hs_bar = 'sb-green' if stats.headshot_pct >= 50 else ('sb-yellow' if stats.headshot_pct >= 35 else 'sb-red') %}
+{% set kast_bar = 'sb-green' if stats.kast_pct >= 75 else ('sb-yellow' if stats.kast_pct >= 60 else 'sb-red') %}
+{% set surv_color = 'sc-green' if stats.survival_rate >= 55 else ('sc-yellow' if stats.survival_rate >= 40 else 'sc-red') %}
+{% set surv_bar = 'sb-green' if stats.survival_rate >= 55 else ('sb-yellow' if stats.survival_rate >= 40 else 'sb-red') %}
+
+<div class="stat-grid">
+    <div class="stat-cell">
+        <div class="stat-cell-value {{ rating_color }}">{{ result.rating }}</div>
+        <div class="stat-cell-label">Rating</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-fill {{ rating_bar }}" style="--bar-w: {{ [result.rating / 1.6 * 100, 100]|min }}%;"></div></div>
+    </div>
+    <div class="stat-cell">
+        <div class="stat-cell-value {{ kd_color }}">{{ "%.2f"|format(stats.kd_ratio) }}</div>
+        <div class="stat-cell-label">K/D</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-fill {{ kd_bar }}" style="--bar-w: {{ [stats.kd_ratio / 2.0 * 100, 100]|min }}%;"></div></div>
+    </div>
+    <div class="stat-cell">
+        <div class="stat-cell-value {{ adr_color }}">{{ "%.0f"|format(stats.adr) }}</div>
+        <div class="stat-cell-label">ADR</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-fill {{ adr_bar }}" style="--bar-w: {{ [stats.adr / 120 * 100, 100]|min }}%;"></div></div>
+    </div>
+    <div class="stat-cell">
+        <div class="stat-cell-value {{ hs_color }}">{{ "%.0f"|format(stats.headshot_pct) }}%</div>
+        <div class="stat-cell-label">HS%</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-fill {{ hs_bar }}" style="--bar-w: {{ stats.headshot_pct }}%;"></div></div>
+    </div>
+    <div class="stat-cell">
+        <div class="stat-cell-value {{ kast_color }}">{{ "%.0f"|format(stats.kast_pct) }}%</div>
+        <div class="stat-cell-label">KAST</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-fill {{ kast_bar }}" style="--bar-w: {{ stats.kast_pct }}%;"></div></div>
+    </div>
+    <div class="stat-cell">
+        <div class="stat-cell-value {{ surv_color }}">{{ "%.0f"|format(stats.survival_rate) }}%</div>
+        <div class="stat-cell-label">Survival</div>
+        <div class="stat-bar-wrap"><div class="stat-bar-fill {{ surv_bar }}" style="--bar-w: {{ stats.survival_rate }}%;"></div></div>
+    </div>
+</div>
+
+<!-- ══════ Score Bars (detailed stats) ══════ -->
+<div class="result-cols">
+    <div class="card elev-sm" style="padding: var(--space-4);">
+        <div class="card-kicker" style="margin-bottom: 10px;">Performance</div>
+        <div class="score-bar">
+            <span class="score-bar-label">K / D / A</span>
+            <span class="score-bar-value" style="min-width: auto;">{{ stats.kills }} / {{ stats.deaths }} / {{ stats.assists }}</span>
+        </div>
+        <div class="score-bar">
+            <span class="score-bar-label">Opening Duels</span>
+            <div class="score-bar-track">
+                {% set od_total = stats.opening_kills + stats.opening_deaths %}
+                {% if od_total > 0 %}
+                <div class="score-bar-fill" style="width: {{ stats.opening_kills / od_total * 100 }}%; background: linear-gradient(90deg, #4ade80, #22c55e);"></div>
+                {% endif %}
+            </div>
+            <span class="score-bar-value">{{ stats.opening_kills }}W / {{ stats.opening_deaths }}L</span>
+        </div>
+        <div class="score-bar">
+            <span class="score-bar-label">Counter-Strafe</span>
+            <div class="score-bar-track">
+                <div class="score-bar-fill" style="width: {{ stats.counter_strafe_score }}%; background: {% if stats.counter_strafe_score >= 90 %}#4ade80{% elif stats.counter_strafe_score >= 80 %}#fbbf24{% else %}#f87171{% endif %};"></div>
+            </div>
+            <span class="score-bar-value">{{ "%.0f"|format(stats.counter_strafe_score) }}%</span>
+        </div>
+        {% if stats.crosshair_placement_kills > 0 %}
+        <div class="score-bar">
+            <span class="score-bar-label">Crosshair Pl.</span>
+            <div class="score-bar-track">
+                {% set cp_pct = [100 - (stats.crosshair_placement_avg / 40 * 100), 0]|max %}
+                <div class="score-bar-fill" style="width: {{ cp_pct }}%; background: {% if stats.crosshair_placement_avg < 5 %}#4ade80{% elif stats.crosshair_placement_avg < 15 %}#fbbf24{% else %}#f87171{% endif %};"></div>
+            </div>
+            <span class="score-bar-value">{{ "%.1f"|format(stats.crosshair_placement_avg) }}°</span>
+        </div>
+        {% endif %}
+        <div class="score-bar">
+            <span class="score-bar-label">Accuracy</span>
+            <div class="score-bar-track">
+                <div class="score-bar-fill sb-accent" style="width: {{ [stats.accuracy, 100]|min }}%;"></div>
+            </div>
+            <span class="score-bar-value">{{ "%.1f"|format(stats.accuracy) }}%</span>
+        </div>
+        <div class="score-bar">
+            <span class="score-bar-label">Trade Kills</span>
+            <span class="score-bar-value" style="min-width: auto;">{{ stats.trade_kills }}</span>
+        </div>
+    </div>
+
+    <div class="card elev-sm" style="padding: var(--space-4);">
+        <div class="card-kicker" style="margin-bottom: 10px;">Utility & Waffen</div>
+        {% set util_total = stats.flashes_thrown + stats.smokes_thrown + stats.he_thrown + stats.molotovs_thrown %}
+        <div class="score-bar">
+            <span class="score-bar-label">Utility/Runde</span>
+            <div class="score-bar-track">
+                <div class="score-bar-fill sb-accent" style="width: {{ [stats.utility_per_round / 3.5 * 100, 100]|min }}%;"></div>
+            </div>
+            <span class="score-bar-value">{{ "%.1f"|format(stats.utility_per_round) }}</span>
+        </div>
+        <div class="score-bar">
+            <span class="score-bar-label">Flashes</span>
+            <div class="score-bar-track">
+                {% set flash_total = stats.flash_enemies_blinded + stats.flash_teammates_blinded %}
+                {% if flash_total > 0 %}
+                <div class="score-bar-fill" style="width: {{ stats.flash_enemies_blinded / flash_total * 100 }}%; background: #4ade80;"></div>
+                {% endif %}
+            </div>
+            <span class="score-bar-value">{{ stats.flash_enemies_blinded }}e / {{ stats.flash_teammates_blinded }}t</span>
+        </div>
+        <div class="score-bar">
+            <span class="score-bar-label">Smokes / HE / Molly</span>
+            <span class="score-bar-value" style="min-width: auto;">{{ stats.smokes_thrown }} / {{ stats.he_thrown }} / {{ stats.molotovs_thrown }}</span>
+        </div>
+        <div class="score-bar">
+            <span class="score-bar-label">Waffen-Split</span>
+            <span class="score-bar-value" style="min-width: auto; font-size: 12px;">{{ stats.awp_rifle_split }}</span>
+        </div>
+        <div class="score-bar">
+            <span class="score-bar-label">Spray Control</span>
+            <span class="score-bar-value" style="min-width: auto; font-size: 12px;">{{ stats.burst_spray_ratio }}</span>
+        </div>
+        <div class="score-bar">
+            <span class="score-bar-label">Kampfdistanz</span>
+            <span class="score-bar-value" style="min-width: auto; font-size: 12px;">N:{{ stats.close_range_kills }} M:{{ stats.mid_range_kills }} W:{{ stats.long_range_kills }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- ══════ CS2-Style Scoreboard ══════ -->
+{% set target_team = stats.team %}
+{% set team1_players = [] %}
+{% set team2_players = [] %}
+{% for p in result.all_players %}
+    {% if p.team == target_team %}
+        {% set _ = team1_players.append(p) %}
+    {% else %}
+        {% set _ = team2_players.append(p) %}
+    {% endif %}
+{% endfor %}
+
+<div class="sb-wrapper">
+    <div class="sb-wrapper-bg" style="background-image: url('{{ url_for('static', filename='radars/' + result.map_name|lower + '.png') }}');"></div>
+    <div class="card-kicker" style="margin-bottom: 10px;">Scoreboard</div>
+
+    <!-- Team 1 (your team) -->
+    <div class="sb-team sb-ct">
+        <div class="sb-team-header">
+            <div>Spieler</div>
+            <div style="text-align:center;">K</div>
+            <div style="text-align:center;">A</div>
+            <div style="text-align:center;">D</div>
+            <div style="text-align:center;">ADR</div>
+            <div style="text-align:center;">K/D</div>
+        </div>
+        {% for p in team1_players|sort(attribute='kills', reverse=True) %}
+        <div class="sb-row {% if p.steam_id == stats.steam_id %}sb-row-you{% endif %}">
+            <div class="sb-name">
+                {{ p.name }}
+                {% if p.steam_id == stats.steam_id %}<span class="sb-you-badge">Du</span>{% endif %}
+            </div>
+            <div class="sb-cell sb-cell-kd">{{ p.kills }}</div>
+            <div class="sb-cell">{{ p.assists }}</div>
+            <div class="sb-cell">{{ p.deaths }}</div>
+            <div class="sb-cell">{{ "%.0f"|format(p.adr) }}</div>
+            <div class="sb-cell">
+                {{ "%.2f"|format(p.kd_ratio) }}
+                {% set kd_w = [p.kd_ratio / 2.0 * 30, 30]|min %}
+                <span class="sb-kd-bar" style="width: {{ kd_w }}px; background: {% if p.kd_ratio >= 1.2 %}#4ade80{% elif p.kd_ratio >= 0.9 %}#fbbf24{% else %}#f87171{% endif %};"></span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Team 2 (enemy) -->
+    <div class="sb-team sb-t">
+        <div class="sb-team-header">
+            <div>Spieler</div>
+            <div style="text-align:center;">K</div>
+            <div style="text-align:center;">A</div>
+            <div style="text-align:center;">D</div>
+            <div style="text-align:center;">ADR</div>
+            <div style="text-align:center;">K/D</div>
+        </div>
+        {% for p in team2_players|sort(attribute='kills', reverse=True) %}
+        <div class="sb-row">
+            <div class="sb-name">{{ p.name }}</div>
+            <div class="sb-cell sb-cell-kd">{{ p.kills }}</div>
+            <div class="sb-cell">{{ p.assists }}</div>
+            <div class="sb-cell">{{ p.deaths }}</div>
+            <div class="sb-cell">{{ "%.0f"|format(p.adr) }}</div>
+            <div class="sb-cell">
+                {{ "%.2f"|format(p.kd_ratio) }}
+                {% set kd_w = [p.kd_ratio / 2.0 * 30, 30]|min %}
+                <span class="sb-kd-bar" style="width: {{ kd_w }}px; background: {% if p.kd_ratio >= 1.2 %}#4ade80{% elif p.kd_ratio >= 0.9 %}#fbbf24{% else %}#f87171{% endif %};"></span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- ══════ Duel Matrix ══════ -->
+{% if duel_matrix %}
+<div class="card elev-sm" style="margin-bottom: var(--space-5); padding: var(--space-3);">
+    <div class="card-kicker" style="margin-bottom: 10px;">Gegner-Duelle</div>
+    <table class="duel-table">
+        <thead>
+            <tr>
+                <th>Gegner</th>
+                <th style="text-align:center;">Kills</th>
+                <th style="text-align:center;">Deaths</th>
+                <th style="text-align:center;">Bilanz</th>
+                <th>K/D</th>
+                <th style="text-align:center;">HS</th>
+                <th>Waffen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in duel_matrix %}
+            <tr>
+                <td style="font-weight:500;">{{ d.name }}</td>
+                <td style="text-align:center; color:#4ade80;">{{ d.kills }}</td>
+                <td style="text-align:center; color:#f87171;">{{ d.deaths }}</td>
+                <td style="text-align:center;">
+                    {% set total = d.kills + d.deaths %}
+                    {% if total > 0 %}
+                    <div class="duel-bar" style="margin:0 auto;">
+                        <div class="duel-bar-k" style="width:{{ (d.kills / total * 100)|round }}%;"></div>
+                        <div class="duel-bar-d" style="width:{{ (d.deaths / total * 100)|round }}%;"></div>
+                    </div>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="{% if d.kd >= 1.5 %}sc-green{% elif d.kd >= 1.0 %}sc-yellow{% else %}sc-red{% endif %}" style="font-weight:600;">
+                        {{ d.kd }}
+                    </span>
+                </td>
+                <td style="text-align:center;">{{ d.hs_kills }}</td>
+                <td><span class="duel-weapon">{{ d.top_weapons|join(', ') }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- ══════ Round Timeline ══════ -->
+{% if round_timeline %}
+<div class="card elev-sm" style="margin-bottom: var(--space-5); padding: var(--space-3);">
+    <div class="card-kicker" style="margin-bottom: 8px;">Runden-Timeline</div>
+    {% set early_deaths = round_timeline|selectattr('died_early')|list|length %}
+    {% set zero_impact = round_timeline|rejectattr('player_kills')|selectattr('player_died')|list|length %}
+    <div class="tl-summary">
+        {% if early_deaths > 0 %}<span><strong class="sc-red">{{ early_deaths }}</strong> fruehe Tode</span>{% endif %}
+        {% if zero_impact > 0 %}<span><strong class="sc-red">{{ zero_impact }}</strong> Runden ohne Impact</span>{% endif %}
+        {% set multi_kills = round_timeline|selectattr('player_kills', 'ge', 3)|list|length %}
+        {% if multi_kills > 0 %}<span><strong class="sc-green">{{ multi_kills }}</strong> Multi-Kill Runden</span>{% endif %}
+    </div>
+    <div class="tl-grid">
+        {% for r in round_timeline %}
+        {% if r.round == 13 %}
+        <div class="tl-halftime">— Seitenwechsel —</div>
+        {% endif %}
+        <div class="tl-row {% if r.won %}tl-row-won{% else %}tl-row-lost{% endif %} {% if r.died_early %}tl-row-early{% endif %}">
+            <div class="tl-round">R{{ r.round }}</div>
+            <div class="tl-side {% if r.side == 'CT' %}tl-side-ct{% else %}tl-side-t{% endif %}">{{ r.side }}</div>
+            <div class="tl-events">
+                {% for e in r.events %}
+                    {% if e.type == 'kill' %}
+                    <span class="tl-event tl-kill" title="{{ e.target }} ({{ e.weapon }}{% if e.headshot %}, HS{% endif %})">✦ {{ e.target|truncate(10, True, '…') }}</span>
+                    {% elif e.type == 'death' %}
+                    <span class="tl-event tl-death" title="Getoetet von {{ e.killer }} ({{ e.weapon }}{% if e.headshot %}, HS{% endif %})">☠ {{ e.killer|truncate(10, True, '…') }}</span>
+                    {% elif e.type == 'bomb_plant' and e.is_self %}
+                    <span class="tl-event tl-bomb" title="Bombe gelegt">💣</span>
+                    {% elif e.type == 'bomb_defuse' and e.is_self %}
+                    <span class="tl-event tl-bomb" title="Bombe entschaerft">🔧</span>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <div class="tl-info">
+                {% if r.player_kills >= 3 %}<span class="tl-multikill">{{ r.player_kills }}K</span>
+                {% elif r.player_kills > 0 %}{{ r.player_kills }}K
+                {% elif r.player_died %}0K{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ══════ Economy Performance ══════ -->
+{% if economy %}
+<div style="margin-bottom: var(--space-5);">
+    <div class="card-kicker" style="margin-bottom: 8px;">Wirtschafts-Performance</div>
+    <div class="econ-grid">
+        {% set econ_order = [('pistol', 'Pistole', 'econ-card-pistol'), ('eco', 'Eco', 'econ-card-eco'), ('force', 'Force', 'econ-card-force'), ('fullbuy', 'Fullbuy', 'econ-card-fullbuy')] %}
+        {% for key, label, cls in econ_order %}
+        {% set e = economy.get(key, {}) %}
+        {% if e %}
+        <div class="card elev-sm econ-card {{ cls }}">
+            <div class="econ-label">{{ label }}</div>
+            <div class="econ-big {% if e.kd >= 1.2 %}sc-green{% elif e.kd >= 0.8 %}sc-yellow{% else %}sc-red{% endif %}">{{ e.kd }}</div>
+            <div class="econ-sub">K/D in {{ e.rounds }} Runden</div>
+            <div style="margin-top: 10px;">
+                <div class="econ-row"><span class="econ-row-label">ADR</span><span>{{ e.adr }}</span></div>
+                <div class="econ-row"><span class="econ-row-label">K / D</span><span>{{ e.kills }} / {{ e.deaths }}</span></div>
+                <div class="econ-row"><span class="econ-row-label">Win-Rate</span><span class="{% if e.win_rate >= 60 %}sc-green{% elif e.win_rate >= 40 %}sc-yellow{% else %}sc-red{% endif %}">{{ e.win_rate }}%</span></div>
+            </div>
+        </div>
+        {% else %}
+        <div class="card elev-sm econ-card" style="opacity: 0.4;">
+            <div class="econ-label">{{ label }}</div>
+            <div class="econ-big" style="color: var(--color-neutral-600);">—</div>
+            <div class="econ-sub">Keine Runden</div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ══════ Focus & Coach ══════ -->
 {% set focus_areas = [] %}
 {% if stats.crosshair_placement_kills > 0 and stats.crosshair_placement_avg > 15 %}{% set _ = focus_areas.append('Crosshair Placement') %}{% endif %}
 {% if stats.counter_strafe_score < 80 %}{% set _ = focus_areas.append('Counter-Strafing') %}{% endif %}
@@ -74,8 +639,8 @@
 {% if stats.kd_ratio < 0.9 %}{% set _ = focus_areas.append('Clutch-Disziplin') %}{% endif %}
 
 {% if focus_areas %}
-<div style="margin-bottom: var(--space-5);">
-    <div class="card-kicker" style="margin-bottom: 8px;">Fokus-Bereiche fuers naechste Training</div>
+<div style="margin-bottom: var(--space-4);">
+    <div class="card-kicker" style="margin-bottom: 8px;">Fokus-Bereiche</div>
     <div class="focus-tags">
         {% for area in focus_areas %}
         <span class="tag tag-accent">{{ area }}</span>
@@ -84,149 +649,133 @@
 </div>
 {% endif %}
 
-<!-- Coach Cards -->
-<div style="margin-bottom: var(--space-5);">
-    <div class="card-kicker" style="margin-bottom: 8px;">Coach sagt</div>
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-        {% if stats.opening_kills + stats.opening_deaths > 0 %}
-        <div class="card coach-card">
-            <div class="coach-card-header">
-                <span class="card-title" style="font-size: 14px;">Opening Duels: {{ stats.opening_kills }}W / {{ stats.opening_deaths }}L</span>
-                {% if stats.opening_deaths > stats.opening_kills %}
-                <span class="tag tag-accent">Prioritaet</span>
-                {% elif stats.opening_kills > stats.opening_deaths %}
-                <span class="tag tag-neutral">Staerke</span>
-                {% else %}
-                <span class="tag tag-neutral">Beobachten</span>
-                {% endif %}
-            </div>
-            <div class="card-body">
-                {% if stats.opening_deaths > stats.opening_kills %}
-                Du verlierst die Mehrzahl der Opening Duels. Flash + Shoulder-Peek fuer Info, dann erst committen.
-                {% else %}
-                Gute Opening-Duel-Bilanz. Weiter so, aber variiere deine Peek-Timings.
-                {% endif %}
-            </div>
+<div class="card-kicker" style="margin-bottom: 8px;">Coach-Analyse</div>
+<div class="coach-grid">
+    {% if stats.opening_kills + stats.opening_deaths > 0 %}
+    <div class="card coach-card">
+        <div class="coach-card-header">
+            <span class="card-title" style="font-size: 14px;">Opening Duels: {{ stats.opening_kills }}W / {{ stats.opening_deaths }}L</span>
+            {% if stats.opening_deaths > stats.opening_kills %}
+            <span class="tag tag-accent">Prioritaet</span>
+            {% elif stats.opening_kills > stats.opening_deaths %}
+            <span class="tag tag-neutral">Staerke</span>
+            {% else %}
+            <span class="tag tag-neutral">Beobachten</span>
+            {% endif %}
         </div>
-        {% endif %}
-
-        {% if stats.crosshair_placement_kills > 0 %}
-        <div class="card coach-card">
-            <div class="coach-card-header">
-                <span class="card-title" style="font-size: 14px;">Crosshair Placement: {{ "%.1f"|format(stats.crosshair_placement_avg) }}° ({{ stats.crosshair_placement_rating }})</span>
-                {% if stats.crosshair_placement_avg > 15 %}
-                <span class="tag tag-accent">Prioritaet</span>
-                {% elif stats.crosshair_placement_avg <= 5 %}
-                <span class="tag tag-neutral">Staerke</span>
-                {% else %}
-                <span class="tag tag-neutral">Beobachten</span>
-                {% endif %}
-            </div>
-            <div class="card-body">
-                {% if stats.crosshair_placement_avg > 25 %}
-                Fadenkreuz fast nie auf Gegner-Position. Massive Nachkorrekturen bei jedem Fight — immer auf Kopfhoehe, immer auf den naechsten Angle pre-aimen.
-                {% elif stats.crosshair_placement_avg > 15 %}
-                Zu weit vom Gegner entfernt. Beim Bewegen das Crosshair auf die naechste gefaehrliche Ecke richten, auf Kopfhoehe.
-                {% elif stats.crosshair_placement_avg > 8 %}
-                Solide Crosshair Placement, aber noch nicht tight genug. Feinschliff: Tighter an die Angles kleben.
-                {% elif stats.crosshair_placement_avg > 4 %}
-                Gute Crosshair Placement — die meisten Positionen sauber pre-aimed. Minimale Korrekturen noetig.
-                {% else %}
-                Exzellente Crosshair Placement. Fadenkreuz sitzt fast immer genau da, wo der Gegner auftaucht. Pro-Level Pre-Aim.
-                {% endif %}
-            </div>
-            <div style="margin-top: 4px; font-size: 12px; color: var(--color-neutral-500);">
-                {{ stats.crosshair_placement_excellent }}× &lt;5° | {{ stats.crosshair_placement_good }}× 5-15° | {{ stats.crosshair_placement_average }}× 15-30° | {{ stats.crosshair_placement_poor }}× &gt;30°
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="card coach-card">
-            <div class="coach-card-header">
-                <span class="card-title" style="font-size: 14px;">Counter-Strafing: {{ "%.0f"|format(stats.counter_strafe_score) }}%</span>
-                {% if stats.counter_strafe_score < 80 %}
-                <span class="tag tag-accent">Prioritaet</span>
-                {% elif stats.counter_strafe_score >= 90 %}
-                <span class="tag tag-neutral">Staerke</span>
-                {% else %}
-                <span class="tag tag-neutral">Beobachten</span>
-                {% endif %}
-            </div>
-            <div class="card-body">
-                {% if stats.counter_strafe_score < 80 %}
-                Zu oft in Bewegung geschossen. Gegenrichtung antippen, dann feuern — muss ins Muskelgedaechtnis.
-                {% elif stats.counter_strafe_score >= 90 %}
-                Sauberes Counter-Strafing. Gelegentlich noch Running-Shots in Panik-Situationen.
-                {% else %}
-                Ordentlich, aber noch Luft nach oben. Fokus: Auch unter Druck sauber stoppen.
-                {% endif %}
-            </div>
-        </div>
-
-        {% set util_total = stats.flashes_thrown + stats.smokes_thrown + stats.he_thrown + stats.molotovs_thrown %}
-        <div class="card coach-card">
-            <div class="coach-card-header">
-                <span class="card-title" style="font-size: 14px;">Utility: {{ "%.1f"|format(stats.utility_per_round) }}/Runde</span>
-                {% if stats.utility_per_round < 1.5 %}
-                <span class="tag tag-accent">Prioritaet</span>
-                {% else %}
-                <span class="tag tag-neutral">Staerke</span>
-                {% endif %}
-            </div>
-            <div class="card-body">
-                {% if stats.utility_per_round < 1.5 %}
-                Zu wenig Vorbereitung durch Nades. Ziel: 2-3 Standard-Lineups pro Map konsequent werfen.
-                {% else %}
-                Gute Utility-Nutzung. Du bereitest Peeks und Positionskaempfe mit Nades vor.
-                {% endif %}
-            </div>
-        </div>
-
-        {% if stats.flash_teammates_blinded > stats.flash_enemies_blinded and stats.flashes_thrown > 3 %}
-        <div class="card coach-card">
-            <div class="coach-card-header">
-                <span class="card-title" style="font-size: 14px;">Flash-Technik</span>
-                <span class="tag tag-accent">Prioritaet</span>
-            </div>
-            <div class="card-body">
-                Du blindest dein eigenes Team oefter als den Gegner ({{ stats.flash_teammates_blinded }} vs. {{ stats.flash_enemies_blinded }}). Pop-Flashes ueber Hindernisse ueben.
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="card coach-card">
-            <div class="coach-card-header">
-                <span class="card-title" style="font-size: 14px;">ADR: {{ "%.1f"|format(stats.adr) }}</span>
-                {% if stats.adr >= 80 %}
-                <span class="tag tag-neutral">Staerke</span>
-                {% elif stats.adr >= 65 %}
-                <span class="tag tag-neutral">Beobachten</span>
-                {% else %}
-                <span class="tag tag-accent">Prioritaet</span>
-                {% endif %}
-            </div>
-            <div class="card-body">
-                {% if stats.adr >= 80 %}
-                Starker ADR-Wert. Du dominierst die Fights.
-                {% elif stats.adr >= 65 %}
-                Solide, aber such dir mehr Kontakt in der Rundenmitte.
-                {% else %}
-                Zu wenig Schadensbeitrag. Du musst aktiver Fights suchen.
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="card coach-card">
-            <div class="coach-card-header">
-                <span class="card-title" style="font-size: 14px;">Waffen-Split: {{ stats.awp_rifle_split }}</span>
-                <span class="tag tag-neutral">Staerke</span>
-            </div>
-            <div class="card-body">Pistol-Kills: {{ stats.pistol_kills }}. {% if stats.awp_kills > 0 and stats.rifle_kills > 0 %}Ausgewogener Mix.{% elif stats.awp_kills == 0 %}Reine Rifle-Performance.{% else %}AWP-fokussiert.{% endif %}</div>
+        <div class="card-body">
+            {% if stats.opening_deaths > stats.opening_kills %}
+            Du verlierst die Mehrzahl der Opening Duels. Flash + Shoulder-Peek fuer Info, dann erst committen.
+            {% else %}
+            Gute Opening-Duel-Bilanz. Weiter so, aber variiere deine Peek-Timings.
+            {% endif %}
         </div>
     </div>
+    {% endif %}
+
+    {% if stats.crosshair_placement_kills > 0 %}
+    <div class="card coach-card">
+        <div class="coach-card-header">
+            <span class="card-title" style="font-size: 14px;">Crosshair Placement: {{ "%.1f"|format(stats.crosshair_placement_avg) }}°</span>
+            {% if stats.crosshair_placement_avg > 15 %}
+            <span class="tag tag-accent">Prioritaet</span>
+            {% elif stats.crosshair_placement_avg <= 5 %}
+            <span class="tag tag-neutral">Staerke</span>
+            {% else %}
+            <span class="tag tag-neutral">Beobachten</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if stats.crosshair_placement_avg > 25 %}
+            Massive Nachkorrekturen bei jedem Fight — immer auf Kopfhoehe pre-aimen.
+            {% elif stats.crosshair_placement_avg > 15 %}
+            Crosshair beim Bewegen auf die naechste gefaehrliche Ecke richten.
+            {% elif stats.crosshair_placement_avg > 8 %}
+            Solide, aber Feinschliff noetig — tighter an die Angles kleben.
+            {% elif stats.crosshair_placement_avg > 4 %}
+            Gute Placement. Minimale Korrekturen noetig.
+            {% else %}
+            Exzellent — Pro-Level Pre-Aim.
+            {% endif %}
+        </div>
+        <div style="margin-top: 4px; font-size: 11px; color: var(--color-neutral-600);">
+            {{ stats.crosshair_placement_excellent }}× &lt;5° | {{ stats.crosshair_placement_good }}× 5-15° | {{ stats.crosshair_placement_average }}× 15-30° | {{ stats.crosshair_placement_poor }}× &gt;30°
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card coach-card">
+        <div class="coach-card-header">
+            <span class="card-title" style="font-size: 14px;">Counter-Strafing: {{ "%.0f"|format(stats.counter_strafe_score) }}%</span>
+            {% if stats.counter_strafe_score < 80 %}
+            <span class="tag tag-accent">Prioritaet</span>
+            {% elif stats.counter_strafe_score >= 90 %}
+            <span class="tag tag-neutral">Staerke</span>
+            {% else %}
+            <span class="tag tag-neutral">Beobachten</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if stats.counter_strafe_score < 80 %}
+            Zu oft in Bewegung geschossen — Gegenrichtung antippen, dann feuern.
+            {% elif stats.counter_strafe_score >= 90 %}
+            Sauberes Counter-Strafing. Gelegentlich noch Running-Shots in Panik.
+            {% else %}
+            Ordentlich, aber auch unter Druck sauber stoppen.
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card coach-card">
+        <div class="coach-card-header">
+            <span class="card-title" style="font-size: 14px;">Utility: {{ "%.1f"|format(stats.utility_per_round) }}/Runde</span>
+            {% if stats.utility_per_round < 1.5 %}
+            <span class="tag tag-accent">Prioritaet</span>
+            {% else %}
+            <span class="tag tag-neutral">Staerke</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if stats.utility_per_round < 1.5 %}
+            Zu wenig Nades. Ziel: 2-3 Standard-Lineups pro Map konsequent werfen.
+            {% else %}
+            Gute Utility-Nutzung — Peeks und Positionskaempfe werden vorbereitet.
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card coach-card">
+        <div class="coach-card-header">
+            <span class="card-title" style="font-size: 14px;">ADR: {{ "%.1f"|format(stats.adr) }}</span>
+            {% if stats.adr >= 80 %}
+            <span class="tag tag-neutral">Staerke</span>
+            {% elif stats.adr >= 65 %}
+            <span class="tag tag-neutral">Beobachten</span>
+            {% else %}
+            <span class="tag tag-accent">Prioritaet</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if stats.adr >= 80 %}Starker ADR-Wert — du dominierst die Fights.
+            {% elif stats.adr >= 65 %}Solide, aber such dir mehr Kontakt in der Rundenmitte.
+            {% else %}Zu wenig Schadensbeitrag — aktiver Fights suchen.{% endif %}
+        </div>
+    </div>
+
+    {% if stats.flash_teammates_blinded > stats.flash_enemies_blinded and stats.flashes_thrown > 3 %}
+    <div class="card coach-card">
+        <div class="coach-card-header">
+            <span class="card-title" style="font-size: 14px;">Flash-Technik</span>
+            <span class="tag tag-accent">Prioritaet</span>
+        </div>
+        <div class="card-body">
+            Team oefter geblinded als Gegner ({{ stats.flash_teammates_blinded }} vs. {{ stats.flash_enemies_blinded }}). Pop-Flashes ueben.
+        </div>
+    </div>
+    {% endif %}
 </div>
 
-<!-- 2D Kill Map -->
+<!-- ══════ Kill Map ══════ -->
 {% if kill_map_data %}
 <div style="margin-bottom: var(--space-5);">
     <div class="card-kicker" style="margin-bottom: 8px;">Kill Map — {{ result.map_name }}</div>
@@ -250,8 +799,8 @@
 </div>
 {% endif %}
 
-<!-- Collapsible Raw Data -->
-<details style="margin-bottom: var(--space-5);">
+<!-- ══════ Collapsible Sections ══════ -->
+<details style="margin-bottom: var(--space-4);">
     <summary>Alle Rohdaten anzeigen</summary>
     <table class="table" style="margin-top: 10px;">
         <tbody>
@@ -291,32 +840,13 @@
     </table>
 </details>
 
-<!-- Collapsible Coach Report -->
-<details style="margin-bottom: var(--space-5);">
-    <summary>Volltext-Report (Rohtext)</summary>
-    <div style="white-space: pre-wrap; font-size: 12.5px; line-height: 1.7; color: var(--color-neutral-300); margin-top: 10px;">{{ report }}</div>
-</details>
-
-<!-- Scoreboard -->
-<div class="card-kicker" style="margin-bottom: 8px;">Scoreboard</div>
-<table class="table">
-    <thead><tr><th>Spieler</th><th>K</th><th>D</th><th>A</th><th>ADR</th><th>K/D</th></tr></thead>
-    <tbody>
-        {% for p in result.all_players|sort(attribute='kills', reverse=True) %}
-        <tr{% if p.steam_id == stats.steam_id %} class="scoreboard-highlight"{% endif %}>
-            <td>{{ p.name }}{% if p.steam_id == stats.steam_id %} (Du){% endif %}</td>
-            <td>{{ p.kills }}</td>
-            <td>{{ p.deaths }}</td>
-            <td>{{ p.assists }}</td>
-            <td>{{ "%.0f"|format(p.adr) }}</td>
-            <td>{{ "%.2f"|format(p.kd_ratio) }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<!-- ══════ Full Report (rendered) ══════ -->
+<div class="card-kicker" style="margin-bottom: 8px;">Vollstaendiger Coach-Report</div>
+<div id="report-rendered"></div>
+<div id="report-raw" style="display:none;">{{ report }}</div>
 
 {% if obsidian_path %}
-<p style="margin-top: var(--space-5); color: var(--color-neutral-600); font-size: 11px;">
+<p style="color: var(--color-neutral-600); font-size: 11px;">
     Obsidian-Notiz exportiert: {{ obsidian_path }}
 </p>
 {% endif %}
@@ -336,28 +866,21 @@
     var RADAR_SIZE = 1024;
     var scale = W / RADAR_SIZE;
 
-    // Load radar image
     var img = new Image();
     img.src = '{{ url_for("static", filename="radars/") }}' + mapData.map + '.png';
 
     function drawMap() {
         ctx.clearRect(0, 0, W, H);
-
-        // Background
         ctx.fillStyle = '#0d0f1a';
         ctx.fillRect(0, 0, W, H);
 
-        // Radar image as map outline
         if (img.complete && img.naturalWidth > 0) {
             ctx.globalAlpha = 0.7;
             ctx.drawImage(img, 0, 0, W, H);
             ctx.globalAlpha = 1.0;
         }
 
-        // Draw kill/death dots
         var dots = mapData.dots;
-
-        // Deaths first (underneath), then kills on top
         var deaths = [], kills = [];
         for (var i = 0; i < dots.length; i++) {
             if (dots[i].type === 'death') deaths.push(dots[i]);
@@ -365,106 +888,177 @@
         }
 
         function drawDot(d) {
-            var x = d.x * scale;
-            var y = d.y * scale;
+            var x = d.x * scale, y = d.y * scale;
             if (x < 0 || x > W || y < 0 || y > H) return;
-
             var color, radius;
-            if (d.type === 'kill') {
-                color = d.headshot ? '#fbbf24' : '#4ade80';
-                radius = d.headshot ? 6 : 5;
-            } else {
-                color = '#f87171';
-                radius = 5;
-            }
+            if (d.type === 'kill') { color = d.headshot ? '#fbbf24' : '#4ade80'; radius = d.headshot ? 6 : 5; }
+            else { color = '#f87171'; radius = 5; }
 
-            // Outer glow
             var grad = ctx.createRadialGradient(x, y, 0, x, y, radius + 8);
-            grad.addColorStop(0, color.replace('#', 'rgba(') ? colorToRgba(color, 0.35) : 'rgba(255,255,255,0.2)');
+            grad.addColorStop(0, colorToRgba(color, 0.35));
             grad.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.beginPath();
-            ctx.arc(x, y, radius + 8, 0, Math.PI * 2);
-            ctx.fillStyle = grad;
-            ctx.fill();
-
-            // Main dot
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fillStyle = color;
-            ctx.fill();
-
-            // White center highlight
-            ctx.beginPath();
-            ctx.arc(x, y, 1.5, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255,255,255,0.6)';
-            ctx.fill();
-
-            // X marker for deaths
+            ctx.beginPath(); ctx.arc(x, y, radius + 8, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
+            ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+            ctx.beginPath(); ctx.arc(x, y, 1.5, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fill();
             if (d.type === 'death') {
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 2;
-                ctx.globalAlpha = 0.7;
-                ctx.beginPath();
-                ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y + 5);
-                ctx.moveTo(x + 5, y - 5); ctx.lineTo(x - 5, y + 5);
-                ctx.stroke();
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.globalAlpha = 0.7;
+                ctx.beginPath(); ctx.moveTo(x-5,y-5); ctx.lineTo(x+5,y+5); ctx.moveTo(x+5,y-5); ctx.lineTo(x-5,y+5); ctx.stroke();
                 ctx.globalAlpha = 1.0;
             }
         }
-
-        deaths.forEach(drawDot);
-        kills.forEach(drawDot);
-
-        // Map name label
-        ctx.font = '500 11px Inter, sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.25)';
-        ctx.textAlign = 'right';
+        deaths.forEach(drawDot); kills.forEach(drawDot);
+        ctx.font = '500 11px Inter, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.textAlign = 'right';
         ctx.fillText(mapData.map.toUpperCase(), W - 10, H - 10);
     }
 
     function colorToRgba(hex, a) {
-        var r = parseInt(hex.slice(1,3), 16);
-        var g = parseInt(hex.slice(3,5), 16);
-        var b = parseInt(hex.slice(5,7), 16);
-        return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+        var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+        return 'rgba('+r+','+g+','+b+','+a+')';
     }
 
-    img.onload = drawMap;
-    img.onerror = drawMap;
-    // Draw immediately if image is cached
+    img.onload = drawMap; img.onerror = drawMap;
     if (img.complete) drawMap();
 
-    // Tooltip on hover
     var tooltip = document.getElementById('kill-map-tooltip');
     canvas.addEventListener('mousemove', function(e) {
         var rect = canvas.getBoundingClientRect();
-        var mx = (e.clientX - rect.left) * (W / rect.width);
-        var my = (e.clientY - rect.top) * (H / rect.height);
+        var mx = (e.clientX - rect.left) * (W / rect.width), my = (e.clientY - rect.top) * (H / rect.height);
         var found = null;
-        var dots = mapData.dots;
-        for (var i = 0; i < dots.length; i++) {
-            var d = dots[i];
-            var dx = d.x * scale - mx;
-            var dy = d.y * scale - my;
-            if (dx * dx + dy * dy < 144) {
-                found = d;
-                break;
-            }
+        for (var i = 0; i < mapData.dots.length; i++) {
+            var d = mapData.dots[i], dx = d.x*scale - mx, dy = d.y*scale - my;
+            if (dx*dx + dy*dy < 144) { found = d; break; }
         }
         if (found) {
             tooltip.textContent = found.label + (found.weapon ? ' (' + found.weapon + ')' : '');
             tooltip.style.display = 'block';
             tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
             tooltip.style.top = (e.clientY - rect.top - 20) + 'px';
-        } else {
-            tooltip.style.display = 'none';
-        }
+        } else { tooltip.style.display = 'none'; }
     });
-
-    canvas.addEventListener('mouseleave', function() {
-        tooltip.style.display = 'none';
-    });
+    canvas.addEventListener('mouseleave', function() { tooltip.style.display = 'none'; });
 })();
 </script>
 {% endif %}
+<script>
+(function() {
+    var raw = document.getElementById('report-raw');
+    var container = document.getElementById('report-rendered');
+    if (!raw || !container) return;
+
+    var text = raw.textContent;
+    // Split into sections by ### headers
+    var parts = text.split(/^### /m);
+    // First part is the ## header + intro — skip, shown in banner
+    parts.shift();
+
+    // Icon map for section titles
+    var icons = {
+        'K/D': '⚔', 'ADR': '💥', 'KAST': '📊', 'Opening': '🎯',
+        'Crosshair': '◎', 'Counter': '🦶', 'Spray': '🔫', 'Waffen': '🔧',
+        'Trade': '🤝', 'Utility': '💣', 'Flash': '⚡', 'Clutch': '🏆',
+        'Multi': '🔥', 'CT/T': '↔', 'Kampf': '📏', 'Death': '⏱',
+        'Kill-Highlight': '✨', 'Rank': '📈', 'Gegner': '👥',
+        'Runden': '📋', 'Wirtschaft': '💰',
+    };
+
+    function getIcon(title) {
+        for (var key in icons) {
+            if (title.indexOf(key) === 0) return icons[key];
+        }
+        return '▸';
+    }
+
+    function getBadge(title, body) {
+        if (/Exzellent|Stark(?:e[sr]?)?\b|Gute[sr]?\b|Starke/.test(body.substring(0, 150)))
+            return '<span class="report-section-badge badge-strong">Staerke</span>';
+        if (/Solide|Ordentlich|Ausgeglichen|Sauber/.test(body.substring(0, 150)))
+            return '<span class="report-section-badge badge-ok">Solide</span>';
+        if (/ALARM|Unter |schwach|schlecht|Nemesis|verlierst|zu oft|zu wenig|zu isoliert|ohne Impact|Tilt/i.test(body.substring(0, 250)))
+            return '<span class="report-section-badge badge-weak">Baustelle</span>';
+        return '<span class="report-section-badge badge-info">Info</span>';
+    }
+
+    function formatBody(text) {
+        var lines = text.split('\n').filter(function(l) { return l.trim(); });
+        var html = '';
+        for (var i = 0; i < lines.length; i++) {
+            var l = lines[i].trim()
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\[\[(.+?)\]\]/g, '<em>$1</em>');
+
+            if (/^<strong>Training:/.test(l) || /^<strong>Tipp:/.test(l)) {
+                html += '<span class="rp-tip">' + l + '</span>';
+            } else {
+                html += '<p>' + l + '</p>';
+            }
+        }
+        return html;
+    }
+
+    // Categorize sections
+    var verdictParts = [];
+    var trainingParts = [];
+    var regularSections = [];
+
+    for (var i = 0; i < parts.length; i++) {
+        var section = parts[i].trim();
+        if (!section) continue;
+        var firstLine = section.split('\n')[0];
+        if (firstLine.indexOf('Gesamtbewertung') === 0) verdictParts.push(section);
+        else if (firstLine.indexOf('Trainingsplan') === 0) trainingParts.push(section);
+        else regularSections.push(section);
+    }
+
+    var html = '';
+
+    // Regular sections as collapsible accordion
+    for (var j = 0; j < regularSections.length; j++) {
+        var sec = regularSections[j];
+        var secLines = sec.split('\n');
+        var title = secLines[0].trim();
+        var body = secLines.slice(1).join('\n').trim();
+        if (!body) body = '<em style="color:var(--color-neutral-600);">Keine Auffaelligkeiten.</em>';
+        var icon = getIcon(title);
+        var badge = getBadge(title, body);
+
+        html += '<div class="report-section">';
+        html += '<div class="report-section-header" onclick="this.classList.toggle(\'open\')">';
+        html += '<span class="report-section-chevron">▶</span>';
+        html += '<span class="report-section-title">' + icon + ' ' + title + '</span>';
+        html += badge;
+        html += '</div>';
+        html += '<div class="report-section-body">' + formatBody(body) + '</div>';
+        html += '</div>';
+    }
+
+    // Verdict
+    for (var v = 0; v < verdictParts.length; v++) {
+        var vLines = verdictParts[v].split('\n');
+        var vBody = vLines.slice(1).join('\n').trim();
+        html += '<div class="report-verdict">';
+        html += '<h3>Gesamtbewertung</h3>';
+        html += formatBody(vBody);
+        html += '</div>';
+    }
+
+    // Training plan as numbered list
+    for (var t = 0; t < trainingParts.length; t++) {
+        var tLines = trainingParts[t].split('\n').filter(function(l) { return l.trim(); });
+        html += '<div class="report-training-plan">';
+        html += '<h3>Trainingsplan</h3>';
+        var hasItems = false;
+        html += '<ol>';
+        for (var k = 1; k < tLines.length; k++) {
+            var item = tLines[k].trim().replace(/^\d+\.\s*/, '');
+            item = item.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\[\[(.+?)\]\]/g, '<em>$1</em>');
+            if (item) { html += '<li>' + item + '</li>'; hasItems = true; }
+        }
+        html += '</ol>';
+        if (!hasItems) html += '<p style="color:var(--color-neutral-400);font-size:13px;">Keine kritischen Baustellen — weiter so!</p>';
+        html += '</div>';
+    }
+
+    container.innerHTML = html;
+})();
+</script>
 {% endblock %}

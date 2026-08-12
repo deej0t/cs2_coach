@@ -5,14 +5,20 @@
 <h2>Demo analysieren</h2>
 
 <div class="grid-2" style="margin-bottom: var(--space-6);">
+    <!-- Upload Card -->
     <div class="card elev-sm">
         <span class="card-kicker">Upload</span>
         <h3 class="card-title">Demo hochladen</h3>
-        <form id="upload-form" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:var(--space-3);">
-            <div class="field">
-                <label>Demo-Datei (.dem)</label>
-                <input type="file" name="demo" accept=".dem" required class="input" id="upload-demo-file">
+        <form id="upload-form" class="form-analyze" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:var(--space-3);">
+
+            <!-- Drag & Drop Zone -->
+            <div class="drop-zone" id="drop-zone">
+                <div class="drop-zone-icon"><i data-lucide="upload-cloud" style="width:32px;height:32px;"></i></div>
+                <div class="drop-zone-text"><strong>Klicken</strong> oder Demo hierher ziehen</div>
+                <div class="drop-zone-hint">.dem Dateien bis 500 MB</div>
+                <input type="file" name="demo" accept=".dem" required id="upload-demo-file" style="display:none;">
             </div>
+
             <div class="field" id="upload-player-select" style="display:none;">
                 <label>Spieler auswaehlen</label>
                 <select name="player_select" class="input" id="upload-player-dropdown">
@@ -29,14 +35,25 @@
                     <input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input" id="upload-steamid">
                 </div>
             </div>
-            <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Analysieren</button>
+            <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="upload-btn">
+                <i data-lucide="play" style="width:14px;height:14px;"></i> Analysieren
+            </button>
         </form>
+
+        <!-- Overlay -->
+        <div class="analyze-overlay" id="upload-overlay">
+            <div class="analyze-spinner"></div>
+            <div class="analyze-status" id="upload-status">Demo wird hochgeladen...</div>
+            <div class="analyze-progress"><div class="analyze-progress-fill" id="upload-progress-fill"></div></div>
+            <div class="analyze-sub">Das kann einige Sekunden dauern</div>
+        </div>
     </div>
 
+    <!-- Local Path Card -->
     <div class="card elev-sm">
         <span class="card-kicker">Lokal</span>
         <h3 class="card-title">Lokaler Pfad</h3>
-        <form id="path-form" action="{{ url_for('analyze_path') }}" method="post" style="display:flex;flex-direction:column;gap:var(--space-3);">
+        <form id="path-form" class="form-analyze" action="{{ url_for('analyze_path') }}" method="post" style="display:flex;flex-direction:column;gap:var(--space-3);">
             <div class="field">
                 <label>Pfad zur Demo-Datei</label>
                 <input type="text" name="demo_path" placeholder="D:/SteamLibrary/.../replays/match730_xxx.dem" class="input" id="path-demo-input">
@@ -57,8 +74,18 @@
                     <input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" class="input" id="path-steamid">
                 </div>
             </div>
-            <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Analysieren</button>
+            <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="path-btn">
+                <i data-lucide="play" style="width:14px;height:14px;"></i> Analysieren
+            </button>
         </form>
+
+        <!-- Overlay -->
+        <div class="analyze-overlay" id="path-overlay">
+            <div class="analyze-spinner"></div>
+            <div class="analyze-status">Demo wird analysiert...</div>
+            <div class="analyze-progress"><div class="analyze-progress-fill"></div></div>
+            <div class="analyze-sub">Das kann einige Sekunden dauern</div>
+        </div>
     </div>
 </div>
 
@@ -108,52 +135,102 @@
 {% block scripts %}
 <script>
 (function() {
-    // Upload form: fetch players when file is selected
-    var uploadFile = document.getElementById('upload-demo-file');
-    var uploadSelect = document.getElementById('upload-player-select');
-    var uploadDropdown = document.getElementById('upload-player-dropdown');
-    var uploadName = document.getElementById('upload-player-name');
-    var uploadSteamid = document.getElementById('upload-steamid');
+    // Re-init Lucide for dynamically added icons
+    if (window.lucide) lucide.createIcons();
 
-    uploadFile.addEventListener('change', function() {
-        if (!this.files[0]) return;
-        var fd = new FormData();
-        fd.append('demo', this.files[0]);
-        uploadDropdown.innerHTML = '<option value="">Lade Spieler...</option>';
-        uploadSelect.style.display = '';
-        fetch('{{ url_for("api_players") }}', {method: 'POST', body: fd})
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.players) {
-                    uploadDropdown.innerHTML = '<option value="">— Spieler waehlen —</option>';
-                    data.players.forEach(function(p) {
-                        var opt = document.createElement('option');
-                        opt.value = p.steamid;
-                        opt.textContent = p.name + ' (' + p.steamid + ')';
-                        opt.dataset.name = p.name;
-                        uploadDropdown.appendChild(opt);
-                    });
-                }
-            })
-            .catch(function() {
-                uploadDropdown.innerHTML = '<option value="">Fehler beim Laden</option>';
-            });
+    var MAX_SIZE = 500 * 1024 * 1024; // 500 MB
+
+    // ── Drag & Drop ──
+    var dropZone = document.getElementById('drop-zone');
+    var fileInput = document.getElementById('upload-demo-file');
+
+    dropZone.addEventListener('click', function() { fileInput.click(); });
+
+    dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        this.classList.add('drag-over');
     });
-
-    uploadDropdown.addEventListener('change', function() {
-        var opt = this.options[this.selectedIndex];
-        if (opt.value) {
-            uploadName.value = opt.dataset.name || '';
-            uploadSteamid.value = opt.value;
+    dropZone.addEventListener('dragleave', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        this.classList.remove('drag-over');
+    });
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        this.classList.remove('drag-over');
+        var files = e.dataTransfer.files;
+        if (files.length && files[0].name.toLowerCase().endsWith('.dem')) {
+            fileInput.files = files;
+            fileInput.dispatchEvent(new Event('change'));
+        } else {
+            window._notyf.error('Nur .dem Dateien erlaubt');
         }
     });
 
-    // Path form: fetch players on blur
+    // ── File Validation & UI Update ──
+    fileInput.addEventListener('change', function() {
+        var file = this.files[0];
+        if (!file) return;
+
+        if (!file.name.toLowerCase().endsWith('.dem')) {
+            window._notyf.error('Nur .dem Dateien erlaubt');
+            this.value = '';
+            return;
+        }
+        if (file.size > MAX_SIZE) {
+            window._notyf.error('Datei zu gross (max 500 MB)');
+            this.value = '';
+            return;
+        }
+
+        // Update drop zone visual
+        var sizeMB = (file.size / 1024 / 1024).toFixed(1);
+        dropZone.classList.add('has-file');
+        dropZone.querySelector('.drop-zone-text').innerHTML = '<strong>' + file.name + '</strong>';
+        dropZone.querySelector('.drop-zone-hint').textContent = sizeMB + ' MB';
+        dropZone.querySelector('.drop-zone-icon i').setAttribute('data-lucide', 'file-check');
+        if (window.lucide) lucide.createIcons();
+
+        // Fetch players
+        fetchPlayersFromFile(file);
+    });
+
+    function fetchPlayersFromFile(file) {
+        var fd = new FormData();
+        fd.append('demo', file);
+        var dropdown = document.getElementById('upload-player-dropdown');
+        var selectDiv = document.getElementById('upload-player-select');
+        dropdown.innerHTML = '<option value="">Lade Spieler...</option>';
+        selectDiv.style.display = '';
+        fetch('{{ url_for("api_players") }}', {method: 'POST', body: fd})
+            .then(function(r) { return r.json(); })
+            .then(function(data) { populateDropdown(data, dropdown, 'upload-player-name', 'upload-steamid'); })
+            .catch(function() { dropdown.innerHTML = '<option value="">Fehler beim Laden</option>'; });
+    }
+
+    function populateDropdown(data, dropdown, nameId, steamidId) {
+        if (!data.players) return;
+        dropdown.innerHTML = '<option value="">— Spieler waehlen —</option>';
+        data.players.forEach(function(p) {
+            var opt = document.createElement('option');
+            opt.value = p.steamid;
+            opt.textContent = p.name + ' (' + p.steamid + ')';
+            opt.dataset.name = p.name;
+            dropdown.appendChild(opt);
+        });
+    }
+
+    document.getElementById('upload-player-dropdown').addEventListener('change', function() {
+        var opt = this.options[this.selectedIndex];
+        if (opt.value) {
+            document.getElementById('upload-player-name').value = opt.dataset.name || '';
+            document.getElementById('upload-steamid').value = opt.value;
+        }
+    });
+
+    // ── Path form: player fetch on blur ──
     var pathInput = document.getElementById('path-demo-input');
     var pathSelect = document.getElementById('path-player-select');
     var pathDropdown = document.getElementById('path-player-dropdown');
-    var pathName = document.getElementById('path-player-name');
-    var pathSteamid = document.getElementById('path-steamid');
     var lastPathFetched = '';
 
     pathInput.addEventListener('blur', function() {
@@ -166,29 +243,84 @@
         pathSelect.style.display = '';
         fetch('{{ url_for("api_players") }}', {method: 'POST', body: fd})
             .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.players) {
-                    pathDropdown.innerHTML = '<option value="">— Spieler waehlen —</option>';
-                    data.players.forEach(function(p) {
-                        var opt = document.createElement('option');
-                        opt.value = p.steamid;
-                        opt.textContent = p.name + ' (' + p.steamid + ')';
-                        opt.dataset.name = p.name;
-                        pathDropdown.appendChild(opt);
-                    });
-                }
-            })
-            .catch(function() {
-                pathDropdown.innerHTML = '<option value="">Fehler beim Laden</option>';
-            });
+            .then(function(data) { populateDropdown(data, pathDropdown, 'path-player-name', 'path-steamid'); })
+            .catch(function() { pathDropdown.innerHTML = '<option value="">Fehler beim Laden</option>'; });
     });
 
-    pathDropdown.addEventListener('change', function() {
+    document.getElementById('path-player-dropdown').addEventListener('change', function() {
         var opt = this.options[this.selectedIndex];
         if (opt.value) {
-            pathName.value = opt.dataset.name || '';
-            pathSteamid.value = opt.value;
+            document.getElementById('path-player-name').value = opt.dataset.name || '';
+            document.getElementById('path-steamid').value = opt.value;
         }
+    });
+
+    // ── Upload form: XHR with real upload progress ──
+    document.getElementById('upload-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (!fileInput.files[0]) { window._notyf.error('Bitte eine .dem Datei waehlen'); return; }
+
+        var overlay = document.getElementById('upload-overlay');
+        var fill = document.getElementById('upload-progress-fill');
+        var status = document.getElementById('upload-status');
+        overlay.classList.add('active');
+        NProgress.start();
+
+        var xhr = new XMLHttpRequest();
+        var fd = new FormData(this);
+
+        xhr.upload.addEventListener('progress', function(ev) {
+            if (ev.lengthComputable) {
+                var pct = Math.round(ev.loaded / ev.total * 100);
+                fill.style.width = (pct * 0.5) + '%'; // Upload = 0-50%
+                status.textContent = 'Hochladen... ' + pct + '%';
+                NProgress.set(pct / 200);
+            }
+        });
+
+        xhr.upload.addEventListener('load', function() {
+            status.textContent = 'Demo wird analysiert...';
+            fill.style.width = '50%';
+            NProgress.set(0.5);
+            // Trickle progress during analysis
+            var pct = 50;
+            var iv = setInterval(function() {
+                pct += Math.random() * 5 + 1;
+                if (pct > 92) { clearInterval(iv); pct = 92; }
+                fill.style.width = pct + '%';
+                NProgress.set(pct / 100);
+            }, 500);
+            xhr._trickleIv = iv;
+        });
+
+        xhr.addEventListener('load', function() {
+            clearInterval(xhr._trickleIv);
+            NProgress.done();
+            if (xhr.status === 200) {
+                fill.style.width = '100%';
+                status.textContent = 'Fertig!';
+                // Replace page with result
+                setTimeout(function() {
+                    document.open();
+                    document.write(xhr.responseText);
+                    document.close();
+                    if (xhr.responseURL) history.replaceState(null, '', xhr.responseURL);
+                }, 200);
+            } else {
+                overlay.classList.remove('active');
+                window._notyf.error('Fehler bei der Analyse');
+            }
+        });
+
+        xhr.addEventListener('error', function() {
+            clearInterval(xhr._trickleIv);
+            NProgress.done();
+            overlay.classList.remove('active');
+            window._notyf.error('Verbindungsfehler');
+        });
+
+        xhr.open('POST', this.action);
+        xhr.send(fd);
     });
 })();
 </script>

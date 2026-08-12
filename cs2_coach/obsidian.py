@@ -1,7 +1,8 @@
-"""Obsidian-Export – erzeugt Markdown mit Frontmatter und Wikilinks."""
+"""Obsidian-Export – erzeugt Markdown mit Frontmatter und Wikilinks + JSON-Export."""
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -19,13 +20,83 @@ def export_match(result: MatchResult, coach_report: str, vault_path: str,
     match_date = result.match_date or datetime.now().strftime("%Y-%m-%d")
     time_str = result.match_datetime.split(" ")[1].replace(":", "") if result.match_datetime else datetime.now().strftime("%H%M")
     score = f"{result.score_team1}-{result.score_team2}"
-    filename = f"{match_date}_{result.map_name}_{score}_{time_str}.md"
-    filepath = coach_dir / filename
 
+    # Markdown export
+    md_filename = f"{match_date}_{result.map_name}_{score}_{time_str}.md"
+    md_path = coach_dir / md_filename
     content = _build_markdown(result, coach_report, match_date)
-    filepath.write_text(content, encoding="utf-8")
+    md_path.write_text(content, encoding="utf-8")
 
-    return filepath
+    # JSON export (for Trends, Exports browser, etc.)
+    export_dir = coach_dir / "exports"
+    export_dir.mkdir(exist_ok=True)
+    json_filename = f"{match_date}_{result.map_name.lower()}_{score}_{time_str}_coach.json"
+    json_path = export_dir / json_filename
+    json_data = _build_export_json(result, coach_report)
+    json_path.write_text(
+        json.dumps(json_data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    return md_path
+
+
+def _build_export_json(result: MatchResult, coach_report: str) -> dict:
+    """Build JSON export with all stats for web UI consumption."""
+    s = result.player_stats
+    scoreboard = []
+    for p in sorted(result.all_players, key=lambda x: x.kills, reverse=True):
+        scoreboard.append(_player_to_json(p, p.steam_id == s.steam_id))
+
+    return {
+        "match": {
+            "date": result.match_date,
+            "datetime": result.match_datetime,
+            "map": result.map_name,
+            "score_own": result.score_team1,
+            "score_enemy": result.score_team2,
+            "total_rounds": result.total_rounds,
+            "result": result.result_str,
+        },
+        "player": _player_to_json(s, True, include_rating=result.rating),
+        "report": coach_report,
+        "scoreboard": scoreboard,
+        "duel_matrix": result.duel_matrix,
+        "round_timeline": result.round_timeline,
+        "economy": result.economy_performance,
+    }
+
+
+def _player_to_json(p: PlayerStats, is_target: bool,
+                     include_rating: float | None = None) -> dict:
+    util_total = p.flashes_thrown + p.smokes_thrown + p.he_thrown + p.molotovs_thrown
+    d = {
+        "name": p.name,
+        "steam_id": p.steam_id,
+        "kills": p.kills,
+        "deaths": p.deaths,
+        "assists": p.assists,
+        "kd": round(p.kd_ratio, 2),
+        "adr": round(p.adr, 1),
+        "hs_pct": round(p.headshot_pct, 1),
+        "kast_pct": round(p.kast_pct, 1),
+        "survival_rate": round(p.survival_rate, 1),
+        "accuracy": round(p.accuracy, 1),
+        "opening_kills": p.opening_kills,
+        "opening_deaths": p.opening_deaths,
+        "trade_kills": p.trade_kills,
+        "crosshair_placement": {
+            "avg_degrees": round(p.crosshair_placement_avg, 1),
+            "kills_analyzed": p.crosshair_placement_kills,
+            "rating": p.crosshair_placement_rating,
+        },
+        "counter_strafe_score": round(p.counter_strafe_score, 1),
+        "utility_per_round": round(p.utility_per_round, 2),
+        "is_target": is_target,
+    }
+    if include_rating is not None:
+        d["rating"] = include_rating
+    return d
 
 
 def _build_markdown(result: MatchResult, coach_report: str, date: str) -> str:

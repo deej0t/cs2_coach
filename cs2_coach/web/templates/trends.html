@@ -19,8 +19,71 @@
     .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
     .chart-card { padding: var(--space-3) !important; }
     .chart-card canvas { width: 100% !important; height: 200px !important; }
+
+    .sc-green { color: #4ade80; }
+    .sc-yellow { color: #fbbf24; }
+    .sc-red { color: #f87171; }
+
+    /* Map Stats */
+    .map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-5); }
+    .map-card {
+        padding: 16px !important; position: relative; overflow: hidden;
+        border-top: 3px solid var(--color-neutral-700);
+    }
+    .map-card-bg {
+        position: absolute; inset: 0; z-index: 0;
+        background-size: cover; background-position: center;
+        opacity: 0.05; pointer-events: none;
+    }
+    .map-card > :not(.map-card-bg) { position: relative; z-index: 1; }
+    .map-card-name { font-size: 18px; font-weight: 600; margin-bottom: 2px; }
+    .map-card-matches { font-size: 11px; color: var(--color-neutral-500); margin-bottom: 10px; }
+    .map-wr-bar { height: 6px; border-radius: 3px; overflow: hidden; background: var(--color-neutral-800); margin-bottom: 10px; }
+    .map-wr-fill { height: 100%; border-radius: 3px; }
+    .map-stat-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+    .map-stat-label { color: var(--color-neutral-500); }
+    .map-stat-value { font-weight: 500; }
+
     @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
 </style>
+
+<!-- ══════ Map Performance ══════ -->
+{% if map_stats %}
+<div class="card-kicker" style="margin-bottom: 8px;">Map-Performance</div>
+<div class="map-grid">
+    {% for m in map_stats %}
+    <div class="map-card card elev-sm" style="border-top-color: {% if m.win_rate >= 60 %}#4ade80{% elif m.win_rate >= 40 %}#fbbf24{% else %}#f87171{% endif %};">
+        <div class="map-card-bg" style="background-image: url('{{ url_for('static', filename='radars/' + m.map|lower + '.png') }}');"></div>
+        <div class="map-card-name">{{ m.map }}</div>
+        <div class="map-card-matches">{{ m.matches }} Match{{ 'es' if m.matches != 1 }} · {{ m.wins }}W {{ m.losses }}L{% if m.draws %} {{ m.draws }}D{% endif %}</div>
+        <div class="map-wr-bar">
+            <div class="map-wr-fill" style="width: {{ m.win_rate }}%; background: {% if m.win_rate >= 60 %}#4ade80{% elif m.win_rate >= 40 %}#fbbf24{% else %}#f87171{% endif %};"></div>
+        </div>
+        <div class="map-stat-row">
+            <span class="map-stat-label">Win-Rate</span>
+            <span class="map-stat-value {% if m.win_rate >= 60 %}sc-green{% elif m.win_rate >= 40 %}sc-yellow{% else %}sc-red{% endif %}">{{ m.win_rate }}%</span>
+        </div>
+        <div class="map-stat-row">
+            <span class="map-stat-label">Avg Rating</span>
+            <span class="map-stat-value {% if m.avg_rating >= 1.1 %}sc-green{% elif m.avg_rating >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ m.avg_rating }}</span>
+        </div>
+        <div class="map-stat-row">
+            <span class="map-stat-label">Avg K/D</span>
+            <span class="map-stat-value {% if m.avg_kd >= 1.2 %}sc-green{% elif m.avg_kd >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ m.avg_kd }}</span>
+        </div>
+        <div class="map-stat-row">
+            <span class="map-stat-label">Avg ADR</span>
+            <span class="map-stat-value">{{ m.avg_adr }}</span>
+        </div>
+        <div class="map-stat-row">
+            <span class="map-stat-label">Avg KAST</span>
+            <span class="map-stat-value">{{ m.avg_kast }}%</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<div class="hr" style="margin-bottom: var(--space-5);"></div>
+{% endif %}
 
 <div class="chart-grid">
     <div class="card elev-sm chart-card">

@@ -88,6 +88,9 @@ def create_app() -> Flask:
                 stats=result.player_stats,
                 obsidian_path=obsidian_path,
                 kill_map_data=_build_kill_map_data(result),
+                duel_matrix=result.duel_matrix,
+                round_timeline=result.round_timeline,
+                economy=result.economy_performance,
                 config=cfg,
             )
         except Exception as e:
@@ -125,6 +128,9 @@ def create_app() -> Flask:
                 stats=result.player_stats,
                 obsidian_path=obsidian_path,
                 kill_map_data=_build_kill_map_data(result),
+                duel_matrix=result.duel_matrix,
+                round_timeline=result.round_timeline,
+                economy=result.economy_performance,
                 config=cfg,
             )
         except Exception as e:
@@ -240,7 +246,8 @@ def create_app() -> Flask:
     @app.route("/trends")
     def trends():
         export_list = _get_exports(cfg)
-        return render_template("trends.html", exports=export_list, config=cfg)
+        map_stats = _get_map_stats(export_list)
+        return render_template("trends.html", exports=export_list, map_stats=map_stats, config=cfg)
 
     @app.route("/exports")
     def exports():
@@ -484,3 +491,48 @@ def _build_kill_map_data(result: MatchResult) -> dict | None:
         "map": map_key,
         "dots": dots,
     }
+
+
+def _get_map_stats(exports: list[dict]) -> list[dict]:
+    """Aggregate per-map statistics from exports."""
+    if not exports:
+        return []
+
+    by_map: dict[str, list[dict]] = {}
+    for e in exports:
+        m = e.get("map", "?")
+        by_map.setdefault(m, []).append(e)
+
+    result = []
+    for map_name, matches in sorted(by_map.items()):
+        n = len(matches)
+        wins = sum(1 for m in matches if m.get("result") == "Sieg")
+        losses = sum(1 for m in matches if m.get("result") == "Niederlage")
+        draws = n - wins - losses
+
+        avg_rating = round(sum(m.get("rating", 0) for m in matches) / n, 2)
+        avg_kd = round(sum(m.get("kd", 0) for m in matches) / n, 2)
+        avg_adr = round(sum(m.get("adr", 0) for m in matches) / n, 1)
+        avg_kast = round(sum(m.get("kast", 0) for m in matches) / n, 1)
+        avg_hs = round(sum(m.get("hs_pct", 0) for m in matches) / n, 1)
+        total_kills = sum(m.get("kills", 0) for m in matches)
+        total_deaths = sum(m.get("deaths", 0) for m in matches)
+        win_rate = round(wins / n * 100, 1)
+
+        result.append({
+            "map": map_name,
+            "matches": n,
+            "wins": wins,
+            "losses": losses,
+            "draws": draws,
+            "win_rate": win_rate,
+            "avg_rating": avg_rating,
+            "avg_kd": avg_kd,
+            "avg_adr": avg_adr,
+            "avg_kast": avg_kast,
+            "avg_hs": avg_hs,
+            "total_kills": total_kills,
+            "total_deaths": total_deaths,
+        })
+
+    return sorted(result, key=lambda x: -x["matches"])

@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/nprogress@0.2.0/nprogress.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.css">
     <title>{% block title %}CS2 Coach{% endblock %}</title>
     <style>
         :root {
@@ -48,18 +50,41 @@
         a { color: var(--color-accent); text-underline-offset: 3px; }
         ::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
 
+        /* NProgress override */
+        #nprogress .bar { background: var(--color-accent); height: 3px; }
+        #nprogress .peg { box-shadow: 0 0 10px var(--color-accent), 0 0 5px var(--color-accent); }
+        #nprogress .spinner { display: none; }
+
         /* Nav */
-        .nav { display: flex; align-items: center; gap: var(--space-6); padding: var(--space-3) var(--space-6); }
-        .nav-brand { font-family: var(--font-heading); font-weight: 500; font-size: 18px; margin-right: auto; color: var(--color-text); text-decoration: none; }
-        .nav a { color: var(--color-neutral-300); text-decoration: none; font-size: 13px; }
-        .nav a:hover { color: var(--color-accent); }
+        .nav {
+            display: flex; align-items: center; gap: var(--space-6);
+            padding: var(--space-3) var(--space-6);
+            position: sticky; top: 0; z-index: 100;
+            background: color-mix(in srgb, var(--color-bg) 85%, transparent);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid color-mix(in srgb, var(--color-text) 6%, transparent);
+        }
+        .nav-brand {
+            font-family: var(--font-heading); font-weight: 600; font-size: 17px;
+            margin-right: auto; color: var(--color-text); text-decoration: none;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .nav-brand i { color: var(--color-accent); }
+        .nav a {
+            color: var(--color-neutral-400); text-decoration: none; font-size: 13px;
+            display: flex; align-items: center; gap: 5px;
+            padding: 4px 8px; border-radius: var(--radius-sm);
+            transition: color 0.15s, background 0.15s;
+        }
+        .nav a:hover { color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
+        .nav a i { opacity: 0.6; }
 
         /* Container */
         .container { max-width: 800px; margin: 0 auto; padding: var(--space-6); }
         .container-wide { max-width: 1000px; margin: 0 auto; padding: var(--space-6); }
 
         /* Cards */
-        .card { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); border-radius: var(--radius-md); background: var(--color-surface); }
+        .card { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); border-radius: var(--radius-md); background: var(--color-surface); position: relative; overflow: hidden; }
         .card-kicker { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-accent); }
         .card-title { font-family: var(--font-heading); font-weight: 500; font-size: 17px; line-height: 1.2; }
         .card-body { margin: 0; font-size: 13px; opacity: 0.8; flex: 1; }
@@ -75,13 +100,14 @@
         .tag-draw { background: rgba(251,191,36,0.15); color: var(--color-yellow); }
 
         /* Buttons */
-        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; text-decoration: none; font-family: var(--font-heading); font-weight: 500; font-size: 14px; color: var(--color-text); background: transparent; border: 1px solid transparent; padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; text-decoration: none; font-family: var(--font-heading); font-weight: 500; font-size: 14px; color: var(--color-text); background: transparent; border: 1px solid transparent; padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); transition: background 0.15s, border-color 0.15s, opacity 0.15s; }
         .btn-primary { color: var(--color-accent); border-color: var(--color-accent); }
         .btn-primary:hover { background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
         .btn-secondary { border-color: var(--color-divider); }
         .btn-secondary:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
         .btn-ghost { color: var(--color-accent); padding-inline: var(--space-1); }
         .btn-ghost:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
         /* Tables */
         .table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -90,20 +116,76 @@
         .table thead tr { background: linear-gradient(to right, transparent, var(--color-divider) 48px, var(--color-divider) calc(100% - 48px), transparent) no-repeat bottom / 100% 1px; }
         .table tbody tr { background: linear-gradient(to right, transparent, color-mix(in srgb, var(--color-text) 8%, transparent) 48px, color-mix(in srgb, var(--color-text) 8%, transparent) calc(100% - 48px), transparent) no-repeat bottom / 100% 1px; }
         .table tbody tr:hover { background: linear-gradient(color-mix(in srgb, var(--color-text) 4%, transparent), color-mix(in srgb, var(--color-text) 4%, transparent)) no-repeat 0 0 / 100% 100%, linear-gradient(to right, transparent, color-mix(in srgb, var(--color-text) 8%, transparent) 48px, color-mix(in srgb, var(--color-text) 8%, transparent) calc(100% - 48px), transparent) no-repeat bottom / 100% 1px; }
+        .table th[data-sort] { cursor: pointer; user-select: none; }
+        .table th[data-sort]:hover { color: var(--color-accent); }
 
         /* Fading rule */
         .hr { height: 1px; border: 0; margin: var(--space-4) 0; background: linear-gradient(to right, transparent, var(--color-divider) 48px, var(--color-divider) calc(100% - 48px), transparent); }
 
         /* Forms */
         .field > label { display: block; font-size: 12px; margin-bottom: 5px; color: color-mix(in srgb, var(--color-text) 70%, transparent); }
-        .input { width: 100%; min-height: 36px; padding: 6px 10px; font: inherit; font-size: 14px; color: var(--color-text); caret-color: var(--color-accent); background: var(--color-surface); border: 1px solid var(--color-divider); border-radius: var(--radius-md); }
+        .input { width: 100%; min-height: 36px; padding: 6px 10px; font: inherit; font-size: 14px; color: var(--color-text); caret-color: var(--color-accent); background: var(--color-surface); border: 1px solid var(--color-divider); border-radius: var(--radius-md); transition: border-color 0.15s; }
         .input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
         .input:focus-visible { border-color: var(--color-accent); outline: none; }
 
-        /* Flash messages */
-        .flash { padding: 0.75rem 1rem; border-radius: var(--radius-md); margin-bottom: 1rem; font-size: 13px; }
-        .flash.error { background: rgba(248,113,113,0.1); border: 1px solid var(--color-red); color: var(--color-red); }
-        .flash.success { background: rgba(74,222,128,0.1); border: 1px solid var(--color-green); color: var(--color-green); }
+        /* Analyze overlay */
+        .analyze-overlay {
+            position: absolute; inset: 0; z-index: 10;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(35,37,50,0.94); border-radius: var(--radius-md);
+            gap: 14px; padding: 24px;
+        }
+        .analyze-overlay.active { display: flex; }
+        .analyze-spinner {
+            width: 40px; height: 40px;
+            border: 3px solid var(--color-neutral-700);
+            border-top-color: var(--color-accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .analyze-status { font-size: 15px; font-weight: 500; color: var(--color-text); }
+        .analyze-sub { font-size: 12px; color: var(--color-neutral-500); }
+        .analyze-progress {
+            width: 180px; height: 4px; border-radius: 2px;
+            background: var(--color-neutral-800); overflow: hidden;
+        }
+        .analyze-progress-fill {
+            height: 100%; width: 0%; border-radius: 2px;
+            background: var(--color-accent);
+            transition: width 0.3s ease;
+        }
+
+        /* Drop zone */
+        .drop-zone {
+            border: 2px dashed var(--color-divider); border-radius: var(--radius-md);
+            padding: 28px 16px; text-align: center; cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .drop-zone:hover { border-color: var(--color-neutral-600); }
+        .drop-zone.drag-over {
+            border-color: var(--color-accent);
+            background: rgba(145,132,217,0.06);
+        }
+        .drop-zone-icon { color: var(--color-neutral-600); margin-bottom: 8px; }
+        .drop-zone-text { font-size: 13px; color: var(--color-neutral-400); }
+        .drop-zone-text strong { color: var(--color-accent); }
+        .drop-zone-hint { font-size: 11px; color: var(--color-neutral-600); margin-top: 4px; }
+        .drop-zone.has-file { border-style: solid; border-color: var(--color-accent-700); background: rgba(145,132,217,0.04); }
+        .drop-zone.has-file .drop-zone-text { color: var(--color-text); }
+
+        /* Filter bar */
+        .filter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: var(--space-4); flex-wrap: wrap; }
+        .filter-btn {
+            font-size: 12px; padding: 4px 12px; border-radius: 20px; cursor: pointer;
+            border: 1px solid var(--color-divider); background: transparent; color: var(--color-neutral-400);
+            font-family: var(--font-body); transition: all 0.15s;
+        }
+        .filter-btn:hover { border-color: var(--color-neutral-600); color: var(--color-text); }
+        .filter-btn.active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(145,132,217,0.1); }
+
+        /* Notyf overrides */
+        .notyf__toast { border-radius: var(--radius-md) !important; font-family: var(--font-body) !important; font-size: 13px !important; }
 
         /* Utilities */
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
@@ -119,27 +201,83 @@
         @media (max-width: 768px) {
             .grid-2, .grid-3 { grid-template-columns: 1fr; }
             .container, .container-wide { padding: var(--space-4); }
-            .nav { gap: var(--space-4); }
+            .nav { gap: var(--space-3); padding: var(--space-3) var(--space-4); }
+            .nav a span { display: none; }
         }
     </style>
 </head>
 <body>
     <nav class="nav">
-        <a href="{{ url_for('index') }}" class="nav-brand">CS2 Coach</a>
-        <a href="{{ url_for('index') }}">Analyse</a>
-        <a href="{{ url_for('batch') }}">Batch</a>
-        <a href="{{ url_for('trends') }}">Trends</a>
-        <a href="{{ url_for('exports') }}">Exports</a>
-        <a href="{{ url_for('settings') }}">Einstellungen</a>
+        <a href="{{ url_for('index') }}" class="nav-brand">
+            <i data-lucide="crosshair" style="width:20px;height:20px;"></i> CS2 Coach
+        </a>
+        <a href="{{ url_for('index') }}"><i data-lucide="search" style="width:14px;height:14px;"></i> <span>Analyse</span></a>
+        <a href="{{ url_for('batch') }}"><i data-lucide="layers" style="width:14px;height:14px;"></i> <span>Batch</span></a>
+        <a href="{{ url_for('trends') }}"><i data-lucide="trending-up" style="width:14px;height:14px;"></i> <span>Trends</span></a>
+        <a href="{{ url_for('exports') }}"><i data-lucide="archive" style="width:14px;height:14px;"></i> <span>Exports</span></a>
+        <a href="{{ url_for('settings') }}"><i data-lucide="settings" style="width:14px;height:14px;"></i> <span>Einstellungen</span></a>
     </nav>
     <div class="{% block container_class %}container{% endblock %}">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% for category, message in messages %}
-                <div class="flash {{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endwith %}
         {% block content %}{% endblock %}
     </div>
+
+    <script src="https://unpkg.com/nprogress@0.2.0/nprogress.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script>
+    (function() {
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Initialize Notyf
+        window._notyf = new Notyf({
+            duration: 4500,
+            position: { x: 'right', y: 'top' },
+            ripple: false,
+            dismissible: true
+        });
+
+        // Flash messages → Toasts
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        window._notyf.open({ type: '{{ category }}', message: {{ message | tojson }} });
+        {% endfor %}
+        {% endwith %}
+
+        // NProgress config
+        NProgress.configure({ showSpinner: false, trickleSpeed: 120 });
+
+        // Auto-attach loading overlay to forms with class "form-analyze"
+        document.querySelectorAll('.form-analyze').forEach(function(form) {
+            form.addEventListener('submit', function() {
+                NProgress.start();
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.dataset.originalText = btn.textContent;
+                    btn.innerHTML = '<span class="analyze-spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;"></span> Analysiere...';
+                }
+                var overlay = form.closest('.card, .analyze-card');
+                if (overlay) {
+                    var ov = overlay.querySelector('.analyze-overlay');
+                    if (ov) {
+                        ov.classList.add('active');
+                        // Fake progress trickle
+                        var fill = ov.querySelector('.analyze-progress-fill');
+                        if (fill) {
+                            var pct = 0;
+                            var iv = setInterval(function() {
+                                pct += Math.random() * 8 + 1;
+                                if (pct > 92) { clearInterval(iv); pct = 92; }
+                                fill.style.width = pct + '%';
+                            }, 400);
+                        }
+                    }
+                }
+            });
+        });
+    })();
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
