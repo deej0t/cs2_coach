@@ -50,6 +50,24 @@
         a { color: var(--color-accent); text-underline-offset: 3px; }
         ::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
 
+        /* Abbreviation tooltips */
+        abbr[title] {
+            text-decoration: none; border-bottom: 1px dotted var(--color-neutral-600);
+            cursor: help; position: relative;
+        }
+        abbr[title]:hover { border-bottom-color: var(--color-accent); color: var(--color-accent-2); }
+        @media (hover: hover) {
+            abbr[title] { border-bottom-style: dotted; }
+            abbr[title]:hover::after {
+                content: attr(title); position: absolute; bottom: 100%; left: 50%;
+                transform: translateX(-50%); padding: 4px 10px; border-radius: var(--radius-sm);
+                background: var(--color-neutral-900); color: var(--color-neutral-200);
+                font-size: 11px; font-weight: 500; white-space: nowrap; z-index: 200;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.5); pointer-events: none;
+                border: 1px solid var(--color-neutral-700); margin-bottom: 4px;
+            }
+        }
+
         /* NProgress override */
         #nprogress .bar { background: var(--color-accent); height: 3px; }
         #nprogress .peg { box-shadow: 0 0 10px var(--color-accent), 0 0 5px var(--color-accent); }

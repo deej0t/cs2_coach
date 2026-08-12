@@ -123,30 +123,30 @@
 <!-- Stats overview -->
 <div class="grid-3" style="margin-bottom:var(--space-4);">
     <div class="card elev-sm" style="align-items:center;text-align:center;">
-        <span class="card-kicker">K/D</span>
+        <span class="card-kicker"><abbr title="Kill/Death-Verhaeltnis — ueber 1.0 = mehr Kills als Deaths">K/D</abbr></span>
         <span class="ed-stat {% if p.kd >= 1.2 %}sc-green{% elif p.kd >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.kd }}</span>
         <span style="font-size:12px;color:var(--color-neutral-500);">{{ p.kills }} / {{ p.deaths }} / {{ p.assists }}</span>
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
-        <span class="card-kicker">ADR</span>
+        <span class="card-kicker"><abbr title="Average Damage per Round — durchschnittlicher Schaden pro Runde">ADR</abbr></span>
         <span class="ed-stat {% if p.adr >= 80 %}sc-green{% elif p.adr >= 65 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.adr }}</span>
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
-        <span class="card-kicker">Rating</span>
+        <span class="card-kicker"><abbr title="Gesamtbewertung basierend auf Kills, Deaths, Assists, ADR und Impact">Rating</abbr></span>
         <span class="ed-stat {% if p.get('rating', 0) >= 1.1 %}sc-green{% elif p.get('rating', 0) >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.get('rating', '-') }}</span>
     </div>
 </div>
 <div class="grid-3" style="margin-bottom:var(--space-6);">
     <div class="card elev-sm" style="align-items:center;text-align:center;">
-        <span class="card-kicker">KAST%</span>
+        <span class="card-kicker"><abbr title="Kill, Assist, Survived, Traded — Prozent der Runden mit positivem Beitrag">KAST%</abbr></span>
         <span class="ed-stat">{{ p.kast_pct }}%</span>
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
-        <span class="card-kicker">HS%</span>
+        <span class="card-kicker"><abbr title="Headshot-Prozent — Anteil der Kills durch Kopftreffer">HS%</abbr></span>
         <span class="ed-stat">{{ p.hs_pct }}%</span>
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
-        <span class="card-kicker">Counter-Strafe</span>
+        <span class="card-kicker"><abbr title="Anteil der Schuesse im Stillstand — gutes Counter-Strafing bedeutet vor dem Schuss stehen bleiben">Counter-Strafe</abbr></span>
         <span class="ed-stat">{{ p.counter_strafe_pct }}%</span>
     </div>
 </div>
@@ -156,23 +156,23 @@
     <div class="card elev-sm">
         <span class="card-kicker">Kampf</span>
         <table class="table"><tbody>
-            <tr><td>Opening Duels</td><td>{{ p.opening_kills }}W / {{ p.opening_deaths }}L</td></tr>
-            <tr><td>Trade Kills</td><td>{{ p.trade_kills }}</td></tr>
-            <tr><td>Accuracy</td><td>{{ p.accuracy }}%</td></tr>
-            <tr><td>Survival</td><td>{{ p.survival_rate }}%</td></tr>
+            <tr><td><abbr title="Erstes Duell der Runde — gewonnen (W) oder verloren (L)">Opening Duels</abbr></td><td>{{ p.opening_kills }}W / {{ p.opening_deaths }}L</td></tr>
+            <tr><td><abbr title="Kill eines Gegners innerhalb von 3s nachdem er einen Teammate getoetet hat">Trade Kills</abbr></td><td>{{ p.trade_kills }}</td></tr>
+            <tr><td><abbr title="Treffergenauigkeit — Prozent der Schuesse die getroffen haben">Accuracy</abbr></td><td>{{ p.accuracy }}%</td></tr>
+            <tr><td><abbr title="Ueberlebensrate — Prozent der Runden ueberlebt">Survival</abbr></td><td>{{ p.survival_rate }}%</td></tr>
             {% if p.multikills %}<tr><td>Multi-Kills</td><td>2k:{{ p.multikills['2k'] }} 3k:{{ p.multikills['3k'] }} 4k:{{ p.multikills['4k'] }} 5k:{{ p.multikills['5k'] }}</td></tr>{% endif %}
         </tbody></table>
     </div>
     <div class="card elev-sm">
         <span class="card-kicker">Mechanik</span>
         <table class="table"><tbody>
-            <tr><td>Counter-Strafe</td><td>{{ p.counter_strafe_pct }}% (inacc: {{ p.avg_inaccuracy_move }})</td></tr>
-            {% if p.spray_control %}<tr><td>Spray-Control</td><td>Burst {{ p.spray_control.burst_kills }} / Spray {{ p.spray_control.spray_kills }}</td></tr>
-            <tr><td>Avg Recoil-Index</td><td>{{ p.spray_control.avg_recoil_index }}</td></tr>{% endif %}
+            <tr><td><abbr title="Anteil der Schuesse im Stillstand (inacc = Movement Inaccuracy)">Counter-Strafe</abbr></td><td>{{ p.counter_strafe_pct }}% (inacc: {{ p.avg_inaccuracy_move }})</td></tr>
+            {% if p.spray_control %}<tr><td><abbr title="Burst (1-3 Schuesse) vs. Spray (4+) Kills">Spray-Control</abbr></td><td>Burst {{ p.spray_control.burst_kills }} / Spray {{ p.spray_control.spray_kills }}</td></tr>
+            <tr><td><abbr title="Durchschnittliche Schussnummer im Magazin beim Kill — niedrig = Burst, hoch = Spray">Avg Recoil-Index</abbr></td><td>{{ p.spray_control.avg_recoil_index }}</td></tr>{% endif %}
             {% if p.weapons %}<tr><td>AWP Kills</td><td>{{ p.weapons.awp_kills }}</td></tr>
             <tr><td>Rifle Kills</td><td>{{ p.weapons.rifle_kills }}</td></tr>
             <tr><td>Pistol Kills</td><td>{{ p.weapons.pistol_kills }}</td></tr>{% endif %}
-            {% if p.engagement_distance %}<tr><td>Kampfdistanz</td><td>avg {{ p.engagement_distance.avg }}u (N:{{ p.engagement_distance.close }}/M:{{ p.engagement_distance.mid }}/W:{{ p.engagement_distance.long }})</td></tr>{% endif %}
+            {% if p.engagement_distance %}<tr><td><abbr title="N=Nah (<500u), M=Mittel (500-1500u), W=Weit (>1500u)">Kampfdistanz</abbr></td><td>avg {{ p.engagement_distance.avg }}u (N:{{ p.engagement_distance.close }}/M:{{ p.engagement_distance.mid }}/W:{{ p.engagement_distance.long }})</td></tr>{% endif %}
         </tbody></table>
     </div>
     <div class="card elev-sm">
@@ -191,10 +191,10 @@
     <div class="card elev-sm">
         <span class="card-kicker">Situationen</span>
         <table class="table"><tbody>
-            {% if p.clutches %}<tr><td>Clutches</td><td>{{ p.clutches.wins }}/{{ p.clutches.attempts }}</td></tr>{% endif %}
+            {% if p.clutches %}<tr><td><abbr title="1vX Situationen — gewonnen/versucht">Clutches</abbr></td><td>{{ p.clutches.wins }}/{{ p.clutches.attempts }}</td></tr>{% endif %}
             {% if p.side_split %}<tr><td>CT</td><td>{{ p.side_split.ct_kills }}K / {{ p.side_split.ct_deaths }}D</td></tr>
             <tr><td>T</td><td>{{ p.side_split.t_kills }}K / {{ p.side_split.t_deaths }}D</td></tr>{% endif %}
-            {% if p.death_timing %}<tr><td>Death-Timing</td><td>Early {{ p.death_timing.early }} | Mid {{ p.death_timing.mid }} | Late {{ p.death_timing.late }}</td></tr>{% endif %}
+            {% if p.death_timing %}<tr><td><abbr title="Wann in der Runde du stirbst — Early (erstes Drittel), Mid, Late">Death-Timing</abbr></td><td>Early {{ p.death_timing.early }} | Mid {{ p.death_timing.mid }} | Late {{ p.death_timing.late }}</td></tr>{% endif %}
             {% if p.kill_context %}{% if p.kill_context.thru_smoke > 0 %}<tr><td>Smoke Kills</td><td>{{ p.kill_context.thru_smoke }}</td></tr>{% endif %}
             {% if p.kill_context.wallbang > 0 %}<tr><td>Wallbangs</td><td>{{ p.kill_context.wallbang }}</td></tr>{% endif %}
             {% if p.kill_context.noscope > 0 %}<tr><td>Noscopes</td><td>{{ p.kill_context.noscope }}</td></tr>{% endif %}{% endif %}
