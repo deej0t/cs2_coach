@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Fortschritt & Achievements{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Fortschritt & Achievements</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Vergleiche deine Monate, sammle Achievements und sieh wie du dich entwickelst.
+</p>
+
+<style>
+    .sc-green { color: #4ade80; }
+    .sc-yellow { color: #fbbf24; }
+    .sc-red { color: #f87171; }
+
+    /* Period comparison */
+    .pc-table { width: 100%; border-collapse: collapse; margin-bottom: var(--space-5); }
+    .pc-table th { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500); padding: 8px 10px; text-align: center; border-bottom: 1px solid var(--color-neutral-800); }
+    .pc-table th:first-child { text-align: left; }
+    .pc-table td { padding: 10px; text-align: center; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent); font-size: 13px; }
+    .pc-table td:first-child { text-align: left; font-weight: 600; font-size: 14px; }
+    .pc-delta { font-size: 10px; font-weight: 600; margin-left: 4px; }
+    .pc-up { color: #4ade80; }
+    .pc-down { color: #f87171; }
+    .pc-best { background: rgba(74,222,128,0.06); }
+
+    /* Achievements */
+    .ach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-3); }
+    .ach-card { padding: 14px !important; text-align: center; transition: transform 0.15s, box-shadow 0.15s; position: relative; overflow: hidden; }
+    .ach-card:hover { transform: translateY(-2px); }
+    .ach-locked { opacity: 0.35; filter: grayscale(1); }
+    .ach-icon { width: 36px; height: 36px; margin: 0 auto 8px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+    .ach-unlocked .ach-icon { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .ach-locked .ach-icon { background: var(--color-neutral-800); color: var(--color-neutral-600); }
+    .ach-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+    .ach-desc { font-size: 11px; color: var(--color-neutral-500); }
+    .ach-check { position: absolute; top: 8px; right: 8px; font-size: 14px; color: #4ade80; }
+    .ach-cat-header { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-500); padding: 8px 0; margin-top: var(--space-3); }
+
+    /* Progress bar */
+    .ach-progress { margin-bottom: var(--space-5); }
+    .ach-prog-bar { height: 10px; border-radius: 5px; background: var(--color-neutral-800); overflow: hidden; margin-bottom: 6px; }
+    .ach-prog-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #fbbf24, #4ade80); }
+    .ach-prog-text { display: flex; justify-content: space-between; font-size: 12px; color: var(--color-neutral-500); }
+
+    /* Formkurve */
+    .fk-chart { height: 200px; margin-bottom: var(--space-5); }
+</style>
+
+<!-- ══════ Achievement Progress ══════ -->
+{% if achievements %}
+{% set unlocked = achievements|selectattr("unlocked")|list|length %}
+{% set total_ach = achievements|length %}
+{% set pct = (unlocked / total_ach * 100)|round(1) %}
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:15px;font-weight:600;">Achievements</span>
+        <span style="font-size:13px;color:var(--color-neutral-400);"><span style="color:#fbbf24;font-weight:700;">{{ unlocked }}</span> / {{ total_ach }} freigeschaltet</span>
+    </div>
+    <div class="ach-prog-bar"><div class="ach-prog-fill" style="width:{{ pct }}%;"></div></div>
+    <div class="ach-prog-text"><span>{{ pct }}% abgeschlossen</span><span>{{ total_ach - unlocked }} verbleibend</span></div>
+</div>
+
+{% set categories = [] %}
+{% for a in achievements %}{% if a.cat not in categories %}{% if categories.append(a.cat) %}{% endif %}{% endif %}{% endfor %}
+
+{% for cat in categories %}
+<div class="ach-cat-header">{{ cat }}</div>
+<div class="ach-grid">
+    {% for a in achievements if a.cat == cat %}
+    <div class="card elev-sm ach-card {% if a.unlocked %}ach-unlocked{% else %}ach-locked{% endif %}">
+        {% if a.unlocked %}<span class="ach-check">&#10003;</span>{% endif %}
+        <div class="ach-icon"><i data-lucide="{{ a.icon }}" style="width:20px;height:20px;"></i></div>
+        <div class="ach-name">{{ a.name }}</div>
+        <div class="ach-desc">{{ a.desc }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endfor %}
+
+<div class="hr" style="margin: var(--space-5) 0;"></div>
+{% endif %}
+
+<!-- ══════ Period Comparison ══════ -->
+{% if periods and periods|length >= 1 %}
+<div class="card-kicker" style="margin-bottom: 8px;">Monats-Vergleich</div>
+
+{% set month_names = {"01": "Januar", "02": "Februar", "03": "Maerz", "04": "April", "05": "Mai", "06": "Juni", "07": "Juli", "08": "August", "09": "September", "10": "Oktober", "11": "November", "12": "Dezember"} %}
+
+{% set best_rating_month = periods|sort(attribute="avg_rating", reverse=true)|first %}
+
+<div class="card elev-sm" style="padding: var(--space-3); margin-bottom: var(--space-5);">
+    <table class="pc-table">
+        <thead>
+            <tr>
+                <th>Monat</th>
+                <th>Matches</th>
+                <th>Win-Rate</th>
+                <th>Rating</th>
+                <th>K/D</th>
+                <th>ADR</th>
+                <th>HS%</th>
+                <th>KAST%</th>
+                <th>Kills</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for p in periods %}
+        <tr class="{% if p.month == best_rating_month.month %}pc-best{% endif %}">
+            <td>
+                {{ month_names.get(p.month[-2:], p.month[-2:]) }} {{ p.month[:4] }}
+                {% if p.month == best_rating_month.month %}<span style="color:#fbbf24;font-size:11px;"> ★ Bester Monat</span>{% endif %}
+            </td>
+            <td>{{ p.matches }} <span style="font-size:11px;color:var(--color-neutral-500);">({{ p.wins }}W/{{ p.losses }}L)</span></td>
+            <td>
+                <span class="{% if p.win_rate >= 60 %}sc-green{% elif p.win_rate >= 40 %}sc-yellow{% else %}sc-red{% endif %}" style="font-weight:600;">{{ p.win_rate }}%</span>
+                {% if p.get('delta_wr') is not none %}<span class="pc-delta {% if p.delta_wr > 0 %}pc-up{% elif p.delta_wr < 0 %}pc-down{% endif %}">{% if p.delta_wr > 0 %}+{% endif %}{{ p.delta_wr }}</span>{% endif %}
+            </td>
+            <td>
+                <span class="{% if p.avg_rating >= 1.1 %}sc-green{% elif p.avg_rating >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}" style="font-weight:600;">{{ p.avg_rating }}</span>
+                {% if p.get('delta_rating') is not none %}<span class="pc-delta {% if p.delta_rating > 0 %}pc-up{% elif p.delta_rating < 0 %}pc-down{% endif %}">{% if p.delta_rating > 0 %}+{% endif %}{{ p.delta_rating }}</span>{% endif %}
+            </td>
+            <td>
+                <span class="{% if p.avg_kd >= 1.2 %}sc-green{% elif p.avg_kd >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.avg_kd }}</span>
+                {% if p.get('delta_kd') is not none %}<span class="pc-delta {% if p.delta_kd > 0 %}pc-up{% elif p.delta_kd < 0 %}pc-down{% endif %}">{% if p.delta_kd > 0 %}+{% endif %}{{ p.delta_kd }}</span>{% endif %}
+            </td>
+            <td>
+                {{ p.avg_adr }}
+                {% if p.get('delta_adr') is not none %}<span class="pc-delta {% if p.delta_adr > 0 %}pc-up{% elif p.delta_adr < 0 %}pc-down{% endif %}">{% if p.delta_adr > 0 %}+{% endif %}{{ p.delta_adr }}</span>{% endif %}
+            </td>
+            <td>
+                {{ p.avg_hs }}%
+                {% if p.get('delta_hs') is not none %}<span class="pc-delta {% if p.delta_hs > 0 %}pc-up{% elif p.delta_hs < 0 %}pc-down{% endif %}">{% if p.delta_hs > 0 %}+{% endif %}{{ p.delta_hs }}</span>{% endif %}
+            </td>
+            <td>{{ p.avg_kast }}%</td>
+            <td>{{ p.total_kills }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- ══════ Formkurve ══════ -->
+{% if exports|length >= 3 %}
+<div class="card-kicker" style="margin-bottom: 8px;">Formkurve — Rating ueber alle Matches</div>
+<div class="card elev-sm" style="padding: var(--space-3); margin-bottom: var(--space-5);">
+    <canvas id="formkurve" class="fk-chart"></canvas>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if exports|length >= 3 %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var exports = {{ exports | tojson }};
+    exports.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+
+    var labels = exports.map(function(e) { return e.map + ' ' + (e.date || '').slice(5); });
+    var ratings = exports.map(function(e) { return e.rating; });
+
+    // Rolling average (5-match window)
+    var rolling = [];
+    for (var i = 0; i < ratings.length; i++) {
+        var start = Math.max(0, i - 4);
+        var window = ratings.slice(start, i + 1);
+        var avg = window.reduce(function(a, b) { return a + b; }, 0) / window.length;
+        rolling.push(Math.round(avg * 100) / 100);
+    }
+
+    var resultColors = exports.map(function(e) {
+        if (e.result === 'Sieg') return 'rgba(74, 222, 128, 0.9)';
+        if (e.result === 'Niederlage') return 'rgba(248, 113, 113, 0.9)';
+        return 'rgba(251, 191, 36, 0.9)';
+    });
+
+    new Chart(document.getElementById('formkurve'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Rating',
+                    data: ratings,
+                    borderColor: 'rgba(145, 132, 217, 0.5)',
+                    backgroundColor: 'rgba(145, 132, 217, 0.05)',
+                    fill: false,
+                    pointBackgroundColor: resultColors,
+                    pointBorderColor: 'rgba(145, 132, 217, 0.5)',
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderWidth: 1,
+                    tension: 0.1,
+                },
+                {
+                    label: 'Rolling Avg (5)',
+                    data: rolling,
+                    borderColor: 'rgba(251, 191, 36, 1)',
+                    backgroundColor: 'rgba(251, 191, 36, 0.08)',
+                    fill: true,
+                    pointRadius: 0,
+                    borderWidth: 2.5,
+                    tension: 0.3,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#9a9dae', font: { family: 'Inter', size: 11 } }
+                },
+                tooltip: {
+                    backgroundColor: '#232532', borderColor: '#3f424d', borderWidth: 1,
+                    titleColor: '#e9e9ed', bodyColor: '#e9e9ed',
+                    titleFont: { family: 'Inter' }, bodyFont: { family: 'Inter' },
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#75798c', font: { size: 9, family: 'Inter' }, maxRotation: 45, maxTicksLimit: 15 },
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                },
+                y: {
+                    suggestedMin: 0.4,
+                    suggestedMax: 1.6,
+                    ticks: { color: '#75798c', font: { size: 11, family: 'Inter' } },
+                    grid: { color: 'rgba(255,255,255,0.06)' },
+                }
+            },
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

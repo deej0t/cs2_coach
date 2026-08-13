@@ -370,6 +370,19 @@ def create_app() -> Flask:
             flash("Ziel entfernt.", "success")
         return redirect(url_for("goals"))
 
+    @app.route("/opponents")
+    def opponents():
+        opponent_data = _build_opponent_stats(cfg)
+        return render_template("opponents.html", opponents=opponent_data, config=cfg)
+
+    @app.route("/compare")
+    def compare():
+        export_list = _get_exports(cfg)
+        periods = _build_period_comparison(export_list)
+        achievements = _build_achievements(export_list, cfg)
+        return render_template("compare.html", periods=periods,
+                               achievements=achievements, exports=export_list, config=cfg)
+
     @app.route("/exports")
     def exports():
         export_list = _get_exports(cfg)
@@ -737,6 +750,231 @@ def _rank_for_value(key: str, value: float) -> tuple[str, float]:
                 pct = ((i + 1) / len(tiers)) * 100
                 return tiers[i][0], min(pct, 100)
         return tiers[0][0], 5.0
+
+
+def _build_opponent_stats(cfg: dict) -> list[dict]:
+    """Aggregate duel statistics across all exports per opponent."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+    if not vault_path:
+        return []
+
+    export_dir = Path(vault_path) / subfolder / "exports"
+    if not export_dir.exists():
+        return []
+
+    from collections import defaultdict
+    opp = defaultdict(lambda: {
+        "kills": 0, "deaths": 0, "hs_kills": 0, "hs_deaths": 0,
+        "matches": 0, "weapons_used": defaultdict(int), "maps": [],
+        "results": [],
+    })
+
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        dm = data.get("duel_matrix", [])
+        match_map = data.get("match", {}).get("map", "?")
+        match_result = data.get("match", {}).get("result", "?")
+        for d in dm:
+            name = d.get("name", "?")
+            opp[name]["kills"] += d.get("kills", 0)
+            opp[name]["deaths"] += d.get("deaths", 0)
+            opp[name]["hs_kills"] += d.get("hs_kills", 0)
+            opp[name]["hs_deaths"] += d.get("hs_deaths", 0)
+            opp[name]["matches"] += 1
+            opp[name]["maps"].append(match_map)
+            opp[name]["results"].append(match_result)
+            for w in d.get("top_weapons", []):
+                opp[name]["weapons_used"][w] += 1
+
+    result = []
+    for name, s in opp.items():
+        total = s["kills"] + s["deaths"]
+        if total < 3:
+            continue
+        kd = round(s["kills"] / max(s["deaths"], 1), 2)
+        hs_pct = round(s["hs_kills"] / max(s["kills"], 1) * 100, 1)
+        top_weapons = sorted(s["weapons_used"].items(), key=lambda x: -x[1])[:3]
+        wins_vs = sum(1 for r in s["results"] if r == "Sieg")
+        losses_vs = sum(1 for r in s["results"] if r == "Niederlage")
+
+        # Classify threat level
+        if s["deaths"] > s["kills"] + 2 and total >= 6:
+            threat = "nemesis"
+        elif s["kills"] > s["deaths"] + 2 and total >= 6:
+            threat = "victim"
+        else:
+            threat = "even"
+
+        result.append({
+            "name": name, "kills": s["kills"], "deaths": s["deaths"],
+            "kd": kd, "hs_pct": hs_pct, "total_duels": total,
+            "matches": s["matches"], "threat": threat,
+            "top_weapons": [w[0] for w in top_weapons],
+            "maps": list(set(s["maps"])),
+            "wins_vs": wins_vs, "losses_vs": losses_vs,
+        })
+
+    return sorted(result, key=lambda x: -x["total_duels"])
+
+
+def _build_period_comparison(exports: list[dict]) -> list[dict]:
+    """Group exports by month and compute per-period stats for comparison."""
+    if not exports:
+        return []
+
+    by_month: dict[str, list[dict]] = {}
+    for e in exports:
+        month = e.get("date", "?")[:7]  # YYYY-MM
+        if month and month != "?":
+            by_month.setdefault(month, []).append(e)
+
+    periods = []
+    for month in sorted(by_month.keys(), reverse=True):
+        matches = by_month[month]
+        n = len(matches)
+        wins = sum(1 for m in matches if m.get("result") == "Sieg")
+        losses = sum(1 for m in matches if m.get("result") == "Niederlage")
+
+        avg_rating = round(sum(m.get("rating", 0) for m in matches) / n, 2)
+        avg_kd = round(sum(m.get("kd", 0) for m in matches) / n, 2)
+        avg_adr = round(sum(m.get("adr", 0) for m in matches) / n, 1)
+        avg_hs = round(sum(m.get("hs_pct", 0) for m in matches) / n, 1)
+        avg_kast = round(sum(m.get("kast", 0) for m in matches) / n, 1)
+        total_kills = sum(m.get("kills", 0) for m in matches)
+
+        periods.append({
+            "month": month, "matches": n, "wins": wins, "losses": losses,
+            "draws": n - wins - losses,
+            "win_rate": round(wins / n * 100, 1),
+            "avg_rating": avg_rating, "avg_kd": avg_kd, "avg_adr": avg_adr,
+            "avg_hs": avg_hs, "avg_kast": avg_kast, "total_kills": total_kills,
+        })
+
+    # Compute deltas vs previous month
+    for i in range(len(periods) - 1):
+        curr = periods[i]
+        prev = periods[i + 1]
+        curr["delta_rating"] = round(curr["avg_rating"] - prev["avg_rating"], 2)
+        curr["delta_kd"] = round(curr["avg_kd"] - prev["avg_kd"], 2)
+        curr["delta_adr"] = round(curr["avg_adr"] - prev["avg_adr"], 1)
+        curr["delta_hs"] = round(curr["avg_hs"] - prev["avg_hs"], 1)
+        curr["delta_wr"] = round(curr["win_rate"] - prev["win_rate"], 1)
+
+    return periods
+
+
+def _build_achievements(exports: list[dict], cfg: dict) -> list[dict]:
+    """Check which achievements have been unlocked."""
+    n = len(exports)
+    if not n:
+        return []
+
+    total_kills = sum(e.get("kills", 0) for e in exports)
+    wins = sum(1 for e in exports if e.get("result") == "Sieg")
+
+    # Win streaks
+    max_win_streak = 0
+    cur = 0
+    for e in reversed(exports):
+        if e.get("result") == "Sieg":
+            cur += 1
+            max_win_streak = max(max_win_streak, cur)
+        else:
+            cur = 0
+
+    # Per-match records
+    max_kills = max(e.get("kills", 0) for e in exports)
+    max_rating = max(e.get("rating", 0) for e in exports)
+    max_hs = max(e.get("hs_pct", 0) for e in exports)
+    max_adr = max(e.get("adr", 0) for e in exports)
+    max_kd = max(e.get("kd", 0) for e in exports)
+
+    # Multi-kill check from JSON exports
+    has_ace = False
+    has_4k = False
+    max_clutches_in_match = 0
+    vault_path = cfg.get("obsidian_vault_path", "")
+    subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+    if vault_path:
+        export_dir = Path(vault_path) / subfolder / "exports"
+        if export_dir.exists():
+            for f in export_dir.glob("*_coach.json"):
+                try:
+                    data = json.loads(f.read_text(encoding="utf-8"))
+                    p = data.get("player", {})
+                    mk = p.get("multikills", {})
+                    if mk:
+                        if mk.get("5k", 0) > 0:
+                            has_ace = True
+                        if mk.get("4k", 0) > 0:
+                            has_4k = True
+                    cl = p.get("clutches", {})
+                    if cl:
+                        max_clutches_in_match = max(max_clutches_in_match, cl.get("wins", 0))
+                except (json.JSONDecodeError, OSError):
+                    continue
+
+    # KAST streaks
+    kast_70_streak = 0
+    kast_70_max = 0
+    for e in reversed(exports):
+        if e.get("kast", 0) >= 70:
+            kast_70_streak += 1
+            kast_70_max = max(kast_70_max, kast_70_streak)
+        else:
+            kast_70_streak = 0
+
+    # Rating > 1.0 streak
+    rating_1_streak = 0
+    rating_1_max = 0
+    for e in reversed(exports):
+        if e.get("rating", 0) >= 1.0:
+            rating_1_streak += 1
+            rating_1_max = max(rating_1_max, rating_1_streak)
+        else:
+            rating_1_streak = 0
+
+    # Define achievements
+    achievements = [
+        # Grind
+        {"id": "first", "cat": "Grind", "name": "Erste Schritte", "desc": "Erstes Match analysiert", "icon": "play", "unlocked": n >= 1},
+        {"id": "five", "cat": "Grind", "name": "Am Ball", "desc": "5 Matches analysiert", "icon": "repeat", "unlocked": n >= 5},
+        {"id": "ten", "cat": "Grind", "name": "Dedicated", "desc": "10 Matches analysiert", "icon": "bar-chart-3", "unlocked": n >= 10},
+        {"id": "twenty", "cat": "Grind", "name": "Grinder", "desc": "20 Matches analysiert", "icon": "flame", "unlocked": n >= 20},
+        {"id": "fifty", "cat": "Grind", "name": "Veteran", "desc": "50 Matches analysiert", "icon": "award", "unlocked": n >= 50},
+        {"id": "hundred", "cat": "Grind", "name": "Centurion", "desc": "100 Matches analysiert", "icon": "crown", "unlocked": n >= 100},
+        # Aim
+        {"id": "k200", "cat": "Aim", "name": "Killer", "desc": "200 Gesamt-Kills", "icon": "crosshair", "unlocked": total_kills >= 200},
+        {"id": "k500", "cat": "Aim", "name": "Terminator", "desc": "500 Gesamt-Kills", "icon": "zap", "unlocked": total_kills >= 500},
+        {"id": "k1000", "cat": "Aim", "name": "Tausend Tode", "desc": "1000 Gesamt-Kills", "icon": "skull", "unlocked": total_kills >= 1000},
+        {"id": "bomb30", "cat": "Aim", "name": "30-Bombe", "desc": "30+ Kills in einem Match", "icon": "bomb", "unlocked": max_kills >= 30},
+        {"id": "bomb40", "cat": "Aim", "name": "40-Bombe", "desc": "40+ Kills in einem Match", "icon": "rocket", "unlocked": max_kills >= 40},
+        {"id": "hs_god", "cat": "Aim", "name": "Headshot-Maschine", "desc": "60%+ HS in einem Match", "icon": "target", "unlocked": max_hs >= 60},
+        {"id": "ace", "cat": "Aim", "name": "Ace!", "desc": "5 Kills in einer Runde", "icon": "star", "unlocked": has_ace},
+        {"id": "quad", "cat": "Aim", "name": "Quad Kill", "desc": "4 Kills in einer Runde", "icon": "sparkles", "unlocked": has_4k},
+        # Performance
+        {"id": "rat12", "cat": "Performance", "name": "Elite", "desc": "Rating 1.20+ in einem Match", "icon": "trending-up", "unlocked": max_rating >= 1.20},
+        {"id": "rat13", "cat": "Performance", "name": "MVP", "desc": "Rating 1.30+ in einem Match", "icon": "medal", "unlocked": max_rating >= 1.30},
+        {"id": "adr100", "cat": "Performance", "name": "Damage Dealer", "desc": "100+ ADR in einem Match", "icon": "flame", "unlocked": max_adr >= 100},
+        {"id": "kd2", "cat": "Performance", "name": "Dominator", "desc": "K/D 2.0+ in einem Match", "icon": "shield", "unlocked": max_kd >= 2.0},
+        # Consistency
+        {"id": "kast5", "cat": "Consistency", "name": "Konstant", "desc": "5 Spiele in Folge KAST > 70%", "icon": "activity", "unlocked": kast_70_max >= 5},
+        {"id": "kast10", "cat": "Consistency", "name": "Fels in der Brandung", "desc": "10 Spiele in Folge KAST > 70%", "icon": "mountain", "unlocked": kast_70_max >= 10},
+        {"id": "rat5", "cat": "Consistency", "name": "Formtief? Nein!", "desc": "5 Spiele in Folge Rating > 1.0", "icon": "thumbs-up", "unlocked": rating_1_max >= 5},
+        # Wins
+        {"id": "win3", "cat": "Siege", "name": "Hot Streak", "desc": "3 Siege in Folge", "icon": "flame", "unlocked": max_win_streak >= 3},
+        {"id": "win5", "cat": "Siege", "name": "Unaufhaltbar", "desc": "5 Siege in Folge", "icon": "zap", "unlocked": max_win_streak >= 5},
+        {"id": "win10", "cat": "Siege", "name": "Unbesiegbar", "desc": "10 Siege in Folge", "icon": "crown", "unlocked": max_win_streak >= 10},
+        {"id": "wins50", "cat": "Siege", "name": "Winner", "desc": "50 Siege gesamt", "icon": "trophy", "unlocked": wins >= 50},
+        # Clutch
+        {"id": "clutch3", "cat": "Clutch", "name": "Clutch-Koenig", "desc": "3+ Clutch-Wins in einem Match", "icon": "shield-check", "unlocked": max_clutches_in_match >= 3},
+    ]
+
+    return achievements
 
 
 def _build_weapon_stats(cfg: dict) -> list[dict]:

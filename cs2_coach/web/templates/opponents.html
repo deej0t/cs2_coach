@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Gegner-Analyse{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Gegner-Analyse</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Alle Gegner aggregiert ueber alle Matches — finde deine Nemesis und deine Opfer.
+</p>
+
+{% if not opponents %}
+<div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
+    <p style="color: var(--color-neutral-500);">Keine Gegner-Daten vorhanden.</p>
+</div>
+{% else %}
+
+<style>
+    .opp-table { width: 100%; border-collapse: collapse; }
+    .opp-table th { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500); padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--color-neutral-800); }
+    .opp-table td { padding: 8px 10px; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent); font-size: 13px; }
+    .opp-table tr:hover td { background: color-mix(in srgb, var(--color-accent) 3%, transparent); }
+    .opp-name { font-weight: 600; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .opp-threat { display: inline-flex; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.03em; }
+    .opp-nemesis { background: rgba(248,113,113,0.12); color: #f87171; }
+    .opp-victim { background: rgba(74,222,128,0.12); color: #4ade80; }
+    .opp-even { background: rgba(145,132,217,0.08); color: #9184d9; }
+    .opp-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; width: 80px; background: var(--color-neutral-800); }
+    .opp-maps { font-size: 11px; color: var(--color-neutral-500); }
+    .opp-weapons { font-size: 11px; color: var(--color-neutral-500); }
+
+    .sc-green { color: #4ade80; }
+    .sc-yellow { color: #fbbf24; }
+    .sc-red { color: #f87171; }
+
+    .opp-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
+    .opp-sum-card { padding: 16px !important; text-align: center; }
+    .opp-sum-val { font-family: var(--font-heading); font-size: 28px; font-weight: 700; }
+    .opp-sum-label { font-size: 10px; color: var(--color-neutral-500); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+    .opp-sum-sub { font-size: 12px; color: var(--color-neutral-400); margin-top: 4px; }
+
+    @media (max-width: 768px) { .opp-summary { grid-template-columns: 1fr; } }
+</style>
+
+<!-- Summary -->
+{% set nemeses = opponents|selectattr("threat", "equalto", "nemesis")|list %}
+{% set victims = opponents|selectattr("threat", "equalto", "victim")|list %}
+<div class="opp-summary">
+    <div class="card elev-sm opp-sum-card" style="border-top: 3px solid var(--color-neutral-700);">
+        <div class="opp-sum-val">{{ opponents|length }}</div>
+        <div class="opp-sum-label">Gegner getroffen</div>
+    </div>
+    <div class="card elev-sm opp-sum-card" style="border-top: 3px solid #f87171;">
+        <div class="opp-sum-val sc-red">{{ nemeses|length }}</div>
+        <div class="opp-sum-label">Nemesis</div>
+        <div class="opp-sum-sub">Gegner die dich dominiert haben</div>
+    </div>
+    <div class="card elev-sm opp-sum-card" style="border-top: 3px solid #4ade80;">
+        <div class="opp-sum-val sc-green">{{ victims|length }}</div>
+        <div class="opp-sum-label">Dominiert</div>
+        <div class="opp-sum-sub">Gegner die du dominiert hast</div>
+    </div>
+</div>
+
+<!-- Nemesis section -->
+{% if nemeses %}
+<div class="card-kicker" style="margin-bottom: 8px; color: #f87171;">Nemesis — Gegner die dich dominiert haben</div>
+<div class="card elev-sm" style="padding: var(--space-3); margin-bottom: var(--space-5); border-left: 3px solid #f87171;">
+    <table class="opp-table">
+        <thead><tr><th>Gegner</th><th style="text-align:center;">Kills</th><th style="text-align:center;">Deaths</th><th>Bilanz</th><th>K/D</th><th>HS%</th><th>Maps</th></tr></thead>
+        <tbody>
+        {% for o in nemeses %}
+        <tr>
+            <td class="opp-name">{{ o.name }} <span class="opp-threat opp-nemesis">Nemesis</span></td>
+            <td style="text-align:center;color:#4ade80;">{{ o.kills }}</td>
+            <td style="text-align:center;color:#f87171;">{{ o.deaths }}</td>
+            <td>{% if o.total_duels > 0 %}<div class="opp-bar"><div style="width:{{ (o.kills / o.total_duels * 100)|round }}%;background:#4ade80;height:100%;"></div><div style="width:{{ (o.deaths / o.total_duels * 100)|round }}%;background:#f87171;height:100%;"></div></div>{% endif %}</td>
+            <td><span class="sc-red" style="font-weight:600;">{{ o.kd }}</span></td>
+            <td>{{ o.hs_pct }}%</td>
+            <td class="opp-maps">{{ o.maps|join(', ') }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Full table -->
+<div class="card-kicker" style="margin-bottom: 8px;">Alle Gegner ({{ opponents|length }})</div>
+<div class="card elev-sm" style="padding: var(--space-3); margin-bottom: var(--space-5);">
+    <table class="opp-table">
+        <thead><tr><th>Gegner</th><th>Status</th><th style="text-align:center;">Kills</th><th style="text-align:center;">Deaths</th><th>Bilanz</th><th>K/D</th><th>HS%</th><th>Duelle</th><th>Maps</th><th>Waffen</th></tr></thead>
+        <tbody>
+        {% for o in opponents %}
+        <tr>
+            <td class="opp-name">{{ o.name }}</td>
+            <td>
+                {% if o.threat == 'nemesis' %}<span class="opp-threat opp-nemesis">Nemesis</span>
+                {% elif o.threat == 'victim' %}<span class="opp-threat opp-victim">Dominiert</span>
+                {% else %}<span class="opp-threat opp-even">Ausgeglichen</span>{% endif %}
+            </td>
+            <td style="text-align:center;color:#4ade80;">{{ o.kills }}</td>
+            <td style="text-align:center;color:#f87171;">{{ o.deaths }}</td>
+            <td>{% if o.total_duels > 0 %}<div class="opp-bar"><div style="width:{{ (o.kills / o.total_duels * 100)|round }}%;background:#4ade80;height:100%;"></div><div style="width:{{ (o.deaths / o.total_duels * 100)|round }}%;background:#f87171;height:100%;"></div></div>{% endif %}</td>
+            <td><span class="{% if o.kd >= 1.5 %}sc-green{% elif o.kd >= 1.0 %}sc-yellow{% else %}sc-red{% endif %}" style="font-weight:600;">{{ o.kd }}</span></td>
+            <td>{{ o.hs_pct }}%</td>
+            <td style="text-align:center;">{{ o.total_duels }}</td>
+            <td class="opp-maps">{{ o.maps|join(', ') }}</td>
+            <td class="opp-weapons">{{ o.top_weapons|join(', ') }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endif %}
+{% endblock %}
