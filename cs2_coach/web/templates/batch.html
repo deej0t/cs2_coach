@@ -184,7 +184,7 @@
                 scanBtn.disabled = false;
                 scanBtn.textContent = 'Scannen';
                 if (data.error) {
-                    if (typeof notyf !== 'undefined') notyf.error(data.error);
+                    if (window._notyf) window._notyf.error(data.error);
                     return;
                 }
                 scannedDemos = data.demos;

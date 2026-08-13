@@ -400,7 +400,7 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
 
     # 5) Flash-Effektivität
     if blind_df is not None:
-        _process_flashes(blind_df, player_lookup, team_by_player)
+        _process_flashes(blind_df, player_lookup, team_by_player, round_ticks)
 
     # 6) Clutches
     if kills_df is not None and rounds_df is not None:
@@ -725,7 +725,7 @@ def _process_utility(parser, player_lookup):
 
 # -- Flash-Effektivität --
 
-def _process_flashes(blind_df, player_lookup, team_by_player):
+def _process_flashes(blind_df, player_lookup, team_by_player, round_ticks):
     enemy_durations: dict[str, list[float]] = {}
 
     for _, row in blind_df.iterrows():
@@ -738,11 +738,16 @@ def _process_flashes(blind_df, player_lookup, team_by_player):
         if victim_id == attacker_id:
             continue  # Self-flash ignorieren
 
-        attacker_team = team_by_player.get(attacker_id, "")
-        victim_team = team_by_player.get(victim_id, "")
+        attacker_start = team_by_player.get(attacker_id, "")
+        victim_start = team_by_player.get(victim_id, "")
 
-        if attacker_team and victim_team:
-            if attacker_team != victim_team:
+        if attacker_start and victim_start:
+            tick = int(row.get("tick", 0))
+            round_idx = _tick_to_round(tick, round_ticks)
+            attacker_side = _own_side_for_round(round_idx, attacker_start)
+            victim_side = _own_side_for_round(round_idx, victim_start)
+
+            if attacker_side != victim_side:
                 player_lookup[attacker_id].flash_enemies_blinded += 1
                 enemy_durations.setdefault(attacker_id, []).append(duration)
             else:

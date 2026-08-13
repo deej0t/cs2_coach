@@ -92,11 +92,86 @@ def _player_to_json(p: PlayerStats, is_target: bool,
             "rating": p.crosshair_placement_rating,
         },
         "counter_strafe_score": round(p.counter_strafe_score, 1),
+        "counter_strafe_pct": round(p.counter_strafe_score, 1),
+        "avg_inaccuracy_move": round(p.avg_inaccuracy_move, 2),
         "utility_per_round": round(p.utility_per_round, 2),
         "is_target": is_target,
     }
     if include_rating is not None:
         d["rating"] = include_rating
+
+    # Extended stats for export_detail view
+    if is_target:
+        if p.rounds_2k or p.rounds_3k or p.rounds_4k or p.rounds_5k:
+            d["multikills"] = {
+                "2k": p.rounds_2k, "3k": p.rounds_3k,
+                "4k": p.rounds_4k, "5k": p.rounds_5k,
+            }
+        if p.burst_kills or p.spray_kills or p.avg_recoil_index:
+            d["spray_control"] = {
+                "burst_kills": p.burst_kills,
+                "spray_kills": p.spray_kills,
+                "avg_recoil_index": round(p.avg_recoil_index, 2),
+            }
+        if p.awp_kills or p.rifle_kills or p.pistol_kills:
+            d["weapons"] = {
+                "awp_kills": p.awp_kills,
+                "rifle_kills": p.rifle_kills,
+                "pistol_kills": p.pistol_kills,
+            }
+        if p.avg_fight_distance > 0:
+            d["engagement_distance"] = {
+                "avg": round(p.avg_fight_distance, 0),
+                "close": p.close_range_kills,
+                "mid": p.mid_range_kills,
+                "long": p.long_range_kills,
+            }
+        d["utility"] = {
+            "total": util_total,
+            "per_round": round(p.utility_per_round, 2),
+            "flashes": p.flashes_thrown,
+            "smokes": p.smokes_thrown,
+            "he": p.he_thrown,
+            "molotovs": p.molotovs_thrown,
+        }
+        if p.flash_enemies_blinded or p.flash_teammates_blinded:
+            d["flash_effectiveness"] = {
+                "enemies_blinded": p.flash_enemies_blinded,
+                "teammates_blinded": p.flash_teammates_blinded,
+                "avg_enemy_duration": round(p.flash_avg_enemy_duration, 2),
+            }
+        if p.clutch_attempts:
+            d["clutches"] = {
+                "wins": p.clutch_wins,
+                "attempts": p.clutch_attempts,
+            }
+        if p.ct_kills or p.ct_deaths or p.t_kills or p.t_deaths:
+            d["side_split"] = {
+                "ct_kills": p.ct_kills, "ct_deaths": p.ct_deaths,
+                "t_kills": p.t_kills, "t_deaths": p.t_deaths,
+            }
+        if p.deaths_early or p.deaths_mid or p.deaths_late:
+            d["death_timing"] = {
+                "early": p.deaths_early,
+                "mid": p.deaths_mid,
+                "late": p.deaths_late,
+            }
+        kill_ctx = {}
+        if p.kills_thru_smoke:
+            kill_ctx["thru_smoke"] = p.kills_thru_smoke
+        if p.kills_penetrated:
+            kill_ctx["wallbang"] = p.kills_penetrated
+        if p.kills_noscope:
+            kill_ctx["noscope"] = p.kills_noscope
+        if kill_ctx:
+            d["kill_context"] = kill_ctx
+        if p.rank_old or p.rank_new:
+            d["rank"] = {
+                "old": p.rank_old,
+                "new": p.rank_new,
+                "change": p.rank_change,
+            }
+
     return d
 
 

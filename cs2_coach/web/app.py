@@ -331,7 +331,7 @@ def create_app() -> Flask:
         export_dir = Path(vault_path) / subfolder / "exports"
         filepath = export_dir / filename
 
-        if not filepath.exists():
+        if not filepath.resolve().is_relative_to(export_dir.resolve()) or not filepath.exists():
             flash("Export nicht gefunden.", "error")
             return redirect(url_for("exports"))
 
@@ -347,7 +347,7 @@ def create_app() -> Flask:
         subfolder = current.get("coach_subfolder", "CS2-Coach")
         export_dir = Path(vault_path) / subfolder / "exports" if vault_path else None
         export_count = len(list(export_dir.glob("*_coach.json"))) if export_dir and export_dir.exists() else 0
-        notes_dir = Path(vault_path) / subfolder / "matches" if vault_path else None
+        notes_dir = Path(vault_path) / subfolder if vault_path else None
         notes_count = len(list(notes_dir.glob("*.md"))) if notes_dir and notes_dir.exists() else 0
         # Count pycache
         project_root = Path(__file__).parent.parent.parent
@@ -415,7 +415,7 @@ def create_app() -> Flask:
             flash("Kein Vault-Pfad konfiguriert.", "error")
             return redirect(url_for("settings"))
         removed = 0
-        notes_dir = Path(vault_path) / subfolder / "matches"
+        notes_dir = Path(vault_path) / subfolder
         if notes_dir.exists():
             for f in notes_dir.glob("*.md"):
                 f.unlink()
