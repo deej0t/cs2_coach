@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Achievements{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Achievements</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Deine Meilensteine und Auszeichnungen — spiel, analysiere, und schalte sie frei.
+</p>
+
+<style>
+    .ach-hero {
+        display: flex; align-items: center; gap: var(--space-5);
+        padding: var(--space-5); margin-bottom: var(--space-5);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(135deg, rgba(145,132,217,0.08), rgba(99,102,241,0.05));
+        border: 1px solid rgba(145,132,217,0.2);
+    }
+    .ach-ring-wrap { position: relative; flex-shrink: 0; }
+    .ach-ring-text {
+        position: absolute; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+    }
+    .ach-ring-val { font-family: var(--font-heading); font-size: 28px; font-weight: 700; line-height: 1; }
+    .ach-ring-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); margin-top: 2px; }
+    .ach-hero-info { flex: 1; }
+    .ach-hero-info h3 { margin: 0 0 6px; font-size: 18px; }
+    .ach-hero-info p { margin: 0; font-size: 13px; color: var(--color-neutral-400); }
+    .ach-pts { font-family: var(--font-heading); font-size: 22px; font-weight: 700; color: var(--color-accent); }
+    .ach-pts-label { font-size: 11px; color: var(--color-neutral-500); }
+
+    .ach-stats { display: flex; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-5); }
+    .ach-stat-card {
+        flex: 1; min-width: 100px; text-align: center;
+        padding: 10px; border-radius: var(--radius-md);
+        background: var(--color-surface); box-shadow: var(--shadow-sm);
+    }
+    .ach-stat-val { font-family: var(--font-heading); font-size: 22px; font-weight: 700; line-height: 1; }
+    .ach-stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .ach-filter { display: flex; gap: 4px; margin-bottom: var(--space-4); flex-wrap: wrap; }
+    .ach-filter-btn {
+        padding: 5px 14px; border-radius: 20px; cursor: pointer;
+        font-size: 12px; border: 1px solid var(--color-divider);
+        background: transparent; color: var(--color-neutral-400);
+        font-family: var(--font-body); transition: all 0.15s;
+        display: flex; align-items: center; gap: 5px;
+    }
+    .ach-filter-btn:hover { border-color: var(--color-neutral-600); color: var(--color-text); }
+    .ach-filter-btn.active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(145,132,217,0.1); }
+
+    .ach-section-title {
+        font-size: 14px; font-weight: 600; margin-bottom: var(--space-3);
+        display: flex; align-items: center; gap: 6px;
+        color: var(--color-neutral-300);
+    }
+
+    .ach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-5); }
+
+    .ach-card {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px; border-radius: var(--radius-md);
+        background: var(--color-surface); box-shadow: var(--shadow-sm);
+        transition: transform 0.15s, box-shadow 0.15s;
+        position: relative; overflow: hidden;
+    }
+    .ach-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .ach-card.locked { opacity: 0.45; }
+    .ach-card.locked:hover { opacity: 0.6; }
+
+    .ach-icon {
+        width: 44px; height: 44px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; font-size: 18px;
+    }
+    .ach-icon i { width: 20px; height: 20px; }
+
+    .ach-details { flex: 1; min-width: 0; }
+    .ach-name { font-size: 14px; font-weight: 600; line-height: 1.2; }
+    .ach-desc { font-size: 11px; color: var(--color-neutral-500); margin-top: 2px; }
+
+    .ach-tier {
+        font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+        padding: 2px 8px; border-radius: 10px; flex-shrink: 0;
+    }
+    .ach-pts-badge {
+        font-size: 10px; font-weight: 600; color: var(--color-accent);
+        position: absolute; top: 8px; right: 10px;
+    }
+
+    .ach-glow {
+        position: absolute; top: -20px; right: -20px; width: 60px; height: 60px;
+        border-radius: 50%; filter: blur(20px); opacity: 0.15; pointer-events: none;
+    }
+
+    .ach-progress-wrap { margin-bottom: var(--space-5); }
+    .ach-progress-item {
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 0; font-size: 13px;
+    }
+    .ach-progress-label { width: 160px; color: var(--color-neutral-400); font-size: 12px; }
+    .ach-progress-bar {
+        flex: 1; height: 8px; border-radius: 4px;
+        background: var(--color-neutral-800); overflow: hidden;
+    }
+    .ach-progress-fill {
+        height: 100%; border-radius: 4px;
+        background: linear-gradient(90deg, var(--color-accent), #4ade80);
+        transition: width 0.3s;
+    }
+    .ach-progress-val { width: 60px; text-align: right; font-size: 12px; font-weight: 600; }
+</style>
+
+{% if not ach.unlocked and not ach.locked %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Daten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- Hero card -->
+<div class="ach-hero">
+    <div class="ach-ring-wrap">
+        <svg width="110" height="110" viewBox="0 0 110 110">
+            <circle cx="55" cy="55" r="48" fill="none" stroke="var(--color-neutral-800)" stroke-width="7"/>
+            <circle cx="55" cy="55" r="48" fill="none" stroke="var(--color-accent)" stroke-width="7"
+                    stroke-dasharray="{{ (ach.earned / ach.total * 301.6)|round(1) }} 301.6"
+                    stroke-linecap="round" transform="rotate(-90 55 55)"
+                    style="transition: stroke-dasharray 0.6s;"/>
+        </svg>
+        <div class="ach-ring-text">
+            <div class="ach-ring-val">{{ ach.earned }}</div>
+            <div class="ach-ring-label">von {{ ach.total }}</div>
+        </div>
+    </div>
+    <div class="ach-hero-info">
+        <h3>
+            {% if ach.earned == ach.total %}Alle freigeschaltet!
+            {% elif ach.earned >= ach.total * 0.75 %}Fast komplett!
+            {% elif ach.earned >= ach.total * 0.5 %}Auf gutem Weg
+            {% elif ach.earned >= ach.total * 0.25 %}Guter Start
+            {% else %}Am Anfang
+            {% endif %}
+        </h3>
+        <p>{{ ach.earned }} von {{ ach.total }} Achievements freigeschaltet</p>
+        <div style="margin-top: 8px;">
+            <span class="ach-pts">{{ ach.points }}</span>
+            <span class="ach-pts-label"> / {{ ach.max_points }} Punkte</span>
+        </div>
+    </div>
+</div>
+
+<!-- Quick stats -->
+<div class="ach-stats">
+    <div class="ach-stat-card">
+        <div class="ach-stat-val">{{ ach.stats.matches }}</div>
+        <div class="ach-stat-lbl">Matches</div>
+    </div>
+    <div class="ach-stat-card">
+        <div class="ach-stat-val">{{ ach.stats.kills }}</div>
+        <div class="ach-stat-lbl">Total Kills</div>
+    </div>
+    <div class="ach-stat-card">
+        <div class="ach-stat-val">{{ ach.stats.clutch_wins }}</div>
+        <div class="ach-stat-lbl">Clutch Wins</div>
+    </div>
+    <div class="ach-stat-card">
+        <div class="ach-stat-val">{{ ach.stats.best_streak }}</div>
+        <div class="ach-stat-lbl">Beste Serie</div>
+    </div>
+    <div class="ach-stat-card">
+        <div class="ach-stat-val">{{ ach.stats.maps }}</div>
+        <div class="ach-stat-lbl">Maps</div>
+    </div>
+    <div class="ach-stat-card">
+        <div class="ach-stat-val">{{ ach.stats.multikills_3k + ach.stats.multikills_4k + ach.stats.multikills_5k }}</div>
+        <div class="ach-stat-lbl">3K+ Runden</div>
+    </div>
+</div>
+
+<!-- Filter buttons -->
+<div class="ach-filter">
+    <button class="ach-filter-btn active" onclick="filterAch('all')">Alle</button>
+    <button class="ach-filter-btn" onclick="filterAch('unlocked')"><i data-lucide="trophy" style="width:12px;height:12px;"></i> Freigeschaltet ({{ ach.earned }})</button>
+    <button class="ach-filter-btn" onclick="filterAch('locked')"><i data-lucide="lock" style="width:12px;height:12px;"></i> Gesperrt ({{ ach.total - ach.earned }})</button>
+    {% for cat_name, cat_icon in ach.categories.items() %}
+    <button class="ach-filter-btn" onclick="filterAch('cat', '{{ cat_name }}')"><i data-lucide="{{ cat_icon }}" style="width:12px;height:12px;"></i> {{ cat_name }}</button>
+    {% endfor %}
+</div>
+
+<!-- Unlocked achievements -->
+<div id="ach-unlocked-section">
+    <div class="ach-section-title"><i data-lucide="trophy" style="width:16px;height:16px;color:var(--color-accent);"></i> Freigeschaltet</div>
+    <div class="ach-grid" id="ach-unlocked">
+        {% for a in ach.unlocked %}
+        <div class="ach-card" data-cat="{{ a.cat }}" data-status="unlocked">
+            <div class="ach-glow" style="background: {{ a.tier_style.color }};"></div>
+            <div class="ach-icon" style="background: {{ a.tier_style.bg }}; border: 1px solid {{ a.tier_style.border }};">
+                <i data-lucide="{{ ach.categories[a.cat] }}" style="color: {{ a.tier_style.color }};"></i>
+            </div>
+            <div class="ach-details">
+                <div class="ach-name">{{ a.name }}</div>
+                <div class="ach-desc">{{ a.desc }}</div>
+            </div>
+            <span class="ach-tier" style="background: {{ a.tier_style.bg }}; color: {{ a.tier_style.color }}; border: 1px solid {{ a.tier_style.border }};">{{ a.tier }}</span>
+            <span class="ach-pts-badge">+{{ a.pts }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Locked achievements -->
+<div id="ach-locked-section">
+    <div class="ach-section-title"><i data-lucide="lock" style="width:16px;height:16px;color:var(--color-neutral-600);"></i> Noch nicht freigeschaltet</div>
+    <div class="ach-grid" id="ach-locked">
+        {% for a in ach.locked %}
+        <div class="ach-card locked" data-cat="{{ a.cat }}" data-status="locked">
+            <div class="ach-icon" style="background: var(--color-neutral-800); border: 1px solid var(--color-neutral-700);">
+                <i data-lucide="{{ ach.categories[a.cat] }}" style="color: var(--color-neutral-600);"></i>
+            </div>
+            <div class="ach-details">
+                <div class="ach-name">{{ a.name }}</div>
+                <div class="ach-desc">{{ a.desc }}</div>
+            </div>
+            <span class="ach-tier" style="background: var(--color-neutral-800); color: var(--color-neutral-600); border: 1px solid var(--color-neutral-700);">{{ a.tier }}</span>
+            <span class="ach-pts-badge" style="color: var(--color-neutral-600);">+{{ a.pts }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Next milestones progress -->
+<div class="card elev-sm" style="padding: var(--space-4); margin-top: var(--space-5);">
+    <div class="card-kicker" style="margin-bottom: var(--space-3);">Naechste Meilensteine</div>
+    <div class="ach-progress-wrap">
+        {% set progress_items = [
+            ("Matches", ach.stats.matches, [5, 10, 25, 50, 100]),
+            ("Kills", ach.stats.kills, [100, 500, 1000]),
+            ("Clutch Wins", ach.stats.clutch_wins, [1, 5, 10, 25]),
+            ("Win-Streak", ach.stats.best_streak, [3, 5, 10]),
+            ("Maps", ach.stats.maps, [5, 7]),
+        ] %}
+        {% for label, current, targets in progress_items %}
+            {% set next_target = namespace(val=targets[-1]) %}
+            {% for t in targets %}
+                {% if current < t and next_target.val >= t %}
+                    {% set next_target.val = t %}
+                {% endif %}
+            {% endfor %}
+            {% if current < next_target.val %}
+        <div class="ach-progress-item">
+            <div class="ach-progress-label">{{ label }}</div>
+            <div class="ach-progress-bar">
+                <div class="ach-progress-fill" style="width: {{ (current / next_target.val * 100)|round(1) }}%;"></div>
+            </div>
+            <div class="ach-progress-val">{{ current }}/{{ next_target.val }}</div>
+        </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterAch(mode, cat) {
+    var cards = document.querySelectorAll('.ach-card');
+    var unlockedSection = document.getElementById('ach-unlocked-section');
+    var lockedSection = document.getElementById('ach-locked-section');
+
+    // Reset visibility
+    unlockedSection.style.display = '';
+    lockedSection.style.display = '';
+
+    cards.forEach(function(card) {
+        var show = true;
+        if (mode === 'unlocked') {
+            show = card.dataset.status === 'unlocked';
+            lockedSection.style.display = 'none';
+        } else if (mode === 'locked') {
+            show = card.dataset.status === 'locked';
+            unlockedSection.style.display = 'none';
+        } else if (mode === 'cat') {
+            show = card.dataset.cat === cat;
+        }
+        card.style.display = show ? '' : 'none';
+    });
+
+    // Update active filter button
+    document.querySelectorAll('.ach-filter-btn').forEach(function(btn) {
+        btn.classList.remove('active');
+    });
+    event.target.closest('.ach-filter-btn').classList.add('active');
+
+    lucide.createIcons();
+}
+</script>
+{% endblock %}

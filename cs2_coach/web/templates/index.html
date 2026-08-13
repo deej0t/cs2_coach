@@ -93,6 +93,10 @@
         display: flex; align-items: center; justify-content: center;
         font-size: 18px; font-weight: 700; color: #fff; letter-spacing: 0.02em;
         box-shadow: 0 4px 16px rgba(145,132,217,0.3);
+        overflow: hidden;
+    }
+    .hero-avatar img {
+        width: 100%; height: 100%; object-fit: cover;
     }
     .hero-info { flex: 1; }
     .hero-meta { display: flex; gap: var(--space-4); font-size: 12px; color: var(--color-neutral-500); margin-top: 2px; }
@@ -160,7 +164,9 @@
 
 <!-- ── Hero Banner ── -->
 <div class="hero-banner">
-    <div class="hero-avatar">{{ config.get('player_name', 'CS')[:2]|upper }}</div>
+    <div class="hero-avatar">
+        {% if steam_avatar_url %}<img src="{{ steam_avatar_url }}" alt="Avatar">{% else %}{{ config.get('player_name', 'CS')[:2]|upper }}{% endif %}
+    </div>
     <div class="hero-info">
         <h2 style="margin:0;font-size:24px;">{{ config.get('player_name', 'Spieler') }}</h2>
         <div class="hero-meta">

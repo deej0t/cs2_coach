@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Map-Veto{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Map-Analyse & Veto-Helper</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Deine Performance pro Map — mit Pick/Ban-Empfehlungen fuer den Veto-Prozess.
+</p>
+
+<style>
+    .mv-veto-bar {
+        display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap;
+    }
+    .mv-veto-card {
+        flex: 1; min-width: 200px; padding: var(--space-4);
+        border-radius: var(--radius-md); text-align: center;
+    }
+    .mv-pick { background: rgba(74,222,128,0.06); border: 1px solid rgba(74,222,128,0.2); }
+    .mv-ban { background: rgba(248,113,113,0.06); border: 1px solid rgba(248,113,113,0.2); }
+    .mv-veto-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 6px; }
+    .mv-veto-maps { font-size: 15px; font-weight: 600; }
+
+    .mv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+
+    .mv-card {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        background: var(--color-surface); box-shadow: var(--shadow-sm);
+        border-left: 4px solid var(--color-neutral-700);
+        transition: transform 0.15s;
+    }
+    .mv-card:hover { transform: translateY(-2px); }
+    .mv-card.pick { border-left-color: #4ade80; }
+    .mv-card.ban { border-left-color: #f87171; }
+    .mv-card.neutral { border-left-color: #fbbf24; }
+
+    .mv-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .mv-map-name { font-size: 18px; font-weight: 700; font-family: var(--font-heading); }
+    .mv-rec {
+        font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 10px;
+        text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .mv-rec-pick { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .mv-rec-ban { background: rgba(248,113,113,0.15); color: #f87171; }
+    .mv-rec-neutral { background: rgba(251,191,36,0.15); color: #fbbf24; }
+
+    .mv-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+    .mv-stat { text-align: center; }
+    .mv-stat-val { font-family: var(--font-heading); font-size: 18px; font-weight: 700; line-height: 1; }
+    .mv-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); margin-top: 2px; }
+
+    .mv-wr-bar {
+        height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;
+        background: var(--color-neutral-800); position: relative;
+    }
+    .mv-wr-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
+    .mv-wr-info { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-neutral-500); margin-bottom: 10px; }
+
+    .mv-sides { display: flex; gap: 8px; margin-bottom: 8px; }
+    .mv-side {
+        flex: 1; text-align: center; padding: 6px; border-radius: var(--radius-sm);
+        font-size: 12px;
+    }
+    .mv-side-ct { background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.15); }
+    .mv-side-t { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.15); }
+    .mv-side-label { font-size: 9px; text-transform: uppercase; color: var(--color-neutral-500); }
+    .mv-side-val { font-weight: 600; font-size: 14px; }
+
+    .mv-recent { display: flex; gap: 3px; }
+    .mv-recent-dot {
+        width: 10px; height: 10px; border-radius: 50%;
+    }
+    .mv-dot-w { background: var(--color-green); }
+    .mv-dot-l { background: var(--color-red); }
+    .mv-dot-d { background: var(--color-yellow); }
+
+    .mv-rec-text { font-size: 12px; color: var(--color-neutral-400); margin-top: 8px; font-style: italic; }
+</style>
+
+{% if not veto.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Map-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- Quick veto recommendation -->
+<div class="mv-veto-bar">
+    <div class="mv-veto-card mv-pick">
+        <div class="mv-veto-label" style="color: #4ade80;">Pick</div>
+        <div class="mv-veto-maps" style="color: #4ade80;">
+            {% if veto.picks %}
+                {% for p in veto.picks %}{{ p.map }}{% if not loop.last %}, {% endif %}{% endfor %}
+            {% else %}
+                Keine klaren Picks
+            {% endif %}
+        </div>
+    </div>
+    <div class="mv-veto-card mv-ban">
+        <div class="mv-veto-label" style="color: #f87171;">Ban</div>
+        <div class="mv-veto-maps" style="color: #f87171;">
+            {% if veto.bans %}
+                {% for b in veto.bans %}{{ b.map }}{% if not loop.last %}, {% endif %}{% endfor %}
+            {% else %}
+                Keine klaren Bans
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Map cards -->
+<div class="mv-grid">
+{% for m in veto.maps %}
+<div class="mv-card {{ m.rec_type }}">
+    <div class="mv-head">
+        <div class="mv-map-name">{{ m.map }}</div>
+        <span class="mv-rec mv-rec-{{ m.rec_type }}">{{ m.rec_type|upper }}</span>
+    </div>
+
+    <!-- Win rate bar -->
+    <div class="mv-wr-bar">
+        <div class="mv-wr-fill" style="width: {{ m.win_rate }}%; background: {% if m.win_rate >= 55 %}linear-gradient(90deg, #4ade80, #22c55e){% elif m.win_rate >= 45 %}linear-gradient(90deg, #fbbf24, #f59e0b){% else %}linear-gradient(90deg, #f87171, #ef4444){% endif %};"></div>
+    </div>
+    <div class="mv-wr-info">
+        <span>{{ m.wins }}W / {{ m.losses }}L{% if m.draws > 0 %} / {{ m.draws }}D{% endif %}</span>
+        <span class="{% if m.win_rate >= 55 %}win{% elif m.win_rate < 45 %}loss{% else %}draw{% endif %}" style="font-weight:600;">{{ m.win_rate }}%</span>
+    </div>
+
+    <!-- Key stats -->
+    <div class="mv-stats">
+        <div class="mv-stat">
+            <div class="mv-stat-val {% if m.avg_rating >= 1.0 %}win{% elif m.avg_rating < 0.85 %}loss{% endif %}">{{ m.avg_rating }}</div>
+            <div class="mv-stat-lbl">Rating</div>
+        </div>
+        <div class="mv-stat">
+            <div class="mv-stat-val {% if m.avg_kd >= 1.2 %}win{% elif m.avg_kd < 0.9 %}loss{% endif %}">{{ m.avg_kd }}</div>
+            <div class="mv-stat-lbl">K/D</div>
+        </div>
+        <div class="mv-stat">
+            <div class="mv-stat-val">{{ m.avg_adr }}</div>
+            <div class="mv-stat-lbl">ADR</div>
+        </div>
+    </div>
+
+    <!-- Side split -->
+    <div class="mv-sides">
+        <div class="mv-side mv-side-ct">
+            <div class="mv-side-label">CT</div>
+            <div class="mv-side-val {% if m.ct_kd >= 1.2 %}win{% elif m.ct_kd < 0.9 %}loss{% endif %}">{{ m.ct_kd }}</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);">{{ m.ct_kills }}K/{{ m.ct_deaths }}D</div>
+        </div>
+        <div class="mv-side mv-side-t">
+            <div class="mv-side-label">T</div>
+            <div class="mv-side-val {% if m.t_kd >= 1.2 %}win{% elif m.t_kd < 0.9 %}loss{% endif %}">{{ m.t_kd }}</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);">{{ m.t_kills }}K/{{ m.t_deaths }}D</div>
+        </div>
+    </div>
+
+    <!-- Recent form -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <div style="font-size:11px;color:var(--color-neutral-500);">Letzte {{ m.recent_total }} (Rating {{ m.recent_rating }})</div>
+        <div style="font-size:12px;font-weight:600;">{{ m.matches }} Matches</div>
+    </div>
+
+    <div class="mv-rec-text">{{ m.recommendation }}</div>
+</div>
+{% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}

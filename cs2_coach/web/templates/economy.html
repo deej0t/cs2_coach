@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Economy-IQ{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Economy-IQ</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Wie gut nutzt du dein Geld? Performance nach Kauftyp, Effizienz und Tipps.
+</p>
+
+<style>
+    .eiq-score-card {
+        display: flex; align-items: center; gap: var(--space-5);
+        padding: var(--space-5); margin-bottom: var(--space-5);
+        background: linear-gradient(135deg, rgba(145,132,217,0.10) 0%, rgba(99,102,241,0.04) 100%);
+        border: 1px solid rgba(145,132,217,0.15); border-radius: var(--radius-lg);
+    }
+    .eiq-ring {
+        width: 90px; height: 90px; position: relative; flex-shrink: 0;
+    }
+    .eiq-ring-val {
+        position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+        font-family: var(--font-heading); font-size: 28px; font-weight: 700;
+    }
+    .eiq-info { flex: 1; }
+    .eiq-info h3 { margin: 0 0 4px; font-size: 18px; }
+    .eiq-info p { margin: 0; font-size: 13px; color: var(--color-neutral-500); }
+    .eiq-meta { display: flex; gap: var(--space-4); margin-top: 8px; font-size: 12px; color: var(--color-neutral-400); }
+
+    .eiq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+    .eiq-card { padding: var(--space-4) !important; border-top: 3px solid var(--color-neutral-700); }
+    .eiq-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .eiq-card-icon {
+        width: 36px; height: 36px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .eiq-card-label { font-size: 15px; font-weight: 600; }
+    .eiq-card-desc { font-size: 11px; color: var(--color-neutral-500); }
+
+    .eiq-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .eiq-stat { text-align: center; }
+    .eiq-stat-val { font-family: var(--font-heading); font-size: 22px; font-weight: 700; line-height: 1.1; }
+    .eiq-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); margin-top: 2px; }
+
+    .eiq-wr-bar { height: 8px; border-radius: 4px; background: var(--color-neutral-800); overflow: hidden; margin: 12px 0 6px; }
+    .eiq-wr-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .eiq-wr-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-neutral-500); }
+
+    .eiq-tips { margin-bottom: var(--space-5); }
+    .eiq-tip {
+        display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+        border-radius: var(--radius-md); margin-bottom: var(--space-2); font-size: 13px;
+    }
+    .eiq-tip-positive { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.20); color: #4ade80; }
+    .eiq-tip-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.20); color: #fbbf24; }
+
+    .eiq-chart-wrap { position: relative; height: 220px; }
+    .eiq-chart-wrap canvas { position: absolute; inset: 0; }
+
+    .eiq-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+</style>
+
+{% if not eco.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Economy-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- ── Economy-IQ Score ── -->
+<div class="card elev-sm eiq-score-card">
+    <div class="eiq-ring">
+        <svg viewBox="0 0 36 36" style="width:100%;height:100%;transform:rotate(-90deg);">
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--color-neutral-800)" stroke-width="3"/>
+            <circle cx="18" cy="18" r="15.9" fill="none"
+                    stroke="{% if eco.eco_iq >= 55 %}#4ade80{% elif eco.eco_iq >= 45 %}#fbbf24{% else %}#f87171{% endif %}"
+                    stroke-width="3" stroke-dasharray="{{ eco.eco_iq }} {{ 100 - eco.eco_iq }}"
+                    stroke-linecap="round"/>
+        </svg>
+        <div class="eiq-ring-val {% if eco.eco_iq >= 55 %}win{% elif eco.eco_iq >= 45 %}draw{% else %}loss{% endif %}">{{ eco.eco_iq }}</div>
+    </div>
+    <div class="eiq-info">
+        <h3>Economy-IQ Score</h3>
+        <p>Gewichtete Win-Rate ueber alle Kauftypen — je hoeher, desto effizienter nutzt du dein Geld.</p>
+        <div class="eiq-meta">
+            <span>{{ eco.total_matches }} Matches</span>
+            <span>{{ eco.total_rounds }} Runden</span>
+            {% if eco.best_cat and eco.summary[eco.best_cat] %}
+            <span>Staerke: <span style="color:{{ eco.summary[eco.best_cat].color }};font-weight:600;">{{ eco.summary[eco.best_cat].label }}</span></span>
+            {% endif %}
+            {% if eco.worst_cat and eco.summary[eco.worst_cat] %}
+            <span>Schwaeche: <span style="color:{{ eco.summary[eco.worst_cat].color }};font-weight:600;">{{ eco.summary[eco.worst_cat].label }}</span></span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ── Category Cards ── -->
+<div class="card-kicker" style="margin-bottom: 8px;">Performance nach Kauftyp</div>
+<div class="eiq-grid">
+    {% for key in ['pistol', 'eco', 'force', 'fullbuy'] %}
+    {% if eco.summary.get(key) %}
+    {% set s = eco.summary[key] %}
+    <div class="card elev-sm eiq-card" style="border-top-color: {{ s.color }};">
+        <div class="eiq-card-head">
+            <div class="eiq-card-icon" style="background: {{ s.color }}15; color: {{ s.color }};">
+                <i data-lucide="{{ s.icon }}" style="width:18px;height:18px;"></i>
+            </div>
+            <div>
+                <div class="eiq-card-label">
+                    {{ s.label }}
+                    {% if key == eco.best_cat %}
+                    <span class="eiq-badge" style="background:rgba(74,222,128,0.15);color:#4ade80;margin-left:6px;">Staerke</span>
+                    {% elif key == eco.worst_cat %}
+                    <span class="eiq-badge" style="background:rgba(248,113,113,0.15);color:#f87171;margin-left:6px;">Schwaeche</span>
+                    {% endif %}
+                </div>
+                <div class="eiq-card-desc">{{ s.desc }}</div>
+            </div>
+        </div>
+
+        <div class="eiq-stat-grid">
+            <div class="eiq-stat">
+                <div class="eiq-stat-val {% if s.win_rate >= 55 %}win{% elif s.win_rate >= 45 %}draw{% else %}loss{% endif %}">{{ s.win_rate }}%</div>
+                <div class="eiq-stat-label">Win-Rate</div>
+            </div>
+            <div class="eiq-stat">
+                <div class="eiq-stat-val {% if s.kd >= 1.2 %}win{% elif s.kd >= 0.9 %}draw{% else %}loss{% endif %}">{{ s.kd }}</div>
+                <div class="eiq-stat-label">K/D</div>
+            </div>
+            <div class="eiq-stat">
+                <div class="eiq-stat-val">{{ s.adr }}</div>
+                <div class="eiq-stat-label">ADR</div>
+            </div>
+            <div class="eiq-stat">
+                <div class="eiq-stat-val">{{ s.total_rounds }}</div>
+                <div class="eiq-stat-label">Runden</div>
+            </div>
+        </div>
+
+        <div class="eiq-wr-bar">
+            <div class="eiq-wr-fill" style="width: {{ s.win_rate }}%; background: {{ s.color }};"></div>
+        </div>
+        <div class="eiq-wr-meta">
+            <span>{{ s.rounds_won }}W / {{ s.rounds_lost }}L</span>
+            <span>{{ s.total_kills }}K / {{ s.total_deaths }}D</span>
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+
+<!-- ── Tips ── -->
+{% if eco.tips %}
+<div class="card-kicker" style="margin-bottom: 8px;">Empfehlungen</div>
+<div class="eiq-tips">
+    {% for tip in eco.tips %}
+    <div class="eiq-tip eiq-tip-{{ tip.type }}">
+        <i data-lucide="{% if tip.type == 'positive' %}check-circle{% else %}alert-triangle{% endif %}" style="width:16px;height:16px;flex-shrink:0;"></i>
+        <span>{{ tip.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── Win-Rate Trend Chart ── -->
+{% if eco.trend|length >= 3 %}
+<div class="card-kicker" style="margin-bottom: 8px;">Win-Rate Trend nach Kauftyp <span style="color:var(--color-neutral-600);font-size:10px;">(letzte {{ eco.trend|length }} Matches)</span></div>
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
+    <div class="eiq-chart-wrap">
+        <canvas id="eiq-trend"></canvas>
+    </div>
+</div>
+{% endif %}
+
+<!-- ── Round Distribution ── -->
+<div class="card-kicker" style="margin-bottom: 8px;">Rundenverteilung</div>
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
+    <div style="display:flex;gap:4px;height:28px;border-radius:4px;overflow:hidden;">
+        {% set total = eco.total_rounds %}
+        {% for key in ['pistol', 'eco', 'force', 'fullbuy'] %}
+        {% if eco.summary.get(key) %}
+        {% set s = eco.summary[key] %}
+        {% set pct = (s.total_rounds / total * 100)|round(1) %}
+        <div style="width:{{ pct }}%;background:{{ s.color }};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#000;min-width:30px;"
+             title="{{ s.label }}: {{ s.total_rounds }} Runden ({{ pct }}%)">
+            {{ pct }}%
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    <div style="display:flex;gap:var(--space-4);margin-top:8px;font-size:11px;color:var(--color-neutral-500);flex-wrap:wrap;">
+        {% for key in ['pistol', 'eco', 'force', 'fullbuy'] %}
+        {% if eco.summary.get(key) %}
+        {% set s = eco.summary[key] %}
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ s.color }};margin-right:4px;"></span>{{ s.label }} ({{ s.total_rounds }})</span>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if eco.has_data and eco.trend|length >= 3 %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var trend = {{ eco.trend | tojson }};
+    var labels = trend.map(function(t) { return t.map + ' ' + (t.date || '').slice(5); });
+
+    // Compute per-match win-rate for each category using rolling window
+    var cats = ['fullbuy', 'force', 'eco', 'pistol'];
+    var colors = {'fullbuy': '#4ade80', 'force': '#fb923c', 'eco': '#f87171', 'pistol': '#fbbf24'};
+    var catLabels = {'fullbuy': 'Full-Buy', 'force': 'Force-Buy', 'eco': 'Eco', 'pistol': 'Pistol'};
+
+    var datasets = [];
+    cats.forEach(function(cat) {
+        var data = trend.map(function(t) {
+            var c = t[cat];
+            if (!c || !c.rounds) return null;
+            return c.win_rate;
+        });
+        // Only add if we have data
+        var hasData = data.some(function(d) { return d !== null; });
+        if (hasData) {
+            datasets.push({
+                label: catLabels[cat],
+                data: data,
+                borderColor: colors[cat],
+                backgroundColor: colors[cat].replace(')', ', 0.08)').replace('rgb', 'rgba'),
+                borderWidth: 2,
+                tension: 0.3,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                pointBackgroundColor: colors[cat],
+                spanGaps: true,
+            });
+        }
+    });
+
+    new Chart(document.getElementById('eiq-trend'), {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#9a9dae', font: { family: 'Inter', size: 11 }, usePointStyle: true, pointStyle: 'circle' }
+                },
+                tooltip: {
+                    backgroundColor: '#232532', borderColor: '#3f424d', borderWidth: 1,
+                    titleColor: '#e9e9ed', bodyColor: '#e9e9ed',
+                    titleFont: { family: 'Inter' }, bodyFont: { family: 'Inter' },
+                    callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y + '%'; } }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#75798c', font: { size: 9, family: 'Inter' }, maxRotation: 45, maxTicksLimit: 12 },
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                },
+                y: {
+                    min: 0, max: 100,
+                    ticks: { color: '#75798c', font: { size: 10, family: 'Inter' }, callback: function(v) { return v + '%'; } },
+                    grid: { color: 'rgba(255,255,255,0.06)' },
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Habit-Tracker{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Habit-Tracker</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Deine Gewohnheiten ueber Zeit — werden sie besser oder schlechter?
+</p>
+
+<style>
+    .ht-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+    .ht-card {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        background: var(--color-surface); box-shadow: var(--shadow-sm);
+        border-left: 3px solid var(--color-neutral-700);
+    }
+    .ht-card.improving { border-left-color: #4ade80; }
+    .ht-card.worsening { border-left-color: #f87171; }
+    .ht-card.at-target { border-left-color: var(--color-accent); }
+
+    .ht-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .ht-name { font-size: 15px; font-weight: 600; }
+    .ht-trend {
+        display: flex; align-items: center; gap: 4px;
+        font-size: 13px; font-weight: 600; padding: 2px 10px;
+        border-radius: 12px;
+    }
+    .ht-trend.up { color: #4ade80; background: rgba(74,222,128,0.1); }
+    .ht-trend.down { color: #f87171; background: rgba(248,113,113,0.1); }
+    .ht-trend.flat { color: var(--color-neutral-500); background: var(--color-neutral-800); }
+
+    .ht-values { display: flex; gap: var(--space-4); margin-bottom: 12px; }
+    .ht-val-item { text-align: center; }
+    .ht-val { font-family: var(--font-heading); font-size: 20px; font-weight: 700; line-height: 1; }
+    .ht-val-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); margin-top: 3px; }
+
+    .ht-target-bar {
+        height: 6px; border-radius: 3px; background: var(--color-neutral-800);
+        overflow: hidden; margin-bottom: 6px; position: relative;
+    }
+    .ht-target-fill {
+        height: 100%; border-radius: 3px;
+        transition: width 0.4s;
+    }
+    .ht-target-marker {
+        position: absolute; top: -3px; width: 2px; height: 12px;
+        background: var(--color-text); border-radius: 1px;
+    }
+    .ht-target-info {
+        display: flex; justify-content: space-between;
+        font-size: 11px; color: var(--color-neutral-500); margin-bottom: 10px;
+    }
+
+    .ht-chart { height: 80px; position: relative; margin-bottom: 8px; }
+    .ht-chart canvas { width: 100% !important; height: 80px !important; }
+
+    .ht-tip {
+        font-size: 12px; color: var(--color-neutral-400);
+        padding: 8px 10px; border-radius: var(--radius-sm);
+        background: rgba(145,132,217,0.06); border: 1px solid rgba(145,132,217,0.12);
+        margin-top: 8px;
+    }
+    .ht-tip strong { color: var(--color-accent); }
+
+    .ht-summary {
+        display: flex; gap: var(--space-4); margin-bottom: var(--space-5); flex-wrap: wrap;
+    }
+    .ht-summary-card {
+        flex: 1; min-width: 200px; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface);
+        box-shadow: var(--shadow-sm); text-align: center;
+    }
+    .ht-summary-val { font-family: var(--font-heading); font-size: 32px; font-weight: 700; line-height: 1; }
+    .ht-summary-lbl { font-size: 11px; color: var(--color-neutral-500); margin-top: 4px; }
+</style>
+
+{% if not habits.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Mindestens 2 Matches noetig. Analysiere mehr Demos.</p>
+</div>
+{% else %}
+
+<!-- Summary -->
+<div class="ht-summary">
+    <div class="ht-summary-card">
+        <div class="ht-summary-val win">{{ habits.habits|selectattr('improving')|list|length }}</div>
+        <div class="ht-summary-lbl">Verbessert</div>
+    </div>
+    <div class="ht-summary-card">
+        <div class="ht-summary-val loss">{{ habits.habits|selectattr('worsening')|list|length }}</div>
+        <div class="ht-summary-lbl">Verschlechtert</div>
+    </div>
+    <div class="ht-summary-card">
+        <div class="ht-summary-val" style="color:var(--color-accent);">{{ habits.habits|selectattr('at_target')|list|length }}</div>
+        <div class="ht-summary-lbl">Ziel erreicht</div>
+    </div>
+    <div class="ht-summary-card">
+        <div class="ht-summary-val">{{ habits.match_count }}</div>
+        <div class="ht-summary-lbl">Matches</div>
+    </div>
+</div>
+
+<!-- Habit cards -->
+<div class="ht-grid">
+{% for h in habits.habits %}
+<div class="ht-card {% if h.at_target %}at-target{% elif h.improving %}improving{% elif h.worsening %}worsening{% endif %}">
+    <div class="ht-head">
+        <div class="ht-name">{{ h.name }}</div>
+        {% if h.trend != 0 %}
+        <div class="ht-trend {% if h.improving %}up{% elif h.worsening %}down{% else %}flat{% endif %}">
+            {% if h.good_direction == 'up' %}
+                {% if h.trend > 0 %}&#9650;{% elif h.trend < 0 %}&#9660;{% else %}&#8212;{% endif %}
+            {% else %}
+                {% if h.trend < 0 %}&#9650;{% elif h.trend > 0 %}&#9660;{% else %}&#8212;{% endif %}
+            {% endif %}
+            {{ h.trend|abs }}{{ h.unit }}
+        </div>
+        {% else %}
+        <div class="ht-trend flat">&#8212; stabil</div>
+        {% endif %}
+    </div>
+
+    <div class="ht-values">
+        <div class="ht-val-item">
+            <div class="ht-val {% if h.at_target %}win{% elif h.worsening %}loss{% endif %}">{{ h.current }}{{ h.unit }}</div>
+            <div class="ht-val-label">Aktuell</div>
+        </div>
+        <div class="ht-val-item">
+            <div class="ht-val">{{ h.avg }}{{ h.unit }}</div>
+            <div class="ht-val-label">Durchschnitt</div>
+        </div>
+        <div class="ht-val-item">
+            <div class="ht-val">{{ h.avg_last5 }}{{ h.unit }}</div>
+            <div class="ht-val-label">Letzte 5</div>
+        </div>
+        <div class="ht-val-item">
+            <div class="ht-val" style="color:var(--color-neutral-400);">{{ h.target }}{{ h.unit }}</div>
+            <div class="ht-val-label">Ziel</div>
+        </div>
+    </div>
+
+    <!-- Target progress bar -->
+    {% if h.good_direction == 'up' %}
+        {% set pct = (h.current / h.target * 100) if h.target > 0 else 0 %}
+        {% set target_pct = 100 %}
+    {% else %}
+        {% set pct = ((h.target * 2 - h.current) / (h.target * 2) * 100) if h.target > 0 else 0 %}
+        {% set target_pct = 50 %}
+    {% endif %}
+    <div class="ht-target-bar">
+        <div class="ht-target-fill" style="width: {{ [pct, 100]|min }}%; background: {% if h.at_target %}linear-gradient(90deg, var(--color-accent), #4ade80){% elif h.worsening %}linear-gradient(90deg, #f87171, #fb923c){% else %}linear-gradient(90deg, var(--color-accent), var(--color-accent-2)){% endif %};"></div>
+        {% if h.good_direction == 'up' %}
+        <div class="ht-target-marker" style="left: {{ target_pct }}%;" title="Ziel: {{ h.target }}{{ h.unit }}"></div>
+        {% endif %}
+    </div>
+    <div class="ht-target-info">
+        <span>{% if h.at_target %}Ziel erreicht{% else %}{{ h.current }}{{ h.unit }} von {{ h.target }}{{ h.unit }}{% endif %}</span>
+        <span>Ziel: {{ h.target }}{{ h.unit }}</span>
+    </div>
+
+    <!-- Sparkline chart -->
+    <div class="ht-chart">
+        <canvas id="chart-{{ h.id }}"></canvas>
+    </div>
+
+    <div class="ht-tip"><strong>Tipp:</strong> {{ h.tip }}</div>
+</div>
+{% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if habits.has_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+{% for h in habits.habits %}
+(function() {
+    var ctx = document.getElementById('chart-{{ h.id }}').getContext('2d');
+    var data = {{ h.data_points|tojson }};
+    var labels = {{ h.labels|tojson }};
+    var target = {{ h.target }};
+    var goodDir = '{{ h.good_direction }}';
+
+    // Compute gradient color based on direction
+    var grad = ctx.createLinearGradient(0, 0, 0, 80);
+    grad.addColorStop(0, 'rgba(145,132,217,0.25)');
+    grad.addColorStop(1, 'rgba(145,132,217,0.0)');
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    data: data,
+                    borderColor: '#9184d9',
+                    borderWidth: 2,
+                    backgroundColor: grad,
+                    fill: true,
+                    tension: 0.35,
+                    pointRadius: 2,
+                    pointHoverRadius: 5,
+                    pointBackgroundColor: '#9184d9',
+                },
+                {
+                    data: Array(data.length).fill(target),
+                    borderColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    borderDash: [4, 4],
+                    pointRadius: 0,
+                    fill: false,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(41,43,49,0.95)',
+                    titleColor: '#e9e9ed',
+                    bodyColor: '#e9e9ed',
+                    borderColor: 'rgba(145,132,217,0.3)',
+                    borderWidth: 1,
+                    titleFont: { size: 11 },
+                    bodyFont: { size: 12, weight: 'bold' },
+                    padding: 8,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(ctx) {
+                            if (ctx.datasetIndex === 1) return 'Ziel: ' + target;
+                            return ctx.parsed.y + '{{ h.unit }}';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { display: false },
+                y: {
+                    display: false,
+                    beginAtZero: false,
+                }
+            },
+            interaction: { mode: 'index', intersect: false },
+        }
+    });
+})();
+{% endfor %}
+</script>
+{% endif %}
+{% endblock %}

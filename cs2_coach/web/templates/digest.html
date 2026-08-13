@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Digest{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Wochen- & Monats-Digest</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Automatische Zusammenfassungen deiner Performance — exportierbar als Obsidian-Notiz.
+</p>
+
+<style>
+    .dg-tabs { display: flex; gap: 4px; margin-bottom: var(--space-4); }
+    .dg-tab {
+        padding: 6px 16px; border-radius: 20px; cursor: pointer;
+        font-size: 12px; border: 1px solid var(--color-divider);
+        background: transparent; color: var(--color-neutral-400);
+        font-family: var(--font-body); transition: all 0.15s;
+    }
+    .dg-tab:hover { border-color: var(--color-neutral-600); color: var(--color-text); }
+    .dg-tab.active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(145,132,217,0.1); }
+
+    .dg-card { padding: var(--space-4) !important; margin-bottom: var(--space-4); border-left: 3px solid var(--color-neutral-700); }
+    .dg-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .dg-card-title { font-size: 16px; font-weight: 600; }
+    .dg-card-badge { font-size: 11px; padding: 3px 10px; border-radius: 10px; font-weight: 600; }
+
+    .dg-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .dg-stat { text-align: center; }
+    .dg-stat-val { font-family: var(--font-heading); font-size: 20px; font-weight: 700; line-height: 1.1; }
+    .dg-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); margin-top: 2px; }
+
+    .dg-maps { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .dg-map-pill {
+        font-size: 11px; padding: 3px 10px; border-radius: 12px;
+        background: var(--color-neutral-800); color: var(--color-neutral-300);
+    }
+
+    .dg-highlights { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-bottom: 10px; }
+    .dg-hl { padding: 10px; border-radius: var(--radius-sm); font-size: 12px; }
+    .dg-hl-best { background: rgba(74,222,128,0.06); border: 1px solid rgba(74,222,128,0.15); }
+    .dg-hl-worst { background: rgba(248,113,113,0.06); border: 1px solid rgba(248,113,113,0.15); }
+    .dg-hl-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); margin-bottom: 4px; }
+    .dg-hl-val { font-weight: 600; font-size: 13px; }
+
+    .dg-wl { display: flex; gap: 4px; margin-bottom: 10px; }
+    .dg-wl-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dg-wl-dot.w { background: var(--color-green); }
+    .dg-wl-dot.l { background: var(--color-red); }
+    .dg-wl-dot.d { background: var(--color-yellow); }
+
+    .dg-trend { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+    .dg-trend.up { color: var(--color-green); }
+    .dg-trend.down { color: var(--color-red); }
+    .dg-trend.flat { color: var(--color-neutral-500); }
+
+    .dg-actions { display: flex; gap: var(--space-2); align-items: center; }
+</style>
+
+{% if not digest.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Daten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- ── Tabs ── -->
+<div class="dg-tabs">
+    <button class="dg-tab active" onclick="showTab('monthly')">Monatlich</button>
+    <button class="dg-tab" onclick="showTab('weekly')">Woechentlich</button>
+</div>
+
+<!-- ── Monthly Digests ── -->
+<div id="tab-monthly">
+{% for p in digest.periods %}
+<div class="card elev-sm dg-card" style="border-left-color: {% if p.win_rate >= 55 %}#4ade80{% elif p.win_rate >= 45 %}#fbbf24{% else %}#f87171{% endif %};">
+    <div class="dg-card-head">
+        <div>
+            <div class="dg-card-title">{{ p.label }}</div>
+            <div style="font-size:12px;color:var(--color-neutral-500);margin-top:2px;">{{ p.matches }} Matches</div>
+        </div>
+        <div class="dg-actions">
+            <div class="dg-trend {% if p.trend_rating > 0.05 %}up{% elif p.trend_rating < -0.05 %}down{% else %}flat{% endif %}">
+                {% if p.trend_rating > 0.05 %}&#9650;{% elif p.trend_rating < -0.05 %}&#9660;{% else %}&#8212;{% endif %}
+                {{ p.trend_rating|abs }}
+            </div>
+            <form method="post" action="{{ url_for('digest_export') }}" style="margin:0;">
+                <input type="hidden" name="period" value="{{ p.key }}">
+                <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" title="Als Obsidian-Notiz exportieren">
+                    <i data-lucide="file-down" style="width:14px;height:14px;"></i> Export
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- W/L dots -->
+    <div class="dg-wl">
+        {% for m in p.match_list %}
+        <div class="dg-wl-dot {% if m.result == 'Sieg' %}w{% elif m.result == 'Niederlage' %}l{% else %}d{% endif %}"
+             title="{{ m.map }} {{ m.score }} ({{ m.date }})"></div>
+        {% endfor %}
+    </div>
+
+    <!-- Stats -->
+    <div class="dg-stats">
+        <div class="dg-stat">
+            <div class="dg-stat-val {% if p.win_rate >= 55 %}win{% elif p.win_rate >= 45 %}draw{% else %}loss{% endif %}">{{ p.win_rate }}%</div>
+            <div class="dg-stat-label">Win-Rate</div>
+        </div>
+        <div class="dg-stat">
+            <div class="dg-stat-val {% if p.avg_rating >= 1.1 %}win{% elif p.avg_rating >= 0.9 %}draw{% else %}loss{% endif %}">{{ p.avg_rating }}</div>
+            <div class="dg-stat-label">Rating</div>
+        </div>
+        <div class="dg-stat">
+            <div class="dg-stat-val {% if p.avg_kd >= 1.2 %}win{% elif p.avg_kd >= 0.9 %}draw{% else %}loss{% endif %}">{{ p.avg_kd }}</div>
+            <div class="dg-stat-label">K/D</div>
+        </div>
+        <div class="dg-stat">
+            <div class="dg-stat-val">{{ p.avg_adr }}</div>
+            <div class="dg-stat-label">ADR</div>
+        </div>
+        <div class="dg-stat">
+            <div class="dg-stat-val">{{ p.avg_hs }}%</div>
+            <div class="dg-stat-label">HS%</div>
+        </div>
+        <div class="dg-stat">
+            <div class="dg-stat-val">{{ p.avg_kast }}%</div>
+            <div class="dg-stat-label">KAST%</div>
+        </div>
+        <div class="dg-stat">
+            <div class="dg-stat-val">{{ p.total_kills }}</div>
+            <div class="dg-stat-label">Kills</div>
+        </div>
+        <div class="dg-stat">
+            <div class="dg-stat-val">{{ p.wins }}W/{{ p.losses }}L</div>
+            <div class="dg-stat-label">Bilanz</div>
+        </div>
+    </div>
+
+    <!-- Maps -->
+    <div class="dg-maps">
+        {% for m in p.maps %}
+        <span class="dg-map-pill">{{ m.name }} ({{ m.count }}x)</span>
+        {% endfor %}
+    </div>
+
+    <!-- Highlights -->
+    <div class="dg-highlights">
+        <div class="dg-hl dg-hl-best">
+            <div class="dg-hl-label">Bestes Match</div>
+            <div class="dg-hl-val" style="color:#4ade80;">{{ p.best.map }} ({{ p.best.score }}) — {{ p.best.rating }}</div>
+        </div>
+        <div class="dg-hl dg-hl-worst">
+            <div class="dg-hl-label">Schlechtestes Match</div>
+            <div class="dg-hl-val" style="color:#f87171;">{{ p.worst.map }} ({{ p.worst.score }}) — {{ p.worst.rating }}</div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+
+<!-- ── Weekly Digests ── -->
+<div id="tab-weekly" style="display:none;">
+{% for p in digest.weekly %}
+<div class="card elev-sm dg-card" style="border-left-color: {% if p.win_rate >= 55 %}#4ade80{% elif p.win_rate >= 45 %}#fbbf24{% else %}#f87171{% endif %};">
+    <div class="dg-card-head">
+        <div>
+            <div class="dg-card-title">{{ p.label }}</div>
+            <div style="font-size:12px;color:var(--color-neutral-500);margin-top:2px;">{{ p.matches }} Matches</div>
+        </div>
+        <div class="dg-actions">
+            <div class="dg-trend {% if p.trend_rating > 0.05 %}up{% elif p.trend_rating < -0.05 %}down{% else %}flat{% endif %}">
+                {% if p.trend_rating > 0.05 %}&#9650;{% elif p.trend_rating < -0.05 %}&#9660;{% else %}&#8212;{% endif %}
+                {{ p.trend_rating|abs }}
+            </div>
+            <form method="post" action="{{ url_for('digest_export') }}" style="margin:0;">
+                <input type="hidden" name="period" value="{{ p.key }}">
+                <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" title="Als Obsidian-Notiz exportieren">
+                    <i data-lucide="file-down" style="width:14px;height:14px;"></i> Export
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="dg-wl">
+        {% for m in p.match_list %}
+        <div class="dg-wl-dot {% if m.result == 'Sieg' %}w{% elif m.result == 'Niederlage' %}l{% else %}d{% endif %}"
+             title="{{ m.map }} {{ m.score }} ({{ m.date }})"></div>
+        {% endfor %}
+    </div>
+
+    <div class="dg-stats">
+        <div class="dg-stat">
+            <div class="dg-stat-val {% if p.win_rate >= 55 %}win{% elif p.win_rate >= 45 %}draw{% else %}loss{% endif %}">{{ p.win_rate }}%</div>
+            <div class="dg-stat-label">Win-Rate</div>
+        </div>
+        <div class="dg-stat">
+            <div class="dg-stat-val {% if p.avg_rating >= 1.1 %}win{% elif p.avg_rating >= 0.9 %}draw{% else %}loss{% endif %}">{{ p.avg_rating }}</div>
+            <div class="dg-stat-label">Rating</div>
+        </div>
+        <div class="dg-stat">
+            <div class="dg-stat-val {% if p.avg_kd >= 1.2 %}win{% elif p.avg_kd >= 0.9 %}draw{% else %}loss{% endif %}">{{ p.avg_kd }}</div>
+            <div class="dg-stat-label">K/D</div>
+        </div>
+        <div class="dg-stat">
+            <div class="dg-stat-val">{{ p.avg_adr }}</div>
+            <div class="dg-stat-label">ADR</div>
+        </div>
+        <div class="dg-stat">
+            <div class="dg-stat-val">{{ p.total_kills }}</div>
+            <div class="dg-stat-label">Kills</div>
+        </div>
+        <div class="dg-stat">
+            <div class="dg-stat-val">{{ p.wins }}W/{{ p.losses }}L</div>
+            <div class="dg-stat-label">Bilanz</div>
+        </div>
+    </div>
+
+    <div class="dg-maps">
+        {% for m in p.maps %}
+        <span class="dg-map-pill">{{ m.name }} ({{ m.count }}x)</span>
+        {% endfor %}
+    </div>
+
+    <div class="dg-highlights">
+        <div class="dg-hl dg-hl-best">
+            <div class="dg-hl-label">Bestes Match</div>
+            <div class="dg-hl-val" style="color:#4ade80;">{{ p.best.map }} ({{ p.best.score }}) — {{ p.best.rating }}</div>
+        </div>
+        <div class="dg-hl dg-hl-worst">
+            <div class="dg-hl-label">Schlechtestes Match</div>
+            <div class="dg-hl-val" style="color:#f87171;">{{ p.worst.map }} ({{ p.worst.score }}) — {{ p.worst.rating }}</div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(tab) {
+    document.getElementById('tab-monthly').style.display = tab === 'monthly' ? '' : 'none';
+    document.getElementById('tab-weekly').style.display = tab === 'weekly' ? '' : 'none';
+    document.querySelectorAll('.dg-tab').forEach(function(el) {
+        el.classList.toggle('active', el.textContent.trim().toLowerCase().indexOf(tab === 'monthly' ? 'monat' : 'woech') === 0);
+    });
+    lucide.createIcons();
+}
+</script>
+{% endblock %}

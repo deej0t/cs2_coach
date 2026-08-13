@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
+import time
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -25,6 +28,80 @@ CONFIG_PATH = Path(__file__).parent.parent.parent / "config.yaml"
 UPLOAD_FOLDER = tempfile.mkdtemp(prefix="cs2coach_")
 ALLOWED_EXTENSIONS = {".dem"}
 
+# Steam avatar cache: {steam_id: (url, timestamp)}
+_avatar_cache: dict[str, tuple[str, float]] = {}
+_AVATAR_CACHE_TTL = 3600  # 1 hour
+
+
+def _fetch_steam_avatar(steam_id: str) -> str:
+    """Fetch Steam avatar URL from community XML profile. Returns URL or empty string."""
+    if not steam_id:
+        return ""
+    # Check cache
+    if steam_id in _avatar_cache:
+        url, ts = _avatar_cache[steam_id]
+        if time.time() - ts < _AVATAR_CACHE_TTL:
+            return url
+    try:
+        req = urllib.request.Request(
+            f"https://steamcommunity.com/profiles/{steam_id}/?xml=1",
+            headers={"User-Agent": "CS2-Coach/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            xml = resp.read().decode("utf-8", errors="replace")
+        # Extract avatarFull URL
+        m = re.search(r"<avatarFull><!\[CDATA\[(.*?)\]\]></avatarFull>", xml)
+        if not m:
+            m = re.search(r"<avatarFull>(.*?)</avatarFull>", xml)
+        avatar_url = m.group(1) if m else ""
+        _avatar_cache[steam_id] = (avatar_url, time.time())
+        return avatar_url
+    except Exception:
+        return _avatar_cache.get(steam_id, ("", 0))[0]
+
+
+def _post_discord(webhook_url: str, result, cfg: dict) -> None:
+    """Post a match summary to Discord via webhook. Fire-and-forget."""
+    if not webhook_url:
+        return
+    try:
+        s = result.player_stats
+        player = cfg.get("player_name", s.name)
+        result_emoji = {"Sieg": ":green_circle:", "Niederlage": ":red_circle:"}.get(result.result_str, ":yellow_circle:")
+        kd_color = 0x4ade80 if s.kd_ratio >= 1.2 else (0xfbbf24 if s.kd_ratio >= 0.9 else 0xf87171)
+        rating_color = 0x4ade80 if result.rating >= 1.1 else (0xfbbf24 if result.rating >= 0.9 else 0xf87171)
+
+        embed = {
+            "title": f"{result_emoji} {result.result_str} — {result.map_name} {result.score_team1}:{result.score_team2}",
+            "color": 0x4ade80 if result.result_str == "Sieg" else (0xf87171 if result.result_str == "Niederlage" else 0xfbbf24),
+            "fields": [
+                {"name": "K/D", "value": f"**{s.kills}/{s.deaths}** ({s.kd_ratio:.2f})", "inline": True},
+                {"name": "Rating", "value": f"**{result.rating}**", "inline": True},
+                {"name": "ADR", "value": f"**{s.adr:.0f}**", "inline": True},
+                {"name": "HS%", "value": f"{s.hs_pct:.0f}%", "inline": True},
+                {"name": "KAST", "value": f"{s.kast_pct:.0f}%", "inline": True},
+                {"name": "Utility/R", "value": f"{s.utility_per_round:.1f}", "inline": True},
+            ],
+            "footer": {"text": f"{player} • CS2 Coach"},
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        # Add rank change if available
+        rank = getattr(s, "rank", None)
+        if rank and hasattr(rank, "change") and rank.change:
+            sign = "+" if rank.change > 0 else ""
+            embed["fields"].append({"name": "Rating Change", "value": f"{sign}{rank.change:.0f}", "inline": True})
+
+        payload = json.dumps({"embeds": [embed]}).encode("utf-8")
+        req = urllib.request.Request(
+            webhook_url,
+            data=payload,
+            headers={"Content-Type": "application/json", "User-Agent": "CS2-Coach/1.0"},
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass  # Fire-and-forget
+
 
 def load_config() -> dict:
     if CONFIG_PATH.exists():
@@ -42,6 +119,33 @@ def create_app() -> Flask:
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # no static file caching in dev
 
     cfg = load_config()
+
+    def _resolve_steam_id() -> str:
+        """Get SteamID64 from config or first export."""
+        sid = cfg.get("steam_id", "")
+        if sid:
+            return sid
+        vault = cfg.get("obsidian_vault_path", "")
+        sub = cfg.get("coach_subfolder", "CS2-Coach")
+        if not vault:
+            return ""
+        edir = Path(vault) / sub / "exports"
+        if not edir.exists():
+            return ""
+        for f in sorted(edir.glob("*_coach.json"), reverse=True):
+            try:
+                d = json.loads(f.read_text(encoding="utf-8"))
+                sid = d.get("player", {}).get("steam_id", "")
+                if sid:
+                    return str(sid)
+            except Exception:
+                continue
+        return ""
+
+    @app.context_processor
+    def inject_avatar():
+        sid = _resolve_steam_id()
+        return {"steam_avatar_url": _fetch_steam_avatar(sid) if sid else ""}
 
     @app.route("/")
     def index():
@@ -85,6 +189,9 @@ def create_app() -> Flask:
             if vault_path:
                 obsidian_path = str(export_match(result, report, vault_path, subfolder))
 
+            # Discord webhook (file upload route)
+            _post_discord(cfg.get("discord_webhook", ""), result, cfg)
+
             return render_template(
                 "result.html",
                 result=result,
@@ -124,6 +231,9 @@ def create_app() -> Flask:
             obsidian_path = None
             if vault_path:
                 obsidian_path = str(export_match(result, report, vault_path, subfolder))
+
+            # Discord webhook (path-based route)
+            _post_discord(cfg.get("discord_webhook", ""), result, cfg)
 
             return render_template(
                 "result.html",
@@ -306,6 +416,7 @@ def create_app() -> Flask:
                     sub = cfg.get("coach_subfolder", "CS2-Coach")
                     if vault_path:
                         export_match(result, report, vault_path, sub)
+                    _post_discord(cfg.get("discord_webhook", ""), result, cfg)
 
                     s = result.player_stats
                     yield f"data: {json.dumps({'type': 'result', 'current': i + 1, 'total': total, 'demo_path': str(demo), 'filename': demo.name, 'map': result.map_name, 'date': result.match_date, 'score': f'{result.score_team1}:{result.score_team2}', 'result_str': result.result_str, 'kills': s.kills, 'deaths': s.deaths, 'assists': s.assists, 'adr': round(s.adr, 1), 'hs_pct': round(s.headshot_pct, 1), 'kast_pct': round(s.kast_pct, 1), 'rating': result.rating})}\n\n"
@@ -383,6 +494,46 @@ def create_app() -> Flask:
         return render_template("compare.html", periods=periods,
                                achievements=achievements, exports=export_list, config=cfg)
 
+    @app.route("/economy")
+    def economy():
+        export_list = _get_exports(cfg)
+        eco_data = _build_economy_iq(export_list, cfg)
+        return render_template("economy.html", eco=eco_data, config=cfg)
+
+    @app.route("/digest")
+    def digest():
+        export_list = _get_exports(cfg)
+        digest_data = _build_digest(export_list)
+        return render_template("digest.html", digest=digest_data, config=cfg)
+
+    @app.route("/digest/export", methods=["POST"])
+    def digest_export():
+        export_list = _get_exports(cfg)
+        digest_data = _build_digest(export_list)
+        period_key = request.form.get("period", "")
+        period = None
+        for p in digest_data.get("periods", []):
+            if p["key"] == period_key:
+                period = p
+                break
+        if not period:
+            flash("Zeitraum nicht gefunden.", "error")
+            return redirect(url_for("digest"))
+        # Write Obsidian note
+        vault_path = cfg.get("obsidian_vault_path", "")
+        subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+        if not vault_path:
+            flash("Vault-Pfad nicht konfiguriert.", "error")
+            return redirect(url_for("digest"))
+        out_dir = Path(vault_path) / subfolder
+        out_dir.mkdir(parents=True, exist_ok=True)
+        fname = f"Digest_{period['key']}.md"
+        filepath = out_dir / fname
+        md = _render_digest_markdown(period)
+        filepath.write_text(md, encoding="utf-8")
+        flash(f"Digest exportiert: {fname}", "success")
+        return redirect(url_for("digest"))
+
     @app.route("/exports")
     def exports():
         export_list = _get_exports(cfg)
@@ -403,6 +554,101 @@ def create_app() -> Flask:
         analysis = _analyze_rounds(data)
         return render_template("export_detail.html", data=data, analysis=analysis,
                                filename=filename, config=cfg)
+
+    @app.route("/watch")
+    def watch():
+        demo_folder = cfg.get("demo_folder", "")
+        watch_data = _build_watch_status(cfg) if demo_folder else {"has_folder": False}
+        return render_template("watch.html", watch=watch_data, config=cfg)
+
+    @app.route("/api/watch-check")
+    def watch_check():
+        """Check for new demos in the configured folder."""
+        demo_folder = cfg.get("demo_folder", "")
+        if not demo_folder:
+            return jsonify({"error": "Kein Demo-Ordner konfiguriert"}), 400
+        folder_path = Path(demo_folder)
+        if not folder_path.is_dir():
+            return jsonify({"error": "Ordner nicht gefunden"}), 400
+
+        analyzed_files = _get_analyzed_filenames(cfg)
+        demos = sorted(folder_path.glob("*.dem"), key=lambda p: p.stat().st_mtime, reverse=True)
+        new_demos = [d for d in demos if d.name not in analyzed_files]
+
+        return jsonify({
+            "total": len(demos),
+            "analyzed": len(demos) - len(new_demos),
+            "new": len(new_demos),
+            "new_files": [{"name": d.name, "path": str(d), "size_mb": round(d.stat().st_size / (1024*1024), 1), "date": datetime.fromtimestamp(d.stat().st_mtime).strftime("%Y-%m-%d %H:%M")} for d in new_demos[:20]],
+        })
+
+    @app.route("/api/watch-analyze")
+    def watch_analyze():
+        """SSE endpoint: auto-analyze all new demos in the watch folder."""
+        demo_folder = cfg.get("demo_folder", "")
+        player_name = cfg.get("player_name", "")
+        steam_id = _resolve_steam_id()
+
+        folder_path = Path(demo_folder)
+        if not folder_path.is_dir():
+            def err():
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Ordner nicht gefunden'})}\n\n"
+            return Response(err(), mimetype="text/event-stream")
+
+        analyzed_files = _get_analyzed_filenames(cfg)
+        demos = sorted(
+            [d for d in folder_path.glob("*.dem") if d.name not in analyzed_files],
+            key=lambda p: p.stat().st_mtime,
+        )
+
+        if not demos:
+            def err():
+                yield f"data: {json.dumps({'type': 'done', 'message': 'Keine neuen Demos'})}\n\n"
+            return Response(err(), mimetype="text/event-stream")
+
+        def generate():
+            total = len(demos)
+            yield f"data: {json.dumps({'type': 'init', 'total': total})}\n\n"
+            for i, demo in enumerate(demos):
+                try:
+                    result = parse_demo(str(demo), player_name, steam_id)
+                    report = generate_report(result)
+                    vault_path = cfg.get("obsidian_vault_path", "")
+                    sub = cfg.get("coach_subfolder", "CS2-Coach")
+                    if vault_path:
+                        export_match(result, report, vault_path, sub)
+                    _post_discord(cfg.get("discord_webhook", ""), result, cfg)
+                    s = result.player_stats
+                    yield f"data: {json.dumps({'type': 'result', 'current': i+1, 'total': total, 'filename': demo.name, 'map': result.map_name, 'score': f'{result.score_team1}:{result.score_team2}', 'result_str': result.result_str, 'rating': result.rating, 'kills': s.kills, 'deaths': s.deaths})}\n\n"
+                except Exception as e:
+                    yield f"data: {json.dumps({'type': 'error_item', 'current': i+1, 'total': total, 'filename': demo.name, 'message': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+    @app.route("/achievements")
+    def achievements():
+        exports = _get_exports(cfg)
+        ach_data = _build_achievements(exports, cfg)
+        return render_template("achievements.html", ach=ach_data, config=cfg)
+
+    @app.route("/maps")
+    def maps():
+        exports = _get_exports(cfg)
+        map_stats = _get_map_stats(exports)
+        veto = _build_map_veto(map_stats, exports)
+        return render_template("maps.html", map_stats=map_stats, veto=veto, config=cfg)
+
+    @app.route("/highlights")
+    def highlights():
+        hl_data = _build_highlights(cfg)
+        return render_template("highlights.html", hl=hl_data, config=cfg)
+
+    @app.route("/habits")
+    def habits():
+        exports = _get_exports(cfg)
+        habit_data = _build_habit_tracker(exports)
+        return render_template("habits.html", habits=habit_data, config=cfg)
 
     @app.route("/settings")
     def settings():
@@ -436,7 +682,9 @@ def create_app() -> Flask:
             "coach_subfolder": request.form.get("coach_subfolder", "CS2-Coach").strip(),
             "player_name": request.form.get("player_name", "").strip(),
             "steam_id": request.form.get("steam_id", "").strip(),
+            "demo_folder": request.form.get("demo_folder", "").strip(),
             "language": request.form.get("language", "de").strip(),
+            "discord_webhook": request.form.get("discord_webhook", "").strip(),
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             f.write("# CS2-Coach Konfiguration\n")
@@ -1498,6 +1746,304 @@ def _analyze_rounds(data: dict) -> dict:
     }
 
 
+def _get_analyzed_filenames(cfg: dict) -> set[str]:
+    """Get set of demo filenames that have already been analyzed."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    analyzed = set()
+    if export_dir and export_dir.exists():
+        for ef in export_dir.glob("*_coach.json"):
+            try:
+                data = json.loads(ef.read_text(encoding="utf-8"))
+                demo_file = data.get("match", {}).get("demo_file", "")
+                if demo_file:
+                    analyzed.add(demo_file)
+            except Exception:
+                pass
+    return analyzed
+
+
+def _build_watch_status(cfg: dict) -> dict:
+    """Build status info for the folder-watch page."""
+    demo_folder = cfg.get("demo_folder", "")
+    if not demo_folder:
+        return {"has_folder": False}
+
+    folder_path = Path(demo_folder)
+    if not folder_path.is_dir():
+        return {"has_folder": True, "folder_exists": False, "path": demo_folder}
+
+    demos = sorted(folder_path.glob("*.dem"), key=lambda p: p.stat().st_mtime, reverse=True)
+    analyzed_files = _get_analyzed_filenames(cfg)
+    new_demos = [d for d in demos if d.name not in analyzed_files]
+
+    recent = []
+    for d in demos[:10]:
+        recent.append({
+            "name": d.name,
+            "path": str(d),
+            "size_mb": round(d.stat().st_size / (1024 * 1024), 1),
+            "date": datetime.fromtimestamp(d.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
+            "analyzed": d.name in analyzed_files,
+        })
+
+    return {
+        "has_folder": True,
+        "folder_exists": True,
+        "path": demo_folder,
+        "total": len(demos),
+        "analyzed": len(demos) - len(new_demos),
+        "new": len(new_demos),
+        "recent": recent,
+    }
+
+
+def _build_digest(exports: list[dict]) -> dict:
+    """Build weekly and monthly digest summaries from export data."""
+    if not exports:
+        return {"has_data": False, "periods": []}
+
+    from collections import defaultdict
+
+    # Parse dates and group by week and month
+    weekly = defaultdict(list)
+    monthly = defaultdict(list)
+    for e in exports:
+        date_str = e.get("date", "")
+        if not date_str or date_str == "?":
+            continue
+        try:
+            dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
+        except (ValueError, TypeError):
+            continue
+        # ISO week key
+        iso = dt.isocalendar()
+        wk = f"{iso[0]}-W{iso[1]:02d}"
+        weekly[wk].append(e)
+        # Month key
+        mk = dt.strftime("%Y-%m")
+        monthly[mk].append(e)
+
+    def _summarize(matches: list[dict], label: str, key: str) -> dict:
+        n = len(matches)
+        wins = sum(1 for m in matches if m.get("result") == "Sieg")
+        losses = sum(1 for m in matches if m.get("result") == "Niederlage")
+        draws = n - wins - losses
+        avg_rating = round(sum(m.get("rating", 0) for m in matches) / max(n, 1), 2)
+        avg_kd = round(sum(m.get("kd", 0) for m in matches) / max(n, 1), 2)
+        avg_adr = round(sum(m.get("adr", 0) for m in matches) / max(n, 1), 1)
+        avg_hs = round(sum(m.get("hs_pct", 0) for m in matches) / max(n, 1), 1)
+        avg_kast = round(sum(m.get("kast", 0) for m in matches) / max(n, 1), 1)
+        total_kills = sum(m.get("kills", 0) for m in matches)
+        total_deaths = sum(m.get("deaths", 0) for m in matches)
+        win_rate = round(wins / max(n, 1) * 100, 1)
+
+        # Maps played
+        from collections import Counter
+        map_counts = Counter(m.get("map", "?") for m in matches)
+        maps = [{"name": mp, "count": c} for mp, c in map_counts.most_common()]
+
+        # Best and worst match
+        best = max(matches, key=lambda m: m.get("rating", 0))
+        worst = min(matches, key=lambda m: m.get("rating", 0))
+
+        # Trend: compare first half vs second half
+        sorted_m = sorted(matches, key=lambda m: m.get("date", ""))
+        half = max(len(sorted_m) // 2, 1)
+        first_half = sorted_m[:half]
+        second_half = sorted_m[half:]
+        trend_rating = round(
+            sum(m.get("rating", 0) for m in second_half) / max(len(second_half), 1)
+            - sum(m.get("rating", 0) for m in first_half) / max(len(first_half), 1), 2
+        )
+
+        return {
+            "label": label,
+            "key": key,
+            "matches": n,
+            "wins": wins, "losses": losses, "draws": draws,
+            "win_rate": win_rate,
+            "avg_rating": avg_rating, "avg_kd": avg_kd, "avg_adr": avg_adr,
+            "avg_hs": avg_hs, "avg_kast": avg_kast,
+            "total_kills": total_kills, "total_deaths": total_deaths,
+            "maps": maps,
+            "best": {"map": best.get("map"), "rating": best.get("rating"), "score": best.get("score"), "date": best.get("date")},
+            "worst": {"map": worst.get("map"), "rating": worst.get("rating"), "score": worst.get("score"), "date": worst.get("date")},
+            "trend_rating": trend_rating,
+            "match_list": sorted_m,
+        }
+
+    month_names = {
+        "01": "Januar", "02": "Februar", "03": "Maerz", "04": "April",
+        "05": "Mai", "06": "Juni", "07": "Juli", "08": "August",
+        "09": "September", "10": "Oktober", "11": "November", "12": "Dezember",
+    }
+
+    periods = []
+    # Monthly summaries (most recent first)
+    for mk in sorted(monthly.keys(), reverse=True):
+        mm = mk[-2:]
+        label = f"{month_names.get(mm, mm)} {mk[:4]}"
+        periods.append(_summarize(monthly[mk], label, mk))
+
+    # Weekly summaries (most recent first)
+    weekly_periods = []
+    for wk in sorted(weekly.keys(), reverse=True)[:8]:  # last 8 weeks max
+        label = f"KW {wk.split('-W')[1]} / {wk.split('-W')[0]}"
+        weekly_periods.append(_summarize(weekly[wk], label, wk))
+
+    return {
+        "has_data": True,
+        "periods": periods,
+        "weekly": weekly_periods,
+    }
+
+
+def _render_digest_markdown(period: dict) -> str:
+    """Render a digest period as Obsidian Markdown."""
+    p = period
+    lines = [
+        f"# Digest: {p['label']}",
+        "",
+        f"**Matches:** {p['matches']} ({p['wins']}W / {p['losses']}L / {p['draws']}D)",
+        f"**Win-Rate:** {p['win_rate']}%",
+        "",
+        "## Durchschnittswerte",
+        "",
+        f"| Metrik | Wert |",
+        f"|--------|------|",
+        f"| Rating | {p['avg_rating']} |",
+        f"| K/D | {p['avg_kd']} |",
+        f"| ADR | {p['avg_adr']} |",
+        f"| HS% | {p['avg_hs']}% |",
+        f"| KAST% | {p['avg_kast']}% |",
+        f"| Kills | {p['total_kills']} |",
+        f"| Deaths | {p['total_deaths']} |",
+        "",
+        "## Maps",
+        "",
+    ]
+    for m in p.get("maps", []):
+        lines.append(f"- **{m['name']}**: {m['count']}x gespielt")
+    lines += [
+        "",
+        "## Highlights",
+        "",
+        f"- **Bestes Match:** {p['best']['map']} ({p['best']['score']}) — Rating {p['best']['rating']}",
+        f"- **Schlechtestes Match:** {p['worst']['map']} ({p['worst']['score']}) — Rating {p['worst']['rating']}",
+        f"- **Trend:** Rating {'gestiegen' if p['trend_rating'] > 0 else 'gesunken'} ({'+' if p['trend_rating'] > 0 else ''}{p['trend_rating']})",
+        "",
+        "---",
+        f"*Generiert am {datetime.now().strftime('%Y-%m-%d %H:%M')} von CS2 Coach*",
+    ]
+    return "\n".join(lines)
+
+
+def _build_economy_iq(exports: list[dict], cfg: dict) -> dict:
+    """Aggregate economy data across all exports for the Economy-IQ page."""
+    if not exports:
+        return {"has_data": False}
+
+    vault_path = cfg.get("obsidian_vault_path", "")
+    subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / subfolder / "exports" if vault_path else None
+
+    cats = {"pistol": [], "eco": [], "force": [], "fullbuy": []}
+    cat_meta = {
+        "pistol": {"label": "Pistol", "icon": "hand", "desc": "Pistolrunden (Runde 1 & 13)", "color": "#fbbf24"},
+        "eco": {"label": "Eco", "icon": "piggy-bank", "desc": "Sparrunden (<$1500 Ausruestung)", "color": "#f87171"},
+        "force": {"label": "Force-Buy", "icon": "zap", "desc": "Forcekauf ($1500–$3700)", "color": "#fb923c"},
+        "fullbuy": {"label": "Full-Buy", "icon": "shield", "desc": "Vollkauf (>$3700)", "color": "#4ade80"},
+    }
+    per_match = []  # per-match economy breakdown for trend
+
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        eco = data.get("economy", {})
+        if not eco:
+            continue
+        match_info = data.get("match", {})
+        match_entry = {
+            "date": match_info.get("date", "?"),
+            "map": match_info.get("map", "?"),
+            "result": match_info.get("result", "?"),
+        }
+        for cat_key in cats:
+            if cat_key in eco:
+                cats[cat_key].append(eco[cat_key])
+                match_entry[cat_key] = eco[cat_key]
+        per_match.append(match_entry)
+
+    # Aggregate per category
+    summary = {}
+    for cat_key, entries in cats.items():
+        if not entries:
+            continue
+        total_rounds = sum(e.get("rounds", 0) for e in entries)
+        total_kills = sum(e.get("kills", 0) for e in entries)
+        total_deaths = sum(e.get("deaths", 0) for e in entries)
+        total_won = sum(e.get("rounds_won", 0) for e in entries)
+        total_damage = sum(e.get("adr", 0) * e.get("rounds", 1) for e in entries)
+        n_matches = len(entries)
+        summary[cat_key] = {
+            **cat_meta.get(cat_key, {}),
+            "total_rounds": total_rounds,
+            "total_kills": total_kills,
+            "total_deaths": total_deaths,
+            "kd": round(total_kills / max(total_deaths, 1), 2),
+            "adr": round(total_damage / max(total_rounds, 1), 1),
+            "win_rate": round(total_won / max(total_rounds, 1) * 100, 1),
+            "rounds_won": total_won,
+            "rounds_lost": total_rounds - total_won,
+            "matches": n_matches,
+        }
+
+    # Best/worst category
+    best_cat = max(summary, key=lambda c: summary[c]["win_rate"]) if summary else None
+    worst_cat = min(summary, key=lambda c: summary[c]["win_rate"]) if summary else None
+
+    # Per-match trend data for chart (last 20)
+    trend = per_match[-20:]
+
+    # Recommendations
+    tips = []
+    if summary.get("eco") and summary["eco"]["win_rate"] >= 30:
+        tips.append({"type": "positive", "text": f"Starke Eco-Runden: {summary['eco']['win_rate']}% Win-Rate — du holst viel aus wenig Equipment raus."})
+    elif summary.get("eco") and summary["eco"]["win_rate"] < 15:
+        tips.append({"type": "warning", "text": f"Eco-Runden: Nur {summary['eco']['win_rate']}% Win-Rate. Spar lieber konsequent und investiere in Force-Buys."})
+    if summary.get("force") and summary["force"]["win_rate"] >= 50:
+        tips.append({"type": "positive", "text": f"Force-Buys zahlen sich aus: {summary['force']['win_rate']}% Win-Rate — gute Kaufentscheidungen."})
+    elif summary.get("force") and summary["force"]["win_rate"] < 30:
+        tips.append({"type": "warning", "text": f"Force-Buys: Nur {summary['force']['win_rate']}% Win-Rate. Ueberlege, ob Full-Save nicht effektiver waere."})
+    if summary.get("fullbuy") and summary["fullbuy"]["win_rate"] < 50:
+        tips.append({"type": "warning", "text": f"Full-Buy Win-Rate nur {summary['fullbuy']['win_rate']}% — moegliche Ursachen: Utility-Einsatz, Positionierung oder Teamplay."})
+    if summary.get("pistol") and summary["pistol"]["win_rate"] >= 60:
+        tips.append({"type": "positive", "text": f"Pistolrunden-Spezialist: {summary['pistol']['win_rate']}% Win-Rate — das verschafft dir oekonomische Vorteile."})
+
+    # Overall eco efficiency score (weighted win rate)
+    total_rounds_all = sum(s["total_rounds"] for s in summary.values())
+    eco_iq = round(sum(s["win_rate"] * s["total_rounds"] for s in summary.values()) / max(total_rounds_all, 1), 1) if summary else 0
+
+    return {
+        "has_data": True,
+        "summary": summary,
+        "best_cat": best_cat,
+        "worst_cat": worst_cat,
+        "trend": trend,
+        "tips": tips,
+        "eco_iq": eco_iq,
+        "total_rounds": total_rounds_all,
+        "total_matches": len(per_match),
+    }
+
+
 def _build_dashboard_data(exports: list[dict], map_stats: list[dict]) -> dict:
     """Compute dashboard metrics from export data."""
     if not exports:
@@ -1810,4 +2356,515 @@ def _build_dashboard_data(exports: list[dict], map_stats: list[dict]) -> dict:
         "role": role,
         "training": training,
         "alerts": alerts,
+    }
+
+
+def _build_achievements(exports: list[dict], cfg: dict) -> dict:
+    """Build achievement data from all exports (reads full JSONs for multikills)."""
+    if not exports:
+        return {"unlocked": [], "locked": [], "total": 0, "earned": 0, "points": 0, "max_points": 0}
+
+    # Read full export JSONs for multikill / round_timeline data
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    full_exports = []
+    if export_dir and export_dir.exists():
+        for f in sorted(export_dir.glob("*_coach.json")):
+            try:
+                full_exports.append(json.loads(f.read_text(encoding="utf-8")))
+            except Exception:
+                pass
+
+    # Aggregate stats
+    n = len(exports)
+    total_kills = sum(e["kills"] for e in exports)
+    total_deaths = sum(e["deaths"] for e in exports)
+    total_assists = sum(e.get("assists", 0) for e in exports)
+    total_clutch_wins = sum(e.get("clutch_wins", 0) for e in exports)
+    wins = sum(1 for e in exports if e["result"] == "Sieg")
+    max_kills = max((e["kills"] for e in exports), default=0)
+    max_rating = max((e["rating"] for e in exports), default=0)
+    max_adr = max((e["adr"] for e in exports), default=0)
+    max_hs = max((e["hs_pct"] for e in exports), default=0)
+    maps_played = set(e["map"] for e in exports)
+
+    # Multikills from full exports
+    total_3k = sum(d.get("player", {}).get("multikills", {}).get("3k", 0) for d in full_exports)
+    total_4k = sum(d.get("player", {}).get("multikills", {}).get("4k", 0) for d in full_exports)
+    total_5k = sum(d.get("player", {}).get("multikills", {}).get("5k", 0) for d in full_exports)
+    total_2k = sum(d.get("player", {}).get("multikills", {}).get("2k", 0) for d in full_exports)
+
+    # Win/loss streaks
+    best_win_streak = 0
+    cur = 0
+    for e in sorted(exports, key=lambda x: x["date"]):
+        if e["result"] == "Sieg":
+            cur += 1
+            best_win_streak = max(best_win_streak, cur)
+        else:
+            cur = 0
+
+    # KAST streaks
+    kast_70_streak = 0
+    best_kast_70 = 0
+    for e in sorted(exports, key=lambda x: x["date"]):
+        if e.get("kast", 0) >= 70:
+            kast_70_streak += 1
+            best_kast_70 = max(best_kast_70, kast_70_streak)
+        else:
+            kast_70_streak = 0
+
+    # Rating above 1.0 streak
+    rating_streak = 0
+    best_rating_streak = 0
+    for e in sorted(exports, key=lambda x: x["date"]):
+        if e.get("rating", 0) >= 1.0:
+            rating_streak += 1
+            best_rating_streak = max(best_rating_streak, rating_streak)
+        else:
+            rating_streak = 0
+
+    # Has a 13-0 or 0-13?
+    has_shutout_win = any(
+        d.get("match", {}).get("score_own", 0) >= 13 and d.get("match", {}).get("score_enemy", 0) == 0
+        for d in full_exports
+    )
+
+    # Flawless match (0 deaths)
+    has_flawless = any(e["deaths"] == 0 for e in exports)
+
+    # 30-bomb, 40-bomb
+    has_30_bomb = max_kills >= 30
+    has_40_bomb = max_kills >= 40
+
+    # Session days (unique dates)
+    unique_dates = set(e["date"][:10] for e in exports)
+    days_played = len(unique_dates)
+
+    # Define all achievements
+    categories = {
+        "Erste Schritte": "rocket",
+        "Aim": "crosshair",
+        "Consistency": "shield-check",
+        "Clutch & Impact": "zap",
+        "Grind": "flame",
+        "Spezial": "sparkles",
+    }
+
+    all_achievements = [
+        # Erste Schritte
+        {"id": "first_match", "name": "Erste Analyse", "desc": "Analysiere dein erstes Match", "cat": "Erste Schritte", "tier": "bronze", "pts": 10, "check": n >= 1},
+        {"id": "five_matches", "name": "Warm gelaufen", "desc": "5 Matches analysiert", "cat": "Erste Schritte", "tier": "bronze", "pts": 10, "check": n >= 5},
+        {"id": "ten_matches", "name": "Datensammler", "desc": "10 Matches analysiert", "cat": "Erste Schritte", "tier": "silber", "pts": 20, "check": n >= 10},
+        {"id": "twenty_five", "name": "Statistik-Nerd", "desc": "25 Matches analysiert", "cat": "Erste Schritte", "tier": "gold", "pts": 30, "check": n >= 25},
+        {"id": "fifty_matches", "name": "Datenkoenig", "desc": "50 Matches analysiert", "cat": "Erste Schritte", "tier": "platin", "pts": 50, "check": n >= 50},
+        {"id": "hundred_matches", "name": "Analyst", "desc": "100 Matches analysiert", "cat": "Erste Schritte", "tier": "diamant", "pts": 100, "check": n >= 100},
+        {"id": "first_win", "name": "Erster Sieg", "desc": "Gewinne dein erstes Match", "cat": "Erste Schritte", "tier": "bronze", "pts": 10, "check": wins >= 1},
+
+        # Aim
+        {"id": "thirty_bomb", "name": "30-Bombe", "desc": "30+ Kills in einem Match", "cat": "Aim", "tier": "silber", "pts": 30, "check": has_30_bomb},
+        {"id": "forty_bomb", "name": "40-Bombe", "desc": "40+ Kills in einem Match", "cat": "Aim", "tier": "diamant", "pts": 80, "check": has_40_bomb},
+        {"id": "hs_machine", "name": "Headshot-Maschine", "desc": "60%+ HS in einem Match", "cat": "Aim", "tier": "gold", "pts": 40, "check": max_hs >= 60},
+        {"id": "triple_kill", "name": "Triple Kill", "desc": "Erste 3K-Runde", "cat": "Aim", "tier": "bronze", "pts": 10, "check": total_3k >= 1},
+        {"id": "triple_master", "name": "Triple-Meister", "desc": "10 3K-Runden insgesamt", "cat": "Aim", "tier": "silber", "pts": 25, "check": total_3k >= 10},
+        {"id": "quad_kill", "name": "Quad Kill", "desc": "Erste 4K-Runde", "cat": "Aim", "tier": "silber", "pts": 25, "check": total_4k >= 1},
+        {"id": "quad_master", "name": "Quad-Meister", "desc": "5 4K-Runden insgesamt", "cat": "Aim", "tier": "gold", "pts": 50, "check": total_4k >= 5},
+        {"id": "ace", "name": "ACE!", "desc": "Alle 5 Gegner in einer Runde eliminiert", "cat": "Aim", "tier": "platin", "pts": 75, "check": total_5k >= 1},
+        {"id": "kill_century", "name": "100 Kills", "desc": "Insgesamt 100 Kills", "cat": "Aim", "tier": "bronze", "pts": 10, "check": total_kills >= 100},
+        {"id": "kill_500", "name": "500 Kills", "desc": "Insgesamt 500 Kills", "cat": "Aim", "tier": "silber", "pts": 25, "check": total_kills >= 500},
+        {"id": "kill_1000", "name": "1000 Kills", "desc": "Insgesamt 1000 Kills", "cat": "Aim", "tier": "gold", "pts": 50, "check": total_kills >= 1000},
+
+        # Consistency
+        {"id": "kast_70_5", "name": "Konsistent", "desc": "5 Spiele in Folge KAST > 70%", "cat": "Consistency", "tier": "silber", "pts": 30, "check": best_kast_70 >= 5},
+        {"id": "kast_70_10", "name": "Fels in der Brandung", "desc": "10 Spiele in Folge KAST > 70%", "cat": "Consistency", "tier": "gold", "pts": 50, "check": best_kast_70 >= 10},
+        {"id": "rating_1_5", "name": "Ueberdurchschnittlich", "desc": "5 Spiele in Folge Rating >= 1.0", "cat": "Consistency", "tier": "silber", "pts": 30, "check": best_rating_streak >= 5},
+        {"id": "rating_1_10", "name": "Leistungstraeger", "desc": "10 Spiele in Folge Rating >= 1.0", "cat": "Consistency", "tier": "gold", "pts": 50, "check": best_rating_streak >= 10},
+        {"id": "rating_high", "name": "MVP", "desc": "Rating 1.30+ in einem Match", "cat": "Consistency", "tier": "gold", "pts": 40, "check": max_rating >= 1.30},
+        {"id": "adr_100", "name": "Damage Dealer", "desc": "ADR 100+ in einem Match", "cat": "Consistency", "tier": "silber", "pts": 25, "check": max_adr >= 100},
+
+        # Clutch & Impact
+        {"id": "first_clutch", "name": "Clutch-Spieler", "desc": "Gewinne deinen ersten Clutch", "cat": "Clutch & Impact", "tier": "bronze", "pts": 15, "check": total_clutch_wins >= 1},
+        {"id": "clutch_5", "name": "Nervenstark", "desc": "5 Clutches insgesamt gewonnen", "cat": "Clutch & Impact", "tier": "silber", "pts": 30, "check": total_clutch_wins >= 5},
+        {"id": "clutch_10", "name": "Clutch-Koenig", "desc": "10 Clutches insgesamt gewonnen", "cat": "Clutch & Impact", "tier": "gold", "pts": 50, "check": total_clutch_wins >= 10},
+        {"id": "clutch_25", "name": "Clutch-Legende", "desc": "25 Clutches insgesamt gewonnen", "cat": "Clutch & Impact", "tier": "platin", "pts": 75, "check": total_clutch_wins >= 25},
+        {"id": "multikill_50", "name": "Multi-Kill-Maschine", "desc": "50 Multi-Kill-Runden (2K+)", "cat": "Clutch & Impact", "tier": "gold", "pts": 40, "check": (total_2k + total_3k + total_4k + total_5k) >= 50},
+        {"id": "shutout", "name": "Shutout", "desc": "Gewinne 13:0", "cat": "Clutch & Impact", "tier": "platin", "pts": 60, "check": has_shutout_win},
+
+        # Grind
+        {"id": "win_streak_3", "name": "Auf dem Weg", "desc": "3 Siege in Folge", "cat": "Grind", "tier": "bronze", "pts": 15, "check": best_win_streak >= 3},
+        {"id": "win_streak_5", "name": "Heisse Phase", "desc": "5 Siege in Folge", "cat": "Grind", "tier": "silber", "pts": 30, "check": best_win_streak >= 5},
+        {"id": "win_streak_10", "name": "Unaufhaltbar", "desc": "10 Siege in Folge", "cat": "Grind", "tier": "platin", "pts": 60, "check": best_win_streak >= 10},
+        {"id": "five_maps", "name": "Kartograph", "desc": "5 verschiedene Maps gespielt", "cat": "Grind", "tier": "silber", "pts": 20, "check": len(maps_played) >= 5},
+        {"id": "seven_maps", "name": "Globetrotter", "desc": "7 verschiedene Maps gespielt", "cat": "Grind", "tier": "gold", "pts": 35, "check": len(maps_played) >= 7},
+        {"id": "days_7", "name": "Wochenspieler", "desc": "An 7 verschiedenen Tagen gespielt", "cat": "Grind", "tier": "silber", "pts": 20, "check": days_played >= 7},
+        {"id": "days_30", "name": "Monatsspieler", "desc": "An 30 verschiedenen Tagen gespielt", "cat": "Grind", "tier": "gold", "pts": 40, "check": days_played >= 30},
+
+        # Spezial
+        {"id": "flawless", "name": "Unverwundbar", "desc": "0 Tode in einem Match", "cat": "Spezial", "tier": "diamant", "pts": 100, "check": has_flawless},
+        {"id": "assist_king", "name": "Team-Player", "desc": "100 Assists insgesamt", "cat": "Spezial", "tier": "silber", "pts": 25, "check": total_assists >= 100},
+    ]
+
+    # Tier styling
+    tier_colors = {
+        "bronze": {"bg": "rgba(205,127,50,0.12)", "border": "rgba(205,127,50,0.3)", "color": "#cd7f32"},
+        "silber": {"bg": "rgba(192,192,192,0.12)", "border": "rgba(192,192,192,0.3)", "color": "#c0c0c0"},
+        "gold": {"bg": "rgba(255,215,0,0.12)", "border": "rgba(255,215,0,0.3)", "color": "#ffd700"},
+        "platin": {"bg": "rgba(110,200,230,0.12)", "border": "rgba(110,200,230,0.3)", "color": "#6ec8e6"},
+        "diamant": {"bg": "rgba(185,142,255,0.12)", "border": "rgba(185,142,255,0.3)", "color": "#b98eff"},
+    }
+
+    unlocked = []
+    locked = []
+    for a in all_achievements:
+        a["tier_style"] = tier_colors.get(a["tier"], tier_colors["bronze"])
+        if a["check"]:
+            unlocked.append(a)
+        else:
+            locked.append(a)
+
+    total_pts = sum(a["pts"] for a in all_achievements)
+    earned_pts = sum(a["pts"] for a in unlocked)
+
+    return {
+        "unlocked": unlocked,
+        "locked": locked,
+        "total": len(all_achievements),
+        "earned": len(unlocked),
+        "points": earned_pts,
+        "max_points": total_pts,
+        "categories": categories,
+        "tier_colors": tier_colors,
+        # Stats for progress display
+        "stats": {
+            "matches": n,
+            "kills": total_kills,
+            "wins": wins,
+            "clutch_wins": total_clutch_wins,
+            "best_streak": best_win_streak,
+            "maps": len(maps_played),
+            "days": days_played,
+            "multikills_3k": total_3k,
+            "multikills_4k": total_4k,
+            "multikills_5k": total_5k,
+        },
+    }
+
+
+def _build_habit_tracker(exports: list[dict]) -> dict:
+    """Build habit tracking data from exports — trends of key behavioral metrics."""
+    if len(exports) < 2:
+        return {"has_data": False, "habits": [], "data_points": []}
+
+    # Sort chronologically (exports come newest-first)
+    chronological = sorted(exports, key=lambda x: x["date"])
+
+    # Define habits to track
+    habit_defs = [
+        {
+            "id": "hs_pct", "name": "Headshot %", "key": "hs_pct", "unit": "%",
+            "good_direction": "up", "target": 50,
+            "tip_low": "Crosshair hoeher halten. Prefire-Maps spielen.",
+            "tip_high": "Starke Headshots — halte das Niveau.",
+        },
+        {
+            "id": "kast", "name": "KAST %", "key": "kast", "unit": "%",
+            "good_direction": "up", "target": 70,
+            "tip_low": "Mehr Trades, Assists und Survival-Runden. Nicht sinnlos sterben.",
+            "tip_high": "Du bist konstant involviert — weiter so.",
+        },
+        {
+            "id": "utility", "name": "Utility/Runde", "key": "utility_per_round", "unit": "",
+            "good_direction": "up", "target": 2.0,
+            "tip_low": "Kaufe Nades und wirf sie! 2-3 Standard-Lineups pro Map lernen.",
+            "tip_high": "Gute Utility-Nutzung.",
+        },
+        {
+            "id": "counter_strafe", "name": "Counter-Strafe", "key": "counter_strafe", "unit": "%",
+            "good_direction": "up", "target": 85,
+            "tip_low": "Uebe Counter-Strafing auf YPRAC Movement Maps.",
+            "tip_high": "Dein Counter-Strafing ist stark.",
+        },
+        {
+            "id": "crosshair", "name": "Crosshair Placement", "key": "crosshair_placement", "unit": "°",
+            "good_direction": "down", "target": 8,
+            "tip_low": "Crosshair auf Kopfhoehe der Angles halten. Prefire-Maps ueben.",
+            "tip_high": "Exzellentes Crosshair Placement.",
+        },
+        {
+            "id": "survival", "name": "Survival Rate", "key": "survival_rate", "unit": "%",
+            "good_direction": "up", "target": 40,
+            "tip_low": "Weniger unnoetige Peeks. Lerne wann du dich zurueckziehen solltest.",
+            "tip_high": "Du ueberlebst haeufig — gutes Positionsspiel.",
+        },
+        {
+            "id": "opening_death_rate", "name": "Opening Death Rate", "key": "_opening_death_rate", "unit": "%",
+            "good_direction": "down", "target": 15,
+            "tip_low": "Zu oft erster Tod. Weniger aggressive Dry-Peeks, mehr Utility vorher.",
+            "tip_high": "Du stirbst selten als Erster — gutes Timing.",
+        },
+        {
+            "id": "adr", "name": "ADR", "key": "adr", "unit": "",
+            "good_direction": "up", "target": 80,
+            "tip_low": "Mehr Fights nehmen, mehr Impact-Damage pro Runde.",
+            "tip_high": "Starker Damage-Output.",
+        },
+    ]
+
+    habits_out = []
+    for hd in habit_defs:
+        values = []
+        labels = []
+        for e in chronological:
+            if hd["key"] == "_opening_death_rate":
+                total_rounds = e.get("deaths", 1) + (e.get("kills", 0) // 2)  # rough approx
+                opening_deaths = e.get("opening_deaths", 0) or e.get("deaths_early", 0)
+                total_rounds = max(e.get("kills", 0) + e.get("deaths", 0), 1)
+                val = round(opening_deaths / max(total_rounds, 1) * 100, 1) if total_rounds else 0
+            else:
+                val = e.get(hd["key"], 0) or 0
+            values.append(round(val, 1))
+            labels.append(e["date"][:10])
+
+        if not values:
+            continue
+
+        current = values[-1]
+        avg_all = round(sum(values) / len(values), 1)
+        avg_last5 = round(sum(values[-5:]) / len(values[-5:]), 1) if len(values) >= 5 else avg_all
+        avg_first5 = round(sum(values[:5]) / len(values[:5]), 1) if len(values) >= 5 else avg_all
+
+        # Trend: compare last 5 to first 5
+        if len(values) >= 5:
+            trend_val = round(avg_last5 - avg_first5, 1)
+        else:
+            trend_val = 0
+
+        # Is this improving?
+        if hd["good_direction"] == "up":
+            improving = trend_val > 0.5
+            worsening = trend_val < -0.5
+            at_target = current >= hd["target"]
+        else:
+            improving = trend_val < -0.5
+            worsening = trend_val > 0.5
+            at_target = current <= hd["target"]
+
+        tip = hd["tip_high"] if at_target else hd["tip_low"]
+
+        habits_out.append({
+            "id": hd["id"],
+            "name": hd["name"],
+            "unit": hd["unit"],
+            "current": current,
+            "avg": avg_all,
+            "avg_last5": avg_last5,
+            "target": hd["target"],
+            "at_target": at_target,
+            "trend": trend_val,
+            "improving": improving,
+            "worsening": worsening,
+            "good_direction": hd["good_direction"],
+            "tip": tip,
+            "data_points": values,
+            "labels": labels,
+        })
+
+    return {
+        "has_data": True,
+        "habits": habits_out,
+        "match_count": len(chronological),
+    }
+
+
+def _build_highlights(cfg: dict) -> dict:
+    """Build round highlights across all matches from full export JSONs."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False, "matches": [], "totals": {}}
+
+    all_matches = []
+    totals = {"hero": 0, "impact": 0, "invisible": 0, "survivor": 0, "entry": 0, "eco_hero": 0, "total_rounds": 0}
+
+    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        match = data.get("match", {})
+        player = data.get("player", {})
+        timeline = data.get("round_timeline", [])
+        economy = data.get("economy", {})
+
+        if not timeline:
+            continue
+
+        # Determine eco/pistol round numbers from economy data
+        eco_rounds = set()
+        pistol_rounds = {1, match.get("total_rounds", 24) // 2 + 1} if match.get("total_rounds") else {1, 13}
+
+        classified = []
+        for rd in timeline:
+            rnum = rd.get("round", 0)
+            kills = rd.get("player_kills", 0)
+            died = rd.get("player_died", False)
+            won = rd.get("won", False)
+            early = rd.get("died_early", False)
+            events = rd.get("events", [])
+            side = rd.get("side", "?")
+
+            kill_events = [e for e in events if e.get("type") == "kill"]
+            death_events = [e for e in events if e.get("type") == "death"]
+
+            # First kill in round? (check if first event is a kill by player)
+            is_entry = len(kill_events) > 0 and events and events[0].get("type") == "kill"
+
+            # Classify
+            tags = []
+            if kills >= 3 and won:
+                tags.append("hero")
+                totals["hero"] += 1
+            if kills >= 1 and is_entry and won:
+                tags.append("impact")
+                totals["impact"] += 1
+            if kills == 0 and died and not won:
+                tags.append("invisible")
+                totals["invisible"] += 1
+            if not died and won:
+                tags.append("survivor")
+                totals["survivor"] += 1
+            if is_entry:
+                tags.append("entry")
+                totals["entry"] += 1
+            if kills >= 1 and rnum in pistol_rounds:
+                tags.append("eco_hero")
+                totals["eco_hero"] += 1
+
+            totals["total_rounds"] += 1
+
+            # Weapon info from kill events
+            weapons = [k.get("weapon", "?") for k in kill_events]
+            headshots = sum(1 for k in kill_events if k.get("headshot", False))
+
+            classified.append({
+                "round": rnum,
+                "side": side,
+                "won": won,
+                "kills": kills,
+                "died": died,
+                "early": early,
+                "tags": tags,
+                "weapons": weapons,
+                "headshots": headshots,
+                "events": events,
+            })
+
+        # Match-level highlights
+        hero_rounds = [r for r in classified if "hero" in r["tags"]]
+        impact_rounds = [r for r in classified if "impact" in r["tags"]]
+        invisible_rounds = [r for r in classified if "invisible" in r["tags"]]
+
+        all_matches.append({
+            "date": match.get("date", "?"),
+            "map": match.get("map", "?"),
+            "score": f"{match.get('score_own', '?')}:{match.get('score_enemy', '?')}",
+            "result": match.get("result", "?"),
+            "rating": player.get("rating", 0),
+            "kills": player.get("kills", 0),
+            "deaths": player.get("deaths", 0),
+            "rounds": classified,
+            "hero_count": len(hero_rounds),
+            "impact_count": len(impact_rounds),
+            "invisible_count": len(invisible_rounds),
+            "filename": f.name,
+        })
+
+    return {
+        "has_data": bool(all_matches),
+        "matches": all_matches[:20],  # last 20 matches
+        "totals": totals,
+    }
+
+
+def _build_map_veto(map_stats: list[dict], exports: list[dict]) -> dict:
+    """Build map veto recommendations from map stats."""
+    if not map_stats:
+        return {"has_data": False, "picks": [], "bans": [], "maps": []}
+
+    # Enrich with side splits and trends
+    enriched = []
+    for ms in map_stats:
+        map_name = ms["map"]
+        map_exports = [e for e in exports if e.get("map") == map_name]
+
+        # CT/T side performance
+        ct_kills = sum(e.get("ct_kills", 0) for e in map_exports)
+        ct_deaths = sum(e.get("ct_deaths", 0) for e in map_exports)
+        t_kills = sum(e.get("t_kills", 0) for e in map_exports)
+        t_deaths = sum(e.get("t_deaths", 0) for e in map_exports)
+        ct_kd = round(ct_kills / max(ct_deaths, 1), 2)
+        t_kd = round(t_kills / max(t_deaths, 1), 2)
+
+        # Recent form (last 5 on this map)
+        recent = map_exports[:5]
+        recent_wins = sum(1 for e in recent if e.get("result") == "Sieg")
+        recent_rating = round(sum(e.get("rating", 0) for e in recent) / max(len(recent), 1), 2)
+
+        # Compute a composite score for ranking
+        # Weight: 40% win_rate, 30% rating, 15% recent form, 15% K/D
+        composite = (
+            ms["win_rate"] * 0.4
+            + ms["avg_rating"] * 30 * 0.3
+            + (recent_wins / max(len(recent), 1) * 100) * 0.15
+            + min(ms["avg_kd"], 2.0) * 50 * 0.15
+        )
+
+        # Recommendation text
+        if ms["win_rate"] >= 55 and ms["avg_rating"] >= 1.0:
+            rec = "Starke Map — Pick empfohlen"
+            rec_type = "pick"
+        elif ms["win_rate"] >= 50 and ms["avg_rating"] >= 0.9:
+            rec = "Solide Map — spielbar"
+            rec_type = "neutral"
+        elif ms["win_rate"] < 40 or ms["avg_rating"] < 0.8:
+            rec = "Schwache Map — Ban empfohlen"
+            rec_type = "ban"
+        else:
+            rec = "Durchschnittlich — nur bei Bedarf"
+            rec_type = "neutral"
+
+        stronger_side = "CT" if ct_kd > t_kd else ("T" if t_kd > ct_kd else "Ausgeglichen")
+
+        enriched.append({
+            **ms,
+            "ct_kd": ct_kd,
+            "t_kd": t_kd,
+            "ct_kills": ct_kills,
+            "ct_deaths": ct_deaths,
+            "t_kills": t_kills,
+            "t_deaths": t_deaths,
+            "stronger_side": stronger_side,
+            "recent_wins": recent_wins,
+            "recent_total": len(recent),
+            "recent_rating": recent_rating,
+            "composite": composite,
+            "recommendation": rec,
+            "rec_type": rec_type,
+        })
+
+    # Sort by composite score
+    ranked = sorted(enriched, key=lambda x: -x["composite"])
+
+    # Top picks and bans
+    picks = [m for m in ranked if m["rec_type"] == "pick"]
+    bans = [m for m in ranked if m["rec_type"] == "ban"]
+
+    return {
+        "has_data": True,
+        "maps": ranked,
+        "picks": picks,
+        "bans": bans,
     }

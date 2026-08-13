@@ -27,11 +27,21 @@
             <input type="text" name="coach_subfolder" value="{{ config.get('coach_subfolder', 'CS2-Coach') }}" class="input">
         </div>
         <div class="field">
+            <label>Demo-Ordner (fuer Folder-Watch)</label>
+            <input type="text" name="demo_folder" value="{{ config.get('demo_folder', '') }}" placeholder="C:/Users/.../csgo/replays" class="input">
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Ordner mit .dem-Dateien. Wird fuer Auto-Analyse ueberwacht.</div>
+        </div>
+        <div class="field">
             <label>Sprache</label>
             <select name="language" class="input">
                 <option value="de" {% if config.get('language', 'de') == 'de' %}selected{% endif %}>Deutsch</option>
                 <option value="en" {% if config.get('language') == 'en' %}selected{% endif %}>English</option>
             </select>
+        </div>
+        <div class="field">
+            <label>Discord Webhook URL</label>
+            <input type="text" name="discord_webhook" value="{{ config.get('discord_webhook', '') }}" placeholder="https://discord.com/api/webhooks/..." class="input">
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Optional: Match-Ergebnisse automatisch in Discord posten.</div>
         </div>
         <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Speichern</button>
     </form>

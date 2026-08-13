@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Runden-Highlights{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Runden-Highlights</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Jede Runde klassifiziert — Hero, Impact, Invisible. Finde Muster in deinem Spielverhalten.
+</p>
+
+<style>
+    .hl-totals { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-5); }
+    .hl-total-card {
+        flex: 1; min-width: 110px; text-align: center; padding: 12px;
+        border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm);
+    }
+    .hl-total-val { font-family: var(--font-heading); font-size: 26px; font-weight: 700; line-height: 1; }
+    .hl-total-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .hl-match {
+        margin-bottom: var(--space-4); padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm);
+    }
+    .hl-match-head {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+    }
+    .hl-match-title { font-size: 15px; font-weight: 600; }
+    .hl-match-meta { font-size: 12px; color: var(--color-neutral-500); display: flex; gap: 12px; align-items: center; }
+    .hl-match-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+    .hl-badge {
+        font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+        display: inline-flex; align-items: center; gap: 3px;
+    }
+    .hl-badge-hero { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .hl-badge-impact { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .hl-badge-invisible { background: rgba(248,113,113,0.15); color: #f87171; }
+
+    .hl-timeline {
+        display: flex; gap: 3px; flex-wrap: wrap; align-items: center;
+        padding: 8px 0;
+    }
+    .hl-divider {
+        width: 2px; height: 24px; background: var(--color-neutral-700);
+        margin: 0 4px; flex-shrink: 0;
+    }
+    .hl-round {
+        width: 28px; height: 28px; border-radius: 4px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 10px; font-weight: 600; cursor: default;
+        position: relative; transition: transform 0.1s;
+        border: 1px solid transparent;
+    }
+    .hl-round:hover { transform: scale(1.3); z-index: 5; }
+
+    /* Round colors based on classification */
+    .hl-r-hero { background: rgba(251,191,36,0.25); color: #fbbf24; border-color: rgba(251,191,36,0.4); }
+    .hl-r-impact { background: rgba(74,222,128,0.2); color: #4ade80; border-color: rgba(74,222,128,0.3); }
+    .hl-r-invisible { background: rgba(248,113,113,0.2); color: #f87171; border-color: rgba(248,113,113,0.3); }
+    .hl-r-survivor { background: rgba(145,132,217,0.2); color: #b98eff; border-color: rgba(145,132,217,0.3); }
+    .hl-r-entry { background: rgba(96,165,250,0.2); color: #60a5fa; border-color: rgba(96,165,250,0.3); }
+    .hl-r-won { background: rgba(74,222,128,0.08); color: var(--color-neutral-300); }
+    .hl-r-lost { background: rgba(248,113,113,0.06); color: var(--color-neutral-500); }
+    .hl-r-lost.hl-r-died { color: var(--color-neutral-600); }
+
+    .hl-legend {
+        display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: var(--space-4);
+        font-size: 11px; color: var(--color-neutral-400);
+    }
+    .hl-legend-item { display: flex; align-items: center; gap: 5px; }
+    .hl-legend-dot {
+        width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
+    }
+
+    .hl-filter { display: flex; gap: 4px; margin-bottom: var(--space-4); flex-wrap: wrap; }
+    .hl-filter-btn {
+        padding: 5px 12px; border-radius: 20px; cursor: pointer;
+        font-size: 11px; border: 1px solid var(--color-divider);
+        background: transparent; color: var(--color-neutral-400);
+        font-family: var(--font-body); transition: all 0.15s;
+    }
+    .hl-filter-btn:hover { border-color: var(--color-neutral-600); color: var(--color-text); }
+    .hl-filter-btn.active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(145,132,217,0.1); }
+
+    .hl-tooltip {
+        display: none; position: fixed; z-index: 999; padding: 10px 14px;
+        background: var(--color-neutral-900); border: 1px solid var(--color-neutral-700);
+        border-radius: var(--radius-md); box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        font-size: 12px; max-width: 260px; pointer-events: none;
+    }
+    .hl-tooltip.visible { display: block; }
+    .hl-tt-title { font-weight: 600; margin-bottom: 4px; }
+    .hl-tt-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+    .hl-tt-events { font-size: 11px; color: var(--color-neutral-400); }
+    .hl-tt-event { padding: 1px 0; }
+</style>
+
+{% if not hl.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Daten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- Aggregate totals -->
+<div class="hl-totals">
+    <div class="hl-total-card">
+        <div class="hl-total-val" style="color:#fbbf24;">{{ hl.totals.hero }}</div>
+        <div class="hl-total-lbl">Hero-Runden</div>
+    </div>
+    <div class="hl-total-card">
+        <div class="hl-total-val" style="color:#4ade80;">{{ hl.totals.impact }}</div>
+        <div class="hl-total-lbl">Impact-Runden</div>
+    </div>
+    <div class="hl-total-card">
+        <div class="hl-total-val" style="color:#60a5fa;">{{ hl.totals.entry }}</div>
+        <div class="hl-total-lbl">Entry Kills</div>
+    </div>
+    <div class="hl-total-card">
+        <div class="hl-total-val" style="color:#b98eff;">{{ hl.totals.survivor }}</div>
+        <div class="hl-total-lbl">Survivor-Runden</div>
+    </div>
+    <div class="hl-total-card">
+        <div class="hl-total-val" style="color:#f87171;">{{ hl.totals.invisible }}</div>
+        <div class="hl-total-lbl">Invisible-Runden</div>
+    </div>
+    <div class="hl-total-card">
+        <div class="hl-total-val">{{ hl.totals.total_rounds }}</div>
+        <div class="hl-total-lbl">Runden gesamt</div>
+    </div>
+</div>
+
+<!-- Legend -->
+<div class="hl-legend">
+    <div class="hl-legend-item"><div class="hl-legend-dot" style="background:rgba(251,191,36,0.4);"></div> Hero (3K+ & Sieg)</div>
+    <div class="hl-legend-item"><div class="hl-legend-dot" style="background:rgba(74,222,128,0.35);"></div> Impact (Entry + Sieg)</div>
+    <div class="hl-legend-item"><div class="hl-legend-dot" style="background:rgba(96,165,250,0.35);"></div> Entry Kill</div>
+    <div class="hl-legend-item"><div class="hl-legend-dot" style="background:rgba(145,132,217,0.35);"></div> Survivor</div>
+    <div class="hl-legend-item"><div class="hl-legend-dot" style="background:rgba(248,113,113,0.3);"></div> Invisible</div>
+    <div class="hl-legend-item"><div class="hl-legend-dot" style="background:rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.2);"></div> Sieg</div>
+    <div class="hl-legend-item"><div class="hl-legend-dot" style="background:rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.15);"></div> Niederlage</div>
+</div>
+
+<!-- Match timelines -->
+{% for m in hl.matches %}
+<div class="hl-match" data-hero="{{ m.hero_count }}" data-invisible="{{ m.invisible_count }}">
+    <div class="hl-match-head">
+        <div>
+            <div class="hl-match-title">
+                <span class="{% if m.result == 'Sieg' %}win{% elif m.result == 'Niederlage' %}loss{% else %}draw{% endif %}">{{ m.result }}</span>
+                — {{ m.map }} {{ m.score }}
+            </div>
+            <div class="hl-match-meta">
+                <span>{{ m.date }}</span>
+                <span>{{ m.kills }}K/{{ m.deaths }}D</span>
+                <span>Rating {{ m.rating }}</span>
+            </div>
+        </div>
+        <div class="hl-match-badges">
+            {% if m.hero_count > 0 %}<span class="hl-badge hl-badge-hero">{{ m.hero_count }}x Hero</span>{% endif %}
+            {% if m.impact_count > 0 %}<span class="hl-badge hl-badge-impact">{{ m.impact_count }}x Impact</span>{% endif %}
+            {% if m.invisible_count > 0 %}<span class="hl-badge hl-badge-invisible">{{ m.invisible_count }}x Invisible</span>{% endif %}
+        </div>
+    </div>
+
+    <div class="hl-timeline">
+        {% for r in m.rounds %}
+            {% if r.round == 13 %}<div class="hl-divider" title="Seitenwechsel"></div>{% endif %}
+            {% if r.round > 24 and (r.round - 25) % 3 == 0 and r.round != 25 %}<div class="hl-divider" title="OT-Wechsel"></div>{% endif %}
+            <div class="hl-round {% if 'hero' in r.tags %}hl-r-hero{% elif 'impact' in r.tags %}hl-r-impact{% elif 'invisible' in r.tags %}hl-r-invisible{% elif 'survivor' in r.tags %}hl-r-survivor{% elif 'entry' in r.tags %}hl-r-entry{% elif r.won %}hl-r-won{% else %}hl-r-lost{% endif %} {% if r.died and 'hero' not in r.tags and 'impact' not in r.tags %}hl-r-died{% endif %}"
+                 title="R{{ r.round }} {{ r.side }} | {{ r.kills }}K {% if r.died %}💀{% endif %} {% if r.won %}✓{% else %}✗{% endif %} {% for t in r.tags %}[{{ t }}] {% endfor %}"
+                 data-round='{{ {"round": r.round, "side": r.side, "kills": r.kills, "died": r.died, "won": r.won, "tags": r.tags, "weapons": r.weapons, "headshots": r.headshots, "events": r.events}|tojson }}' onmouseenter="showTip(event, this)" onmouseleave="hideTip()">
+                {% if r.kills > 0 %}{{ r.kills }}{% elif r.died %}×{% else %}-{% endif %}
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+<!-- Tooltip element -->
+<div class="hl-tooltip" id="hl-tooltip"></div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+var tip = document.getElementById('hl-tooltip');
+
+function showTip(ev, el) {
+    var d = JSON.parse(el.dataset.round);
+    var html = '<div class="hl-tt-title">Runde ' + d.round + ' (' + d.side + ') — ' + (d.won ? '<span class="win">Sieg</span>' : '<span class="loss">Niederlage</span>') + '</div>';
+
+    if (d.tags.length) {
+        html += '<div class="hl-tt-tags">';
+        d.tags.forEach(function(t) {
+            var cls = 'hl-badge hl-badge-' + (t === 'hero' ? 'hero' : t === 'invisible' ? 'invisible' : 'impact');
+            html += '<span class="' + cls + '">' + t + '</span>';
+        });
+        html += '</div>';
+    }
+
+    html += '<div class="hl-tt-events">';
+    html += '<div class="hl-tt-event"><strong>' + d.kills + ' Kill' + (d.kills !== 1 ? 's' : '') + '</strong>';
+    if (d.headshots > 0) html += ' (' + d.headshots + ' HS)';
+    if (d.died) html += ' | <span class="loss">Gestorben</span>';
+    else html += ' | <span class="win">Ueberlebt</span>';
+    html += '</div>';
+
+    if (d.weapons.length) {
+        html += '<div class="hl-tt-event" style="color:var(--color-neutral-500);">Waffen: ' + d.weapons.join(', ') + '</div>';
+    }
+
+    // Show events timeline
+    d.events.forEach(function(e) {
+        if (e.type === 'kill') {
+            html += '<div class="hl-tt-event"><span class="win">✓</span> ' + (e.target || '?') + (e.headshot ? ' (HS)' : '') + '</div>';
+        } else if (e.type === 'death') {
+            html += '<div class="hl-tt-event"><span class="loss">✗</span> von ' + (e.killer || '?') + '</div>';
+        }
+    });
+
+    html += '</div>';
+
+    tip.innerHTML = html;
+    tip.classList.add('visible');
+
+    var rect = el.getBoundingClientRect();
+    tip.style.left = Math.min(rect.left, window.innerWidth - 280) + 'px';
+    tip.style.top = (rect.top - tip.offsetHeight - 8) + 'px';
+    if (parseInt(tip.style.top) < 0) {
+        tip.style.top = (rect.bottom + 8) + 'px';
+    }
+}
+
+function hideTip() {
+    tip.classList.remove('visible');
+}
+</script>
+{% endblock %}

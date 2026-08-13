@@ -147,6 +147,10 @@
             background: linear-gradient(135deg, var(--color-accent), #6366f1);
             display: flex; align-items: center; justify-content: center;
             font-size: 10px; font-weight: 700; color: #fff; letter-spacing: 0.02em;
+            overflow: hidden;
+        }
+        .nav-avatar img {
+            width: 100%; height: 100%; object-fit: cover;
         }
 
         /* Fading rule */
@@ -247,13 +251,22 @@
         <a href="{{ url_for('sessions') }}"><i data-lucide="calendar-days" style="width:14px;height:14px;"></i> <span>Sessions</span></a>
         <a href="{{ url_for('weapons') }}"><i data-lucide="crosshair" style="width:14px;height:14px;"></i> <span>Waffen</span></a>
         <a href="{{ url_for('goals') }}"><i data-lucide="target" style="width:14px;height:14px;"></i> <span>Ziele</span></a>
+        <a href="{{ url_for('economy') }}"><i data-lucide="coins" style="width:14px;height:14px;"></i> <span>Economy</span></a>
+        <a href="{{ url_for('maps') }}"><i data-lucide="map" style="width:14px;height:14px;"></i> <span>Maps</span></a>
         <a href="{{ url_for('opponents') }}"><i data-lucide="swords" style="width:14px;height:14px;"></i> <span>Gegner</span></a>
         <a href="{{ url_for('compare') }}"><i data-lucide="trophy" style="width:14px;height:14px;"></i> <span>Fortschritt</span></a>
+        <a href="{{ url_for('digest') }}"><i data-lucide="notebook-pen" style="width:14px;height:14px;"></i> <span>Digest</span></a>
+        <a href="{{ url_for('watch') }}"><i data-lucide="folder-search" style="width:14px;height:14px;"></i> <span>Watch</span></a>
+        <a href="{{ url_for('highlights') }}"><i data-lucide="sparkles" style="width:14px;height:14px;"></i> <span>Highlights</span></a>
+        <a href="{{ url_for('habits') }}"><i data-lucide="activity" style="width:14px;height:14px;"></i> <span>Habits</span></a>
+        <a href="{{ url_for('achievements') }}"><i data-lucide="award" style="width:14px;height:14px;"></i> <span>Achievements</span></a>
         <a href="{{ url_for('exports') }}"><i data-lucide="archive" style="width:14px;height:14px;"></i> <span>Exports</span></a>
         <a href="{{ url_for('settings') }}"><i data-lucide="settings" style="width:14px;height:14px;"></i> <span>Einstellungen</span></a>
         {% if config and config.get('player_name') %}
         <div class="nav-player">
-            <div class="nav-avatar">{{ config.player_name[:2]|upper }}</div>
+            <div class="nav-avatar">
+                {% if steam_avatar_url %}<img src="{{ steam_avatar_url }}" alt="Avatar">{% else %}{{ config.player_name[:2]|upper }}{% endif %}
+            </div>
             <span>{{ config.player_name }}</span>
         </div>
         {% endif %}
