@@ -57,6 +57,7 @@ def _build_export_json(result: MatchResult, coach_report: str) -> dict:
             "score_enemy": result.score_team2,
             "total_rounds": result.total_rounds,
             "result": result.result_str,
+            "demo_file": Path(result.demo_path).name if result.demo_path else "",
         },
         "player": _player_to_json(s, True, include_rating=result.rating),
         "report": coach_report,

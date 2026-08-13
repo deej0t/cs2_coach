@@ -8,21 +8,48 @@
     .sort-header::after { content: ''; display: inline-block; width: 12px; margin-left: 4px; }
     .sort-header.sort-asc::after { content: '\25B2'; font-size: 8px; vertical-align: middle; }
     .sort-header.sort-desc::after { content: '\25BC'; font-size: 8px; vertical-align: middle; }
+
+    /* Scan list */
+    .scan-summary { display: flex; gap: var(--space-5); font-size: 13px; margin-bottom: var(--space-3); }
+    .scan-count { font-weight: 600; }
+    .scan-new { color: var(--color-accent); }
+    .scan-done { color: var(--color-green); }
+    .demo-list { max-height: 420px; overflow-y: auto; border: 1px solid var(--color-divider); border-radius: var(--radius-md); }
+    .demo-row {
+        display: grid; grid-template-columns: 24px 1fr 140px 70px 80px; gap: 8px; align-items: center;
+        padding: 7px 12px; font-size: 12px; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent);
+        transition: background 0.1s;
+    }
+    .demo-row:last-child { border-bottom: none; }
+    .demo-row:hover { background: color-mix(in srgb, var(--color-accent) 4%, transparent); }
+    .demo-row.analyzed { opacity: 0.5; }
+    .demo-status { width: 8px; height: 8px; border-radius: 50%; }
+    .demo-status.new { background: var(--color-accent); box-shadow: 0 0 6px var(--color-accent); }
+    .demo-status.done { background: var(--color-green); }
+    .demo-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .demo-date { color: var(--color-neutral-500); }
+    .demo-size { color: var(--color-neutral-600); text-align: right; }
+    .demo-action { text-align: right; }
+    .scan-filter-bar { display: flex; gap: 8px; margin-bottom: var(--space-3); }
+    .scan-pill { padding: 3px 10px; font-size: 11px; border: 1px solid var(--color-neutral-700); background: transparent; color: var(--color-neutral-400); cursor: pointer; border-radius: var(--radius-sm); transition: all 0.15s; }
+    .scan-pill.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
 </style>
 
 <h2>Batch-Analyse</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Analysiere alle .dem-Dateien in einem Ordner auf einmal.
+    Scanne einen Demo-Ordner, sieh welche Matches neu sind, und analysiere alle auf einmal.
 </p>
 
 <!-- Form -->
 <div id="batch-form-card" class="card elev-sm" style="max-width: 600px; margin-bottom: var(--space-5);">
     <span class="card-kicker">Ordner</span>
-    <h3 class="card-title">Demos aus Ordner analysieren</h3>
     <form id="batch-form" style="display:flex;flex-direction:column;gap:var(--space-3);">
         <div class="field">
             <label>Ordner-Pfad</label>
-            <input type="text" name="folder_path" id="batch-folder" placeholder="D:/SteamLibrary/.../replays/" required class="input">
+            <div style="display:flex;gap:var(--space-2);">
+                <input type="text" name="folder_path" id="batch-folder" placeholder="D:/SteamLibrary/.../replays/" required class="input" style="flex:1;">
+                <button type="button" id="scan-btn" class="btn btn-secondary">Scannen</button>
+            </div>
         </div>
         <div class="grid-2">
             <div class="field">
@@ -35,10 +62,29 @@
             </div>
         </div>
         <div style="display: flex; gap: var(--space-3); align-items: center;">
-            <button type="submit" id="batch-submit" class="btn btn-primary">Alle analysieren</button>
+            <button type="submit" id="batch-submit" class="btn btn-primary" disabled>Alle analysieren</button>
+            <button type="button" id="batch-new-only" class="btn btn-secondary" style="display:none;">Nur Neue analysieren</button>
             <button type="button" id="batch-reset" class="btn btn-secondary" style="display:none;">Reset</button>
         </div>
     </form>
+</div>
+
+<!-- Scan Results (hidden initially) -->
+<div id="scan-results" style="display:none; margin-bottom: var(--space-5);">
+    <div class="card elev-sm" style="padding: var(--space-3);">
+        <div class="card-kicker" style="margin-bottom: 8px;">Demo-Dateien</div>
+        <div class="scan-summary">
+            <span>Gesamt: <span class="scan-count" id="scan-total">0</span></span>
+            <span>Neu: <span class="scan-count scan-new" id="scan-new">0</span></span>
+            <span>Analysiert: <span class="scan-count scan-done" id="scan-analyzed">0</span></span>
+        </div>
+        <div class="scan-filter-bar">
+            <button class="scan-pill active" data-filter="all">Alle</button>
+            <button class="scan-pill" data-filter="new">Nur Neue</button>
+            <button class="scan-pill" data-filter="done">Bereits analysiert</button>
+        </div>
+        <div class="demo-list" id="demo-list"></div>
+    </div>
 </div>
 
 <!-- Progress (hidden initially) -->
@@ -66,11 +112,11 @@
             <div id="summary-record" style="font-size: 28px; font-weight: 500;"></div>
         </div>
         <div class="card elev-sm">
-            <div class="card-kicker">Avg Rating</div>
+            <div class="card-kicker"><abbr title="Gesamtbewertung basierend auf Impact-Metriken">Avg Rating</abbr></div>
             <div id="summary-rating" style="font-size: 28px; font-weight: 500;"></div>
         </div>
         <div class="card elev-sm">
-            <div class="card-kicker">Gesamt K/D</div>
+            <div class="card-kicker"><abbr title="Kill/Death-Verhaeltnis">Gesamt K/D</abbr></div>
             <div id="summary-kd" style="font-size: 28px; font-weight: 500;"></div>
             <div id="summary-kd-ratio" style="font-size: 12px; color: var(--color-neutral-500);"></div>
         </div>
@@ -103,8 +149,12 @@
 <script>
 (function() {
     var form = document.getElementById('batch-form');
+    var scanBtn = document.getElementById('scan-btn');
     var submitBtn = document.getElementById('batch-submit');
+    var newOnlyBtn = document.getElementById('batch-new-only');
     var resetBtn = document.getElementById('batch-reset');
+    var scanResults = document.getElementById('scan-results');
+    var demoList = document.getElementById('demo-list');
     var progressDiv = document.getElementById('batch-progress');
     var progressBar = document.getElementById('progress-bar');
     var progressCount = document.getElementById('progress-count');
@@ -117,134 +167,197 @@
 
     var allResults = [];
     var allErrors = [];
+    var scannedDemos = [];
     var currentES = null;
+    var scanFilter = 'all';
+
+    // ---- Scan ----
+    scanBtn.addEventListener('click', function() {
+        var folder = document.getElementById('batch-folder').value.trim();
+        if (!folder) return;
+        scanBtn.disabled = true;
+        scanBtn.textContent = 'Scanne...';
+
+        fetch('{{ url_for("scan_folder") }}?folder=' + encodeURIComponent(folder))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                scanBtn.disabled = false;
+                scanBtn.textContent = 'Scannen';
+                if (data.error) {
+                    if (typeof notyf !== 'undefined') notyf.error(data.error);
+                    return;
+                }
+                scannedDemos = data.demos;
+                document.getElementById('scan-total').textContent = data.total;
+                document.getElementById('scan-new').textContent = data.new;
+                document.getElementById('scan-analyzed').textContent = data.analyzed;
+                scanResults.style.display = '';
+                renderDemoList();
+                submitBtn.disabled = false;
+                if (data.new > 0) {
+                    newOnlyBtn.style.display = '';
+                    newOnlyBtn.textContent = 'Nur Neue (' + data.new + ')';
+                } else {
+                    newOnlyBtn.style.display = 'none';
+                }
+            })
+            .catch(function() {
+                scanBtn.disabled = false;
+                scanBtn.textContent = 'Scannen';
+            });
+    });
+
+    // ---- Scan filter pills ----
+    document.querySelectorAll('.scan-pill').forEach(function(pill) {
+        pill.addEventListener('click', function() {
+            document.querySelectorAll('.scan-pill').forEach(function(p) { p.classList.remove('active'); });
+            this.classList.add('active');
+            scanFilter = this.dataset.filter;
+            renderDemoList();
+        });
+    });
+
+    function renderDemoList() {
+        demoList.innerHTML = '';
+        var filtered = scannedDemos.filter(function(d) {
+            if (scanFilter === 'new') return !d.analyzed;
+            if (scanFilter === 'done') return d.analyzed;
+            return true;
+        });
+        if (filtered.length === 0) {
+            demoList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-neutral-500);font-size:13px;">Keine Demos in dieser Kategorie.</div>';
+            return;
+        }
+        for (var i = 0; i < filtered.length; i++) {
+            var d = filtered[i];
+            var row = document.createElement('div');
+            row.className = 'demo-row' + (d.analyzed ? ' analyzed' : '');
+            row.innerHTML =
+                '<div><span class="demo-status ' + (d.analyzed ? 'done' : 'new') + '" title="' + (d.analyzed ? 'Bereits analysiert' : 'Neu — noch nicht analysiert') + '"></span></div>' +
+                '<div class="demo-name" title="' + esc(d.filename) + '">' + esc(d.filename) + '</div>' +
+                '<div class="demo-date">' + esc(d.date) + '</div>' +
+                '<div class="demo-size">' + d.size_mb + ' MB</div>' +
+                '<div class="demo-action">' +
+                    (d.analyzed
+                        ? '<span style="font-size:10px;color:var(--color-green);">&#10003;</span>'
+                        : '<span style="font-size:10px;color:var(--color-accent);">NEU</span>') +
+                '</div>';
+            demoList.appendChild(row);
+        }
+    }
 
     // ---- Reset ----
     resetBtn.addEventListener('click', function() {
         if (currentES) { currentES.close(); currentES = null; }
-        allResults = [];
-        allErrors = [];
+        allResults = []; allErrors = [];
         resultsBody.innerHTML = '';
-        errorsDiv.innerHTML = '';
-        errorsDiv.style.display = 'none';
-        summaryDiv.style.display = 'none';
-        resultsDiv.style.display = 'none';
+        errorsDiv.innerHTML = ''; errorsDiv.style.display = 'none';
+        summaryDiv.style.display = 'none'; resultsDiv.style.display = 'none';
         progressDiv.style.display = 'none';
-        progressBar.style.width = '0%';
-        progressBar.style.background = 'var(--color-accent)';
+        progressBar.style.width = '0%'; progressBar.style.background = 'var(--color-accent)';
         resetBtn.style.display = 'none';
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Alle analysieren';
-        // Clear sort indicators
-        document.querySelectorAll('.sort-header').forEach(function(th) {
-            th.classList.remove('sort-asc', 'sort-desc');
-        });
+        submitBtn.disabled = false; submitBtn.textContent = 'Alle analysieren';
+        document.querySelectorAll('.sort-header').forEach(function(th) { th.classList.remove('sort-asc', 'sort-desc'); });
     });
 
-    // ---- Batch submit ----
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-
+    // ---- Start batch (all or new only) ----
+    function startBatch(newOnly) {
         var folder = document.getElementById('batch-folder').value.trim();
         var player = document.getElementById('batch-player').value.trim();
         var steamid = document.getElementById('batch-steamid').value.trim();
-
         if (!folder) return;
 
-        // Reset UI
-        allResults = [];
-        allErrors = [];
+        allResults = []; allErrors = [];
         resultsBody.innerHTML = '';
-        errorsDiv.innerHTML = '';
-        errorsDiv.style.display = 'none';
+        errorsDiv.innerHTML = ''; errorsDiv.style.display = 'none';
         summaryDiv.style.display = 'none';
-        progressDiv.style.display = '';
-        resultsDiv.style.display = '';
-        progressBar.style.width = '0%';
-        progressBar.style.background = 'var(--color-accent)';
+        progressDiv.style.display = ''; resultsDiv.style.display = '';
+        progressBar.style.width = '0%'; progressBar.style.background = 'var(--color-accent)';
         progressCount.textContent = '0 / ?';
         progressLabel.textContent = 'Analysiere...';
         progressFile.textContent = '';
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Laeuft...';
+        submitBtn.disabled = true; submitBtn.textContent = 'Laeuft...';
+        newOnlyBtn.style.display = 'none';
         resetBtn.style.display = '';
 
         var params = new URLSearchParams({folder: folder, player: player, steamid: steamid});
+        if (newOnly) params.set('new_only', '1');
         var es = new EventSource('{{ url_for("batch_stream") }}?' + params.toString());
         currentES = es;
 
         es.onmessage = function(event) {
             var d = JSON.parse(event.data);
-
             if (d.type === 'error') {
                 es.close(); currentES = null;
-                progressLabel.textContent = 'Fehler';
-                progressFile.textContent = d.message;
-                progressBar.style.background = 'var(--color-red)';
-                progressBar.style.width = '100%';
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Alle analysieren';
+                progressLabel.textContent = 'Fehler'; progressFile.textContent = d.message;
+                progressBar.style.background = 'var(--color-red)'; progressBar.style.width = '100%';
+                submitBtn.disabled = false; submitBtn.textContent = 'Alle analysieren';
                 return;
             }
-
-            if (d.type === 'init') {
-                progressCount.textContent = '0 / ' + d.total;
-                return;
-            }
-
+            if (d.type === 'init') { progressCount.textContent = '0 / ' + d.total; return; }
             if (d.type === 'result') {
                 allResults.push(d);
-                var pct = (d.current / d.total * 100).toFixed(1);
-                progressBar.style.width = pct + '%';
+                progressBar.style.width = (d.current / d.total * 100).toFixed(1) + '%';
                 progressCount.textContent = d.current + ' / ' + d.total;
                 progressFile.textContent = d.filename;
                 addResultRow(d);
+                // Update scan list status
+                markAnalyzed(d.filename);
                 return;
             }
-
             if (d.type === 'error_item') {
                 allErrors.push(d);
-                var pct = (d.current / d.total * 100).toFixed(1);
-                progressBar.style.width = pct + '%';
+                progressBar.style.width = (d.current / d.total * 100).toFixed(1) + '%';
                 progressCount.textContent = d.current + ' / ' + d.total;
                 progressFile.textContent = d.filename + ' (Fehler)';
-
                 errorsDiv.style.display = '';
                 var div = document.createElement('div');
-                div.className = 'flash error';
-                div.style.marginBottom = '4px';
+                div.className = 'flash error'; div.style.marginBottom = '4px';
                 div.textContent = d.filename + ': ' + d.message;
                 errorsDiv.appendChild(div);
                 return;
             }
-
             if (d.type === 'done') {
                 es.close(); currentES = null;
                 progressLabel.textContent = 'Fertig';
-                progressBar.style.width = '100%';
-                progressBar.style.background = 'var(--color-green)';
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Alle analysieren';
+                progressBar.style.width = '100%'; progressBar.style.background = 'var(--color-green)';
+                submitBtn.disabled = false; submitBtn.textContent = 'Alle analysieren';
                 updateSummary();
+                // Re-scan to update counts
+                scanBtn.click();
                 return;
             }
         };
-
         es.onerror = function() {
             es.close(); currentES = null;
             progressLabel.textContent = 'Verbindung verloren';
             progressBar.style.background = 'var(--color-red)';
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Alle analysieren';
+            submitBtn.disabled = false; submitBtn.textContent = 'Alle analysieren';
         };
-    });
+    }
+
+    form.addEventListener('submit', function(e) { e.preventDefault(); startBatch(false); });
+    newOnlyBtn.addEventListener('click', function() { startBatch(true); });
+
+    function markAnalyzed(filename) {
+        for (var i = 0; i < scannedDemos.length; i++) {
+            if (scannedDemos[i].filename === filename) {
+                scannedDemos[i].analyzed = true;
+                break;
+            }
+        }
+        // Update counts
+        var newCount = scannedDemos.filter(function(d) { return !d.analyzed; }).length;
+        var doneCount = scannedDemos.filter(function(d) { return d.analyzed; }).length;
+        document.getElementById('scan-new').textContent = newCount;
+        document.getElementById('scan-analyzed').textContent = doneCount;
+    }
 
     // ---- Add result row ----
     function addResultRow(d) {
         var resultClass = d.result_str === 'Sieg' ? 'tag-win' : d.result_str === 'Niederlage' ? 'tag-loss' : 'tag-draw';
         var resultOrder = d.result_str === 'Sieg' ? 2 : d.result_str === 'Niederlage' ? 0 : 1;
         var tr = document.createElement('tr');
-        // Store sortable values as data attributes
         tr.dataset.date = d.date || '';
         tr.dataset.map = (d.map || '').toLowerCase();
         tr.dataset.result = resultOrder;
@@ -253,7 +366,6 @@
         tr.dataset.hs_pct = d.hs_pct;
         tr.dataset.kast_pct = d.kast_pct;
         tr.dataset.rating = d.rating;
-
         tr.innerHTML =
             '<td style="color:var(--color-neutral-500);">' + esc(d.date) + '</td>' +
             '<td>' + esc(d.map) + '</td>' +
@@ -264,52 +376,26 @@
             '<td>' + d.hs_pct + '%</td>' +
             '<td>' + d.kast_pct + '%</td>' +
             '<td>' + d.rating + '</td>' +
-            '<td>' +
-                '<form action="{{ url_for("analyze_path") }}" method="post" style="display:inline;">' +
-                    '<input type="hidden" name="demo_path" value="' + escAttr(d.demo_path) + '">' +
-                    '<input type="hidden" name="player" value="' + escAttr(document.getElementById('batch-player').value) + '">' +
-                    '<input type="hidden" name="steamid" value="' + escAttr(document.getElementById('batch-steamid').value) + '">' +
-                    '<button type="submit" class="btn btn-ghost" style="font-size:12px;padding:2px 8px;">Details &rarr;</button>' +
-                '</form>' +
-            '</td>';
+            '<td><form action="{{ url_for("analyze_path") }}" method="post" style="display:inline;"><input type="hidden" name="demo_path" value="' + escAttr(d.demo_path) + '"><input type="hidden" name="player" value="' + escAttr(document.getElementById('batch-player').value) + '"><input type="hidden" name="steamid" value="' + escAttr(document.getElementById('batch-steamid').value) + '"><button type="submit" class="btn btn-ghost" style="font-size:12px;padding:2px 8px;">Details &rarr;</button></form></td>';
         resultsBody.appendChild(tr);
     }
 
     // ---- Sortable columns ----
     var sortState = { key: null, asc: true };
-
     document.querySelectorAll('.sort-header').forEach(function(th) {
         th.addEventListener('click', function() {
             var key = this.dataset.sort;
-            if (sortState.key === key) {
-                sortState.asc = !sortState.asc;
-            } else {
-                sortState.key = key;
-                sortState.asc = true;
-            }
-
-            // Update header indicators
-            document.querySelectorAll('.sort-header').forEach(function(h) {
-                h.classList.remove('sort-asc', 'sort-desc');
-            });
+            if (sortState.key === key) { sortState.asc = !sortState.asc; }
+            else { sortState.key = key; sortState.asc = true; }
+            document.querySelectorAll('.sort-header').forEach(function(h) { h.classList.remove('sort-asc', 'sort-desc'); });
             this.classList.add(sortState.asc ? 'sort-asc' : 'sort-desc');
-
-            // Sort rows
             var rows = Array.from(resultsBody.querySelectorAll('tr'));
-            var isNumeric = ['kills', 'adr', 'hs_pct', 'kast_pct', 'rating', 'result'].indexOf(key) !== -1;
-
-            rows.sort(function(a, b) {
-                var va = a.dataset[key] || '';
-                var vb = b.dataset[key] || '';
-                var cmp;
-                if (isNumeric) {
-                    cmp = parseFloat(va) - parseFloat(vb);
-                } else {
-                    cmp = va.localeCompare(vb);
-                }
+            var isNum = ['kills','adr','hs_pct','kast_pct','rating','result'].indexOf(key) !== -1;
+            rows.sort(function(a,b) {
+                var va = a.dataset[key] || '', vb = b.dataset[key] || '';
+                var cmp = isNum ? parseFloat(va) - parseFloat(vb) : va.localeCompare(vb);
                 return sortState.asc ? cmp : -cmp;
             });
-
             rows.forEach(function(row) { resultsBody.appendChild(row); });
         });
     });
@@ -318,37 +404,22 @@
     function updateSummary() {
         if (allResults.length === 0) return;
         summaryDiv.style.display = '';
-
-        var wins = 0, losses = 0, draws = 0;
-        var totalK = 0, totalD = 0, ratingSum = 0;
+        var wins=0, losses=0, draws=0, totalK=0, totalD=0, ratingSum=0;
         for (var i = 0; i < allResults.length; i++) {
             var r = allResults[i];
-            if (r.result_str === 'Sieg') wins++;
-            else if (r.result_str === 'Niederlage') losses++;
-            else draws++;
-            totalK += r.kills;
-            totalD += r.deaths;
-            ratingSum += r.rating;
+            if (r.result_str === 'Sieg') wins++; else if (r.result_str === 'Niederlage') losses++; else draws++;
+            totalK += r.kills; totalD += r.deaths; ratingSum += r.rating;
         }
-
         var record = '<span class="win">' + wins + 'W</span> / <span class="loss">' + losses + 'L</span>';
         if (draws > 0) record += ' / <span class="draw">' + draws + 'D</span>';
         document.getElementById('summary-record').innerHTML = record;
         document.getElementById('summary-rating').textContent = (ratingSum / allResults.length).toFixed(2);
         document.getElementById('summary-kd').textContent = totalK + '/' + totalD;
-        document.getElementById('summary-kd-ratio').textContent = 'Ratio: ' + (totalK / Math.max(totalD, 1)).toFixed(2);
+        document.getElementById('summary-kd-ratio').textContent = 'Ratio: ' + (totalK / Math.max(totalD,1)).toFixed(2);
     }
 
-    // ---- Helpers ----
-    function esc(s) {
-        var d = document.createElement('div');
-        d.textContent = s || '';
-        return d.innerHTML;
-    }
-
-    function escAttr(s) {
-        return (s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
+    function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+    function escAttr(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 })();
 </script>
 {% endblock %}

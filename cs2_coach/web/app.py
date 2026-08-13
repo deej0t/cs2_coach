@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -201,12 +202,61 @@ def create_app() -> Flask:
     def batch():
         return render_template("batch.html", config=cfg)
 
+    @app.route("/api/scan-folder")
+    def scan_folder():
+        """List .dem files in a folder and mark which are already analyzed."""
+        folder = request.args.get("folder", "").strip()
+        folder_path = Path(folder)
+        if not folder_path.is_dir():
+            return jsonify({"error": "Ordner nicht gefunden"}), 400
+
+        demos = sorted(folder_path.glob("*.dem"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not demos:
+            return jsonify({"error": "Keine .dem-Dateien gefunden"}), 400
+
+        # Collect analyzed demo filenames from exports
+        analyzed_files = set()
+        vault_path = cfg.get("obsidian_vault_path", "")
+        sub = cfg.get("coach_subfolder", "CS2-Coach")
+        export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+        if export_dir and export_dir.exists():
+            for ef in export_dir.glob("*_coach.json"):
+                try:
+                    data = json.loads(ef.read_text(encoding="utf-8"))
+                    demo_file = data.get("match", {}).get("demo_file", "")
+                    if demo_file:
+                        analyzed_files.add(demo_file)
+                except Exception:
+                    pass
+
+        result = []
+        for d in demos:
+            mtime = d.stat().st_mtime
+            date_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+            size_mb = round(d.stat().st_size / (1024 * 1024), 1)
+            result.append({
+                "filename": d.name,
+                "path": str(d),
+                "date": date_str,
+                "size_mb": size_mb,
+                "analyzed": d.name in analyzed_files,
+            })
+
+        analyzed_count = sum(1 for r in result if r["analyzed"])
+        return jsonify({
+            "demos": result,
+            "total": len(result),
+            "analyzed": analyzed_count,
+            "new": len(result) - analyzed_count,
+        })
+
     @app.route("/api/batch-stream")
     def batch_stream():
         """SSE endpoint: streams progress for each demo in a folder."""
         folder = request.args.get("folder", "").strip()
         player_name = request.args.get("player", cfg.get("player_name", ""))
         steam_id = request.args.get("steamid", cfg.get("steam_id", ""))
+        new_only = request.args.get("new_only", "") == "1"
 
         folder_path = Path(folder)
         if not folder_path.is_dir():
@@ -219,6 +269,26 @@ def create_app() -> Flask:
             def err():
                 yield f"data: {json.dumps({'type': 'error', 'message': 'Keine .dem-Dateien gefunden'})}\n\n"
             return Response(err(), mimetype="text/event-stream")
+
+        if new_only:
+            analyzed_files: set[str] = set()
+            vault_path = cfg.get("obsidian_vault_path", "")
+            sub = cfg.get("coach_subfolder", "CS2-Coach")
+            export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+            if export_dir and export_dir.exists():
+                for ef in export_dir.glob("*_coach.json"):
+                    try:
+                        data = json.loads(ef.read_text(encoding="utf-8"))
+                        demo_file = data.get("match", {}).get("demo_file", "")
+                        if demo_file:
+                            analyzed_files.add(demo_file)
+                    except Exception:
+                        pass
+            demos = [d for d in demos if d.name not in analyzed_files]
+            if not demos:
+                def err():
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Keine neuen Demos gefunden'})}\n\n"
+                return Response(err(), mimetype="text/event-stream")
 
         def generate():
             total = len(demos)
