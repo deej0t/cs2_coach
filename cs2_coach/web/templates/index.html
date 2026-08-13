@@ -78,6 +78,44 @@
     .analyze-toggle .chevron { transition: transform 0.2s; font-size: 12px; }
     .analyze-section[open] .chevron { transform: rotate(90deg); }
 
+    /* ── Alert Bars ── */
+    .alert-bar {
+        display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+        border-radius: var(--radius-md); font-size: 13px;
+    }
+    .alert-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.25); color: var(--color-yellow); }
+    .alert-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.25); color: var(--color-green); }
+
+    /* ── Role Badge ── */
+    .role-badge {
+        width: 48px; height: 48px; border-radius: 50%;
+        background: rgba(145,132,217,0.12); border: 1px solid var(--color-accent-800);
+        display: flex; align-items: center; justify-content: center;
+        color: var(--color-accent); flex-shrink: 0;
+    }
+
+    /* ── Training Plan ── */
+    .training-list { display: flex; flex-direction: column; gap: 6px; }
+    .training-item {
+        display: flex; align-items: center; gap: 10px; padding: 7px 10px;
+        border-radius: var(--radius-sm); background: rgba(255,255,255,0.02);
+        border: 1px solid color-mix(in srgb, var(--color-text) 5%, transparent);
+    }
+    .training-type {
+        font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+        padding: 2px 7px; border-radius: 3px; white-space: nowrap;
+    }
+    .training-type-aim { background: rgba(248,113,113,0.15); color: var(--color-red); }
+    .training-type-movement { background: rgba(251,191,36,0.15); color: var(--color-yellow); }
+    .training-type-utility { background: rgba(74,222,128,0.15); color: var(--color-green); }
+    .training-type-review { background: rgba(145,132,217,0.15); color: var(--color-accent); }
+    .training-type-gameplan { background: rgba(56,189,248,0.15); color: #38bdf8; }
+    .training-type-rolle { background: rgba(251,146,60,0.15); color: #fb923c; }
+    .training-info { flex: 1; min-width: 0; }
+    .training-name { font-size: 13px; font-weight: 500; }
+    .training-desc { font-size: 11px; color: var(--color-neutral-500); }
+    .training-dur { font-size: 12px; color: var(--color-neutral-400); white-space: nowrap; font-weight: 500; }
+
     @media (max-width: 900px) {
         .dash-top { grid-template-columns: 1fr 1fr; }
         .dash-mid { grid-template-columns: 1fr; }
@@ -124,6 +162,18 @@
         <div class="qs-sub">K/D {{ dashboard.total_kills }}/{{ dashboard.total_deaths }} ({{ "%.2f"|format(dashboard.total_kills / [dashboard.total_deaths, 1]|max) }})</div>
     </div>
 </div>
+
+<!-- ── Trend Alerts ── -->
+{% if dashboard.alerts %}
+<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:var(--space-5);">
+    {% for a in dashboard.alerts %}
+    <div class="alert-bar alert-{{ a.type }}">
+        <i data-lucide="{{ a.icon }}" style="width:15px;height:15px;flex-shrink:0;"></i>
+        <span>{{ a.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
 
 <!-- ── Spider Chart + Strengths/Weaknesses ── -->
 <div class="dash-mid">
@@ -182,6 +232,65 @@
                         {% else %}var(--color-red){% endif %};"></div>
                 </div>
                 <div class="bm-rank">{{ b.rank }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- ── Role + Training Plan ── -->
+<div class="grid-2" style="margin-bottom:var(--space-5);">
+    <!-- Role Card -->
+    <div class="card elev-sm">
+        <span class="card-kicker">Deine Rolle</span>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+            <div class="role-badge">
+                {% if dashboard.role.primary == 'Entry Fragger' %}<i data-lucide="swords" style="width:22px;height:22px;"></i>
+                {% elif dashboard.role.primary == 'Support' %}<i data-lucide="shield" style="width:22px;height:22px;"></i>
+                {% elif dashboard.role.primary == 'AWPer' %}<i data-lucide="crosshair" style="width:22px;height:22px;"></i>
+                {% elif dashboard.role.primary == 'Lurker' %}<i data-lucide="eye" style="width:22px;height:22px;"></i>
+                {% elif dashboard.role.primary == 'Anchor' %}<i data-lucide="anchor" style="width:22px;height:22px;"></i>
+                {% endif %}
+            </div>
+            <div>
+                <div style="font-size:20px;font-weight:600;">{{ dashboard.role.primary }}</div>
+                <div style="font-size:11px;color:var(--color-neutral-500);">Zweitrolle: {{ dashboard.role.secondary }}</div>
+            </div>
+        </div>
+        <p style="font-size:13px;color:var(--color-neutral-400);margin-top:8px;">{{ dashboard.role.description }}</p>
+        <div style="font-size:12px;margin-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:2px 16px;">
+            <span style="color:var(--color-neutral-500);">Opening Rate</span><span style="text-align:right;font-weight:500;">{{ dashboard.role.stats.opening_rate }}%</span>
+            <span style="color:var(--color-neutral-500);">AWP-Anteil</span><span style="text-align:right;font-weight:500;">{{ dashboard.role.stats.awp_pct }}%</span>
+            <span style="color:var(--color-neutral-500);">Survival</span><span style="text-align:right;font-weight:500;">{{ dashboard.role.stats.avg_survival }}%</span>
+            <span style="color:var(--color-neutral-500);">Utility/Rd</span><span style="text-align:right;font-weight:500;">{{ dashboard.role.stats.avg_util }}</span>
+        </div>
+        <div class="focus-box" style="margin-top:auto;">
+            <div class="focus-label">Rollen-Tipp</div>
+            {{ dashboard.role.tip }}
+        </div>
+    </div>
+
+    <!-- Training Plan Card -->
+    <div class="card elev-sm">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span class="card-kicker">Trainingsplan</span>
+            <span style="font-size:11px;color:var(--color-neutral-500);">~{{ dashboard.training.total_minutes }} Min</span>
+        </div>
+        <p style="font-size:12px;color:var(--color-neutral-500);margin:2px 0 8px;">
+            Basierend auf deinen Schwaechen: {{ dashboard.training.weak_areas | join(', ') }}
+        </p>
+        <div class="training-list">
+            {% for ex in dashboard.training.exercises %}
+            <div class="training-item">
+                <div class="training-type training-type-{{ ex.type | lower }}">{{ ex.type }}</div>
+                <div class="training-info">
+                    <div class="training-name">
+                        {% if ex.url %}<a href="{{ ex.url }}" style="color:var(--color-accent);text-decoration:none;">{{ ex.name }}</a>
+                        {% else %}{{ ex.name }}{% endif %}
+                    </div>
+                    <div class="training-desc">{{ ex.desc }}</div>
+                </div>
+                <div class="training-dur">{{ ex.duration }}</div>
             </div>
             {% endfor %}
         </div>

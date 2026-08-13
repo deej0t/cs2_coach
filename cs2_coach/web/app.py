@@ -466,10 +466,13 @@ def _get_exports(cfg: dict) -> list[dict]:
             data = json.loads(f.read_text(encoding="utf-8"))
             match = data.get("match", {})
             player = data.get("player", {})
+            weapons = player.get("weapons", {})
+            side = player.get("side_split", {})
             exports.append({
                 "filename": f.name,
                 "date": match.get("date", match.get("datetime", "?")),
                 "map": match.get("map", "?"),
+                "total_rounds": match.get("total_rounds", 0),
                 "score": f"{match.get('score_own', '?')}:{match.get('score_enemy', '?')}",
                 "result": match.get("result", "?"),
                 "kd": player.get("kd", 0),
@@ -479,9 +482,29 @@ def _get_exports(cfg: dict) -> list[dict]:
                 "hs_pct": player.get("hs_pct", 0),
                 "kills": player.get("kills", 0),
                 "deaths": player.get("deaths", 0),
+                "assists": player.get("assists", 0),
                 "crosshair_placement": player.get("crosshair_placement", {}).get("avg_degrees", 0),
                 "counter_strafe": player.get("counter_strafe_score", 0),
                 "utility_per_round": player.get("utility_per_round", 0),
+                "opening_kills": player.get("opening_kills", 0),
+                "opening_deaths": player.get("opening_deaths", 0),
+                "trade_kills": player.get("trade_kills", 0),
+                "survival_rate": player.get("survival_rate", 0),
+                "awp_kills": weapons.get("awp_kills", 0),
+                "rifle_kills": weapons.get("rifle_kills", 0),
+                "pistol_kills": weapons.get("pistol_kills", 0),
+                "avg_fight_distance": player.get("engagement_distance", {}).get("avg", 0),
+                "clutch_wins": player.get("clutches", {}).get("wins", 0),
+                "clutch_attempts": player.get("clutches", {}).get("attempts", 0),
+                "ct_kills": side.get("ct_kills", 0),
+                "ct_deaths": side.get("ct_deaths", 0),
+                "t_kills": side.get("t_kills", 0),
+                "t_deaths": side.get("t_deaths", 0),
+                "deaths_early": player.get("death_timing", {}).get("early", 0),
+                "deaths_mid": player.get("death_timing", {}).get("mid", 0),
+                "deaths_late": player.get("death_timing", {}).get("late", 0),
+                "flash_enemies": player.get("flash_effectiveness", {}).get("enemies_blinded", 0),
+                "flash_teammates": player.get("flash_effectiveness", {}).get("teammates_blinded", 0),
             })
         except (json.JSONDecodeError, KeyError):
             continue
@@ -771,6 +794,189 @@ def _build_dashboard_data(exports: list[dict], map_stats: list[dict]) -> dict:
         else:
             break
 
+    # ── Role Detection ──
+    total_opening = sum(e.get("opening_kills", 0) + e.get("opening_deaths", 0) for e in exports)
+    total_ok = sum(e.get("opening_kills", 0) for e in exports)
+    opening_rate = total_ok / max(total_opening, 1)
+    avg_survival = round(sum(e.get("survival_rate", 0) for e in exports) / n, 1)
+    total_awp = sum(e.get("awp_kills", 0) for e in exports)
+    total_rifle = sum(e.get("rifle_kills", 0) for e in exports)
+    awp_pct = total_awp / max(total_awp + total_rifle, 1) * 100
+    avg_assists = sum(e.get("assists", 0) for e in exports) / n
+    total_early_deaths = sum(e.get("deaths_early", 0) for e in exports)
+    total_late_deaths = sum(e.get("deaths_late", 0) for e in exports)
+    total_all_deaths = total_early_deaths + sum(e.get("deaths_mid", 0) for e in exports) + total_late_deaths
+    early_death_pct = total_early_deaths / max(total_all_deaths, 1) * 100
+    late_death_pct = total_late_deaths / max(total_all_deaths, 1) * 100
+    avg_trade = sum(e.get("trade_kills", 0) for e in exports) / n
+
+    role_scores = {
+        "Entry Fragger": (opening_rate * 120) + (early_death_pct * 0.3) - (avg_survival * 0.2),
+        "Support": (avg_util * 15) + (avg_assists * 5) + (avg_trade * 8) - (opening_rate * 20),
+        "AWPer": (awp_pct * 1.5) + (sum(e.get("avg_fight_distance", 0) for e in exports) / n * 0.01),
+        "Lurker": (late_death_pct * 0.8) + (avg_survival * 0.3) - (avg_trade * 5) - (opening_rate * 30),
+        "Anchor": (avg_survival * 0.5) + (sum(e.get("ct_kills", 0) for e in exports) / max(sum(e.get("t_kills", 0) for e in exports), 1) * 15) - (early_death_pct * 0.2),
+    }
+    role_sorted = sorted(role_scores.items(), key=lambda x: -x[1])
+    primary_role = role_sorted[0][0]
+    secondary_role = role_sorted[1][0]
+
+    role_descriptions = {
+        "Entry Fragger": "Du suchst aktiv den ersten Kontakt und oeffnest Runden fuer dein Team.",
+        "Support": "Du unterstuetzt mit Utility und Trade-Kills — das Rueckgrat des Teams.",
+        "AWPer": "Du kontrollierst Lanes mit der AWP und hast hohe Kampfdistanzen.",
+        "Lurker": "Du spielst isoliert, stirbst spaet und suchst Off-Angle Kills.",
+        "Anchor": "Du haeltst Sites auf der CT-Seite und spielst passiv-defensiv.",
+    }
+
+    role_tips = {
+        "Entry Fragger": "Trainiere Prefire-Angles und Flash-Entries. Dein Team verlaesst sich auf deinen ersten Kill.",
+        "Support": "Lerne mehr Smoke/Flash Lineups. Gutes Support-Play gewinnt Runden ohne Highlight-Kills.",
+        "AWPer": "Arbeite an Quick-Scopes und Repositioning nach dem ersten Schuss.",
+        "Lurker": "Timing ist alles — lerne wann du rotieren und wann du halten musst.",
+        "Anchor": "Trainiere Retake-Situationen und lerne Delay-Utility (Molotov, Smoke).",
+    }
+
+    role = {
+        "primary": primary_role,
+        "secondary": secondary_role,
+        "description": role_descriptions[primary_role],
+        "tip": role_tips[primary_role],
+        "stats": {
+            "opening_rate": round(opening_rate * 100, 1),
+            "awp_pct": round(awp_pct, 1),
+            "avg_survival": avg_survival,
+            "avg_util": avg_util,
+            "early_death_pct": round(early_death_pct, 1),
+        },
+    }
+
+    # ── Training Plan ──
+    training_exercises = []
+    # Sort weaknesses by severity and build exercises
+    weak_keys = [w["key"] for w in weaknesses]
+
+    exercise_db = {
+        "hs_pct": [
+            {"name": "Aim Botz", "url": "steam://openurl/https://steamcommunity.com/sharedfiles/filedetails/?id=243702660", "duration": "10 Min", "desc": "Kopf-Level Tracking und Flick-Aim trainieren", "type": "Aim"},
+            {"name": "Prefire Map (aktive Map)", "url": "", "duration": "5 Min", "desc": "Angle-Peeking mit Crosshair auf Kopfhoehe ueben", "type": "Aim"},
+        ],
+        "crosshair": [
+            {"name": "Yprac Prefire", "url": "steam://openurl/https://steamcommunity.com/sharedfiles/filedetails/?id=3070253025", "duration": "10 Min", "desc": "Pre-Aim auf alle Standard-Angles deiner Map", "type": "Aim"},
+            {"name": "Fast Aim / Reflex", "url": "steam://openurl/https://steamcommunity.com/sharedfiles/filedetails/?id=3075927937", "duration": "5 Min", "desc": "Reaktionszeit und Crosshair-Praezision", "type": "Aim"},
+        ],
+        "counter_strafe": [
+            {"name": "Yprac Movement", "url": "steam://openurl/https://steamcommunity.com/sharedfiles/filedetails/?id=3070194772", "duration": "10 Min", "desc": "Counter-Strafe und A/D-Peeks ueben", "type": "Movement"},
+            {"name": "Peek Practice", "url": "", "duration": "5 Min", "desc": "In einem Offline-Server Jiggle-Peeks mit Stops ueben", "type": "Movement"},
+        ],
+        "utility": [
+            {"name": "Smoke Lineups ueben", "url": "", "duration": "10 Min", "desc": "Die 5 wichtigsten Smokes deiner Hauptmap lernen", "type": "Utility"},
+            {"name": "Yprac Utility Practice", "url": "steam://openurl/https://steamcommunity.com/sharedfiles/filedetails/?id=3070253025", "duration": "5 Min", "desc": "Flash-, Smoke- und Molotov-Lineups trainieren", "type": "Utility"},
+        ],
+        "adr": [
+            {"name": "Deathmatch (FFA)", "url": "", "duration": "10 Min", "desc": "Aggressiver spielen und mehr Kaempfe suchen", "type": "Aim"},
+            {"name": "Trade-Kill Bewusstsein", "url": "", "duration": "5 Min", "desc": "In Matches bewusst auf Trade-Positionen achten", "type": "Gameplan"},
+        ],
+        "kast": [
+            {"name": "Positioning Review", "url": "", "duration": "10 Min", "desc": "Letzte 3 Demos anschauen: Wo stirbst du ohne Impact?", "type": "Review"},
+            {"name": "Crossfire-Setups", "url": "", "duration": "5 Min", "desc": "Mit Teammates Crossfire-Positionen auf Maps einueben", "type": "Gameplan"},
+        ],
+        "rating": [
+            {"name": "Demo Review", "url": "", "duration": "15 Min", "desc": "Letzte Niederlage anschauen und 3 Fehler notieren", "type": "Review"},
+            {"name": "Impact-Runden bewusst spielen", "url": "", "duration": "5 Min", "desc": "In jeder Runde fragen: Was ist mein Job hier?", "type": "Gameplan"},
+        ],
+    }
+
+    # Primary: exercises for the two weakest areas
+    for wk in weak_keys:
+        for ex in exercise_db.get(wk, []):
+            training_exercises.append(ex)
+
+    # Add role-specific exercise
+    role_exercises = {
+        "Entry Fragger": {"name": "Prefire + Flash-Entry", "duration": "5 Min", "desc": "Flash werfen und sofort peeken ueben — Timing ist alles", "type": "Rolle"},
+        "Support": {"name": "Smoke/Flash Combos", "duration": "5 Min", "desc": "2-3 neue Utility-Combos fuer deine Hauptmap lernen", "type": "Rolle"},
+        "AWPer": {"name": "Quick-Scope Drill", "duration": "5 Min", "desc": "Aim Botz mit AWP — schnelles Scopen und Repositioning", "type": "Rolle"},
+        "Lurker": {"name": "Timing-Uebung", "duration": "5 Min", "desc": "Offline-Server: Rotations-Timing von verschiedenen Positionen testen", "type": "Rolle"},
+        "Anchor": {"name": "Retake Practice", "duration": "5 Min", "desc": "Retake-Smokes und Molotov-Lineups fuer deine Sites lernen", "type": "Rolle"},
+    }
+    training_exercises.append(role_exercises[primary_role])
+
+    total_training_min = sum(int(ex["duration"].split()[0]) for ex in training_exercises)
+
+    training = {
+        "exercises": training_exercises,
+        "total_minutes": total_training_min,
+        "weak_areas": [w["label"] for w in weaknesses],
+        "role_exercise": role_exercises[primary_role],
+    }
+
+    # ── Trend Alerts ──
+    alerts = []
+    if n >= 5:
+        last5_avg = lambda key: sum(e.get(key, 0) for e in last5) / 5
+        all_avg = lambda key: sum(e.get(key, 0) for e in exports) / n
+
+        # HS% dropping
+        hs_diff = last5_avg("hs_pct") - all_avg("hs_pct")
+        if hs_diff < -5:
+            alerts.append({"type": "warning", "icon": "trending-down",
+                           "text": f"HS% faellt: {last5_avg('hs_pct'):.1f}% (letzte 5) vs. {all_avg('hs_pct'):.1f}% (gesamt)"})
+        elif hs_diff > 5:
+            alerts.append({"type": "success", "icon": "trending-up",
+                           "text": f"HS% steigt: {last5_avg('hs_pct'):.1f}% (letzte 5) vs. {all_avg('hs_pct'):.1f}% (gesamt)"})
+
+        # ADR trend
+        adr_diff = last5_avg("adr") - all_avg("adr")
+        if adr_diff < -8:
+            alerts.append({"type": "warning", "icon": "trending-down",
+                           "text": f"ADR faellt: {last5_avg('adr'):.1f} vs. {all_avg('adr'):.1f} Durchschnitt"})
+        elif adr_diff > 8:
+            alerts.append({"type": "success", "icon": "trending-up",
+                           "text": f"ADR steigt: {last5_avg('adr'):.1f} vs. {all_avg('adr'):.1f} Durchschnitt"})
+
+        # KAST dropping
+        kast_diff = last5_avg("kast") - all_avg("kast")
+        if kast_diff < -4:
+            alerts.append({"type": "warning", "icon": "trending-down",
+                           "text": f"KAST% sinkt: {last5_avg('kast'):.1f}% vs. {all_avg('kast'):.1f}% — weniger Impact"})
+
+        # Rating trend
+        rat_diff = last5_avg("rating") - all_avg("rating")
+        if rat_diff > 0.08:
+            alerts.append({"type": "success", "icon": "trending-up",
+                           "text": f"Starke Form! Rating {last5_avg('rating'):.2f} vs. {all_avg('rating'):.2f} Durchschnitt"})
+        elif rat_diff < -0.08:
+            alerts.append({"type": "warning", "icon": "trending-down",
+                           "text": f"Rating sinkt: {last5_avg('rating'):.2f} vs. {all_avg('rating'):.2f} Durchschnitt"})
+
+        # Counter-Strafe trend
+        cs_diff = last5_avg("counter_strafe") - all_avg("counter_strafe")
+        if cs_diff > 5:
+            alerts.append({"type": "success", "icon": "trending-up",
+                           "text": f"Counter-Strafe verbessert: {last5_avg('counter_strafe'):.1f}% vs. {all_avg('counter_strafe'):.1f}%"})
+
+        # Utility trend
+        util_diff = last5_avg("utility_per_round") - all_avg("utility_per_round")
+        if util_diff < -0.3:
+            alerts.append({"type": "warning", "icon": "trending-down",
+                           "text": f"Weniger Utility: {last5_avg('utility_per_round'):.1f}/Runde vs. {all_avg('utility_per_round'):.1f} Durchschnitt"})
+
+        # Opening death rate in last 5
+        last5_od = sum(e.get("opening_deaths", 0) for e in last5)
+        last5_ok_val = sum(e.get("opening_kills", 0) for e in last5)
+        if last5_od > 0 and last5_ok_val > 0 and last5_od / max(last5_ok_val, 1) > 1.5:
+            alerts.append({"type": "warning", "icon": "alert-triangle",
+                           "text": f"Opening Duels negativ: {last5_ok_val} First-Kills vs. {last5_od} First-Deaths (letzte 5)"})
+
+        # Win streak / loss streak
+        if streak >= 3 and streak_type == "Sieg":
+            alerts.append({"type": "success", "icon": "flame",
+                           "text": f"Hot Streak! {streak} Siege in Folge"})
+        elif streak >= 3 and streak_type == "Niederlage":
+            alerts.append({"type": "warning", "icon": "alert-triangle",
+                           "text": f"{streak} Niederlagen in Folge — Zeit fuer eine Pause?"})
+
     return {
         "has_data": True,
         "total_matches": n,
@@ -792,4 +998,7 @@ def _build_dashboard_data(exports: list[dict], map_stats: list[dict]) -> dict:
         "worst_map": worst_map,
         "streak": streak,
         "streak_type": streak_type,
+        "role": role,
+        "training": training,
+        "alerts": alerts,
     }
