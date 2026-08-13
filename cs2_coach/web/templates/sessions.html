@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Sessions{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Session-Uebersicht</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Deine Spiel-Sessions gruppiert nach Tag — erkennt Tilt, Ermuedung und Warmup-Effekte.
+</p>
+
+{% if not sessions %}
+<div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
+    <p style="color: var(--color-neutral-500);">Keine analysierten Matches vorhanden.</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">Demo analysieren</a>
+</div>
+{% else %}
+
+<style>
+    .sess-card { padding: var(--space-4) !important; margin-bottom: var(--space-3); border-left: 3px solid var(--color-neutral-700); transition: border-color 0.2s; }
+    .sess-card-win { border-left-color: #4ade80; }
+    .sess-card-loss { border-left-color: #f87171; }
+    .sess-card-mixed { border-left-color: #fbbf24; }
+
+    .sess-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3); }
+    .sess-date { font-family: var(--font-heading); font-size: 18px; font-weight: 600; }
+    .sess-meta { display: flex; gap: var(--space-3); font-size: 12px; color: var(--color-neutral-500); }
+    .sess-meta-val { font-weight: 600; color: var(--color-text); }
+
+    .sess-stats { display: flex; gap: var(--space-4); margin-bottom: var(--space-3); flex-wrap: wrap; }
+    .sess-stat { text-align: center; min-width: 60px; }
+    .sess-stat-val { font-family: var(--font-heading); font-size: 20px; font-weight: 600; }
+    .sess-stat-label { font-size: 10px; color: var(--color-neutral-500); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    .sess-wl { display: flex; gap: 4px; align-items: center; }
+    .sess-wl-dot { width: 20px; height: 20px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+    .sess-wl-w { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .sess-wl-l { background: rgba(248,113,113,0.15); color: #f87171; }
+    .sess-wl-d { background: rgba(251,191,36,0.15); color: #fbbf24; }
+
+    .sess-alert { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    .sess-alert-tilt { background: rgba(248,113,113,0.12); color: #f87171; }
+    .sess-alert-fatigue { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .sess-alert-warmup { background: rgba(74,222,128,0.12); color: #4ade80; }
+
+    .sess-matches { margin-top: var(--space-3); }
+    .sess-match-row { display: grid; grid-template-columns: 100px 50px 60px 60px 60px 1fr; gap: var(--space-2); align-items: center; padding: 5px 8px; font-size: 12px; border-top: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent); }
+    .sess-match-row:first-child { border-top: none; }
+
+    .sess-sparkline { display: flex; align-items: end; gap: 2px; height: 30px; }
+    .sess-spark-bar { width: 14px; border-radius: 2px 2px 0 0; min-height: 3px; transition: height 0.3s; }
+
+    .sc-green { color: #4ade80; }
+    .sc-yellow { color: #fbbf24; }
+    .sc-red { color: #f87171; }
+</style>
+
+{% for s in sessions %}
+<div class="card elev-sm sess-card {% if s.wins > s.losses %}sess-card-win{% elif s.losses > s.wins %}sess-card-loss{% else %}sess-card-mixed{% endif %}">
+    <div class="sess-header">
+        <div style="display:flex;align-items:center;gap:var(--space-3);">
+            <span class="sess-date">{{ s.date }}</span>
+            <div class="sess-wl">
+                {% for m in s.match_details %}
+                <span class="sess-wl-dot {% if m.result == 'Sieg' %}sess-wl-w{% elif m.result == 'Niederlage' %}sess-wl-l{% else %}sess-wl-d{% endif %}">
+                    {% if m.result == 'Sieg' %}W{% elif m.result == 'Niederlage' %}L{% else %}D{% endif %}
+                </span>
+                {% endfor %}
+            </div>
+            {% if s.tilt %}
+            <span class="sess-alert sess-alert-{{ s.tilt.type }}">
+                <i data-lucide="{% if s.tilt.type == 'tilt' %}flame{% elif s.tilt.type == 'fatigue' %}battery-low{% else %}zap{% endif %}" style="width:12px;height:12px;"></i>
+                {{ s.tilt.label }}
+            </span>
+            {% endif %}
+        </div>
+        <div class="sess-meta">
+            <span>{{ s.matches }} Match{{ 'es' if s.matches != 1 }}</span>
+            <span>Win-Rate: <span class="sess-meta-val {% if s.win_rate >= 60 %}sc-green{% elif s.win_rate >= 40 %}sc-yellow{% else %}sc-red{% endif %}">{{ s.win_rate }}%</span></span>
+        </div>
+    </div>
+
+    <div class="sess-stats">
+        <div class="sess-stat">
+            <div class="sess-stat-val {% if s.avg_rating >= 1.1 %}sc-green{% elif s.avg_rating >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ s.avg_rating }}</div>
+            <div class="sess-stat-label">Rating</div>
+        </div>
+        <div class="sess-stat">
+            <div class="sess-stat-val {% if s.avg_kd >= 1.2 %}sc-green{% elif s.avg_kd >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ s.avg_kd }}</div>
+            <div class="sess-stat-label">K/D</div>
+        </div>
+        <div class="sess-stat">
+            <div class="sess-stat-val">{{ s.avg_adr }}</div>
+            <div class="sess-stat-label">ADR</div>
+        </div>
+        <div class="sess-stat">
+            <div class="sess-stat-val" style="font-size:14px;display:flex;gap:4px;">
+                <span style="color:#4ade80;">{{ s.wins }}W</span>
+                <span style="color:#f87171;">{{ s.losses }}L</span>
+                {% if s.draws %}<span style="color:#fbbf24;">{{ s.draws }}D</span>{% endif %}
+            </div>
+            <div class="sess-stat-label">Bilanz</div>
+        </div>
+        {% if s.ratings|length > 1 %}
+        <div class="sess-stat" style="min-width:auto;">
+            <div class="sess-sparkline">
+                {% set max_r = s.ratings|max %}
+                {% set min_r = s.ratings|min %}
+                {% set range_r = max_r - min_r if max_r != min_r else 0.1 %}
+                {% for r in s.ratings %}
+                <div class="sess-spark-bar" style="height:{{ ((r - min_r) / range_r * 24 + 6)|round }}px;background:{% if r >= 1.1 %}#4ade80{% elif r >= 0.9 %}#9184d9{% else %}#f87171{% endif %};"></div>
+                {% endfor %}
+            </div>
+            <div class="sess-stat-label">Verlauf</div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if s.tilt %}
+    <div style="padding:6px 12px;margin-bottom:var(--space-3);border-radius:var(--radius-sm);font-size:12px;color:var(--color-neutral-300);background:{% if s.tilt.type == 'tilt' %}rgba(248,113,113,0.06){% elif s.tilt.type == 'fatigue' %}rgba(251,191,36,0.06){% else %}rgba(74,222,128,0.06){% endif %};border-left:3px solid {% if s.tilt.type == 'tilt' %}#f87171{% elif s.tilt.type == 'fatigue' %}#fbbf24{% else %}#4ade80{% endif %};">
+        {{ s.tilt.desc }}{% if s.tilt.type == 'tilt' %} — Nach 2-3 Niederlagen in Folge solltest du eine Pause machen.{% endif %}
+    </div>
+    {% endif %}
+
+    <details>
+        <summary style="cursor:pointer;font-size:12px;color:var(--color-neutral-500);">Matches anzeigen</summary>
+        <div class="sess-matches">
+            <div class="sess-match-row" style="font-weight:600;font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;letter-spacing:0.08em;">
+                <span>Map</span><span>Score</span><span>Rating</span><span>K/D</span><span>ADR</span><span></span>
+            </div>
+            {% for m in s.match_details %}
+            <div class="sess-match-row">
+                <span style="font-weight:500;">{{ m.map }}</span>
+                <span>
+                    <span class="{% if m.result == 'Sieg' %}sc-green{% elif m.result == 'Niederlage' %}sc-red{% else %}sc-yellow{% endif %}" style="font-weight:600;">{{ m.score }}</span>
+                </span>
+                <span class="{% if m.rating >= 1.1 %}sc-green{% elif m.rating >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}" style="font-weight:600;">{{ m.rating }}</span>
+                <span class="{% if m.kd >= 1.2 %}sc-green{% elif m.kd >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ m.kd }}</span>
+                <span>{{ m.adr }}</span>
+                <span style="text-align:right;">
+                    {% if m.filename %}<a href="{{ url_for('view_export', filename=m.filename) }}" style="font-size:11px;color:var(--color-accent);">Details</a>{% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+    </details>
+</div>
+{% endfor %}
+
+{% endif %}
+{% endblock %}

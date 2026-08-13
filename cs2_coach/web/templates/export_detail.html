@@ -95,7 +95,41 @@
     .ed-rp-train li { font-size: 13px; line-height: 1.7; color: var(--color-neutral-300); margin-bottom: 8px; }
     .ed-rp-train li strong { color: var(--color-text); }
 
-    @media (max-width: 768px) { .ed-econ { grid-template-columns: repeat(2, 1fr); } }
+    /* Death Analysis */
+    .da-grid { display: grid; grid-template-columns: 160px 1fr; gap: var(--space-4); align-items: start; }
+    .da-donut { position: relative; width: 140px; height: 140px; }
+    .da-donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .da-donut-num { font-family: var(--font-heading); font-size: 26px; font-weight: 700; }
+    .da-donut-sub { font-size: 10px; color: var(--color-neutral-500); text-transform: uppercase; letter-spacing: 0.08em; }
+    .da-cat-list { display: flex; flex-direction: column; gap: 6px; }
+    .da-cat-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .da-cat-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .da-cat-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--color-neutral-800); overflow: hidden; }
+    .da-cat-fill { height: 100%; border-radius: 3px; }
+    .da-cat-count { min-width: 24px; text-align: right; font-weight: 600; font-size: 12px; }
+
+    /* Round Highlights */
+    .rh-bar { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: var(--space-3); }
+    .rh-pill { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px; letter-spacing: 0.03em; }
+    .rh-hero { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .rh-impact { background: rgba(145,132,217,0.15); color: #9184d9; }
+    .rh-clutch { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .rh-throw { background: rgba(248,113,113,0.15); color: #f87171; }
+    .rh-invisible { background: rgba(248,113,113,0.10); color: #f8717199; }
+    .rh-silent { background: rgba(255,255,255,0.05); color: var(--color-neutral-500); }
+
+    /* Round badges on timeline */
+    .ed-tl-badge { display: inline-flex; padding: 0 5px; border-radius: 3px; font-size: 9px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 4px; vertical-align: middle; }
+
+    /* Death detail table */
+    .da-detail { width: 100%; }
+    .da-detail td { padding: 4px 8px; font-size: 12px; border-top: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent); }
+    .da-detail td:first-child { font-weight: 600; color: var(--color-neutral-400); width: 40px; }
+
+    @media (max-width: 768px) {
+        .ed-econ { grid-template-columns: repeat(2, 1fr); }
+        .da-grid { grid-template-columns: 1fr; }
+    }
 </style>
 
 <div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-6);">
@@ -195,9 +229,9 @@
             {% if p.side_split %}<tr><td>CT</td><td>{{ p.side_split.ct_kills }}K / {{ p.side_split.ct_deaths }}D</td></tr>
             <tr><td>T</td><td>{{ p.side_split.t_kills }}K / {{ p.side_split.t_deaths }}D</td></tr>{% endif %}
             {% if p.death_timing %}<tr><td><abbr title="Wann in der Runde du stirbst — Early (erstes Drittel), Mid, Late">Death-Timing</abbr></td><td>Early {{ p.death_timing.early }} | Mid {{ p.death_timing.mid }} | Late {{ p.death_timing.late }}</td></tr>{% endif %}
-            {% if p.kill_context %}{% if p.kill_context.thru_smoke > 0 %}<tr><td>Smoke Kills</td><td>{{ p.kill_context.thru_smoke }}</td></tr>{% endif %}
-            {% if p.kill_context.wallbang > 0 %}<tr><td>Wallbangs</td><td>{{ p.kill_context.wallbang }}</td></tr>{% endif %}
-            {% if p.kill_context.noscope > 0 %}<tr><td>Noscopes</td><td>{{ p.kill_context.noscope }}</td></tr>{% endif %}{% endif %}
+            {% if p.kill_context %}{% if p.kill_context.get('thru_smoke', 0) > 0 %}<tr><td>Smoke Kills</td><td>{{ p.kill_context.thru_smoke }}</td></tr>{% endif %}
+            {% if p.kill_context.get('wallbang', 0) > 0 %}<tr><td>Wallbangs</td><td>{{ p.kill_context.wallbang }}</td></tr>{% endif %}
+            {% if p.kill_context.get('noscope', 0) > 0 %}<tr><td>Noscopes</td><td>{{ p.kill_context.noscope }}</td></tr>{% endif %}{% endif %}
             {% if p.rank %}<tr><td>Rank</td><td>{{ p.rank.old }} → {{ p.rank.new }} ({{ p.rank.change }})</td></tr>{% endif %}
         </tbody></table>
     </div>
@@ -232,13 +266,141 @@
 </div>
 {% endif %}
 
+<!-- ══════ Death Analysis ══════ -->
+{% if analysis and analysis.death_summary and analysis.death_summary.total > 0 %}
+{% set ds = analysis.death_summary %}
+{% set cats = ds.categories %}
+{% set cat_colors = {"Positioning": "#f87171", "Timing": "#fbbf24", "Aim": "#9184d9", "Utility": "#4ade80", "Numbers": "#7eaadb"} %}
+<div class="grid-2" style="margin-bottom:var(--space-5);">
+    <div class="card elev-sm" style="padding:var(--space-4);">
+        <div class="card-kicker" style="margin-bottom:12px;">
+            <abbr title="Kategorisierung deiner Deaths — zeigt wo die meisten vermeidbaren Tode passieren">Death-Analyse</abbr>
+        </div>
+        <div class="da-grid">
+            <div class="da-donut">
+                <svg viewBox="0 0 36 36" style="width:140px;height:140px;transform:rotate(-90deg);">
+                    {% set ns = namespace(offset=0) %}
+                    {% for cat_name in ["Positioning", "Timing", "Aim", "Utility", "Numbers"] %}
+                    {% if cats.get(cat_name, 0) > 0 %}
+                    {% set pct = cats[cat_name] / ds.total * 100 %}
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="{{ cat_colors[cat_name] }}"
+                            stroke-width="3.2" stroke-dasharray="{{ pct }} {{ 100 - pct }}"
+                            stroke-dashoffset="{{ -ns.offset }}" opacity="0.85"></circle>
+                    {% set ns.offset = ns.offset + pct %}
+                    {% endif %}
+                    {% endfor %}
+                </svg>
+                <div class="da-donut-center">
+                    <span class="da-donut-num">{{ ds.total }}</span>
+                    <span class="da-donut-sub">Deaths</span>
+                </div>
+            </div>
+            <div class="da-cat-list">
+                {% for cat_name in ["Positioning", "Timing", "Aim", "Utility", "Numbers"] %}
+                {% set cnt = cats.get(cat_name, 0) %}
+                {% if cnt > 0 %}
+                <div class="da-cat-row">
+                    <span class="da-cat-dot" style="background:{{ cat_colors[cat_name] }};"></span>
+                    <span style="min-width:80px;">{{ cat_name }}</span>
+                    <div class="da-cat-bar"><div class="da-cat-fill" style="width:{{ cnt / ds.total * 100 }}%;background:{{ cat_colors[cat_name] }};"></div></div>
+                    <span class="da-cat-count">{{ cnt }}</span>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% if ds.worst %}
+        <div style="margin-top:12px;padding:8px 12px;background:rgba(248,113,113,0.06);border-left:3px solid {{ cat_colors.get(ds.worst, '#f87171') }};border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;color:var(--color-neutral-300);">
+            <strong style="color:var(--color-text);">Hauptproblem: {{ ds.worst }}</strong> —
+            {% if ds.worst == "Positioning" %}Du stirbst zu oft ohne Impact. Arbeite an deinen Positionen und Trade-Moeglichkeiten.
+            {% elif ds.worst == "Timing" %}Du peekst zu frueh oder zu aggressiv. Warte auf Utility-Support.
+            {% elif ds.worst == "Aim" %}Du verlierst zu viele direkte Duelle. Trainiere Aim und Crosshair Placement.
+            {% elif ds.worst == "Utility" %}Du stirbst durch Utility — achte auf Molotov/HE Damage.
+            {% elif ds.worst == "Numbers" %}Du stirbst in Ueberzahl-Situationen. Kommuniziere besser mit dem Team.
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Round Highlight Summary -->
+    {% set hs = analysis.highlight_summary %}
+    <div class="card elev-sm" style="padding:var(--space-4);">
+        <div class="card-kicker" style="margin-bottom:12px;">
+            <abbr title="Klassifizierung jeder Runde nach deinem Impact">Runden-Highlights</abbr>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:var(--space-3);">
+            <div style="text-align:center;padding:12px;background:rgba(74,222,128,0.06);border-radius:var(--radius-sm);">
+                <div style="font-family:var(--font-heading);font-size:24px;font-weight:700;color:#4ade80;">{{ hs.hero }}</div>
+                <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;letter-spacing:0.08em;">Hero (3K+)</div>
+            </div>
+            <div style="text-align:center;padding:12px;background:rgba(145,132,217,0.06);border-radius:var(--radius-sm);">
+                <div style="font-family:var(--font-heading);font-size:24px;font-weight:700;color:#9184d9;">{{ hs.impact }}</div>
+                <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;letter-spacing:0.08em;">Impact</div>
+            </div>
+            <div style="text-align:center;padding:12px;background:rgba(248,113,113,0.06);border-radius:var(--radius-sm);">
+                <div style="font-family:var(--font-heading);font-size:24px;font-weight:700;color:#f87171;">{{ hs.throw }}</div>
+                <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;letter-spacing:0.08em;">Throw</div>
+            </div>
+            <div style="text-align:center;padding:12px;background:rgba(248,113,113,0.04);border-radius:var(--radius-sm);">
+                <div style="font-family:var(--font-heading);font-size:24px;font-weight:700;color:#f8717199;">{{ hs.invisible }}</div>
+                <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;letter-spacing:0.08em;">Invisible</div>
+            </div>
+        </div>
+        {% set impact_pct = ((hs.hero + hs.impact + hs.clutch) / hs.total_rounds * 100)|round(1) if hs.total_rounds > 0 else 0 %}
+        {% set negative_pct = ((hs.throw + hs.invisible) / hs.total_rounds * 100)|round(1) if hs.total_rounds > 0 else 0 %}
+        <div style="font-size:12px;color:var(--color-neutral-400);margin-bottom:8px;">
+            <strong style="color:#4ade80;">{{ impact_pct }}%</strong> Impact-Runden · <strong style="color:#f87171;">{{ negative_pct }}%</strong> Negativ-Runden · {{ hs.total_rounds }} Runden gesamt
+        </div>
+        {% if negative_pct > 30 %}
+        <div style="padding:8px 12px;background:rgba(248,113,113,0.06);border-left:3px solid #f87171;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;color:var(--color-neutral-300);">
+            <strong style="color:var(--color-text);">Zu viele Negativ-Runden.</strong> Fokus auf Trade-Positionen und weniger Solo-Peeks.
+        </div>
+        {% elif impact_pct > 35 %}
+        <div style="padding:8px 12px;background:rgba(74,222,128,0.06);border-left:3px solid #4ade80;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;color:var(--color-neutral-300);">
+            <strong style="color:var(--color-text);">Starke Impact-Rate!</strong> Du hattest in vielen Runden entscheidenden Einfluss.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Death detail table -->
+{% if analysis.deaths %}
+<details style="margin-bottom:var(--space-5);">
+    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--color-neutral-400);">Death-Details anzeigen ({{ analysis.deaths|length }})</summary>
+    <div class="card elev-sm" style="margin-top:var(--space-2);padding:var(--space-3);">
+        <table class="da-detail">
+            <tbody>
+            {% for d in analysis.deaths %}
+            <tr>
+                <td>R{{ d.round }}</td>
+                <td><span class="ed-tl-side {% if d.side == 'CT' %}ed-tl-ct{% else %}ed-tl-t{% endif %}">{{ d.side }}</span></td>
+                <td>
+                    <span class="rh-pill rh-{% if d.category == 'Positioning' %}throw{% elif d.category == 'Timing' %}impact{% elif d.category == 'Aim' %}hero{% elif d.category == 'Utility' %}clutch{% else %}invisible{% endif %}" style="background:{{ cat_colors.get(d.category, '#666') }}22;color:{{ cat_colors.get(d.category, '#666') }};">{{ d.category }}</span>
+                </td>
+                <td style="color:var(--color-neutral-300);">{{ d.reason }}</td>
+                <td style="color:var(--color-neutral-500);">{{ d.killer }} ({{ d.weapon }})</td>
+                <td style="text-align:right;">{% if d.won %}<span style="color:#4ade80;">W</span>{% else %}<span style="color:#f87171;">L</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</details>
+{% endif %}
+{% endif %}
+
 <!-- ══════ Round Timeline ══════ -->
 {% if data.round_timeline %}
+{% set highlight_map = {} %}
+{% if analysis and analysis.highlights %}
+{% for h in analysis.highlights %}{% if highlight_map.update({h.round: h}) %}{% endif %}{% endfor %}
+{% endif %}
 <div class="card elev-sm" style="margin-bottom:var(--space-5);padding:var(--space-3);">
     <div class="card-kicker" style="margin-bottom:8px;">Runden-Timeline</div>
     <div class="ed-tl">
         {% for r in data.round_timeline %}
         {% if r.round == 13 %}<div class="ed-tl-ht">— Seitenwechsel —</div>{% endif %}
+        {% set hl = highlight_map.get(r.round) %}
         <div class="ed-tl-row {% if r.won %}ed-tl-won{% else %}ed-tl-lost{% endif %} {% if r.died_early %}ed-tl-early{% endif %}">
             <div class="ed-tl-round">R{{ r.round }}</div>
             <div class="ed-tl-side {% if r.side == 'CT' %}ed-tl-ct{% else %}ed-tl-t{% endif %}">{{ r.side }}</div>
@@ -250,6 +412,9 @@
                     {% elif e.type == 'bomb_defuse' and e.is_self %}<span class="ed-tl-ev ed-tl-bomb">🔧</span>
                     {% endif %}
                 {% endfor %}
+                {% if hl and hl.tag != 'normal' %}
+                <span class="ed-tl-badge rh-{{ hl.tag }}">{{ hl.label }}</span>
+                {% endif %}
             </div>
             <div class="ed-tl-info">{% if r.player_kills >= 3 %}<span class="ed-tl-mk">{{ r.player_kills }}K</span>{% elif r.player_kills > 0 %}{{ r.player_kills }}K{% elif r.player_died %}0K{% endif %}</div>
         </div>

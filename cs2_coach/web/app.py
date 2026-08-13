@@ -322,6 +322,12 @@ def create_app() -> Flask:
         map_stats = _get_map_stats(export_list)
         return render_template("trends.html", exports=export_list, map_stats=map_stats, config=cfg)
 
+    @app.route("/sessions")
+    def sessions():
+        export_list = _get_exports(cfg)
+        session_data = _build_sessions(export_list)
+        return render_template("sessions.html", sessions=session_data, config=cfg)
+
     @app.route("/exports")
     def exports():
         export_list = _get_exports(cfg)
@@ -339,7 +345,9 @@ def create_app() -> Flask:
             return redirect(url_for("exports"))
 
         data = json.loads(filepath.read_text(encoding="utf-8"))
-        return render_template("export_detail.html", data=data, filename=filename, config=cfg)
+        analysis = _analyze_rounds(data)
+        return render_template("export_detail.html", data=data, analysis=analysis,
+                               filename=filename, config=cfg)
 
     @app.route("/settings")
     def settings():
@@ -687,6 +695,265 @@ def _rank_for_value(key: str, value: float) -> tuple[str, float]:
                 pct = ((i + 1) / len(tiers)) * 100
                 return tiers[i][0], min(pct, 100)
         return tiers[0][0], 5.0
+
+
+def _build_sessions(exports: list[dict]) -> list[dict]:
+    """Group exports by date into sessions, detect tilt and performance trends."""
+    if not exports:
+        return []
+
+    # Group by date
+    by_date: dict[str, list[dict]] = {}
+    for e in exports:
+        date = e.get("date", "?")[:10]  # YYYY-MM-DD
+        by_date.setdefault(date, []).append(e)
+
+    sessions = []
+    for date in sorted(by_date.keys(), reverse=True):
+        matches = by_date[date]
+        n = len(matches)
+
+        wins = sum(1 for m in matches if m.get("result") == "Sieg")
+        losses = sum(1 for m in matches if m.get("result") == "Niederlage")
+        draws = n - wins - losses
+        win_rate = round(wins / n * 100, 1)
+
+        avg_rating = round(sum(m.get("rating", 0) for m in matches) / n, 2)
+        avg_kd = round(sum(m.get("kd", 0) for m in matches) / n, 2)
+        avg_adr = round(sum(m.get("adr", 0) for m in matches) / n, 1)
+
+        # Performance degradation: compare first half vs second half of session
+        tilt = None
+        if n >= 3:
+            mid = n // 2
+            first_half = matches[:mid] if mid > 0 else matches[:1]
+            second_half = matches[mid:]
+            first_rating = sum(m.get("rating", 0) for m in first_half) / len(first_half)
+            second_rating = sum(m.get("rating", 0) for m in second_half) / len(second_half)
+            rating_drop = first_rating - second_rating
+
+            first_kd = sum(m.get("kd", 0) for m in first_half) / len(first_half)
+            second_kd = sum(m.get("kd", 0) for m in second_half) / len(second_half)
+
+            if rating_drop > 0.15 and second_rating < 0.9:
+                tilt = {
+                    "type": "tilt",
+                    "label": "Tilt erkannt",
+                    "desc": f"Rating fiel von {first_rating:.2f} auf {second_rating:.2f} im Verlauf der Session",
+                    "drop": round(rating_drop, 2),
+                }
+            elif rating_drop > 0.1:
+                tilt = {
+                    "type": "fatigue",
+                    "label": "Ermuedung",
+                    "desc": f"Leistung sank leicht: {first_rating:.2f} -> {second_rating:.2f}",
+                    "drop": round(rating_drop, 2),
+                }
+            elif rating_drop < -0.1:
+                tilt = {
+                    "type": "warmup",
+                    "label": "Warmup-Effekt",
+                    "desc": f"Leistung stieg: {first_rating:.2f} -> {second_rating:.2f}",
+                    "drop": round(rating_drop, 2),
+                }
+
+        # Loss streak within session
+        max_loss_streak = 0
+        current_streak = 0
+        for m in matches:
+            if m.get("result") == "Niederlage":
+                current_streak += 1
+                max_loss_streak = max(max_loss_streak, current_streak)
+            else:
+                current_streak = 0
+
+        # Match-by-match rating trend for sparkline
+        ratings = [m.get("rating", 0) for m in matches]
+
+        sessions.append({
+            "date": date,
+            "matches": n,
+            "wins": wins,
+            "losses": losses,
+            "draws": draws,
+            "win_rate": win_rate,
+            "avg_rating": avg_rating,
+            "avg_kd": avg_kd,
+            "avg_adr": avg_adr,
+            "tilt": tilt,
+            "max_loss_streak": max_loss_streak,
+            "ratings": ratings,
+            "match_details": [{
+                "map": m.get("map", "?"),
+                "result": m.get("result", "?"),
+                "score": m.get("score", "?"),
+                "rating": m.get("rating", 0),
+                "kd": m.get("kd", 0),
+                "adr": m.get("adr", 0),
+                "filename": m.get("filename", ""),
+            } for m in matches],
+        })
+
+    return sessions
+
+
+def _analyze_rounds(data: dict) -> dict:
+    """Analyze round_timeline for death categories and round highlights."""
+    timeline = data.get("round_timeline", [])
+    player = data.get("player", {})
+    if not timeline:
+        return {"deaths": [], "death_summary": {}, "highlights": [], "highlight_summary": {}}
+
+    total_rounds = len(timeline)
+
+    # ── Death Categorization ──
+    # Categories: Positioning (died without kills, early), Timing (died early with bad pct),
+    # Aim (died in duel — had a kill event close to death), Utility (died to nade/molotov),
+    # Numbers (died when outnumbered — 0 kills, late in round)
+    death_categories = []
+    util_weapons = {"hegrenade", "molotov", "incgrenade", "inferno", "flashbang"}
+
+    for r in timeline:
+        if not r.get("player_died"):
+            continue
+
+        death_event = None
+        kill_events = []
+        for e in r["events"]:
+            if e["type"] == "death":
+                death_event = e
+            elif e["type"] == "kill":
+                kill_events.append(e)
+
+        if not death_event:
+            continue
+
+        death_pct = death_event.get("pct", 50)
+        weapon = death_event.get("weapon", "")
+        kills_in_round = r.get("player_kills", 0)
+
+        # Determine category
+        if weapon in util_weapons:
+            category = "Utility"
+            reason = f"Gestorben durch {weapon}"
+        elif r.get("died_early") or death_pct <= 25:
+            if kills_in_round == 0:
+                category = "Positioning"
+                reason = "Frueh gestorben ohne Impact — schlechte Position"
+            else:
+                category = "Timing"
+                reason = "Frueh gestorben trotz Kill — Overpeek"
+        elif kills_in_round == 0 and death_pct >= 60:
+            category = "Numbers"
+            reason = "Spaet gestorben ohne Kill — Ueberzahl-Situation verloren"
+        elif kills_in_round > 0 and any(abs(k["pct"] - death_pct) < 10 for k in kill_events):
+            category = "Aim"
+            reason = f"Duell verloren ({kills_in_round}K)"
+        elif kills_in_round == 0:
+            category = "Positioning"
+            reason = "Gestorben ohne Trade-Moeglichkeit"
+        else:
+            category = "Aim"
+            reason = f"Gestorben nach {kills_in_round} Kill(s)"
+
+        death_categories.append({
+            "round": r["round"],
+            "side": r["side"],
+            "won": r["won"],
+            "category": category,
+            "reason": reason,
+            "weapon": weapon,
+            "killer": death_event.get("killer", "?"),
+            "death_pct": death_pct,
+            "kills": kills_in_round,
+        })
+
+    # Summary counts
+    cat_counts = {}
+    for d in death_categories:
+        cat_counts[d["category"]] = cat_counts.get(d["category"], 0) + 1
+
+    death_summary = {
+        "total": len(death_categories),
+        "categories": cat_counts,
+        "worst": max(cat_counts, key=cat_counts.get) if cat_counts else None,
+    }
+
+    # ── Round Highlights ──
+    highlights = []
+    for r in timeline:
+        kills = r.get("player_kills", 0)
+        died = r.get("player_died", False)
+        won = r.get("won", False)
+        events = r.get("events", [])
+
+        # Check for opening kill (first kill event with low pct)
+        has_opening = False
+        kill_events = [e for e in events if e["type"] == "kill"]
+        if kill_events and kill_events[0].get("pct", 100) <= 35:
+            has_opening = True
+
+        # Check for clutch (last alive, multiple enemies)
+        has_bomb = any(e["type"] in ("bomb_plant", "bomb_defuse") and e.get("is_self") for e in events)
+
+        # Classify round
+        if kills >= 3:
+            tag = "hero"
+            label = f"{kills}K Highlight"
+        elif has_opening and won and kills >= 1:
+            tag = "impact"
+            label = "Opening-Kill + Win"
+        elif has_bomb and won:
+            tag = "clutch"
+            label = "Bombe + Sieg"
+        elif kills >= 2 and won:
+            tag = "impact"
+            label = f"{kills}K Impact"
+        elif not died and won and kills == 0:
+            tag = "silent"
+            label = "Survived (kein Kill)"
+        elif kills == 0 and died and r.get("died_early"):
+            tag = "throw"
+            label = "Frueh gestorben, 0 Impact"
+        elif kills == 0 and died and not won:
+            tag = "invisible"
+            label = "0K Death, Runde verloren"
+        else:
+            tag = "normal"
+            label = None
+
+        if tag != "normal":
+            highlights.append({
+                "round": r["round"],
+                "side": r["side"],
+                "won": won,
+                "tag": tag,
+                "label": label,
+                "kills": kills,
+                "died": died,
+            })
+
+    # Highlight summary
+    tag_counts = {}
+    for h in highlights:
+        tag_counts[h["tag"]] = tag_counts.get(h["tag"], 0) + 1
+
+    highlight_summary = {
+        "total_rounds": total_rounds,
+        "hero": tag_counts.get("hero", 0),
+        "impact": tag_counts.get("impact", 0),
+        "clutch": tag_counts.get("clutch", 0),
+        "throw": tag_counts.get("throw", 0),
+        "invisible": tag_counts.get("invisible", 0),
+        "silent": tag_counts.get("silent", 0),
+    }
+
+    return {
+        "deaths": death_categories,
+        "death_summary": death_summary,
+        "highlights": highlights,
+        "highlight_summary": highlight_summary,
+    }
 
 
 def _build_dashboard_data(exports: list[dict], map_stats: list[dict]) -> dict:
