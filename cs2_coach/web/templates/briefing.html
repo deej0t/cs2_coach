@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Pre-Match Briefing{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Pre-Match Briefing</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Deine persoenlichen Erinnerungen vor einem Match — waehle die Map.
+</p>
+
+<style>
+    .br-map-select { display: flex; gap: 4px; margin-bottom: var(--space-5); flex-wrap: wrap; }
+    .br-map-btn {
+        padding: 8px 20px; border-radius: 20px; cursor: pointer;
+        font-size: 13px; border: 1px solid var(--color-divider);
+        background: transparent; color: var(--color-neutral-400);
+        font-family: var(--font-body); transition: all 0.15s;
+        text-decoration: none;
+    }
+    .br-map-btn:hover { border-color: var(--color-neutral-600); color: var(--color-text); }
+    .br-map-btn.active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(145,132,217,0.1); font-weight: 600; }
+
+    .br-hero {
+        padding: var(--space-5); margin-bottom: var(--space-5);
+        border-radius: var(--radius-lg); text-align: center;
+        background: linear-gradient(135deg, rgba(145,132,217,0.1), rgba(99,102,241,0.06));
+        border: 1px solid rgba(145,132,217,0.2);
+    }
+    .br-hero-map { font-family: var(--font-heading); font-size: 32px; font-weight: 700; margin-bottom: 4px; }
+    .br-hero-sub { font-size: 13px; color: var(--color-neutral-400); }
+
+    .br-stats {
+        display: flex; gap: var(--space-3); justify-content: center;
+        margin-top: 16px; flex-wrap: wrap;
+    }
+    .br-stat {
+        text-align: center; padding: 8px 16px;
+        border-radius: var(--radius-sm); background: rgba(0,0,0,0.15);
+    }
+    .br-stat-val { font-family: var(--font-heading); font-size: 20px; font-weight: 700; line-height: 1; }
+    .br-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); margin-top: 2px; }
+
+    .br-reminders { display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-5); }
+    .br-reminder {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 14px 16px; border-radius: var(--radius-md);
+        font-size: 14px; line-height: 1.45;
+    }
+    .br-reminder-warning {
+        background: rgba(248,113,113,0.06); border: 1px solid rgba(248,113,113,0.2);
+        color: var(--color-neutral-200);
+    }
+    .br-reminder-tip {
+        background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.2);
+        color: var(--color-neutral-200);
+    }
+    .br-reminder-positive {
+        background: rgba(74,222,128,0.06); border: 1px solid rgba(74,222,128,0.2);
+        color: var(--color-neutral-200);
+    }
+    .br-reminder-icon { flex-shrink: 0; margin-top: 1px; }
+
+    .br-sides { display: flex; gap: var(--space-4); margin-bottom: var(--space-5); }
+    .br-side-card {
+        flex: 1; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .br-side-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-bottom: 6px; font-weight: 600; }
+    .br-side-kd { font-family: var(--font-heading); font-size: 28px; font-weight: 700; }
+
+    .br-recent { margin-bottom: var(--space-5); }
+    .br-recent-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .br-recent-table th {
+        font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--color-neutral-500); padding: 8px 10px; text-align: left;
+        border-bottom: 1px solid var(--color-neutral-800);
+    }
+    .br-recent-table td { padding: 10px; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent); }
+</style>
+
+{% if not brief.has_data and not brief.maps %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Daten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- Map selector -->
+<div class="br-map-select">
+    {% for m in brief.maps %}
+    <a href="{{ url_for('briefing', map_name=m) }}" class="br-map-btn {% if m == brief.map %}active{% endif %}">{{ m }}</a>
+    {% endfor %}
+</div>
+
+{% if brief.has_data %}
+<!-- Hero -->
+<div class="br-hero">
+    <div class="br-hero-map">{{ brief.map }}</div>
+    <div class="br-hero-sub">{{ brief.stats.matches }} Matches | {{ brief.stats.wins }}W / {{ brief.stats.losses }}L</div>
+    <div class="br-stats">
+        <div class="br-stat">
+            <div class="br-stat-val {% if brief.stats.win_rate >= 55 %}win{% elif brief.stats.win_rate < 45 %}loss{% endif %}">{{ brief.stats.win_rate }}%</div>
+            <div class="br-stat-lbl">Win-Rate</div>
+        </div>
+        <div class="br-stat">
+            <div class="br-stat-val {% if brief.avg.rating >= 1.0 %}win{% elif brief.avg.rating < 0.85 %}loss{% endif %}">{{ brief.avg.rating }}</div>
+            <div class="br-stat-lbl">Rating (L5)</div>
+        </div>
+        <div class="br-stat">
+            <div class="br-stat-val">{{ brief.avg.adr }}</div>
+            <div class="br-stat-lbl">ADR (L5)</div>
+        </div>
+        <div class="br-stat">
+            <div class="br-stat-val">{{ brief.avg.hs }}%</div>
+            <div class="br-stat-lbl">HS% (L5)</div>
+        </div>
+        <div class="br-stat">
+            <div class="br-stat-val">{{ brief.avg.util }}</div>
+            <div class="br-stat-lbl">Utility/R</div>
+        </div>
+    </div>
+</div>
+
+<!-- Side split -->
+<div class="br-sides">
+    <div class="br-side-card" style="border-top: 3px solid {% if brief.ct_kd >= brief.t_kd %}#60a5fa{% else %}var(--color-neutral-700){% endif %};">
+        <div class="br-side-label" style="color:#60a5fa;">CT-Side</div>
+        <div class="br-side-kd {% if brief.ct_kd >= 1.2 %}win{% elif brief.ct_kd < 0.9 %}loss{% endif %}">{{ brief.ct_kd }}</div>
+        <div style="font-size:11px;color:var(--color-neutral-500);">K/D</div>
+    </div>
+    <div class="br-side-card" style="border-top: 3px solid {% if brief.t_kd >= brief.ct_kd %}#fbbf24{% else %}var(--color-neutral-700){% endif %};">
+        <div class="br-side-label" style="color:#fbbf24;">T-Side</div>
+        <div class="br-side-kd {% if brief.t_kd >= 1.2 %}win{% elif brief.t_kd < 0.9 %}loss{% endif %}">{{ brief.t_kd }}</div>
+        <div style="font-size:11px;color:var(--color-neutral-500);">K/D</div>
+    </div>
+</div>
+
+<!-- Reminders -->
+{% if brief.reminders %}
+<div class="card-kicker" style="margin-bottom: 8px;">Erinnerungen fuer {{ brief.map }}</div>
+<div class="br-reminders">
+    {% for r in brief.reminders %}
+    <div class="br-reminder br-reminder-{{ r.type }}">
+        <div class="br-reminder-icon">
+            {% if r.type == 'warning' %}<i data-lucide="alert-triangle" style="width:18px;height:18px;color:#f87171;"></i>
+            {% elif r.type == 'tip' %}<i data-lucide="lightbulb" style="width:18px;height:18px;color:#fbbf24;"></i>
+            {% else %}<i data-lucide="check-circle" style="width:18px;height:18px;color:#4ade80;"></i>
+            {% endif %}
+        </div>
+        <span>{{ r.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Recent matches on this map -->
+{% if brief.recent %}
+<div class="br-recent">
+    <div class="card-kicker" style="margin-bottom: 8px;">Letzte Matches auf {{ brief.map }}</div>
+    <div class="card elev-sm" style="padding: var(--space-3);">
+        <table class="br-recent-table">
+            <thead>
+                <tr>
+                    <th>Ergebnis</th>
+                    <th>Score</th>
+                    <th>Rating</th>
+                    <th>K/D</th>
+                    <th>Datum</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in brief.recent %}
+                <tr>
+                    <td><span class="tag tag-{% if r.result == 'Sieg' %}win{% elif r.result == 'Niederlage' %}loss{% else %}draw{% endif %}">{{ r.result }}</span></td>
+                    <td style="font-weight:600;">{{ r.score }}</td>
+                    <td class="{% if r.rating >= 1.0 %}win{% elif r.rating < 0.85 %}loss{% endif %}">{{ r.rating }}</td>
+                    <td>{{ r.kills }}/{{ r.deaths }}</td>
+                    <td style="color:var(--color-neutral-500);">{{ r.date }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Daten fuer {{ brief.map }}. Spiel zuerst ein paar Matches auf dieser Map.</p>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

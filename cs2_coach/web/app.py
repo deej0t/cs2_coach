@@ -639,6 +639,21 @@ def create_app() -> Flask:
         veto = _build_map_veto(map_stats, exports)
         return render_template("maps.html", map_stats=map_stats, veto=veto, config=cfg)
 
+    @app.route("/briefing")
+    @app.route("/briefing/<map_name>")
+    def briefing(map_name=None):
+        exports = _get_exports(cfg)
+        map_stats = _get_map_stats(exports)
+        brief = _build_briefing(map_name, exports, map_stats)
+        return render_template("briefing.html", brief=brief, map_stats=map_stats, config=cfg)
+
+    @app.route("/warmup")
+    def warmup():
+        exports = _get_exports(cfg)
+        map_stats = _get_map_stats(exports)
+        wu_data = _build_warmup(exports, map_stats)
+        return render_template("warmup.html", wu=wu_data, config=cfg)
+
     @app.route("/highlights")
     def highlights():
         hl_data = _build_highlights(cfg)
@@ -2867,4 +2882,328 @@ def _build_map_veto(map_stats: list[dict], exports: list[dict]) -> dict:
         "maps": ranked,
         "picks": picks,
         "bans": bans,
+    }
+
+
+def _build_warmup(exports: list[dict], map_stats: list[dict]) -> dict:
+    """Build personalized warm-up protocol based on recent weaknesses."""
+    if len(exports) < 3:
+        return {"has_data": False, "exercises": [], "focus": "", "duration": 0}
+
+    last5 = exports[:5]
+    avg = lambda key: round(sum(e.get(key, 0) for e in last5) / len(last5), 1)
+
+    avg_hs = avg("hs_pct")
+    avg_cs = avg("counter_strafe")
+    avg_xh = avg("crosshair_placement")
+    avg_util = avg("utility_per_round")
+    avg_adr = avg("adr")
+    avg_kast = avg("kast")
+    avg_survival = avg("survival_rate")
+
+    # Identify weaknesses and build exercises
+    exercises = []
+
+    # Aim / HS%
+    if avg_hs < 45:
+        severity = "hoch" if avg_hs < 35 else "mittel"
+        exercises.append({
+            "id": "aim", "name": "Aim Training", "duration": 5,
+            "icon": "crosshair",
+            "severity": severity,
+            "metric": f"HS% = {avg_hs}%",
+            "target": "Ziel: > 45%",
+            "steps": [
+                "Aim Botz: 100 Kills nur Kopf (AK + M4)",
+                "Fokus auf One-Taps, nicht Spray",
+                "Langsam anfangen, dann Speed steigern",
+            ],
+            "workshop": [
+                {"name": "Aim Botz", "desc": "Klassisches Aim-Training mit Bots"},
+                {"name": "Fast Aim / Reflex Training", "desc": "Schnelle Zielerfassung"},
+            ],
+        })
+
+    # Counter-Strafe
+    if avg_cs < 82:
+        severity = "hoch" if avg_cs < 70 else "mittel"
+        exercises.append({
+            "id": "counterstafe", "name": "Counter-Strafe", "duration": 5,
+            "icon": "move",
+            "severity": severity,
+            "metric": f"Counter-Strafe = {avg_cs}%",
+            "target": "Ziel: > 85%",
+            "steps": [
+                "YPRAC Movement Map: Strafe-Shoot Drills",
+                "A-D-Shoot Rhythmus verinnerlichen",
+                "Bewusst vor jedem Shot stoppen",
+            ],
+            "workshop": [
+                {"name": "YPRAC Movement", "desc": "Counter-Strafe & Movement Drills"},
+                {"name": "Strafe Training", "desc": "A-D-Shoot Mechanik ueben"},
+            ],
+        })
+
+    # Crosshair Placement
+    if avg_xh > 10:
+        severity = "hoch" if avg_xh > 18 else "mittel"
+        exercises.append({
+            "id": "crosshair", "name": "Crosshair Placement", "duration": 5,
+            "icon": "target",
+            "severity": severity,
+            "metric": f"Crosshair = {avg_xh}°",
+            "target": "Ziel: < 8°",
+            "steps": [
+                "Prefire-Map deiner haeufigsten Map laden",
+                "Auf Kopfhoehe durch die Map laufen",
+                "Jeden Winkel bewusst pre-aimen",
+            ],
+            "workshop": [
+                {"name": "Prefire Maps", "desc": "Prefire-Practice fuer jede Map"},
+                {"name": "YPRAC Prefire", "desc": "Gezielte Prefire-Uebungen"},
+            ],
+        })
+
+    # Utility
+    if avg_util < 1.5:
+        severity = "hoch" if avg_util < 1.0 else "mittel"
+        exercises.append({
+            "id": "utility", "name": "Utility Training", "duration": 5,
+            "icon": "flame",
+            "severity": severity,
+            "metric": f"Utility = {avg_util}/Runde",
+            "target": "Ziel: > 2.0/Runde",
+            "steps": [
+                "3 Smoke-Lineups fuer deine beste Map lernen",
+                "2 Flash-Spots fuer Entry/Retake",
+                "1 Molotov-Lineup pro Map-Seite",
+            ],
+            "workshop": [
+                {"name": "Smoke/Flash Practice", "desc": "Lineup-Training"},
+                {"name": "YPRAC Utility", "desc": "Utility-Uebungen pro Map"},
+            ],
+        })
+
+    # Spray Control (if ADR is low, spray might be an issue)
+    if avg_adr < 75:
+        exercises.append({
+            "id": "spray", "name": "Spray Control", "duration": 5,
+            "icon": "zap",
+            "severity": "mittel",
+            "metric": f"ADR = {avg_adr}",
+            "target": "Ziel: > 80 ADR",
+            "steps": [
+                "Recoil Master: AK-47 Spray 50x",
+                "Recoil Master: M4A4/M4A1-S Spray 50x",
+                "Dann: Spray-Transfer auf 2 Ziele",
+            ],
+            "workshop": [
+                {"name": "Recoil Master", "desc": "Spray-Pattern Training"},
+            ],
+        })
+
+    # If survival is very low, add positioning exercise
+    if avg_survival < 30:
+        exercises.append({
+            "id": "positioning", "name": "Positioning Review", "duration": 3,
+            "icon": "shield",
+            "severity": "mittel",
+            "metric": f"Survival = {avg_survival}%",
+            "target": "Ziel: > 35%",
+            "steps": [
+                "Letzte 2 Demos kurz reviewen: Wo bist du gestorben?",
+                "Alternative Positionen finden",
+                "Regel: Immer einen Rueckzugsweg haben",
+            ],
+            "workshop": [],
+        })
+
+    # Always add a quick deathmatch warm-up
+    exercises.append({
+        "id": "dm", "name": "Deathmatch", "duration": 5,
+        "icon": "swords",
+        "severity": "standard",
+        "metric": "Aufwaermen",
+        "target": "5 Minuten FFA DM",
+        "steps": [
+            "FFA Deathmatch mit AK/M4",
+            "Nur Kopf zielen, nicht sprayen",
+            "Fokus: Crosshair auf Kopfhoehe halten",
+        ],
+        "workshop": [],
+    })
+
+    total_duration = sum(ex["duration"] for ex in exercises)
+
+    # Determine focus area
+    weaknesses = []
+    if avg_hs < 45:
+        weaknesses.append(("Aim", avg_hs, "HS%"))
+    if avg_cs < 82:
+        weaknesses.append(("Counter-Strafe", avg_cs, "%"))
+    if avg_xh > 10:
+        weaknesses.append(("Crosshair Placement", avg_xh, "°"))
+    if avg_util < 1.5:
+        weaknesses.append(("Utility", avg_util, "/R"))
+
+    focus = weaknesses[0][0] if weaknesses else "Allgemeines Aufwaermen"
+
+    # Next map suggestion (most played recently)
+    from collections import Counter
+    recent_maps = Counter(e["map"] for e in last5)
+    likely_map = recent_maps.most_common(1)[0][0] if recent_maps else ""
+
+    # Map-specific tip
+    map_tip = ""
+    for ms in map_stats:
+        if ms["map"] == likely_map:
+            if ms["win_rate"] < 45:
+                map_tip = f"Deine Win-Rate auf {likely_map} ist nur {ms['win_rate']}% — ueberleg ob du veto'st."
+            elif ms["avg_rating"] < 0.85:
+                map_tip = f"Dein Rating auf {likely_map} ist {ms['avg_rating']} — Prefire-Map fuer {likely_map} ueben."
+            else:
+                map_tip = f"{likely_map} ist eine deiner staerkeren Maps ({ms['win_rate']}% WR, {ms['avg_rating']} Rating)."
+            break
+
+    return {
+        "has_data": True,
+        "exercises": exercises,
+        "focus": focus,
+        "duration": total_duration,
+        "weaknesses": weaknesses,
+        "likely_map": likely_map,
+        "map_tip": map_tip,
+        "stats": {
+            "hs": avg_hs, "cs": avg_cs, "xh": avg_xh,
+            "util": avg_util, "adr": avg_adr, "kast": avg_kast,
+            "survival": avg_survival,
+        },
+    }
+
+
+def _build_briefing(map_name: str | None, exports: list[dict], map_stats: list[dict]) -> dict:
+    """Build pre-match briefing for a specific map."""
+    available_maps = sorted(set(e["map"] for e in exports))
+    if not available_maps:
+        return {"has_data": False, "map": None, "maps": []}
+
+    if not map_name:
+        map_name = available_maps[0]
+
+    map_exports = [e for e in exports if e["map"] == map_name]
+    if not map_exports:
+        return {"has_data": False, "map": map_name, "maps": available_maps}
+
+    # Find map stats
+    ms = None
+    for s in map_stats:
+        if s["map"] == map_name:
+            ms = s
+            break
+
+    if not ms:
+        return {"has_data": False, "map": map_name, "maps": available_maps}
+
+    # Recent matches on this map
+    recent = map_exports[:5]
+    n = len(recent)
+
+    avg = lambda key: round(sum(e.get(key, 0) for e in recent) / n, 1)
+
+    avg_rating = avg("rating")
+    avg_kd = avg("kd")
+    avg_adr = avg("adr")
+    avg_hs = avg("hs_pct")
+    avg_util = avg("utility_per_round")
+    avg_xh = avg("crosshair_placement")
+    avg_survival = avg("survival_rate")
+
+    # Side performance
+    ct_kills = sum(e.get("ct_kills", 0) for e in map_exports)
+    ct_deaths = sum(e.get("ct_deaths", 0) for e in map_exports)
+    t_kills = sum(e.get("t_kills", 0) for e in map_exports)
+    t_deaths = sum(e.get("t_deaths", 0) for e in map_exports)
+    ct_kd = round(ct_kills / max(ct_deaths, 1), 2)
+    t_kd = round(t_kills / max(t_deaths, 1), 2)
+    weaker_side = "CT" if ct_kd < t_kd else "T"
+
+    # Opening deaths
+    opening_deaths = sum(e.get("opening_deaths", 0) or e.get("deaths_early", 0) for e in recent)
+    opening_kills = sum(e.get("opening_kills", 0) for e in recent)
+    total_rounds = sum(1 for _ in recent)  # approximate
+
+    # Build reminders
+    reminders = []
+
+    # Win rate reminder
+    if ms["win_rate"] < 45:
+        reminders.append({"type": "warning", "text": f"Schwache Win-Rate ({ms['win_rate']}%). Spiel diszipliniert, keine Hero-Plays."})
+    elif ms["win_rate"] >= 55:
+        reminders.append({"type": "positive", "text": f"Starke Map fuer dich ({ms['win_rate']}% WR). Selbstbewusst spielen."})
+
+    # Side weakness
+    if ct_kd < 0.8:
+        reminders.append({"type": "warning", "text": f"CT-Side schwach (K/D {ct_kd}). Passiver spielen, Retakes ueben."})
+    if t_kd < 0.8:
+        reminders.append({"type": "warning", "text": f"T-Side schwach (K/D {t_kd}). Mehr Utility vor dem Entry nutzen."})
+
+    # Opening deaths
+    if opening_deaths > opening_kills and opening_deaths > 0:
+        reminders.append({"type": "warning", "text": f"Zu viele Opening Deaths. Nicht als Erster dry-peeken."})
+
+    # Utility
+    if avg_util < 1.5:
+        reminders.append({"type": "tip", "text": f"Utility nur {avg_util}/Runde. Kauf Nades und wirf sie ALLE."})
+
+    # Crosshair
+    if avg_xh > 12:
+        reminders.append({"type": "tip", "text": f"Crosshair Placement {avg_xh}° — halte das Fadenkreuz auf Kopfhoehe."})
+
+    # Survival
+    if avg_survival < 30:
+        reminders.append({"type": "tip", "text": f"Survival nur {avg_survival}%. Nicht overpeeken, Rueckzugsweg planen."})
+
+    # HS%
+    if avg_hs < 35:
+        reminders.append({"type": "tip", "text": f"HS% nur {avg_hs}% auf {map_name}. Bewusst auf den Kopf zielen."})
+
+    # Recent form
+    recent_wins = sum(1 for e in recent if e["result"] == "Sieg")
+    recent_losses = sum(1 for e in recent if e["result"] == "Niederlage")
+    if recent_losses >= 3:
+        reminders.append({"type": "warning", "text": f"Letzte {n}: {recent_wins}W/{recent_losses}L — schwache Form. Fokus auf Basics."})
+    elif recent_wins >= 3:
+        reminders.append({"type": "positive", "text": f"Letzte {n}: {recent_wins}W/{recent_losses}L — gute Form! Bleib dran."})
+
+    # Always add a positive/neutral one
+    if avg_rating >= 1.0:
+        reminders.append({"type": "positive", "text": f"Dein Rating auf {map_name} ist {avg_rating} — du performst gut hier."})
+
+    # Recent match results for display
+    recent_results = []
+    for e in recent:
+        recent_results.append({
+            "date": e["date"][:10],
+            "score": e.get("score", "?"),
+            "result": e["result"],
+            "rating": e["rating"],
+            "kills": e["kills"],
+            "deaths": e["deaths"],
+        })
+
+    return {
+        "has_data": True,
+        "map": map_name,
+        "maps": available_maps,
+        "stats": ms,
+        "ct_kd": ct_kd,
+        "t_kd": t_kd,
+        "weaker_side": weaker_side,
+        "reminders": reminders,
+        "recent": recent_results,
+        "avg": {
+            "rating": avg_rating, "kd": avg_kd, "adr": avg_adr,
+            "hs": avg_hs, "util": avg_util, "xh": avg_xh,
+            "survival": avg_survival,
+        },
     }

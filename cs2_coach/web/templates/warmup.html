@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Warm-up{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Warm-up Protocol</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Personalisiertes Aufwaermprogramm basierend auf deinen letzten 5 Matches.
+</p>
+
+<style>
+    .wu-hero {
+        display: flex; align-items: center; gap: var(--space-5);
+        padding: var(--space-5); margin-bottom: var(--space-5);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(135deg, rgba(145,132,217,0.08), rgba(99,102,241,0.05));
+        border: 1px solid rgba(145,132,217,0.2);
+    }
+    .wu-timer-wrap { text-align: center; flex-shrink: 0; }
+    .wu-timer {
+        font-family: var(--font-heading); font-size: 48px; font-weight: 700;
+        color: var(--color-accent); line-height: 1; margin-bottom: 4px;
+    }
+    .wu-timer-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); }
+    .wu-hero-info { flex: 1; }
+    .wu-hero-info h3 { margin: 0 0 6px; font-size: 18px; }
+    .wu-hero-info p { margin: 0; font-size: 13px; color: var(--color-neutral-400); }
+    .wu-focus-badge {
+        display: inline-block; margin-top: 8px;
+        font-size: 11px; font-weight: 600; padding: 3px 12px; border-radius: 12px;
+        background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25);
+    }
+
+    .wu-controls {
+        display: flex; gap: var(--space-3); margin-bottom: var(--space-5); align-items: center;
+    }
+
+    .wu-grid { display: flex; flex-direction: column; gap: var(--space-4); margin-bottom: var(--space-5); }
+
+    .wu-card {
+        display: flex; gap: 16px; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface);
+        box-shadow: var(--shadow-sm); transition: opacity 0.3s;
+        border-left: 3px solid var(--color-neutral-700);
+    }
+    .wu-card.severity-hoch { border-left-color: #f87171; }
+    .wu-card.severity-mittel { border-left-color: #fbbf24; }
+    .wu-card.severity-standard { border-left-color: var(--color-accent); }
+    .wu-card.done { opacity: 0.4; }
+    .wu-card.done .wu-check { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+
+    .wu-check {
+        width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+        border: 2px solid var(--color-neutral-600); background: transparent;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; transition: all 0.2s; color: transparent;
+        font-size: 14px; margin-top: 2px;
+    }
+    .wu-check:hover { border-color: var(--color-accent); }
+
+    .wu-content { flex: 1; }
+    .wu-card-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .wu-card-title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .wu-card-dur { font-size: 12px; color: var(--color-neutral-500); font-weight: 600; }
+
+    .wu-metric {
+        display: inline-flex; gap: 10px; font-size: 12px; margin-bottom: 10px;
+    }
+    .wu-metric-val { font-weight: 600; color: var(--color-neutral-300); }
+    .wu-metric-target { color: var(--color-neutral-500); }
+
+    .wu-steps { list-style: none; padding: 0; margin: 0 0 8px; }
+    .wu-steps li {
+        font-size: 12px; color: var(--color-neutral-400); padding: 3px 0;
+        padding-left: 16px; position: relative;
+    }
+    .wu-steps li::before {
+        content: ""; position: absolute; left: 0; top: 10px;
+        width: 6px; height: 6px; border-radius: 50%;
+        background: var(--color-neutral-700);
+    }
+
+    .wu-workshops { display: flex; gap: 6px; flex-wrap: wrap; }
+    .wu-workshop {
+        font-size: 10px; padding: 3px 10px; border-radius: 10px;
+        background: var(--color-neutral-800); color: var(--color-neutral-300);
+        border: 1px solid var(--color-neutral-700);
+    }
+
+    .wu-map-tip {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        background: rgba(96,165,250,0.06); border: 1px solid rgba(96,165,250,0.15);
+        font-size: 13px; color: var(--color-neutral-300); margin-bottom: var(--space-5);
+        display: flex; align-items: center; gap: 10px;
+    }
+
+    .wu-progress-bar {
+        height: 6px; border-radius: 3px; background: var(--color-neutral-800);
+        overflow: hidden; margin-bottom: var(--space-3);
+    }
+    .wu-progress-fill {
+        height: 100%; border-radius: 3px;
+        background: linear-gradient(90deg, var(--color-accent), #4ade80);
+        transition: width 0.3s;
+    }
+
+    .wu-live-timer {
+        font-family: var(--font-heading); font-size: 36px; font-weight: 700;
+        color: var(--color-accent); text-align: center; margin-bottom: var(--space-3);
+        display: none;
+    }
+    .wu-live-timer.active { display: block; }
+</style>
+
+{% if not wu.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Mindestens 3 Matches noetig fuer personalisierte Warm-up-Empfehlungen.</p>
+</div>
+{% else %}
+
+<!-- Hero -->
+<div class="wu-hero">
+    <div class="wu-timer-wrap">
+        <div class="wu-timer">{{ wu.duration }}</div>
+        <div class="wu-timer-label">Minuten</div>
+    </div>
+    <div class="wu-hero-info">
+        <h3>Dein Warm-up fuer heute</h3>
+        <p>{{ wu.exercises|length }} Uebungen basierend auf deinen letzten 5 Matches</p>
+        {% if wu.weaknesses %}
+        <div style="margin-top: 8px;">
+            {% for w in wu.weaknesses %}
+            <span class="wu-focus-badge">{{ w[0] }}: {{ w[1] }}{{ w[2] }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if wu.map_tip %}
+<div class="wu-map-tip">
+    <i data-lucide="map" style="width:16px;height:16px;color:#60a5fa;flex-shrink:0;"></i>
+    <span><strong>{{ wu.likely_map }}:</strong> {{ wu.map_tip }}</span>
+</div>
+{% endif %}
+
+<!-- Controls -->
+<div class="wu-controls">
+    <button class="btn btn-primary" id="wu-start-btn" onclick="startTimer()">
+        <i data-lucide="play" style="width:14px;height:14px;"></i> Timer starten
+    </button>
+    <button class="btn btn-secondary" id="wu-reset-btn" onclick="resetAll()" style="display:none;">
+        <i data-lucide="rotate-ccw" style="width:14px;height:14px;"></i> Reset
+    </button>
+    <span id="wu-done-count" style="font-size:13px;color:var(--color-neutral-500);">0/{{ wu.exercises|length }} erledigt</span>
+</div>
+
+<!-- Live timer -->
+<div class="wu-live-timer" id="wu-live-timer">00:00</div>
+
+<!-- Progress bar -->
+<div class="wu-progress-bar">
+    <div class="wu-progress-fill" id="wu-progress" style="width: 0%;"></div>
+</div>
+
+<!-- Exercise cards -->
+<div class="wu-grid" id="wu-exercises">
+{% for ex in wu.exercises %}
+<div class="wu-card severity-{{ ex.severity }}" id="wu-ex-{{ ex.id }}" data-duration="{{ ex.duration }}">
+    <button class="wu-check" onclick="toggleExercise('{{ ex.id }}')" title="Als erledigt markieren">&#10003;</button>
+    <div class="wu-content">
+        <div class="wu-card-head">
+            <div class="wu-card-title">
+                <i data-lucide="{{ ex.icon }}" style="width:16px;height:16px;color:var(--color-accent);"></i>
+                {{ ex.name }}
+            </div>
+            <div class="wu-card-dur">{{ ex.duration }} Min</div>
+        </div>
+        <div class="wu-metric">
+            <span class="wu-metric-val">{{ ex.metric }}</span>
+            <span class="wu-metric-target">{{ ex.target }}</span>
+        </div>
+        <ul class="wu-steps">
+            {% for step in ex.steps %}
+            <li>{{ step }}</li>
+            {% endfor %}
+        </ul>
+        {% if ex.workshop %}
+        <div class="wu-workshops">
+            {% for ws in ex.workshop %}
+            <span class="wu-workshop" title="{{ ws.desc }}">{{ ws.name }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if wu.has_data %}
+<script>
+var totalExercises = {{ wu.exercises|length }};
+var completed = {};
+var timerInterval = null;
+var timerSeconds = 0;
+
+function toggleExercise(id) {
+    var card = document.getElementById('wu-ex-' + id);
+    if (completed[id]) {
+        delete completed[id];
+        card.classList.remove('done');
+    } else {
+        completed[id] = true;
+        card.classList.add('done');
+    }
+    updateProgress();
+}
+
+function updateProgress() {
+    var count = Object.keys(completed).length;
+    var pct = Math.round(count / totalExercises * 100);
+    document.getElementById('wu-progress').style.width = pct + '%';
+    document.getElementById('wu-done-count').textContent = count + '/' + totalExercises + ' erledigt';
+
+    if (count === totalExercises) {
+        document.getElementById('wu-done-count').innerHTML = '<span style="color:#4ade80;font-weight:600;">Warm-up abgeschlossen!</span>';
+        stopTimer();
+    }
+}
+
+function startTimer() {
+    var btn = document.getElementById('wu-start-btn');
+    var resetBtn = document.getElementById('wu-reset-btn');
+    var timerEl = document.getElementById('wu-live-timer');
+
+    if (timerInterval) {
+        // Pause
+        clearInterval(timerInterval);
+        timerInterval = null;
+        btn.innerHTML = '<i data-lucide="play" style="width:14px;height:14px;"></i> Weiter';
+        lucide.createIcons();
+        return;
+    }
+
+    btn.innerHTML = '<i data-lucide="pause" style="width:14px;height:14px;"></i> Pause';
+    resetBtn.style.display = '';
+    timerEl.classList.add('active');
+    lucide.createIcons();
+
+    timerInterval = setInterval(function() {
+        timerSeconds++;
+        var mins = Math.floor(timerSeconds / 60);
+        var secs = timerSeconds % 60;
+        timerEl.textContent = (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
+    }, 1000);
+}
+
+function stopTimer() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+    var btn = document.getElementById('wu-start-btn');
+    btn.innerHTML = '<i data-lucide="check" style="width:14px;height:14px;"></i> Fertig!';
+    btn.disabled = true;
+    lucide.createIcons();
+}
+
+function resetAll() {
+    completed = {};
+    timerSeconds = 0;
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    document.getElementById('wu-live-timer').textContent = '00:00';
+    document.getElementById('wu-live-timer').classList.remove('active');
+    document.getElementById('wu-start-btn').disabled = false;
+    document.getElementById('wu-start-btn').innerHTML = '<i data-lucide="play" style="width:14px;height:14px;"></i> Timer starten';
+    document.getElementById('wu-reset-btn').style.display = 'none';
+    document.querySelectorAll('.wu-card').forEach(function(c) { c.classList.remove('done'); });
+    updateProgress();
+    lucide.createIcons();
+}
+</script>
+{% endif %}
+{% endblock %}
