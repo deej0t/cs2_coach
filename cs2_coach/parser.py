@@ -251,6 +251,7 @@ class MatchResult:
     player_stats: PlayerStats
     all_players: list[PlayerStats] = field(default_factory=list)
     kill_positions: list[dict] = field(default_factory=list)  # kill/death XY positions for map viz
+    utility_positions: list[dict] = field(default_factory=list)  # grenade detonation XY positions
     duel_matrix: list[dict] = field(default_factory=list)  # per-opponent duel breakdown
     round_timeline: list[dict] = field(default_factory=list)  # per-round event log
     economy_performance: dict = field(default_factory=dict)  # eco/force/fullbuy stats
@@ -440,7 +441,8 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
     _process_crosshair_placement(parser, player_lookup)
 
     # 10b) Kill Positions for 2D Map
-    kill_positions = _extract_kill_positions(parser, player_lookup)
+    kill_positions = _extract_kill_positions(parser, player_lookup, round_ticks)
+    utility_positions = _extract_utility_positions(parser, round_ticks)
 
     # 11) Per-Round-Analyse: KAST, Survival, Multi-Kills, CT/T-Split, Death-Timing
     if kills_df is not None and rounds_df is not None:
@@ -488,6 +490,7 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
         player_stats=target_stats,
         all_players=list(player_lookup.values()),
         kill_positions=kill_positions,
+        utility_positions=utility_positions,
         duel_matrix=duel_matrix,
         round_timeline=round_timeline,
         economy_performance=economy_performance,
@@ -1168,6 +1171,7 @@ def _process_crosshair_placement(parser: DemoParser, player_lookup: dict[str, "P
 
 def _extract_kill_positions(
     parser: DemoParser, player_lookup: dict[str, "PlayerStats"],
+    round_ticks: list[int],
 ) -> list[dict]:
     """Extract attacker/victim XY positions for each kill (2D map visualization)."""
     df = _get_enriched_event_df(
@@ -1192,6 +1196,8 @@ def _extract_kill_positions(
 
         att_name = player_lookup[attacker_id].name if attacker_id in player_lookup else "?"
         vic_name = player_lookup[victim_id].name if victim_id in player_lookup else "?"
+        tick = int(row.get("tick", 0))
+        round_num = _tick_to_round(tick, round_ticks) + 1  # 1-based
 
         positions.append({
             "attacker_id": attacker_id,
@@ -1204,8 +1210,44 @@ def _extract_kill_positions(
             "victim_y": vic_y,
             "weapon": str(row.get("weapon", "")),
             "headshot": bool(row.get("headshot", False)),
+            "round": round_num,
         })
 
+    return positions
+
+
+def _extract_utility_positions(
+    parser: DemoParser, round_ticks: list[int],
+) -> list[dict]:
+    """Extract grenade detonation XY positions for map visualization."""
+    event_map = {
+        "flashbang_detonate": "flash",
+        "smokegrenade_detonate": "smoke",
+        "hegrenade_detonate": "he",
+        "inferno_startburn": "molotov",
+    }
+    positions = []
+    for event_name, util_type in event_map.items():
+        result = parser.parse_events([event_name])
+        if not result:
+            continue
+        _, df = result[0]
+        for _, row in df.iterrows():
+            try:
+                x = float(row.get("x", 0))
+                y = float(row.get("y", 0))
+            except (ValueError, TypeError):
+                continue
+            tick = int(row.get("tick", 0))
+            round_num = _tick_to_round(tick, round_ticks) + 1
+            positions.append({
+                "type": util_type,
+                "player_name": str(row.get("user_name", "?")),
+                "player_id": str(row.get("user_steamid", "")),
+                "x": x,
+                "y": y,
+                "round": round_num,
+            })
     return positions
 
 

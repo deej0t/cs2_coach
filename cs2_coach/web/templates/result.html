@@ -777,21 +777,46 @@
 
 <!-- ══════ Kill Map ══════ -->
 {% if kill_map_data %}
+<style>
+    .km-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .km-layer { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; cursor: pointer; user-select: none; padding: 3px 8px; border-radius: var(--radius-sm); transition: background 0.15s; }
+    .km-layer:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+    .km-layer input { accent-color: var(--color-accent); }
+    .km-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+    .km-mode-group { display: flex; gap: 2px; margin-left: auto; }
+    .km-mode { padding: 3px 10px; font-size: 11px; border: 1px solid var(--color-neutral-700); background: transparent; color: var(--color-neutral-400); cursor: pointer; transition: all 0.15s; }
+    .km-mode:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+    .km-mode:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+    .km-mode.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+    .km-round-ctrl { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px; }
+    .km-round-ctrl input[type=range] { flex: 1; accent-color: var(--color-accent); }
+    .km-round-label { font-size: 11px; min-width: 70px; color: var(--color-neutral-400); }
+    .km-round-pills { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 4px; }
+    .km-pill { width: 22px; height: 18px; font-size: 9px; font-weight: 600; border: none; border-radius: 3px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.1s; }
+    .km-pill.active { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+</style>
 <div style="margin-bottom: var(--space-5);">
     <div class="card-kicker" style="margin-bottom: 8px;">Kill Map — {{ result.map_name }}</div>
     <div class="card elev-sm" style="padding: var(--space-3);">
-        <div style="display: flex; gap: 12px; margin-bottom: 8px;">
-            <span style="font-size: 11px; display: flex; align-items: center; gap: 4px;">
-                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--color-green);"></span> Kills
-            </span>
-            <span style="font-size: 11px; display: flex; align-items: center; gap: 4px;">
-                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--color-red);"></span> Deaths
-            </span>
-            <span style="font-size: 11px; display: flex; align-items: center; gap: 4px;">
-                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--color-yellow);"></span> HS Kill
-            </span>
+        <div class="km-controls">
+            <label class="km-layer"><input type="checkbox" id="km-kills" checked><span class="km-dot" style="background:#4ade80;"></span> Kills</label>
+            <label class="km-layer"><input type="checkbox" id="km-deaths" checked><span class="km-dot" style="background:#f87171;"></span> Deaths</label>
+            <label class="km-layer"><input type="checkbox" id="km-flash"><span class="km-dot" style="background:#60a5fa;"></span> Flashes</label>
+            <label class="km-layer"><input type="checkbox" id="km-smoke"><span class="km-dot" style="background:#a3a3a3;"></span> Smokes</label>
+            <label class="km-layer"><input type="checkbox" id="km-he"><span class="km-dot" style="background:#fb923c;"></span> HE</label>
+            <label class="km-layer"><input type="checkbox" id="km-molotov"><span class="km-dot" style="background:#ef4444;"></span> Molotov</label>
+            <label class="km-layer"><input type="checkbox" id="km-own-only"><abbr title="Nur eigene Utility anzeigen">Nur Eigene</abbr></label>
+            <div class="km-mode-group">
+                <button class="km-mode active" data-mode="dots">Dots</button>
+                <button class="km-mode" data-mode="heatmap">Heatmap</button>
+            </div>
         </div>
-        <div style="position: relative; width: 100%; max-width: 600px;">
+        <div class="km-round-ctrl">
+            <span class="km-round-label" id="km-round-text">Alle Runden</span>
+            <input type="range" id="km-round-slider" min="0" max="{{ kill_map_data.total_rounds }}" value="0">
+        </div>
+        <div class="km-round-pills" id="km-round-pills"></div>
+        <div style="position: relative; width: 100%; max-width: 600px; margin-top: 8px;">
             <canvas id="kill-map" width="600" height="600" style="width:100%;border-radius:var(--radius-md);background:var(--color-bg);"></canvas>
             <div id="kill-map-tooltip" style="display:none;position:absolute;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-sm);padding:4px 8px;font-size:11px;pointer-events:none;white-space:nowrap;z-index:10;"></div>
         </div>
@@ -858,45 +883,140 @@
 (function() {
     var mapData = {{ kill_map_data | tojson }};
     var canvas = document.getElementById('kill-map');
-    if (!canvas || !mapData || !mapData.dots.length) return;
+    if (!canvas || !mapData) return;
 
     var ctx = canvas.getContext('2d');
-    var W = canvas.width;
-    var H = canvas.height;
-    var RADAR_SIZE = 1024;
-    var scale = W / RADAR_SIZE;
+    var W = canvas.width, H = canvas.height, RADAR_SIZE = 1024, scale = W / RADAR_SIZE;
+    var mode = 'dots', selectedRound = 0; // 0 = all rounds
+    var totalRounds = mapData.total_rounds || 0;
 
     var img = new Image();
     img.src = '{{ url_for("static", filename="radars/") }}' + mapData.map + '.png';
 
-    function drawMap() {
-        ctx.clearRect(0, 0, W, H);
-        ctx.fillStyle = '#0d0f1a';
-        ctx.fillRect(0, 0, W, H);
+    // Layer checkboxes
+    var layers = {
+        kills: document.getElementById('km-kills'),
+        deaths: document.getElementById('km-deaths'),
+        flash: document.getElementById('km-flash'),
+        smoke: document.getElementById('km-smoke'),
+        he: document.getElementById('km-he'),
+        molotov: document.getElementById('km-molotov'),
+    };
+    var ownOnly = document.getElementById('km-own-only');
 
-        if (img.complete && img.naturalWidth > 0) {
-            ctx.globalAlpha = 0.7;
-            ctx.drawImage(img, 0, 0, W, H);
+    // Round slider + pills
+    var slider = document.getElementById('km-round-slider');
+    var roundText = document.getElementById('km-round-text');
+    var pillsContainer = document.getElementById('km-round-pills');
+
+    // Build round pills
+    if (totalRounds > 0) {
+        var allPill = document.createElement('button');
+        allPill.className = 'km-pill active';
+        allPill.textContent = '∗';
+        allPill.style.background = 'var(--color-neutral-700)'; allPill.style.color = '#fff';
+        allPill.title = 'Alle Runden';
+        allPill.onclick = function() { selectedRound = 0; slider.value = 0; updateRoundUI(); redraw(); };
+        pillsContainer.appendChild(allPill);
+        for (var r = 1; r <= totalRounds; r++) {
+            var pill = document.createElement('button');
+            pill.className = 'km-pill';
+            pill.textContent = r;
+            pill.dataset.round = r;
+            // Color by half: CT blue first half, T gold second
+            pill.style.background = r <= 12 ? 'rgba(126,170,219,0.2)' : 'rgba(222,178,62,0.2)';
+            pill.style.color = r <= 12 ? '#7eaadb' : '#deb23e';
+            (function(rn) { pill.onclick = function() { selectedRound = rn; slider.value = rn; updateRoundUI(); redraw(); }; })(r);
+            pillsContainer.appendChild(pill);
+        }
+    }
+
+    function updateRoundUI() {
+        roundText.textContent = selectedRound === 0 ? 'Alle Runden' : 'Runde ' + selectedRound;
+        var pills = pillsContainer.querySelectorAll('.km-pill');
+        pills.forEach(function(p) {
+            var pr = parseInt(p.dataset.round) || 0;
+            p.classList.toggle('active', pr === selectedRound || (selectedRound === 0 && !p.dataset.round));
+        });
+    }
+
+    slider.addEventListener('input', function() { selectedRound = parseInt(this.value); updateRoundUI(); redraw(); });
+
+    // Mode buttons
+    document.querySelectorAll('.km-mode').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.km-mode').forEach(function(b) { b.classList.remove('active'); });
+            this.classList.add('active');
+            mode = this.dataset.mode;
+            redraw();
+        });
+    });
+
+    // Layer change listeners
+    Object.values(layers).concat([ownOnly]).forEach(function(cb) { cb.addEventListener('change', redraw); });
+
+    function hex2rgba(hex, a) {
+        var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+        return 'rgba('+r+','+g+','+b+','+a+')';
+    }
+
+    var utilColors = { flash: '#60a5fa', smoke: '#a3a3a3', he: '#fb923c', molotov: '#ef4444' };
+    var utilSymbols = { flash: '⚡', smoke: '●', he: '💥', molotov: '🔥' };
+
+    function getFilteredDots() {
+        var dots = [];
+        if (!mapData.dots) return dots;
+        for (var i = 0; i < mapData.dots.length; i++) {
+            var d = mapData.dots[i];
+            if (selectedRound > 0 && d.round !== selectedRound) continue;
+            if (d.type === 'kill' && !layers.kills.checked) continue;
+            if (d.type === 'death' && !layers.deaths.checked) continue;
+            dots.push(d);
+        }
+        return dots;
+    }
+
+    function getFilteredUtils() {
+        var utils = [];
+        if (!mapData.utils) return utils;
+        for (var i = 0; i < mapData.utils.length; i++) {
+            var u = mapData.utils[i];
+            if (selectedRound > 0 && u.round !== selectedRound) continue;
+            if (!layers[u.type] || !layers[u.type].checked) continue;
+            if (ownOnly.checked && !u.is_own) continue;
+            utils.push(u);
+        }
+        return utils;
+    }
+
+    function drawDots(dots, utils) {
+        // Draw utility first (below kills)
+        for (var u = 0; u < utils.length; u++) {
+            var ut = utils[u], ux = ut.x * scale, uy = ut.y * scale;
+            if (ux < 0 || ux > W || uy < 0 || uy > H) continue;
+            var uc = utilColors[ut.type] || '#888';
+            // Glow
+            var ug = ctx.createRadialGradient(ux, uy, 0, ux, uy, 14);
+            ug.addColorStop(0, hex2rgba(uc, 0.25)); ug.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.beginPath(); ctx.arc(ux, uy, 14, 0, Math.PI * 2); ctx.fillStyle = ug; ctx.fill();
+            // Diamond shape for utility
+            ctx.beginPath();
+            ctx.moveTo(ux, uy - 5); ctx.lineTo(ux + 4, uy); ctx.lineTo(ux, uy + 5); ctx.lineTo(ux - 4, uy);
+            ctx.closePath(); ctx.fillStyle = uc; ctx.globalAlpha = ut.is_own ? 0.9 : 0.4; ctx.fill();
             ctx.globalAlpha = 1.0;
         }
-
-        var dots = mapData.dots;
+        // Deaths first (below kills)
         var deaths = [], kills = [];
         for (var i = 0; i < dots.length; i++) {
-            if (dots[i].type === 'death') deaths.push(dots[i]);
-            else kills.push(dots[i]);
+            if (dots[i].type === 'death') deaths.push(dots[i]); else kills.push(dots[i]);
         }
-
-        function drawDot(d) {
+        function drawKillDot(d) {
             var x = d.x * scale, y = d.y * scale;
             if (x < 0 || x > W || y < 0 || y > H) return;
-            var color, radius;
-            if (d.type === 'kill') { color = d.headshot ? '#fbbf24' : '#4ade80'; radius = d.headshot ? 6 : 5; }
-            else { color = '#f87171'; radius = 5; }
-
+            var color = d.type === 'kill' ? (d.headshot ? '#fbbf24' : '#4ade80') : '#f87171';
+            var radius = d.headshot ? 6 : 5;
             var grad = ctx.createRadialGradient(x, y, 0, x, y, radius + 8);
-            grad.addColorStop(0, colorToRgba(color, 0.35));
-            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            grad.addColorStop(0, hex2rgba(color, 0.35)); grad.addColorStop(1, 'rgba(0,0,0,0)');
             ctx.beginPath(); ctx.arc(x, y, radius + 8, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
             ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
             ctx.beginPath(); ctx.arc(x, y, 1.5, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fill();
@@ -906,30 +1026,86 @@
                 ctx.globalAlpha = 1.0;
             }
         }
-        deaths.forEach(drawDot); kills.forEach(drawDot);
+        deaths.forEach(drawKillDot); kills.forEach(drawKillDot);
+    }
+
+    function drawHeatmap(dots) {
+        // Off-screen canvas for heatmap
+        var hc = document.createElement('canvas'); hc.width = W; hc.height = H;
+        var hctx = hc.getContext('2d');
+        for (var i = 0; i < dots.length; i++) {
+            var d = dots[i], x = d.x * scale, y = d.y * scale;
+            if (x < 0 || x > W || y < 0 || y > H) continue;
+            var r = 28;
+            var g = hctx.createRadialGradient(x, y, 0, x, y, r);
+            g.addColorStop(0, 'rgba(255,255,255,0.4)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+            hctx.beginPath(); hctx.arc(x, y, r, 0, Math.PI * 2); hctx.fillStyle = g; hctx.fill();
+        }
+        // Colorize: get pixel data, map brightness to color
+        var imageData = hctx.getImageData(0, 0, W, H);
+        var pix = imageData.data;
+        for (var p = 0; p < pix.length; p += 4) {
+            var v = pix[p + 3]; // alpha = intensity
+            if (v < 5) { pix[p+3] = 0; continue; }
+            var t = v / 255;
+            // Blue -> Cyan -> Green -> Yellow -> Red
+            var r2, g2, b2;
+            if (t < 0.25) { r2 = 0; g2 = Math.round(t/0.25*255); b2 = 255; }
+            else if (t < 0.5) { r2 = 0; g2 = 255; b2 = Math.round((1-(t-0.25)/0.25)*255); }
+            else if (t < 0.75) { r2 = Math.round((t-0.5)/0.25*255); g2 = 255; b2 = 0; }
+            else { r2 = 255; g2 = Math.round((1-(t-0.75)/0.25)*255); b2 = 0; }
+            pix[p] = r2; pix[p+1] = g2; pix[p+2] = b2; pix[p+3] = Math.min(200, v * 2);
+        }
+        hctx.putImageData(imageData, 0, 0);
+        ctx.globalAlpha = 0.7; ctx.drawImage(hc, 0, 0); ctx.globalAlpha = 1.0;
+    }
+
+    function redraw() {
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = '#0d0f1a'; ctx.fillRect(0, 0, W, H);
+        if (img.complete && img.naturalWidth > 0) {
+            ctx.globalAlpha = 0.7; ctx.drawImage(img, 0, 0, W, H); ctx.globalAlpha = 1.0;
+        }
+        var dots = getFilteredDots();
+        var utils = getFilteredUtils();
+        if (mode === 'heatmap') {
+            drawHeatmap(dots.concat(utils.map(function(u) { return {x: u.x, y: u.y}; })));
+        } else {
+            drawDots(dots, utils);
+        }
+        // Map name watermark
         ctx.font = '500 11px Inter, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.textAlign = 'right';
-        ctx.fillText(mapData.map.toUpperCase(), W - 10, H - 10);
+        ctx.fillText(mapData.map.toUpperCase() + (selectedRound > 0 ? ' R' + selectedRound : ''), W - 10, H - 10);
     }
 
-    function colorToRgba(hex, a) {
-        var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-        return 'rgba('+r+','+g+','+b+','+a+')';
-    }
+    img.onload = redraw; img.onerror = redraw;
+    if (img.complete) redraw();
 
-    img.onload = drawMap; img.onerror = drawMap;
-    if (img.complete) drawMap();
-
+    // Tooltip
     var tooltip = document.getElementById('kill-map-tooltip');
+    var allItems = [];
     canvas.addEventListener('mousemove', function(e) {
         var rect = canvas.getBoundingClientRect();
         var mx = (e.clientX - rect.left) * (W / rect.width), my = (e.clientY - rect.top) * (H / rect.height);
+        // Search dots then utils
         var found = null;
-        for (var i = 0; i < mapData.dots.length; i++) {
-            var d = mapData.dots[i], dx = d.x*scale - mx, dy = d.y*scale - my;
-            if (dx*dx + dy*dy < 144) { found = d; break; }
+        var dots = getFilteredDots();
+        for (var i = 0; i < dots.length; i++) {
+            var d = dots[i], dx = d.x*scale - mx, dy = d.y*scale - my;
+            if (dx*dx + dy*dy < 144) { found = {label: d.label + (d.weapon ? ' (' + d.weapon + ')' : ''), round: d.round}; break; }
+        }
+        if (!found) {
+            var utils = getFilteredUtils();
+            for (var j = 0; j < utils.length; j++) {
+                var u = utils[j], udx = u.x*scale - mx, udy = u.y*scale - my;
+                if (udx*udx + udy*udy < 196) {
+                    var utype = {flash:'Flash',smoke:'Smoke',he:'HE',molotov:'Molotov'}[u.type] || u.type;
+                    found = {label: utype + ': ' + u.player, round: u.round}; break;
+                }
+            }
         }
         if (found) {
-            tooltip.textContent = found.label + (found.weapon ? ' (' + found.weapon + ')' : '');
+            tooltip.textContent = found.label + ' (R' + found.round + ')';
             tooltip.style.display = 'block';
             tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
             tooltip.style.top = (e.clientY - rect.top - 20) + 'px';

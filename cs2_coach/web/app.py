@@ -463,6 +463,7 @@ def _build_kill_map_data(result: MatchResult) -> dict | None:
         return None
 
     target_id = result.player_stats.steam_id
+    total_rounds = result.score_team1 + result.score_team2
     dots = []
     for kp in result.kill_positions:
         att_pos = game_to_radar(kp["attacker_x"], kp["attacker_y"], map_key)
@@ -472,6 +473,7 @@ def _build_kill_map_data(result: MatchResult) -> dict | None:
 
         is_attacker = kp["attacker_id"] == target_id
         is_victim = kp["victim_id"] == target_id
+        round_num = kp.get("round", 0)
 
         if is_attacker:
             dots.append({
@@ -479,17 +481,36 @@ def _build_kill_map_data(result: MatchResult) -> dict | None:
                 "type": "kill", "weapon": kp["weapon"],
                 "headshot": kp["headshot"],
                 "label": f"Kill: {kp['victim_name']}",
+                "round": round_num,
             })
         if is_victim:
             dots.append({
                 "x": round(vic_pos[0], 1), "y": round(vic_pos[1], 1),
                 "type": "death", "weapon": kp["weapon"],
                 "label": f"Death by {kp['attacker_name']}",
+                "round": round_num,
             })
+
+    # Utility positions
+    utils = []
+    for up in getattr(result, "utility_positions", []):
+        pos = game_to_radar(up["x"], up["y"], map_key)
+        if not pos:
+            continue
+        utils.append({
+            "x": round(pos[0], 1), "y": round(pos[1], 1),
+            "type": up["type"],
+            "player": up["player_name"],
+            "player_id": up["player_id"],
+            "is_own": up["player_id"] == target_id,
+            "round": up.get("round", 0),
+        })
 
     return {
         "map": map_key,
         "dots": dots,
+        "utils": utils,
+        "total_rounds": total_rounds,
     }
 
 
