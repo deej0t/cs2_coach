@@ -1,108 +1,243 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Demo-Analyse{% endblock %}
+{% block title %}CS2 Coach — Dashboard{% endblock %}
+{% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Demo analysieren</h2>
+<style>
+    /* ── Dashboard Grid ── */
+    .dash-top { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
+    .dash-mid { display: grid; grid-template-columns: 340px 1fr; gap: var(--space-5); margin-bottom: var(--space-5); }
+    .dash-benchmarks { margin-bottom: var(--space-5); }
+    .dash-maps { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
 
-<div class="grid-2" style="margin-bottom: var(--space-6);">
-    <!-- Upload Card -->
+    /* ── Quick-Stat Cards ── */
+    .qs-card { text-align: center; }
+    .qs-value { font-size: 32px; font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; }
+    .qs-sub { font-size: 11px; color: var(--color-neutral-500); margin-top: 2px; }
+
+    /* ── Form dots ── */
+    .form-dots { display: flex; gap: 6px; justify-content: center; margin-top: 6px; }
+    .form-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .form-dot.w { background: var(--color-green); }
+    .form-dot.l { background: var(--color-red); }
+    .form-dot.d { background: var(--color-yellow); }
+    .form-trend { font-size: 12px; font-weight: 600; margin-top: 2px; }
+    .form-trend.up { color: var(--color-green); }
+    .form-trend.down { color: var(--color-red); }
+    .form-trend.flat { color: var(--color-neutral-500); }
+
+    /* ── Spider Chart ── */
+    .spider-wrap { display: flex; align-items: center; justify-content: center; }
+    .spider-wrap canvas { max-width: 320px; max-height: 320px; }
+
+    /* ── Strengths / Weaknesses ── */
+    .sw-list { display: flex; flex-direction: column; gap: var(--space-3); }
+    .sw-item { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .sw-icon { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .sw-icon.strong { background: rgba(74,222,128,0.15); color: var(--color-green); }
+    .sw-icon.weak { background: rgba(248,113,113,0.15); color: var(--color-red); }
+    .sw-label { font-weight: 500; }
+    .sw-rank { font-size: 11px; color: var(--color-neutral-500); }
+    .focus-box {
+        margin-top: var(--space-4); padding: var(--space-3) var(--space-4);
+        background: rgba(145,132,217,0.08); border: 1px solid var(--color-accent-800);
+        border-radius: var(--radius-md); font-size: 13px;
+    }
+    .focus-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-accent); margin-bottom: 4px; }
+
+    /* ── Benchmarks ── */
+    .bm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3) var(--space-5); }
+    .bm-item { display: flex; flex-direction: column; gap: 3px; }
+    .bm-head { display: flex; justify-content: space-between; align-items: baseline; }
+    .bm-label { font-size: 12px; font-weight: 500; }
+    .bm-value { font-size: 12px; color: var(--color-neutral-400); }
+    .bm-bar { position: relative; height: 6px; background: var(--color-neutral-800); border-radius: 3px; overflow: hidden; }
+    .bm-fill { position: absolute; top: 0; left: 0; height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+    .bm-rank { font-size: 10px; color: var(--color-neutral-500); text-align: right; }
+
+    /* ── Map Cards ── */
+    .map-card { position: relative; overflow: hidden; }
+    .map-card .mc-name { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+    .mc-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; font-size: 12px; }
+    .mc-stats dt { color: var(--color-neutral-500); }
+    .mc-stats dd { margin: 0; font-weight: 500; text-align: right; }
+    .mc-wr-ring {
+        position: absolute; top: 10px; right: 10px; width: 44px; height: 44px;
+    }
+    .mc-veto {
+        margin-top: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+        padding: 2px 8px; border-radius: 3px; display: inline-block;
+    }
+    .mc-veto.pick { background: rgba(74,222,128,0.15); color: var(--color-green); }
+    .mc-veto.ban { background: rgba(248,113,113,0.15); color: var(--color-red); }
+    .mc-veto.neutral { background: rgba(251,191,36,0.1); color: var(--color-yellow); }
+
+    /* ── Analyze Accordion ── */
+    .analyze-toggle { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; padding: var(--space-3) 0; color: var(--color-neutral-400); font-size: 14px; }
+    .analyze-toggle:hover { color: var(--color-accent); }
+    .analyze-toggle .chevron { transition: transform 0.2s; font-size: 12px; }
+    .analyze-section[open] .chevron { transform: rotate(90deg); }
+
+    @media (max-width: 900px) {
+        .dash-top { grid-template-columns: 1fr 1fr; }
+        .dash-mid { grid-template-columns: 1fr; }
+        .bm-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+        .dash-top { grid-template-columns: 1fr; }
+    }
+</style>
+
+{% if dashboard.has_data %}
+
+<!-- ── Quick Stats ── -->
+<div class="dash-top">
+    <div class="card elev-sm qs-card">
+        <span class="card-kicker">Win-Rate</span>
+        <div class="qs-value {% if dashboard.win_rate >= 50 %}win{% else %}loss{% endif %}">{{ dashboard.win_rate }}%</div>
+        <div class="qs-sub">{{ dashboard.wins }}W / {{ dashboard.losses }}L{% if dashboard.draws %} / {{ dashboard.draws }}D{% endif %}</div>
+    </div>
+    <div class="card elev-sm qs-card">
+        <span class="card-kicker"><abbr title="Gesamtbewertung basierend auf Impact-Metriken">Avg Rating</abbr></span>
+        <div class="qs-value">{{ dashboard.avg_rating }}</div>
+        <div class="qs-sub">{{ dashboard.total_matches }} Spiele</div>
+    </div>
+    <div class="card elev-sm qs-card">
+        <span class="card-kicker">Aktuelle Form</span>
+        <div class="form-dots">
+            {% for e in dashboard.last5 %}
+            <div class="form-dot {% if e.result == 'Sieg' %}w{% elif e.result == 'Niederlage' %}l{% else %}d{% endif %}" title="{{ e.map }} {{ e.result }} ({{ e.rating }})"></div>
+            {% endfor %}
+        </div>
+        <div class="form-trend {% if dashboard.form_trend > 0.03 %}up{% elif dashboard.form_trend < -0.03 %}down{% else %}flat{% endif %}">
+            {% if dashboard.form_trend > 0.03 %}&#9650; {{ dashboard.last5_rating }}
+            {% elif dashboard.form_trend < -0.03 %}&#9660; {{ dashboard.last5_rating }}
+            {% else %}&#9644; {{ dashboard.last5_rating }}{% endif %}
+        </div>
+        <div class="qs-sub">Letzte 5 Spiele</div>
+    </div>
+    <div class="card elev-sm qs-card">
+        <span class="card-kicker">Streak</span>
+        <div class="qs-value {% if dashboard.streak_type == 'Sieg' %}win{% elif dashboard.streak_type == 'Niederlage' %}loss{% else %}draw{% endif %}">
+            {{ dashboard.streak }}{% if dashboard.streak_type == 'Sieg' %}W{% elif dashboard.streak_type == 'Niederlage' %}L{% else %}D{% endif %}
+        </div>
+        <div class="qs-sub">K/D {{ dashboard.total_kills }}/{{ dashboard.total_deaths }} ({{ "%.2f"|format(dashboard.total_kills / [dashboard.total_deaths, 1]|max) }})</div>
+    </div>
+</div>
+
+<!-- ── Spider Chart + Strengths/Weaknesses ── -->
+<div class="dash-mid">
     <div class="card elev-sm">
-        <span class="card-kicker">Upload</span>
-        <h3 class="card-title">Demo hochladen</h3>
-        <form id="upload-form" class="form-analyze" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:var(--space-3);">
-
-            <!-- Drag & Drop Zone -->
-            <div class="drop-zone" id="drop-zone">
-                <div class="drop-zone-icon"><i data-lucide="upload-cloud" style="width:32px;height:32px;"></i></div>
-                <div class="drop-zone-text"><strong>Klicken</strong> oder Demo hierher ziehen</div>
-                <div class="drop-zone-hint">.dem Dateien bis 500 MB</div>
-                <input type="file" name="demo" accept=".dem" required id="upload-demo-file" style="display:none;">
-            </div>
-
-            <div class="field" id="upload-player-select" style="display:none;">
-                <label>Spieler auswaehlen</label>
-                <select name="player_select" class="input" id="upload-player-dropdown">
-                    <option value="">Spieler werden geladen...</option>
-                </select>
-            </div>
-            <div class="grid-2">
-                <div class="field">
-                    <label>Spieler-Name</label>
-                    <input type="text" name="player" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input" id="upload-player-name">
-                </div>
-                <div class="field">
-                    <label>SteamID64 (optional)</label>
-                    <input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input" id="upload-steamid">
-                </div>
-            </div>
-            <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="upload-btn">
-                <i data-lucide="play" style="width:14px;height:14px;"></i> Analysieren
-            </button>
-        </form>
-
-        <!-- Overlay -->
-        <div class="analyze-overlay" id="upload-overlay">
-            <div class="analyze-spinner"></div>
-            <div class="analyze-status" id="upload-status">Demo wird hochgeladen...</div>
-            <div class="analyze-progress"><div class="analyze-progress-fill" id="upload-progress-fill"></div></div>
-            <div class="analyze-sub">Das kann einige Sekunden dauern</div>
+        <span class="card-kicker">Skill-Profil</span>
+        <div class="spider-wrap">
+            <canvas id="spider-chart" width="320" height="320"></canvas>
         </div>
     </div>
-
-    <!-- Local Path Card -->
-    <div class="card elev-sm">
-        <span class="card-kicker">Lokal</span>
-        <h3 class="card-title">Lokaler Pfad</h3>
-        <form id="path-form" class="form-analyze" action="{{ url_for('analyze_path') }}" method="post" style="display:flex;flex-direction:column;gap:var(--space-3);">
-            <div class="field">
-                <label>Pfad zur Demo-Datei</label>
-                <input type="text" name="demo_path" placeholder="D:/SteamLibrary/.../replays/match730_xxx.dem" class="input" id="path-demo-input">
-            </div>
-            <div class="field" id="path-player-select" style="display:none;">
-                <label>Spieler auswaehlen</label>
-                <select name="player_select" class="input" id="path-player-dropdown">
-                    <option value="">Spieler werden geladen...</option>
-                </select>
-            </div>
-            <div class="grid-2">
-                <div class="field">
-                    <label>Spieler-Name</label>
-                    <input type="text" name="player" value="{{ config.get('player_name', '') }}" class="input" id="path-player-name">
+    <div class="card elev-sm" style="display:flex;flex-direction:column;justify-content:space-between;">
+        <div>
+            <span class="card-kicker" style="color:var(--color-green);">Staerken</span>
+            <div class="sw-list" style="margin-top:6px;">
+                {% for s in dashboard.strengths %}
+                <div class="sw-item">
+                    <div class="sw-icon strong">&#9650;</div>
+                    <div><span class="sw-label">{{ s.label }}</span> <span class="sw-rank">— {{ s.rank }} ({{ "%.0f"|format(s.pct) }}%)</span></div>
                 </div>
-                <div class="field">
-                    <label>SteamID64 (optional)</label>
-                    <input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" class="input" id="path-steamid">
-                </div>
+                {% endfor %}
             </div>
-            <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="path-btn">
-                <i data-lucide="play" style="width:14px;height:14px;"></i> Analysieren
-            </button>
-        </form>
-
-        <!-- Overlay -->
-        <div class="analyze-overlay" id="path-overlay">
-            <div class="analyze-spinner"></div>
-            <div class="analyze-status">Demo wird analysiert...</div>
-            <div class="analyze-progress"><div class="analyze-progress-fill"></div></div>
-            <div class="analyze-sub">Das kann einige Sekunden dauern</div>
+        </div>
+        <div style="margin-top:var(--space-4);">
+            <span class="card-kicker" style="color:var(--color-red);">Schwaechen</span>
+            <div class="sw-list" style="margin-top:6px;">
+                {% for w in dashboard.weaknesses %}
+                <div class="sw-item">
+                    <div class="sw-icon weak">&#9660;</div>
+                    <div><span class="sw-label">{{ w.label }}</span> <span class="sw-rank">— {{ w.rank }} ({{ "%.0f"|format(w.pct) }}%)</span></div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="focus-box">
+            <div class="focus-label">Naechster Fokus</div>
+            {{ dashboard.focus }}
         </div>
     </div>
 </div>
 
+<!-- ── Skill-Benchmarks ── -->
+<div class="dash-benchmarks">
+    <div class="card elev-sm">
+        <span class="card-kicker">Skill-Benchmarks</span>
+        <div class="bm-grid" style="margin-top:8px;">
+            {% for b in dashboard.benchmarks %}
+            <div class="bm-item">
+                <div class="bm-head">
+                    <span class="bm-label"><abbr title="{{ b.desc }}">{{ b.label }}</abbr></span>
+                    <span class="bm-value">{{ ("{0:" + b.fmt + "}").format(b.value) }}{{ b.unit }}</span>
+                </div>
+                <div class="bm-bar">
+                    <div class="bm-fill" style="width:{{ b.pct }}%; background:
+                        {% if b.pct >= 85 %}var(--color-green)
+                        {% elif b.pct >= 57 %}var(--color-accent)
+                        {% elif b.pct >= 29 %}var(--color-yellow)
+                        {% else %}var(--color-red){% endif %};"></div>
+                </div>
+                <div class="bm-rank">{{ b.rank }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- ── Map Performance ── -->
+{% if map_stats %}
+<h3 style="margin-bottom:var(--space-3);">Map-Performance</h3>
+<div class="dash-maps">
+    {% for m in map_stats %}
+    <div class="card elev-sm map-card">
+        <svg class="mc-wr-ring" viewBox="0 0 36 36">
+            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none" stroke="var(--color-neutral-800)" stroke-width="3"/>
+            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none" stroke="{% if m.win_rate >= 55 %}var(--color-green){% elif m.win_rate >= 45 %}var(--color-yellow){% else %}var(--color-red){% endif %}"
+                  stroke-width="3" stroke-dasharray="{{ m.win_rate }}, 100" stroke-linecap="round"/>
+            <text x="18" y="21" text-anchor="middle" font-size="9" font-weight="600"
+                  fill="var(--color-text)">{{ m.win_rate|int }}%</text>
+        </svg>
+        <div class="mc-name">{{ m.map }}</div>
+        <dl class="mc-stats">
+            <dt>Spiele</dt><dd>{{ m.matches }}</dd>
+            <dt>Bilanz</dt><dd>{{ m.wins }}W {{ m.losses }}L</dd>
+            <dt><abbr title="Gesamtbewertung">Rating</abbr></dt><dd>{{ m.avg_rating }}</dd>
+            <dt><abbr title="Average Damage per Round">ADR</abbr></dt><dd>{{ m.avg_adr }}</dd>
+            <dt><abbr title="Kill/Death-Verhaeltnis">K/D</abbr></dt><dd>{{ m.avg_kd }}</dd>
+        </dl>
+        {% if map_stats|length >= 3 %}
+        {% set sorted_maps = map_stats|sort(attribute='avg_rating') %}
+        {% if m.map == sorted_maps[-1].map %}
+        <span class="mc-veto pick">Pick</span>
+        {% elif m.map == sorted_maps[0].map %}
+        <span class="mc-veto ban">Ban</span>
+        {% else %}
+        <span class="mc-veto neutral">Spielbar</span>
+        {% endif %}
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── Letzte Matches ── -->
 {% if exports %}
 <div class="hr"></div>
 <h3>Letzte Analysen</h3>
 <table class="table">
     <thead>
         <tr>
-            <th>Datum</th>
-            <th>Map</th>
-            <th>Score</th>
-            <th>Ergebnis</th>
-            <th>K/D</th>
-            <th>ADR</th>
-            <th>KAST%</th>
-            <th>Rating</th>
+            <th>Datum</th><th>Map</th><th>Score</th><th>Ergebnis</th>
+            <th><abbr title="Kill/Death-Verhaeltnis">K/D</abbr></th>
+            <th><abbr title="Average Damage per Round">ADR</abbr></th>
+            <th><abbr title="Kill, Assist, Survived, Traded">KAST%</abbr></th>
+            <th><abbr title="Gesamtbewertung">Rating</abbr></th>
             <th></th>
         </tr>
     </thead>
@@ -121,206 +256,285 @@
             <td>{{ e.adr }}</td>
             <td>{{ e.kast }}%</td>
             <td>{{ e.rating }}</td>
-            <td><a href="{{ url_for('view_export', filename=e.filename) }}" class="btn btn-ghost">Details →</a></td>
+            <td><a href="{{ url_for('view_export', filename=e.filename) }}" class="btn btn-ghost">Details &#8594;</a></td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 {% if exports|length > 10 %}
-<p style="margin-top: var(--space-4);"><a href="{{ url_for('exports') }}" class="btn btn-ghost">Alle {{ exports|length }} Exports anzeigen →</a></p>
+<p style="margin-top: var(--space-4);"><a href="{{ url_for('exports') }}" class="btn btn-ghost">Alle {{ exports|length }} Exports anzeigen &#8594;</a></p>
 {% endif %}
+{% endif %}
+
+<!-- ── Analyze (collapsible) ── -->
+<div class="hr"></div>
+<details class="analyze-section">
+    <summary class="analyze-toggle">
+        <span class="chevron">&#9654;</span> Demo analysieren
+    </summary>
+    <div style="padding-top:var(--space-4);">
+        <div class="grid-2">
+            <!-- Upload Card -->
+            <div class="card elev-sm">
+                <span class="card-kicker">Upload</span>
+                <h3 class="card-title">Demo hochladen</h3>
+                <form id="upload-form" class="form-analyze" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:var(--space-3);">
+                    <div class="drop-zone" id="drop-zone">
+                        <div class="drop-zone-icon"><i data-lucide="upload-cloud" style="width:32px;height:32px;"></i></div>
+                        <div class="drop-zone-text"><strong>Klicken</strong> oder Demo hierher ziehen</div>
+                        <div class="drop-zone-hint">.dem Dateien bis 500 MB</div>
+                        <input type="file" name="demo" accept=".dem" required id="upload-demo-file" style="display:none;">
+                    </div>
+                    <div class="field" id="upload-player-select" style="display:none;">
+                        <label>Spieler auswaehlen</label>
+                        <select name="player_select" class="input" id="upload-player-dropdown"><option value="">Spieler werden geladen...</option></select>
+                    </div>
+                    <div class="grid-2">
+                        <div class="field"><label>Spieler-Name</label><input type="text" name="player" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input" id="upload-player-name"></div>
+                        <div class="field"><label>SteamID64</label><input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input" id="upload-steamid"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="upload-btn"><i data-lucide="play" style="width:14px;height:14px;"></i> Analysieren</button>
+                </form>
+                <div class="analyze-overlay" id="upload-overlay">
+                    <div class="analyze-spinner"></div>
+                    <div class="analyze-status" id="upload-status">Demo wird hochgeladen...</div>
+                    <div class="analyze-progress"><div class="analyze-progress-fill" id="upload-progress-fill"></div></div>
+                    <div class="analyze-sub">Das kann einige Sekunden dauern</div>
+                </div>
+            </div>
+            <!-- Local Path Card -->
+            <div class="card elev-sm">
+                <span class="card-kicker">Lokal</span>
+                <h3 class="card-title">Lokaler Pfad</h3>
+                <form id="path-form" class="form-analyze" action="{{ url_for('analyze_path') }}" method="post" style="display:flex;flex-direction:column;gap:var(--space-3);">
+                    <div class="field"><label>Pfad zur Demo-Datei</label><input type="text" name="demo_path" placeholder="D:/SteamLibrary/.../replays/match730_xxx.dem" class="input" id="path-demo-input"></div>
+                    <div class="field" id="path-player-select" style="display:none;">
+                        <label>Spieler auswaehlen</label>
+                        <select name="player_select" class="input" id="path-player-dropdown"><option value="">Spieler werden geladen...</option></select>
+                    </div>
+                    <div class="grid-2">
+                        <div class="field"><label>Spieler-Name</label><input type="text" name="player" value="{{ config.get('player_name', '') }}" class="input" id="path-player-name"></div>
+                        <div class="field"><label>SteamID64</label><input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" class="input" id="path-steamid"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="path-btn"><i data-lucide="play" style="width:14px;height:14px;"></i> Analysieren</button>
+                </form>
+                <div class="analyze-overlay" id="path-overlay">
+                    <div class="analyze-spinner"></div>
+                    <div class="analyze-status">Demo wird analysiert...</div>
+                    <div class="analyze-progress"><div class="analyze-progress-fill"></div></div>
+                    <div class="analyze-sub">Das kann einige Sekunden dauern</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</details>
+
+{% else %}
+<!-- No data yet — show analyze forms prominently -->
+<h2>Willkommen beim CS2 Coach</h2>
+<p style="color:var(--color-neutral-500);margin-bottom:var(--space-5);">Analysiere deine erste Demo um das Dashboard zu aktivieren.</p>
+<div class="grid-2">
+    <div class="card elev-sm">
+        <span class="card-kicker">Upload</span>
+        <h3 class="card-title">Demo hochladen</h3>
+        <form id="upload-form" class="form-analyze" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:var(--space-3);">
+            <div class="drop-zone" id="drop-zone">
+                <div class="drop-zone-icon"><i data-lucide="upload-cloud" style="width:32px;height:32px;"></i></div>
+                <div class="drop-zone-text"><strong>Klicken</strong> oder Demo hierher ziehen</div>
+                <div class="drop-zone-hint">.dem Dateien bis 500 MB</div>
+                <input type="file" name="demo" accept=".dem" required id="upload-demo-file" style="display:none;">
+            </div>
+            <div class="field" id="upload-player-select" style="display:none;">
+                <label>Spieler auswaehlen</label>
+                <select name="player_select" class="input" id="upload-player-dropdown"><option value="">Spieler werden geladen...</option></select>
+            </div>
+            <div class="grid-2">
+                <div class="field"><label>Spieler-Name</label><input type="text" name="player" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input" id="upload-player-name"></div>
+                <div class="field"><label>SteamID64</label><input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input" id="upload-steamid"></div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="upload-btn"><i data-lucide="play" style="width:14px;height:14px;"></i> Analysieren</button>
+        </form>
+        <div class="analyze-overlay" id="upload-overlay">
+            <div class="analyze-spinner"></div>
+            <div class="analyze-status" id="upload-status">Demo wird hochgeladen...</div>
+            <div class="analyze-progress"><div class="analyze-progress-fill" id="upload-progress-fill"></div></div>
+            <div class="analyze-sub">Das kann einige Sekunden dauern</div>
+        </div>
+    </div>
+    <div class="card elev-sm">
+        <span class="card-kicker">Lokal</span>
+        <h3 class="card-title">Lokaler Pfad</h3>
+        <form id="path-form" class="form-analyze" action="{{ url_for('analyze_path') }}" method="post" style="display:flex;flex-direction:column;gap:var(--space-3);">
+            <div class="field"><label>Pfad zur Demo-Datei</label><input type="text" name="demo_path" placeholder="D:/SteamLibrary/.../replays/match730_xxx.dem" class="input" id="path-demo-input"></div>
+            <div class="field" id="path-player-select" style="display:none;">
+                <label>Spieler auswaehlen</label>
+                <select name="player_select" class="input" id="path-player-dropdown"><option value="">Spieler werden geladen...</option></select>
+            </div>
+            <div class="grid-2">
+                <div class="field"><label>Spieler-Name</label><input type="text" name="player" value="{{ config.get('player_name', '') }}" class="input" id="path-player-name"></div>
+                <div class="field"><label>SteamID64</label><input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" class="input" id="path-steamid"></div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="path-btn"><i data-lucide="play" style="width:14px;height:14px;"></i> Analysieren</button>
+        </form>
+        <div class="analyze-overlay" id="path-overlay">
+            <div class="analyze-spinner"></div>
+            <div class="analyze-status">Demo wird analysiert...</div>
+            <div class="analyze-progress"><div class="analyze-progress-fill"></div></div>
+            <div class="analyze-sub">Das kann einige Sekunden dauern</div>
+        </div>
+    </div>
+</div>
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
 (function() {
-    // Re-init Lucide for dynamically added icons
     if (window.lucide) lucide.createIcons();
+    var MAX_SIZE = 500 * 1024 * 1024;
 
-    var MAX_SIZE = 500 * 1024 * 1024; // 500 MB
+    // ── Spider Chart ──
+    var spiderEl = document.getElementById('spider-chart');
+    if (spiderEl) {
+        new Chart(spiderEl, {
+            type: 'radar',
+            data: {
+                labels: {{ dashboard.spider.labels | tojson }},
+                datasets: [{
+                    data: {{ dashboard.spider.scores | tojson }},
+                    backgroundColor: 'rgba(145,132,217,0.18)',
+                    borderColor: 'rgba(145,132,217,0.8)',
+                    borderWidth: 2,
+                    pointBackgroundColor: 'rgba(145,132,217,1)',
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    r: {
+                        min: 0, max: 100,
+                        ticks: { display: false, stepSize: 20 },
+                        grid: { color: 'rgba(233,233,237,0.08)' },
+                        angleLines: { color: 'rgba(233,233,237,0.08)' },
+                        pointLabels: {
+                            color: 'rgba(233,233,237,0.7)',
+                            font: { size: 11, family: 'Inter' }
+                        }
+                    }
+                }
+            }
+        });
+    }
 
     // ── Drag & Drop ──
     var dropZone = document.getElementById('drop-zone');
     var fileInput = document.getElementById('upload-demo-file');
+    if (dropZone && fileInput) {
+        dropZone.addEventListener('click', function() { fileInput.click(); });
+        dropZone.addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', function(e) { e.preventDefault(); this.classList.remove('drag-over'); });
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault(); this.classList.remove('drag-over');
+            var files = e.dataTransfer.files;
+            if (files.length && files[0].name.toLowerCase().endsWith('.dem')) {
+                fileInput.files = files; fileInput.dispatchEvent(new Event('change'));
+            } else { window._notyf.error('Nur .dem Dateien erlaubt'); }
+        });
 
-    dropZone.addEventListener('click', function() { fileInput.click(); });
-
-    dropZone.addEventListener('dragover', function(e) {
-        e.preventDefault(); e.stopPropagation();
-        this.classList.add('drag-over');
-    });
-    dropZone.addEventListener('dragleave', function(e) {
-        e.preventDefault(); e.stopPropagation();
-        this.classList.remove('drag-over');
-    });
-    dropZone.addEventListener('drop', function(e) {
-        e.preventDefault(); e.stopPropagation();
-        this.classList.remove('drag-over');
-        var files = e.dataTransfer.files;
-        if (files.length && files[0].name.toLowerCase().endsWith('.dem')) {
-            fileInput.files = files;
-            fileInput.dispatchEvent(new Event('change'));
-        } else {
-            window._notyf.error('Nur .dem Dateien erlaubt');
-        }
-    });
-
-    // ── File Validation & UI Update ──
-    fileInput.addEventListener('change', function() {
-        var file = this.files[0];
-        if (!file) return;
-
-        if (!file.name.toLowerCase().endsWith('.dem')) {
-            window._notyf.error('Nur .dem Dateien erlaubt');
-            this.value = '';
-            return;
-        }
-        if (file.size > MAX_SIZE) {
-            window._notyf.error('Datei zu gross (max 500 MB)');
-            this.value = '';
-            return;
-        }
-
-        // Update drop zone visual
-        var sizeMB = (file.size / 1024 / 1024).toFixed(1);
-        dropZone.classList.add('has-file');
-        dropZone.querySelector('.drop-zone-text').innerHTML = '<strong>' + file.name + '</strong>';
-        dropZone.querySelector('.drop-zone-hint').textContent = sizeMB + ' MB';
-        dropZone.querySelector('.drop-zone-icon i').setAttribute('data-lucide', 'file-check');
-        if (window.lucide) lucide.createIcons();
-
-        // Fetch players
-        fetchPlayersFromFile(file);
-    });
+        fileInput.addEventListener('change', function() {
+            var file = this.files[0]; if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.dem')) { window._notyf.error('Nur .dem Dateien erlaubt'); this.value = ''; return; }
+            if (file.size > MAX_SIZE) { window._notyf.error('Datei zu gross (max 500 MB)'); this.value = ''; return; }
+            var sizeMB = (file.size / 1024 / 1024).toFixed(1);
+            dropZone.classList.add('has-file');
+            dropZone.querySelector('.drop-zone-text').innerHTML = '<strong>' + file.name + '</strong>';
+            dropZone.querySelector('.drop-zone-hint').textContent = sizeMB + ' MB';
+            fetchPlayersFromFile(file);
+        });
+    }
 
     function fetchPlayersFromFile(file) {
-        var fd = new FormData();
-        fd.append('demo', file);
+        var fd = new FormData(); fd.append('demo', file);
         var dropdown = document.getElementById('upload-player-dropdown');
         var selectDiv = document.getElementById('upload-player-select');
+        if (!dropdown || !selectDiv) return;
         dropdown.innerHTML = '<option value="">Lade Spieler...</option>';
         selectDiv.style.display = '';
         fetch('{{ url_for("api_players") }}', {method: 'POST', body: fd})
             .then(function(r) { return r.json(); })
             .then(function(data) { populateDropdown(data, dropdown, 'upload-player-name', 'upload-steamid'); })
-            .catch(function() { dropdown.innerHTML = '<option value="">Fehler beim Laden</option>'; });
+            .catch(function() { dropdown.innerHTML = '<option value="">Fehler</option>'; });
     }
 
     function populateDropdown(data, dropdown, nameId, steamidId) {
         if (!data.players) return;
-        dropdown.innerHTML = '<option value="">— Spieler waehlen —</option>';
+        dropdown.innerHTML = '<option value="">-- Spieler --</option>';
         data.players.forEach(function(p) {
             var opt = document.createElement('option');
-            opt.value = p.steamid;
-            opt.textContent = p.name + ' (' + p.steamid + ')';
-            opt.dataset.name = p.name;
+            opt.value = p.steamid; opt.textContent = p.name + ' (' + p.steamid + ')'; opt.dataset.name = p.name;
             dropdown.appendChild(opt);
         });
     }
 
-    document.getElementById('upload-player-dropdown').addEventListener('change', function() {
+    var upDD = document.getElementById('upload-player-dropdown');
+    if (upDD) upDD.addEventListener('change', function() {
         var opt = this.options[this.selectedIndex];
-        if (opt.value) {
-            document.getElementById('upload-player-name').value = opt.dataset.name || '';
-            document.getElementById('upload-steamid').value = opt.value;
-        }
+        if (opt.value) { document.getElementById('upload-player-name').value = opt.dataset.name || ''; document.getElementById('upload-steamid').value = opt.value; }
     });
 
-    // ── Path form: player fetch on blur ──
+    // Path form player fetch
     var pathInput = document.getElementById('path-demo-input');
-    var pathSelect = document.getElementById('path-player-select');
-    var pathDropdown = document.getElementById('path-player-dropdown');
+    var pathDD = document.getElementById('path-player-dropdown');
     var lastPathFetched = '';
-
-    pathInput.addEventListener('blur', function() {
+    if (pathInput) pathInput.addEventListener('blur', function() {
         var val = this.value.trim();
         if (!val || !val.toLowerCase().endsWith('.dem') || val === lastPathFetched) return;
         lastPathFetched = val;
-        var fd = new FormData();
-        fd.append('demo_path', val);
-        pathDropdown.innerHTML = '<option value="">Lade Spieler...</option>';
-        pathSelect.style.display = '';
+        var fd = new FormData(); fd.append('demo_path', val);
+        var selectDiv = document.getElementById('path-player-select');
+        if (pathDD) pathDD.innerHTML = '<option value="">Lade Spieler...</option>';
+        if (selectDiv) selectDiv.style.display = '';
         fetch('{{ url_for("api_players") }}', {method: 'POST', body: fd})
             .then(function(r) { return r.json(); })
-            .then(function(data) { populateDropdown(data, pathDropdown, 'path-player-name', 'path-steamid'); })
-            .catch(function() { pathDropdown.innerHTML = '<option value="">Fehler beim Laden</option>'; });
+            .then(function(data) { populateDropdown(data, pathDD, 'path-player-name', 'path-steamid'); })
+            .catch(function() { if (pathDD) pathDD.innerHTML = '<option value="">Fehler</option>'; });
     });
-
-    document.getElementById('path-player-dropdown').addEventListener('change', function() {
+    if (pathDD) pathDD.addEventListener('change', function() {
         var opt = this.options[this.selectedIndex];
-        if (opt.value) {
-            document.getElementById('path-player-name').value = opt.dataset.name || '';
-            document.getElementById('path-steamid').value = opt.value;
-        }
+        if (opt.value) { document.getElementById('path-player-name').value = opt.dataset.name || ''; document.getElementById('path-steamid').value = opt.value; }
     });
 
-    // ── Upload form: XHR with real upload progress ──
-    document.getElementById('upload-form').addEventListener('submit', function(e) {
+    // Upload XHR with progress
+    var uploadForm = document.getElementById('upload-form');
+    if (uploadForm) uploadForm.addEventListener('submit', function(e) {
         e.preventDefault();
         if (!fileInput.files[0]) { window._notyf.error('Bitte eine .dem Datei waehlen'); return; }
-
         var overlay = document.getElementById('upload-overlay');
         var fill = document.getElementById('upload-progress-fill');
         var status = document.getElementById('upload-status');
-        overlay.classList.add('active');
-        NProgress.start();
-
+        overlay.classList.add('active'); NProgress.start();
         var xhr = new XMLHttpRequest();
         var fd = new FormData(this);
-
         xhr.upload.addEventListener('progress', function(ev) {
-            if (ev.lengthComputable) {
-                var pct = Math.round(ev.loaded / ev.total * 100);
-                fill.style.width = (pct * 0.5) + '%'; // Upload = 0-50%
-                status.textContent = 'Hochladen... ' + pct + '%';
-                NProgress.set(pct / 200);
-            }
+            if (ev.lengthComputable) { var pct = Math.round(ev.loaded / ev.total * 100); fill.style.width = (pct * 0.5) + '%'; status.textContent = 'Hochladen... ' + pct + '%'; NProgress.set(pct / 200); }
         });
-
         xhr.upload.addEventListener('load', function() {
-            status.textContent = 'Demo wird analysiert...';
-            fill.style.width = '50%';
-            NProgress.set(0.5);
-            // Trickle progress during analysis
-            var pct = 50;
-            var iv = setInterval(function() {
-                pct += Math.random() * 5 + 1;
-                if (pct > 92) { clearInterval(iv); pct = 92; }
-                fill.style.width = pct + '%';
-                NProgress.set(pct / 100);
-            }, 500);
+            status.textContent = 'Demo wird analysiert...'; fill.style.width = '50%'; NProgress.set(0.5);
+            var pct = 50; var iv = setInterval(function() { pct += Math.random() * 5 + 1; if (pct > 92) { clearInterval(iv); pct = 92; } fill.style.width = pct + '%'; NProgress.set(pct / 100); }, 500);
             xhr._trickleIv = iv;
         });
-
         xhr.addEventListener('load', function() {
-            clearInterval(xhr._trickleIv);
-            NProgress.done();
-            if (xhr.status === 200) {
-                fill.style.width = '100%';
-                status.textContent = 'Fertig!';
-                // Replace page with result
-                setTimeout(function() {
-                    document.open();
-                    document.write(xhr.responseText);
-                    document.close();
-                    if (xhr.responseURL) history.replaceState(null, '', xhr.responseURL);
-                }, 200);
-            } else {
-                overlay.classList.remove('active');
-                window._notyf.error('Fehler bei der Analyse');
-            }
+            clearInterval(xhr._trickleIv); NProgress.done();
+            if (xhr.status === 200) { fill.style.width = '100%'; status.textContent = 'Fertig!'; setTimeout(function() { document.open(); document.write(xhr.responseText); document.close(); if (xhr.responseURL) history.replaceState(null, '', xhr.responseURL); }, 200); }
+            else { overlay.classList.remove('active'); window._notyf.error('Fehler bei der Analyse'); }
         });
-
-        xhr.addEventListener('error', function() {
-            clearInterval(xhr._trickleIv);
-            NProgress.done();
-            overlay.classList.remove('active');
-            window._notyf.error('Verbindungsfehler');
-        });
-
-        xhr.open('POST', this.action);
-        xhr.send(fd);
+        xhr.addEventListener('error', function() { clearInterval(xhr._trickleIv); NProgress.done(); overlay.classList.remove('active'); window._notyf.error('Verbindungsfehler'); });
+        xhr.open('POST', this.action); xhr.send(fd);
     });
 })();
 </script>

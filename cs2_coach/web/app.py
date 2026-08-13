@@ -46,7 +46,10 @@ def create_app() -> Flask:
     @app.route("/")
     def index():
         exports = _get_exports(cfg)
-        return render_template("index.html", exports=exports, config=cfg)
+        map_stats = _get_map_stats(exports)
+        dashboard = _build_dashboard_data(exports, map_stats)
+        return render_template("index.html", exports=exports, map_stats=map_stats,
+                               dashboard=dashboard, config=cfg)
 
     @app.route("/analyze", methods=["POST"])
     def analyze():
@@ -627,3 +630,166 @@ def _get_map_stats(exports: list[dict]) -> list[dict]:
         })
 
     return sorted(result, key=lambda x: -x["matches"])
+
+
+# Skill benchmarks: (min, max) range per rank tier
+_BENCHMARKS = {
+    "adr":       {"tiers": [("Silver", 55), ("Gold Nova", 65), ("MG", 73), ("DMG/LE", 80), ("Faceit 4-6", 85), ("Faceit 7+", 92), ("Pro", 98)], "label": "ADR", "desc": "Average Damage per Round", "fmt": ".1f", "unit": ""},
+    "hs_pct":    {"tiers": [("Silver", 30), ("Gold Nova", 38), ("MG", 42), ("DMG/LE", 48), ("Faceit 4-6", 52), ("Faceit 7+", 56), ("Pro", 60)], "label": "HS%", "desc": "Headshot-Prozent", "fmt": ".1f", "unit": "%"},
+    "kast":      {"tiers": [("Silver", 55), ("Gold Nova", 60), ("MG", 65), ("DMG/LE", 68), ("Faceit 4-6", 72), ("Faceit 7+", 76), ("Pro", 80)], "label": "KAST%", "desc": "Kill, Assist, Survived, Traded", "fmt": ".1f", "unit": "%"},
+    "rating":    {"tiers": [("Silver", 0.6), ("Gold Nova", 0.75), ("MG", 0.85), ("DMG/LE", 0.95), ("Faceit 4-6", 1.0), ("Faceit 7+", 1.08), ("Pro", 1.18)], "label": "Rating", "desc": "Gesamtbewertung", "fmt": ".2f", "unit": ""},
+    "counter_strafe": {"tiers": [("Silver", 50), ("Gold Nova", 60), ("MG", 70), ("DMG/LE", 78), ("Faceit 4-6", 83), ("Faceit 7+", 88), ("Pro", 93)], "label": "Counter-Strafe", "desc": "Anteil stehender Schuesse", "fmt": ".1f", "unit": "%"},
+    "utility":   {"tiers": [("Silver", 0.5), ("Gold Nova", 0.8), ("MG", 1.2), ("DMG/LE", 1.6), ("Faceit 4-6", 2.0), ("Faceit 7+", 2.5), ("Pro", 3.0)], "label": "Utility/Runde", "desc": "Granaten pro Runde", "fmt": ".2f", "unit": ""},
+    "crosshair": {"tiers": [("Pro", 5), ("Faceit 7+", 8), ("Faceit 4-6", 12), ("DMG/LE", 16), ("MG", 22), ("Gold Nova", 28), ("Silver", 35)], "label": "Crosshair Placement", "desc": "Fadenkreuz-Abweichung in Grad (niedriger = besser)", "fmt": ".1f", "unit": "°", "lower_is_better": True},
+}
+
+
+def _rank_for_value(key: str, value: float) -> tuple[str, float]:
+    """Return (rank_label, pct 0-100) for a benchmark metric."""
+    bm = _BENCHMARKS[key]
+    tiers = bm["tiers"]
+    lower_better = bm.get("lower_is_better", False)
+
+    if lower_better:
+        # Tiers sorted best→worst (5, 8, 12, ... 35)
+        for i, (name, threshold) in enumerate(tiers):
+            if value <= threshold:
+                pct = 100 - (i / len(tiers)) * 100
+                return name, min(pct, 100)
+        return tiers[-1][0], 5.0
+    else:
+        # Tiers sorted worst→best
+        for i in range(len(tiers) - 1, -1, -1):
+            if value >= tiers[i][1]:
+                pct = ((i + 1) / len(tiers)) * 100
+                return tiers[i][0], min(pct, 100)
+        return tiers[0][0], 5.0
+
+
+def _build_dashboard_data(exports: list[dict], map_stats: list[dict]) -> dict:
+    """Compute dashboard metrics from export data."""
+    if not exports:
+        return {"has_data": False}
+
+    n = len(exports)
+    last5 = exports[:5]
+
+    # Averages
+    avg_rating = round(sum(e.get("rating", 0) for e in exports) / n, 2)
+    avg_kd = round(sum(e.get("kd", 0) for e in exports) / n, 2)
+    avg_adr = round(sum(e.get("adr", 0) for e in exports) / n, 1)
+    avg_kast = round(sum(e.get("kast", 0) for e in exports) / n, 1)
+    avg_hs = round(sum(e.get("hs_pct", 0) for e in exports) / n, 1)
+    avg_cs = round(sum(e.get("counter_strafe", 0) for e in exports) / n, 1)
+    avg_util = round(sum(e.get("utility_per_round", 0) for e in exports) / n, 2)
+    avg_cp = round(sum(e.get("crosshair_placement", 0) for e in exports) / n, 1)
+    total_kills = sum(e.get("kills", 0) for e in exports)
+    total_deaths = sum(e.get("deaths", 0) for e in exports)
+    wins = sum(1 for e in exports if e.get("result") == "Sieg")
+    losses = sum(1 for e in exports if e.get("result") == "Niederlage")
+    draws = n - wins - losses
+    win_rate = round(wins / n * 100, 1)
+
+    # Last 5 form
+    last5_wins = sum(1 for e in last5 if e.get("result") == "Sieg")
+    last5_rating = round(sum(e.get("rating", 0) for e in last5) / len(last5), 2) if last5 else 0
+    form_trend = last5_rating - avg_rating  # positive = improving
+
+    # Spider chart: 6 axes normalized to 0-100 against Pro benchmarks
+    def _norm(val, lo, hi, lower_better=False):
+        if lower_better:
+            return max(0, min(100, (hi - val) / max(hi - lo, 0.01) * 100))
+        return max(0, min(100, (val - lo) / max(hi - lo, 0.01) * 100))
+
+    spider = {
+        "labels": ["Aim (HS%)", "Impact (ADR)", "Consistency (KAST)", "Utility", "Positioning (Survival)", "Praezision (CP)"],
+        "scores": [
+            round(_norm(avg_hs, 25, 60), 1),
+            round(_norm(avg_adr, 50, 98), 1),
+            round(_norm(avg_kast, 50, 80), 1),
+            round(_norm(avg_util, 0.3, 3.0), 1),
+            round(_norm(100 - (total_deaths / max(total_kills, 1)) * 50, 20, 80), 1),
+            round(_norm(avg_cp, 5, 35, lower_better=True), 1),
+        ],
+    }
+
+    # Benchmarks
+    benchmarks = []
+    bench_values = {
+        "adr": avg_adr, "hs_pct": avg_hs, "kast": avg_kast,
+        "rating": avg_rating, "counter_strafe": avg_cs,
+        "utility": avg_util, "crosshair": avg_cp,
+    }
+    for key, val in bench_values.items():
+        bm = _BENCHMARKS[key]
+        rank, pct = _rank_for_value(key, val)
+        benchmarks.append({
+            "key": key, "label": bm["label"], "desc": bm["desc"],
+            "value": val, "fmt": bm["fmt"], "unit": bm["unit"],
+            "rank": rank, "pct": pct,
+            "lower_is_better": bm.get("lower_is_better", False),
+        })
+
+    # Strengths / Weaknesses (top 2 / bottom 2 by percentile)
+    ranked = sorted(benchmarks, key=lambda b: b["pct"], reverse=True)
+    strengths = ranked[:2]
+    weaknesses = ranked[-2:]
+
+    # Focus recommendation (worst benchmark)
+    focus_map = {
+        "adr": "Mehr Schaden pro Runde machen — Trade-Kills suchen und aggressiver peeken",
+        "hs_pct": "Headshot-Rate verbessern — Crosshair Placement auf Kopfhoehe trainieren",
+        "kast": "Konstanter spielen — Weniger unnoetige Peeks, mehr traden lassen",
+        "rating": "Gesamtperformance verbessern — Fokus auf Impact-Runden",
+        "counter_strafe": "Counter-Strafe trainieren — YPRAC Movement Map spielen",
+        "utility": "Mehr Utility einsetzen — Smoke/Flash Lineups lernen",
+        "crosshair": "Crosshair Placement verbessern — Prefire Maps spielen",
+    }
+    worst = ranked[-1]
+    focus = focus_map.get(worst["key"], "Weiter trainieren!")
+
+    # Best/worst map
+    best_map = map_stats[0]["map"] if map_stats else None
+    worst_map = None
+    if len(map_stats) >= 2:
+        # Sort by rating to find worst
+        by_rating = sorted(map_stats, key=lambda m: m["avg_rating"])
+        worst_map = by_rating[0]["map"]
+        best_map_data = sorted(map_stats, key=lambda m: -m["avg_rating"])[0]
+        best_map = best_map_data["map"]
+
+    # Streak
+    streak = 0
+    streak_type = ""
+    for e in exports:
+        r = e.get("result", "")
+        if streak == 0:
+            streak_type = r
+            streak = 1
+        elif r == streak_type:
+            streak += 1
+        else:
+            break
+
+    return {
+        "has_data": True,
+        "total_matches": n,
+        "wins": wins, "losses": losses, "draws": draws,
+        "win_rate": win_rate,
+        "avg_rating": avg_rating, "avg_kd": avg_kd, "avg_adr": avg_adr,
+        "avg_kast": avg_kast, "avg_hs": avg_hs,
+        "total_kills": total_kills, "total_deaths": total_deaths,
+        "last5": last5,
+        "last5_wins": last5_wins,
+        "last5_rating": last5_rating,
+        "form_trend": round(form_trend, 2),
+        "spider": spider,
+        "benchmarks": benchmarks,
+        "strengths": strengths,
+        "weaknesses": weaknesses,
+        "focus": focus,
+        "best_map": best_map,
+        "worst_map": worst_map,
+        "streak": streak,
+        "streak_type": streak_type,
+    }
