@@ -132,27 +132,48 @@
     }
 </style>
 
-<div style="display:flex;align-items:center;gap:var(--space-4);margin-bottom:var(--space-6);">
-    <a href="{{ url_for('exports') }}" class="btn btn-ghost">← Zurueck</a>
-    <div>
-        <h2 style="margin:0;">
+{% set p = data.player %}
+{% set ed_map_gradients = {
+    "Mirage": "linear-gradient(135deg, #d4a574, #8b6914)",
+    "Dust2": "linear-gradient(135deg, #c4a35a, #8b7355)",
+    "Inferno": "linear-gradient(135deg, #d45e3a, #8b4513)",
+    "Nuke": "linear-gradient(135deg, #5a8fa8, #2c5f7c)",
+    "Ancient": "linear-gradient(135deg, #6b8e5a, #3d5c2e)",
+    "Anubis": "linear-gradient(135deg, #c49a6c, #6b4423)",
+    "Vertigo": "linear-gradient(135deg, #7a8fa8, #4a6178)",
+    "Overpass": "linear-gradient(135deg, #5a7a4e, #3d5c2e)",
+    "Train": "linear-gradient(135deg, #8b7355, #5a4a3a)",
+    "Cache": "linear-gradient(135deg, #6b8e5a, #4a6b3a)",
+} %}
+<div style="position:relative;overflow:hidden;display:flex;align-items:center;gap:var(--space-5);padding:var(--space-5) var(--space-6);margin-bottom:var(--space-6);border-radius:var(--radius-lg);border:1px solid rgba(255,255,255,0.06);">
+    <div style="position:absolute;inset:0;opacity:0.08;background:{{ ed_map_gradients.get(data.match.map, 'linear-gradient(135deg, #555, #333)') }};pointer-events:none;"></div>
+    <a href="{{ url_for('exports') }}" class="btn btn-ghost" style="position:relative;z-index:1;">&#8592; Zurueck</a>
+    <div style="position:relative;z-index:1;flex:1;">
+        <h2 style="margin:0;font-size:22px;">
             {{ data.match.map }}
-            <span class="{% if data.match.result == 'Sieg' %}win{% elif data.match.result == 'Niederlage' %}loss{% else %}draw{% endif %}">
+            <span class="{% if data.match.result == 'Sieg' %}win{% elif data.match.result == 'Niederlage' %}loss{% else %}draw{% endif %}" style="font-size:26px;">
                 {{ data.match.score_own }}:{{ data.match.score_enemy }}
             </span>
         </h2>
-        <div style="display:flex;gap:var(--space-3);margin-top:var(--space-1);">
+        <div style="display:flex;gap:var(--space-3);align-items:center;margin-top:var(--space-1);">
             {% if data.match.result == 'Sieg' %}<span class="tag tag-win">Sieg</span>
             {% elif data.match.result == 'Niederlage' %}<span class="tag tag-loss">Niederlage</span>
             {% else %}<span class="tag tag-draw">{{ data.match.result }}</span>{% endif %}
             {% if data.match.get('date', '') %}
             <span style="font-size:13px;color:var(--color-neutral-500);">{{ data.match.get('date', '') }}</span>
             {% endif %}
+            {% if data.match.get('total_rounds') %}
+            <span style="font-size:12px;color:var(--color-neutral-600);">{{ data.match.total_rounds }} Runden</span>
+            {% endif %}
         </div>
     </div>
+    {% if p.get('rating') %}
+    <div style="position:relative;z-index:1;text-align:center;">
+        <div style="font-family:var(--font-heading);font-size:32px;font-weight:700;{% if p.rating >= 1.1 %}color:var(--color-green);{% elif p.rating >= 0.9 %}color:var(--color-text);{% else %}color:var(--color-red);{% endif %}">{{ p.rating }}</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--color-neutral-500);">Rating</div>
+    </div>
+    {% endif %}
 </div>
-
-{% set p = data.player %}
 
 <!-- Stats overview -->
 <div class="grid-3" style="margin-bottom:var(--space-4);">

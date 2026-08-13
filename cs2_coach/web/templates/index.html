@@ -78,6 +78,36 @@
     .analyze-toggle .chevron { transition: transform 0.2s; font-size: 12px; }
     .analyze-section[open] .chevron { transform: rotate(90deg); }
 
+    /* ── Hero Banner ── */
+    .hero-banner {
+        display: flex; align-items: center; gap: var(--space-5);
+        padding: var(--space-5) var(--space-6);
+        margin-bottom: var(--space-5);
+        background: linear-gradient(135deg, rgba(145,132,217,0.12) 0%, rgba(99,102,241,0.06) 50%, transparent 100%);
+        border: 1px solid rgba(145,132,217,0.15);
+        border-radius: var(--radius-lg);
+    }
+    .hero-avatar {
+        width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
+        background: linear-gradient(135deg, var(--color-accent), #6366f1);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; font-weight: 700; color: #fff; letter-spacing: 0.02em;
+        box-shadow: 0 4px 16px rgba(145,132,217,0.3);
+    }
+    .hero-info { flex: 1; }
+    .hero-meta { display: flex; gap: var(--space-4); font-size: 12px; color: var(--color-neutral-500); margin-top: 2px; }
+    .hero-meta span { display: flex; align-items: center; gap: 4px; }
+    .hero-rating { text-align: center; }
+    .hero-rating-val { font-family: var(--font-heading); font-size: 36px; font-weight: 700; line-height: 1; }
+    .hero-rating-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    /* ── Map Card Gradients ── */
+    .map-card-gradient {
+        position: absolute; inset: 0; opacity: 0.06; pointer-events: none; z-index: 0;
+        border-radius: var(--radius-md);
+    }
+    .map-card > *:not(.map-card-gradient):not(.mc-wr-ring) { position: relative; z-index: 1; }
+
     /* ── Alert Bars ── */
     .alert-bar {
         display: flex; align-items: center; gap: 10px; padding: 8px 14px;
@@ -128,17 +158,29 @@
 
 {% if dashboard.has_data %}
 
+<!-- ── Hero Banner ── -->
+<div class="hero-banner">
+    <div class="hero-avatar">{{ config.get('player_name', 'CS')[:2]|upper }}</div>
+    <div class="hero-info">
+        <h2 style="margin:0;font-size:24px;">{{ config.get('player_name', 'Spieler') }}</h2>
+        <div class="hero-meta">
+            <span>{{ dashboard.total_matches }} Matches</span>
+            <span>{{ dashboard.total_kills }} Kills</span>
+            <span>{{ dashboard.role.primary if dashboard.role else '' }}</span>
+        </div>
+    </div>
+    <div class="hero-rating">
+        <div class="hero-rating-val {% if dashboard.avg_rating >= 1.0 %}win{% else %}loss{% endif %}">{{ dashboard.avg_rating }}</div>
+        <div class="hero-rating-label">Avg Rating</div>
+    </div>
+</div>
+
 <!-- ── Quick Stats ── -->
 <div class="dash-top">
     <div class="card elev-sm qs-card">
         <span class="card-kicker">Win-Rate</span>
         <div class="qs-value {% if dashboard.win_rate >= 50 %}win{% else %}loss{% endif %}">{{ dashboard.win_rate }}%</div>
         <div class="qs-sub">{{ dashboard.wins }}W / {{ dashboard.losses }}L{% if dashboard.draws %} / {{ dashboard.draws }}D{% endif %}</div>
-    </div>
-    <div class="card elev-sm qs-card">
-        <span class="card-kicker"><abbr title="Gesamtbewertung basierend auf Impact-Metriken">Avg Rating</abbr></span>
-        <div class="qs-value">{{ dashboard.avg_rating }}</div>
-        <div class="qs-sub">{{ dashboard.total_matches }} Spiele</div>
     </div>
     <div class="card elev-sm qs-card">
         <span class="card-kicker">Aktuelle Form</span>
@@ -155,11 +197,16 @@
         <div class="qs-sub">Letzte 5 Spiele</div>
     </div>
     <div class="card elev-sm qs-card">
+        <span class="card-kicker">K/D Ratio</span>
+        <div class="qs-value {% if dashboard.avg_kd >= 1.0 %}win{% else %}loss{% endif %}">{{ dashboard.avg_kd }}</div>
+        <div class="qs-sub">{{ dashboard.total_kills }}K / {{ dashboard.total_deaths }}D</div>
+    </div>
+    <div class="card elev-sm qs-card">
         <span class="card-kicker">Streak</span>
         <div class="qs-value {% if dashboard.streak_type == 'Sieg' %}win{% elif dashboard.streak_type == 'Niederlage' %}loss{% else %}draw{% endif %}">
             {{ dashboard.streak }}{% if dashboard.streak_type == 'Sieg' %}W{% elif dashboard.streak_type == 'Niederlage' %}L{% else %}D{% endif %}
         </div>
-        <div class="qs-sub">K/D {{ dashboard.total_kills }}/{{ dashboard.total_deaths }} ({{ "%.2f"|format(dashboard.total_kills / [dashboard.total_deaths, 1]|max) }})</div>
+        <div class="qs-sub">{% if dashboard.streak_type == 'Sieg' %}Siege{% elif dashboard.streak_type == 'Niederlage' %}Niederlagen{% else %}Unentschieden{% endif %} in Folge</div>
     </div>
 </div>
 
@@ -301,9 +348,22 @@
 {% if map_stats %}
 <h3 style="margin-bottom:var(--space-3);">Map-Performance</h3>
 <div class="dash-maps">
+    {% set map_gradients = {
+        "Mirage": "linear-gradient(135deg, #d4a574, #8b6914)",
+        "Dust2": "linear-gradient(135deg, #c4a35a, #8b7355)",
+        "Inferno": "linear-gradient(135deg, #d45e3a, #8b4513)",
+        "Nuke": "linear-gradient(135deg, #5a8fa8, #2c5f7c)",
+        "Ancient": "linear-gradient(135deg, #6b8e5a, #3d5c2e)",
+        "Anubis": "linear-gradient(135deg, #c49a6c, #6b4423)",
+        "Vertigo": "linear-gradient(135deg, #7a8fa8, #4a6178)",
+        "Overpass": "linear-gradient(135deg, #5a7a4e, #3d5c2e)",
+        "Train": "linear-gradient(135deg, #8b7355, #5a4a3a)",
+        "Cache": "linear-gradient(135deg, #6b8e5a, #4a6b3a)",
+    } %}
     {% for m in map_stats %}
-    <div class="card elev-sm map-card">
-        <svg class="mc-wr-ring" viewBox="0 0 36 36">
+    <div class="card elev-sm map-card" style="position:relative;overflow:hidden;">
+        <div class="map-card-gradient" style="background:{{ map_gradients.get(m.map, 'linear-gradient(135deg, #555, #333)') }};"></div>
+        <svg class="mc-wr-ring" viewBox="0 0 36 36" style="z-index:1;">
             <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                   fill="none" stroke="var(--color-neutral-800)" stroke-width="3"/>
             <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
@@ -315,17 +375,17 @@
         <div class="mc-name">{{ m.map }}</div>
         <dl class="mc-stats">
             <dt>Spiele</dt><dd>{{ m.matches }}</dd>
-            <dt>Bilanz</dt><dd>{{ m.wins }}W {{ m.losses }}L</dd>
-            <dt><abbr title="Gesamtbewertung">Rating</abbr></dt><dd>{{ m.avg_rating }}</dd>
+            <dt>Bilanz</dt><dd style="font-weight:600;"><span style="color:var(--color-green);">{{ m.wins }}W</span> <span style="color:var(--color-red);">{{ m.losses }}L</span></dd>
+            <dt><abbr title="Gesamtbewertung">Rating</abbr></dt><dd class="{% if m.avg_rating >= 1.1 %}win{% elif m.avg_rating >= 0.9 %}draw{% else %}loss{% endif %}" style="font-weight:600;">{{ m.avg_rating }}</dd>
             <dt><abbr title="Average Damage per Round">ADR</abbr></dt><dd>{{ m.avg_adr }}</dd>
-            <dt><abbr title="Kill/Death-Verhaeltnis">K/D</abbr></dt><dd>{{ m.avg_kd }}</dd>
+            <dt><abbr title="Kill/Death-Verhaeltnis">K/D</abbr></dt><dd class="{% if m.avg_kd >= 1.2 %}win{% elif m.avg_kd >= 0.9 %}draw{% else %}loss{% endif %}">{{ m.avg_kd }}</dd>
         </dl>
         {% if map_stats|length >= 3 %}
         {% set sorted_maps = map_stats|sort(attribute='avg_rating') %}
         {% if m.map == sorted_maps[-1].map %}
-        <span class="mc-veto pick">Pick</span>
+        <span class="mc-veto pick">&#9733; Pick</span>
         {% elif m.map == sorted_maps[0].map %}
-        <span class="mc-veto ban">Ban</span>
+        <span class="mc-veto ban">&#10005; Ban</span>
         {% else %}
         <span class="mc-veto neutral">Spielbar</span>
         {% endif %}

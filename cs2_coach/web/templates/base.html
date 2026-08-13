@@ -137,6 +137,18 @@
         .table th[data-sort] { cursor: pointer; user-select: none; }
         .table th[data-sort]:hover { color: var(--color-accent); }
 
+        /* Nav player avatar */
+        .nav-player {
+            margin-left: auto; display: flex; align-items: center; gap: 8px;
+            font-size: 13px; color: var(--color-neutral-400);
+        }
+        .nav-avatar {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--color-accent), #6366f1);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: 700; color: #fff; letter-spacing: 0.02em;
+        }
+
         /* Fading rule */
         .hr { height: 1px; border: 0; margin: var(--space-4) 0; background: linear-gradient(to right, transparent, var(--color-divider) 48px, var(--color-divider) calc(100% - 48px), transparent); }
 
@@ -239,6 +251,12 @@
         <a href="{{ url_for('compare') }}"><i data-lucide="trophy" style="width:14px;height:14px;"></i> <span>Fortschritt</span></a>
         <a href="{{ url_for('exports') }}"><i data-lucide="archive" style="width:14px;height:14px;"></i> <span>Exports</span></a>
         <a href="{{ url_for('settings') }}"><i data-lucide="settings" style="width:14px;height:14px;"></i> <span>Einstellungen</span></a>
+        {% if config and config.get('player_name') %}
+        <div class="nav-player">
+            <div class="nav-avatar">{{ config.player_name[:2]|upper }}</div>
+            <span>{{ config.player_name }}</span>
+        </div>
+        {% endif %}
     </nav>
     <div class="{% block container_class %}container{% endblock %}">
         {% block content %}{% endblock %}

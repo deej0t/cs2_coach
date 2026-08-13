@@ -36,7 +36,8 @@
     .habit-label { font-size: 14px; font-weight: 600; }
     .habit-trend { font-size: 12px; font-weight: 600; }
     .habit-desc { font-size: 12px; color: var(--color-neutral-500); margin-bottom: 8px; }
-    .habit-chart { height: 60px; }
+    .habit-chart-wrap { position: relative; height: 60px; width: 100%; }
+    .habit-chart-wrap canvas { position: absolute; inset: 0; }
     .habit-avg { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-neutral-500); margin-top: 4px; }
 
     /* Add goal form */
@@ -168,7 +169,7 @@
             </span>
         </div>
         <div class="habit-desc">{{ h.desc }}</div>
-        <canvas id="habit-{{ h.key }}" class="habit-chart" style="width:100%;height:60px;"></canvas>
+        <div class="habit-chart-wrap"><canvas id="habit-{{ h.key }}"></canvas></div>
         <div class="habit-avg">
             <span>Erste Haelfte: {{ h.avg_first }}{{ h.unit }}</span>
             <span>Zweite Haelfte: {{ h.avg_second }}{{ h.unit }}</span>
