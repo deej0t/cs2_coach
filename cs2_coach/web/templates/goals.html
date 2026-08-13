@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Ziele & Fortschritt{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Ziele & Fortschritt</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Setze dir Ziele, tracke Gewohnheiten und brich persoenliche Rekorde.
+</p>
+
+<style>
+    .sc-green { color: #4ade80; }
+    .sc-yellow { color: #fbbf24; }
+    .sc-red { color: #f87171; }
+
+    /* Goals */
+    .goal-card { padding: var(--space-4) !important; margin-bottom: var(--space-3); }
+    .goal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .goal-label { font-size: 15px; font-weight: 600; }
+    .goal-achieved { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+    .goal-bar { height: 8px; border-radius: 4px; background: var(--color-neutral-800); overflow: hidden; margin-bottom: 8px; }
+    .goal-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .goal-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--color-neutral-500); }
+    .goal-current { font-weight: 600; }
+
+    /* Records */
+    .rec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-5); }
+    .rec-card { padding: 14px !important; text-align: center; border-top: 3px solid var(--color-neutral-700); }
+    .rec-val { font-family: var(--font-heading); font-size: 24px; font-weight: 700; color: #fbbf24; }
+    .rec-label { font-size: 10px; color: var(--color-neutral-500); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+    .rec-where { font-size: 11px; color: var(--color-neutral-400); margin-top: 4px; }
+
+    /* Habits */
+    .habit-card { padding: var(--space-4) !important; margin-bottom: var(--space-3); }
+    .habit-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .habit-label { font-size: 14px; font-weight: 600; }
+    .habit-trend { font-size: 12px; font-weight: 600; }
+    .habit-desc { font-size: 12px; color: var(--color-neutral-500); margin-bottom: 8px; }
+    .habit-chart { height: 60px; }
+    .habit-avg { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-neutral-500); margin-top: 4px; }
+
+    /* Add goal form */
+    .add-goal-form { display: flex; gap: var(--space-2); align-items: end; flex-wrap: wrap; }
+    .add-goal-form select, .add-goal-form input { background: var(--color-surface); border: 1px solid var(--color-neutral-700); color: var(--color-text); padding: 6px 10px; border-radius: var(--radius-sm); font-size: 13px; }
+    .add-goal-form label { font-size: 11px; color: var(--color-neutral-500); display: block; margin-bottom: 2px; }
+</style>
+
+<!-- ══════ Personal Records ══════ -->
+{% if records %}
+<div class="card-kicker" style="margin-bottom: 8px;">Persoenliche Rekorde</div>
+<div class="rec-grid">
+    <div class="card elev-sm rec-card" style="border-top-color: #fbbf24;">
+        <div class="rec-val">{{ records.rating.value }}</div>
+        <div class="rec-label">Bestes Rating</div>
+        <div class="rec-where">{{ records.rating.map }} · {{ records.rating.date }}</div>
+    </div>
+    <div class="card elev-sm rec-card" style="border-top-color: #4ade80;">
+        <div class="rec-val">{{ records.kills.value }}</div>
+        <div class="rec-label">Meiste Kills</div>
+        <div class="rec-where">{{ records.kills.map }} · {{ records.kills.date }}</div>
+    </div>
+    <div class="card elev-sm rec-card" style="border-top-color: #9184d9;">
+        <div class="rec-val">{{ records.adr.value }}</div>
+        <div class="rec-label">Hoechster ADR</div>
+        <div class="rec-where">{{ records.adr.map }} · {{ records.adr.date }}</div>
+    </div>
+    <div class="card elev-sm rec-card" style="border-top-color: #7eaadb;">
+        <div class="rec-val">{{ records.kd.value }}</div>
+        <div class="rec-label">Bestes K/D</div>
+        <div class="rec-where">{{ records.kd.map }} · {{ records.kd.date }}</div>
+    </div>
+    <div class="card elev-sm rec-card" style="border-top-color: #f87171;">
+        <div class="rec-val">{{ records.hs_pct.value }}%</div>
+        <div class="rec-label">Hoechste HS%</div>
+        <div class="rec-where">{{ records.hs_pct.map }} · {{ records.hs_pct.date }}</div>
+    </div>
+    <div class="card elev-sm rec-card" style="border-top-color: #4ade80;">
+        <div class="rec-val">{{ records.total_kills }}</div>
+        <div class="rec-label">Gesamt-Kills</div>
+        <div class="rec-where">{{ records.total_matches }} Matches</div>
+    </div>
+    <div class="card elev-sm rec-card" style="border-top-color: #fbbf24;">
+        <div class="rec-val">{{ records.win_streak }}</div>
+        <div class="rec-label">Laengste Siegesserie</div>
+        <div class="rec-where">in Folge</div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ══════ Active Goals ══════ -->
+<div class="card-kicker" style="margin-bottom: 8px;">Aktive Ziele <span style="color:var(--color-neutral-600);font-size:10px;">(basierend auf letzten 10 Matches)</span></div>
+
+{% if not goals %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center; margin-bottom: var(--space-4);">
+    <p style="color: var(--color-neutral-500); margin-bottom: var(--space-3);">Noch keine Ziele gesetzt. Fuege dein erstes Ziel hinzu!</p>
+</div>
+{% else %}
+{% for g in goals %}
+<div class="card elev-sm goal-card">
+    <div class="goal-header">
+        <span class="goal-label">{{ g.label or g.meta.label + " " + g.meta.desc }}</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+            {% if g.achieved %}
+            <span class="goal-achieved" style="background:rgba(74,222,128,0.15);color:#4ade80;">Erreicht!</span>
+            {% endif %}
+            <form method="post" action="{{ url_for('goals_delete') }}" style="margin:0;">
+                <input type="hidden" name="index" value="{{ loop.index0 }}">
+                <button type="submit" class="btn btn-ghost" style="padding:2px 6px;font-size:11px;color:var(--color-neutral-500);" title="Ziel entfernen">✕</button>
+            </form>
+        </div>
+    </div>
+    <div class="goal-bar">
+        <div class="goal-bar-fill" style="width: {{ g.pct }}%; background: {% if g.achieved %}#4ade80{% elif g.pct >= 80 %}#fbbf24{% else %}#9184d9{% endif %};"></div>
+    </div>
+    <div class="goal-meta">
+        <span>Aktuell: <span class="goal-current {% if g.achieved %}sc-green{% elif g.pct >= 80 %}sc-yellow{% else %}{% endif %}">{{ g.current }}</span></span>
+        <span>Ziel: {{ g.target }}</span>
+        <span>{{ g.pct }}%</span>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- Add Goal Form -->
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-6);">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Neues Ziel hinzufuegen</div>
+    <form method="post" action="{{ url_for('goals_add') }}" class="add-goal-form">
+        <div>
+            <label>Metrik</label>
+            <select name="metric" required>
+                <option value="">Waehlen...</option>
+                <option value="adr">ADR</option>
+                <option value="hs_pct">HS%</option>
+                <option value="kast">KAST%</option>
+                <option value="rating">Rating</option>
+                <option value="kd">K/D</option>
+                <option value="counter_strafe">Counter-Strafe%</option>
+                <option value="crosshair">Crosshair Placement (°)</option>
+                <option value="win_rate">Win-Rate%</option>
+            </select>
+        </div>
+        <div>
+            <label>Zielwert</label>
+            <input type="number" name="target" step="0.01" required placeholder="z.B. 80" style="width:100px;">
+        </div>
+        <div>
+            <label>Beschreibung (optional)</label>
+            <input type="text" name="label" placeholder="z.B. ADR ueber 80 bringen" style="width:200px;">
+        </div>
+        <button type="submit" class="btn btn-primary" style="height:34px;">Hinzufuegen</button>
+    </form>
+</div>
+
+<div class="hr" style="margin-bottom: var(--space-5);"></div>
+
+<!-- ══════ Habit Tracker ══════ -->
+{% if habits %}
+<div class="card-kicker" style="margin-bottom: 8px;">Habit-Tracker <span style="color:var(--color-neutral-600);font-size:10px;">(letzte {{ habits[0].data_points|length }} Matches)</span></div>
+
+<div class="grid-2" style="margin-bottom: var(--space-5);">
+    {% for h in habits %}
+    <div class="card elev-sm habit-card">
+        <div class="habit-header">
+            <span class="habit-label">{{ h.label }}</span>
+            <span class="habit-trend {% if h.improving %}sc-green{% else %}sc-red{% endif %}">
+                {% if h.improving %}▲{% else %}▼{% endif %}
+                {{ h.diff|abs }}{{ h.unit }}
+            </span>
+        </div>
+        <div class="habit-desc">{{ h.desc }}</div>
+        <canvas id="habit-{{ h.key }}" class="habit-chart" style="width:100%;height:60px;"></canvas>
+        <div class="habit-avg">
+            <span>Erste Haelfte: {{ h.avg_first }}{{ h.unit }}</span>
+            <span>Zweite Haelfte: {{ h.avg_second }}{{ h.unit }}</span>
+            <span>Gesamt: {{ h.avg }}{{ h.unit }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if habits %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var habits = {{ habits | tojson }};
+    var commonOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: '#232532', borderColor: '#3f424d', borderWidth: 1,
+                titleColor: '#e9e9ed', bodyColor: '#e9e9ed',
+                titleFont: { family: 'Inter', size: 11 }, bodyFont: { family: 'Inter', size: 11 },
+            }
+        },
+        scales: {
+            x: {
+                ticks: { color: '#75798c', font: { size: 8, family: 'Inter' }, maxRotation: 45, maxTicksLimit: 10 },
+                grid: { color: 'rgba(255,255,255,0.03)' },
+            },
+            y: {
+                ticks: { color: '#75798c', font: { size: 9, family: 'Inter' } },
+                grid: { color: 'rgba(255,255,255,0.05)' },
+            }
+        },
+        elements: {
+            point: { radius: 2, hoverRadius: 4, borderWidth: 1 },
+            line: { tension: 0.3, borderWidth: 2 },
+        }
+    };
+
+    habits.forEach(function(h) {
+        var ctx = document.getElementById('habit-' + h.key);
+        if (!ctx) return;
+
+        var color = h.improving ? 'rgba(74, 222, 128, 1)' : 'rgba(248, 113, 113, 1)';
+        var opts = JSON.parse(JSON.stringify(commonOpts));
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: h.labels,
+                datasets: [{
+                    data: h.data_points,
+                    borderColor: color,
+                    backgroundColor: color.replace('1)', '0.08)'),
+                    fill: true,
+                    pointBackgroundColor: color,
+                }]
+            },
+            options: opts,
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

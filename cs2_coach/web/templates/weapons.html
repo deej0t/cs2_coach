@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Waffen-Analyse{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Waffen-Analyse</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Detaillierte Statistiken pro Waffe ueber {{ exports|length }} analysierte Matches.
+</p>
+
+{% if not weapons %}
+<div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
+    <p style="color: var(--color-neutral-500);">Keine Waffen-Daten vorhanden.</p>
+</div>
+{% else %}
+
+<style>
+    .wp-cat-header { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-500); padding: 12px 0 6px; border-bottom: 1px solid var(--color-neutral-800); margin-top: var(--space-4); }
+    .wp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-3); }
+    .wp-card { padding: 16px !important; border-left: 3px solid var(--color-neutral-700); }
+    .wp-card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .wp-name { font-size: 16px; font-weight: 600; }
+    .wp-matches { font-size: 11px; color: var(--color-neutral-500); }
+    .wp-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 8px; }
+    .wp-stat { text-align: center; padding: 6px 2px; background: var(--color-bg); border-radius: var(--radius-sm); }
+    .wp-stat-val { font-family: var(--font-heading); font-size: 16px; font-weight: 600; }
+    .wp-stat-label { font-size: 9px; color: var(--color-neutral-500); text-transform: uppercase; letter-spacing: 0.06em; }
+    .wp-bar { height: 4px; border-radius: 2px; background: var(--color-neutral-800); overflow: hidden; margin-bottom: 6px; }
+    .wp-bar-fill { height: 100%; border-radius: 2px; }
+    .wp-rec { font-size: 11px; padding: 4px 8px; border-radius: var(--radius-sm); }
+    .wp-rec-good { background: rgba(74,222,128,0.08); color: #4ade80; }
+    .wp-rec-warn { background: rgba(248,113,113,0.08); color: #f87171; }
+    .wp-rec-info { background: rgba(145,132,217,0.08); color: #9184d9; }
+
+    .sc-green { color: #4ade80; }
+    .sc-yellow { color: #fbbf24; }
+    .sc-red { color: #f87171; }
+</style>
+
+{% set max_kills = weapons[0].kills if weapons else 1 %}
+
+{% set categories = ["Rifle", "Sniper", "Pistol", "SMG", "Heavy", "Utility", "Melee", "Other"] %}
+{% for cat in categories %}
+{% set cat_weapons = weapons|selectattr("category", "equalto", cat)|list %}
+{% if cat_weapons %}
+<div class="wp-cat-header">{{ cat }}{% if cat == "Rifle" %} — Hauptwaffen{% elif cat == "Sniper" %} — Scharfschuetzen{% elif cat == "Pistol" %} — Pistolen{% elif cat == "SMG" %} — Maschinenpistolen{% elif cat == "Utility" %} — Granaten{% endif %}</div>
+<div class="wp-grid">
+    {% for w in cat_weapons %}
+    <div class="card elev-sm wp-card" style="border-left-color: {% if w.kd >= 1.5 %}#4ade80{% elif w.kd >= 1.0 %}#fbbf24{% else %}#f87171{% endif %};">
+        <div class="wp-card-head">
+            <span class="wp-name">{{ w.name }}</span>
+            <span class="wp-matches">{{ w.matches }} Matches</span>
+        </div>
+        <div class="wp-stats">
+            <div class="wp-stat">
+                <div class="wp-stat-val sc-green">{{ w.kills }}</div>
+                <div class="wp-stat-label">Kills</div>
+            </div>
+            <div class="wp-stat">
+                <div class="wp-stat-val sc-red">{{ w.deaths }}</div>
+                <div class="wp-stat-label">Deaths</div>
+            </div>
+            <div class="wp-stat">
+                <div class="wp-stat-val {% if w.kd >= 1.5 %}sc-green{% elif w.kd >= 1.0 %}sc-yellow{% else %}sc-red{% endif %}">{{ w.kd }}</div>
+                <div class="wp-stat-label">K/D</div>
+            </div>
+            <div class="wp-stat">
+                <div class="wp-stat-val {% if w.hs_pct >= 50 %}sc-green{% elif w.hs_pct >= 35 %}sc-yellow{% else %}sc-red{% endif %}">{{ w.hs_pct }}%</div>
+                <div class="wp-stat-label">HS%</div>
+            </div>
+        </div>
+        <div class="wp-bar">
+            <div class="wp-bar-fill" style="width: {{ (w.kills / max_kills * 100)|round(1) }}%; background: {% if w.kd >= 1.5 %}#4ade80{% elif w.kd >= 1.0 %}#fbbf24{% else %}#f87171{% endif %};"></div>
+        </div>
+        {% if w.rec %}
+        <div class="wp-rec {% if 'Stark' in w.rec or 'Gut' in w.rec or 'dominant' in w.rec %}wp-rec-good{% elif 'niedrig' in w.rec or 'unter' in w.rec or 'ueberleg' in w.rec %}wp-rec-warn{% else %}wp-rec-info{% endif %}">{{ w.rec }}</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% endblock %}

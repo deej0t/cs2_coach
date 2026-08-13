@@ -328,6 +328,48 @@ def create_app() -> Flask:
         session_data = _build_sessions(export_list)
         return render_template("sessions.html", sessions=session_data, config=cfg)
 
+    @app.route("/weapons")
+    def weapons():
+        export_list = _get_exports(cfg)
+        weapon_data = _build_weapon_stats(cfg)
+        return render_template("weapons.html", weapons=weapon_data, exports=export_list, config=cfg)
+
+    @app.route("/goals")
+    def goals():
+        export_list = _get_exports(cfg)
+        goals_data = _load_goals(cfg)
+        progress = _compute_goal_progress(goals_data, export_list)
+        records = _build_personal_records(export_list)
+        habits = _build_habits(export_list)
+        return render_template("goals.html", goals=progress, records=records,
+                               habits=habits, exports=export_list, config=cfg)
+
+    @app.route("/goals/add", methods=["POST"])
+    def goals_add():
+        goals_data = _load_goals(cfg)
+        new_goal = {
+            "metric": request.form.get("metric", ""),
+            "target": float(request.form.get("target", 0)),
+            "label": request.form.get("label", ""),
+            "created": datetime.now().strftime("%Y-%m-%d"),
+            "achieved": False,
+        }
+        if new_goal["metric"] and new_goal["target"]:
+            goals_data.append(new_goal)
+            _save_goals(cfg, goals_data)
+            flash("Ziel hinzugefuegt!", "success")
+        return redirect(url_for("goals"))
+
+    @app.route("/goals/delete", methods=["POST"])
+    def goals_delete():
+        idx = int(request.form.get("index", -1))
+        goals_data = _load_goals(cfg)
+        if 0 <= idx < len(goals_data):
+            goals_data.pop(idx)
+            _save_goals(cfg, goals_data)
+            flash("Ziel entfernt.", "success")
+        return redirect(url_for("goals"))
+
     @app.route("/exports")
     def exports():
         export_list = _get_exports(cfg)
@@ -695,6 +737,268 @@ def _rank_for_value(key: str, value: float) -> tuple[str, float]:
                 pct = ((i + 1) / len(tiers)) * 100
                 return tiers[i][0], min(pct, 100)
         return tiers[0][0], 5.0
+
+
+def _build_weapon_stats(cfg: dict) -> list[dict]:
+    """Build per-weapon statistics from round_timeline kill/death events."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+    if not vault_path:
+        return []
+
+    export_dir = Path(vault_path) / subfolder / "exports"
+    if not export_dir.exists():
+        return []
+
+    from collections import defaultdict
+    stats = defaultdict(lambda: {"kills": 0, "deaths": 0, "hs": 0, "matches": 0})
+    match_weapons: dict[str, set] = defaultdict(set)
+
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        tl = data.get("round_timeline", [])
+        seen = set()
+        for r in tl:
+            for e in r.get("events", []):
+                if e.get("type") == "kill":
+                    w = e.get("weapon", "unknown")
+                    stats[w]["kills"] += 1
+                    stats[w]["hs"] += 1 if e.get("headshot") else 0
+                    seen.add(w)
+                elif e.get("type") == "death":
+                    w = e.get("weapon", "unknown")
+                    stats[w]["deaths"] += 1
+        for w in seen:
+            stats[w]["matches"] += 1
+
+    # Weapon display names and categories
+    weapon_meta = {
+        "ak47": ("AK-47", "Rifle"), "m4a1_silencer": ("M4A1-S", "Rifle"),
+        "m4a1": ("M4A4", "Rifle"), "galilar": ("Galil AR", "Rifle"),
+        "famas": ("FAMAS", "Rifle"), "aug": ("AUG", "Rifle"), "sg556": ("SG 553", "Rifle"),
+        "awp": ("AWP", "Sniper"), "ssg08": ("Scout", "Sniper"),
+        "deagle": ("Desert Eagle", "Pistol"), "usp_silencer": ("USP-S", "Pistol"),
+        "glock": ("Glock-18", "Pistol"), "p250": ("P250", "Pistol"),
+        "hkp2000": ("P2000", "Pistol"), "elite": ("Dual Berettas", "Pistol"),
+        "tec9": ("Tec-9", "Pistol"), "cz75a": ("CZ75-Auto", "Pistol"),
+        "fiveseven": ("Five-SeveN", "Pistol"), "revolver": ("R8 Revolver", "Pistol"),
+        "mac10": ("MAC-10", "SMG"), "mp5sd": ("MP5-SD", "SMG"),
+        "mp7": ("MP7", "SMG"), "mp9": ("MP9", "SMG"), "ump45": ("UMP-45", "SMG"),
+        "p90": ("P90", "SMG"), "bizon": ("PP-Bizon", "SMG"),
+        "mag7": ("MAG-7", "Heavy"), "nova": ("Nova", "Heavy"),
+        "xm1014": ("XM1014", "Heavy"), "sawedoff": ("Sawed-Off", "Heavy"),
+        "negev": ("Negev", "Heavy"), "m249": ("M249", "Heavy"),
+        "hegrenade": ("HE Grenade", "Utility"), "inferno": ("Molotov/Inc.", "Utility"),
+        "molotov": ("Molotov", "Utility"),
+        "knife": ("Knife", "Melee"), "knife_t": ("Knife", "Melee"),
+    }
+
+    result = []
+    for weapon, s in stats.items():
+        if weapon in ("world",):
+            continue
+        name, cat = weapon_meta.get(weapon, (weapon, "Other"))
+        kills = s["kills"]
+        deaths = s["deaths"]
+        kd = round(kills / max(deaths, 1), 2)
+        hs_pct = round(s["hs"] / max(kills, 1) * 100, 1)
+
+        # Recommendation
+        rec = None
+        if cat == "Rifle" and kills >= 10:
+            if hs_pct < 35:
+                rec = "HS% niedrig — Crosshair auf Kopfhoehe halten"
+            elif hs_pct > 55:
+                rec = "Starke HS% — gutes Crosshair Placement"
+        elif cat == "Sniper" and kills >= 5:
+            if kd >= 2.0:
+                rec = "Starke AWP-Performance — dominant"
+            elif kd < 1.0:
+                rec = "K/D unter 1.0 — ueberleg ob Rifle besser passt"
+        elif cat == "Pistol" and kills >= 5:
+            if hs_pct > 50:
+                rec = "Gute Pistol-Praezision"
+            elif hs_pct < 30:
+                rec = "Pistol-HS% niedrig — uebe Headshots mit USP/Glock"
+
+        result.append({
+            "weapon": weapon, "name": name, "category": cat,
+            "kills": kills, "deaths": deaths, "kd": kd,
+            "hs": s["hs"], "hs_pct": hs_pct, "matches": s["matches"],
+            "rec": rec,
+        })
+
+    return sorted(result, key=lambda x: -x["kills"])
+
+
+# ── Goals & Progress ──
+
+GOALS_FILE = "cs2_coach_goals.json"
+
+
+def _goals_path(cfg: dict) -> Path:
+    vault_path = cfg.get("obsidian_vault_path", "")
+    subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+    if vault_path:
+        return Path(vault_path) / subfolder / GOALS_FILE
+    return Path(GOALS_FILE)
+
+
+def _load_goals(cfg: dict) -> list[dict]:
+    p = _goals_path(cfg)
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return []
+
+
+def _save_goals(cfg: dict, goals: list[dict]):
+    p = _goals_path(cfg)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(goals, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+GOAL_METRICS = {
+    "adr": {"label": "ADR", "desc": "Average Damage per Round", "key": "adr", "fmt": ".1f", "higher_better": True},
+    "hs_pct": {"label": "HS%", "desc": "Headshot-Prozent", "key": "hs_pct", "fmt": ".1f", "higher_better": True},
+    "kast": {"label": "KAST%", "desc": "Kill/Assist/Survived/Traded", "key": "kast", "fmt": ".1f", "higher_better": True},
+    "rating": {"label": "Rating", "desc": "Gesamtbewertung", "key": "rating", "fmt": ".2f", "higher_better": True},
+    "kd": {"label": "K/D", "desc": "Kill/Death-Ratio", "key": "kd", "fmt": ".2f", "higher_better": True},
+    "counter_strafe": {"label": "Counter-Strafe%", "desc": "Anteil stehender Schuesse", "key": "counter_strafe", "fmt": ".1f", "higher_better": True},
+    "crosshair": {"label": "Crosshair Placement", "desc": "Grad-Abweichung (niedriger = besser)", "key": "crosshair_placement", "fmt": ".1f", "higher_better": False},
+    "win_rate": {"label": "Win-Rate%", "desc": "Gewinnrate ueber letzte 10", "key": "_win_rate", "fmt": ".1f", "higher_better": True},
+}
+
+
+def _compute_goal_progress(goals: list[dict], exports: list[dict]) -> list[dict]:
+    """Add current value and progress percentage to each goal."""
+    if not exports:
+        return [dict(g, current=0, pct=0, achieved=False, trend=[]) for g in goals]
+
+    last10 = exports[:10]
+    n = len(last10)
+
+    result = []
+    for g in goals:
+        metric = g.get("metric", "")
+        meta = GOAL_METRICS.get(metric, {})
+        key = meta.get("key", metric)
+        higher_better = meta.get("higher_better", True)
+        target = g.get("target", 0)
+
+        if key == "_win_rate":
+            wins = sum(1 for e in last10 if e.get("result") == "Sieg")
+            current = round(wins / n * 100, 1)
+        else:
+            current = round(sum(e.get(key, 0) for e in last10) / n, 2)
+
+        # Progress
+        if higher_better:
+            pct = min(100, max(0, current / max(target, 0.01) * 100))
+            achieved = current >= target
+        else:
+            pct = min(100, max(0, target / max(current, 0.01) * 100))
+            achieved = current <= target
+
+        # Trend (last 10 values)
+        if key == "_win_rate":
+            trend = []
+            for i, e in enumerate(reversed(last10)):
+                w = sum(1 for x in last10[max(0, len(last10)-i-5):len(last10)-i] if x.get("result") == "Sieg")
+                trend.append(round(w / min(5, i + 1) * 100, 1))
+        else:
+            trend = [e.get(key, 0) for e in reversed(last10)]
+
+        result.append(dict(g, current=current, pct=round(pct, 1), achieved=achieved,
+                           trend=trend, meta=meta))
+
+    return result
+
+
+def _build_personal_records(exports: list[dict]) -> dict:
+    """Find personal bests across all exports."""
+    if not exports:
+        return {}
+
+    best_rating = max(exports, key=lambda e: e.get("rating", 0))
+    best_adr = max(exports, key=lambda e: e.get("adr", 0))
+    best_kills = max(exports, key=lambda e: e.get("kills", 0))
+    best_kd = max(exports, key=lambda e: e.get("kd", 0))
+    best_hs = max(exports, key=lambda e: e.get("hs_pct", 0))
+    best_kast = max(exports, key=lambda e: e.get("kast", 0))
+
+    # Longest win streak
+    max_streak = 0
+    cur = 0
+    for e in reversed(exports):
+        if e.get("result") == "Sieg":
+            cur += 1
+            max_streak = max(max_streak, cur)
+        else:
+            cur = 0
+
+    return {
+        "rating": {"value": best_rating.get("rating", 0), "map": best_rating.get("map", "?"), "date": best_rating.get("date", "?")},
+        "adr": {"value": best_adr.get("adr", 0), "map": best_adr.get("map", "?"), "date": best_adr.get("date", "?")},
+        "kills": {"value": best_kills.get("kills", 0), "map": best_kills.get("map", "?"), "date": best_kills.get("date", "?")},
+        "kd": {"value": best_kd.get("kd", 0), "map": best_kd.get("map", "?"), "date": best_kd.get("date", "?")},
+        "hs_pct": {"value": best_hs.get("hs_pct", 0), "map": best_hs.get("map", "?"), "date": best_hs.get("date", "?")},
+        "kast": {"value": best_kast.get("kast", 0), "map": best_kast.get("map", "?"), "date": best_kast.get("date", "?")},
+        "win_streak": max_streak,
+        "total_kills": sum(e.get("kills", 0) for e in exports),
+        "total_matches": len(exports),
+    }
+
+
+def _build_habits(exports: list[dict]) -> list[dict]:
+    """Track key habits over the last 20 matches with trend lines."""
+    if len(exports) < 3:
+        return []
+
+    last20 = list(reversed(exports[:20]))  # oldest first for chart
+    n = len(last20)
+
+    habits = []
+    habit_defs = [
+        ("hs_pct", "Headshot%", "Anteil der Kills durch Kopftreffer", "%", True),
+        ("adr", "ADR", "Durchschnittlicher Schaden pro Runde", "", True),
+        ("kast", "KAST%", "Runden mit positivem Beitrag", "%", True),
+        ("counter_strafe", "Counter-Strafe", "Anteil stehender Schuesse", "%", True),
+        ("crosshair_placement", "Crosshair Placement", "Grad-Abweichung zum Gegner", "°", False),
+        ("utility_per_round", "Utility/Runde", "Granaten pro Runde", "", True),
+    ]
+
+    for key, label, desc, unit, higher_better in habit_defs:
+        values = [e.get(key, 0) for e in last20]
+        if not any(v > 0 for v in values):
+            continue
+
+        avg_all = round(sum(values) / n, 2)
+        avg_first = round(sum(values[:n//2]) / max(n//2, 1), 2)
+        avg_second = round(sum(values[n//2:]) / max(n - n//2, 1), 2)
+
+        if higher_better:
+            diff = avg_second - avg_first
+            improving = diff > 0
+        else:
+            diff = avg_first - avg_second
+            improving = diff > 0
+
+        habits.append({
+            "key": key, "label": label, "desc": desc, "unit": unit,
+            "data_points": values, "avg": avg_all,
+            "avg_first": avg_first, "avg_second": avg_second,
+            "diff": round(diff, 2), "improving": improving,
+            "higher_better": higher_better,
+            "labels": [f"{e.get('map', '?')} {e.get('date', '')[-5:]}" for e in last20],
+        })
+
+    return habits
 
 
 def _build_sessions(exports: list[dict]) -> list[dict]:
