@@ -665,6 +665,16 @@ def create_app() -> Flask:
         habit_data = _build_habit_tracker(exports)
         return render_template("habits.html", habits=habit_data, config=cfg)
 
+    @app.route("/nemesis")
+    def nemesis():
+        nem_data = _build_nemesis(cfg)
+        return render_template("nemesis.html", nem=nem_data, config=cfg)
+
+    @app.route("/momentum")
+    def momentum():
+        mom_data = _build_momentum(cfg)
+        return render_template("momentum.html", mom=mom_data, config=cfg)
+
     @app.route("/settings")
     def settings():
         # Always reload config from disk
@@ -3206,4 +3216,302 @@ def _build_briefing(map_name: str | None, exports: list[dict], map_stats: list[d
             "hs": avg_hs, "util": avg_util, "xh": avg_xh,
             "survival": avg_survival,
         },
+    }
+
+
+# ── Nemesis ────────────────────────────────────────────────
+def _build_nemesis(cfg: dict) -> dict:
+    """Aggregate duel data across all matches for cross-match enemy analysis."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    # Aggregate by steam_id
+    agg: dict[str, dict] = {}
+    match_count = 0
+
+    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        duels = data.get("duel_matrix", [])
+        match_info = data.get("match", {})
+        if not duels:
+            continue
+        match_count += 1
+
+        for d in duels:
+            sid = d.get("steam_id", d.get("name", ""))
+            if not sid:
+                continue
+            if sid not in agg:
+                agg[sid] = {
+                    "name": d["name"], "steam_id": sid,
+                    "kills": 0, "deaths": 0, "hs_kills": 0, "hs_deaths": 0,
+                    "matches": 0, "weapons": {}, "maps": {},
+                    "results": [],  # track win/loss when facing this enemy
+                }
+            entry = agg[sid]
+            entry["name"] = d["name"]  # update to latest name
+            entry["kills"] += d.get("kills", 0)
+            entry["deaths"] += d.get("deaths", 0)
+            entry["hs_kills"] += d.get("hs_kills", 0)
+            entry["hs_deaths"] += d.get("hs_deaths", 0)
+            entry["matches"] += 1
+            for w in d.get("top_weapons", []):
+                entry["weapons"][w] = entry["weapons"].get(w, 0) + 1
+            map_name = match_info.get("map", "?")
+            entry["maps"][map_name] = entry["maps"].get(map_name, 0) + 1
+            entry["results"].append(match_info.get("result", "?"))
+
+    if not agg:
+        return {"has_data": False}
+
+    # Build ranked lists
+    enemies = []
+    for sid, e in agg.items():
+        total = e["kills"] + e["deaths"]
+        kd = round(e["kills"] / e["deaths"], 2) if e["deaths"] > 0 else float(e["kills"])
+        # Threat score: weighted by encounters and how badly they beat you
+        reverse_kd = e["deaths"] / max(e["kills"], 1)
+        threat = round(reverse_kd * min(e["matches"], 5) * (e["deaths"] / max(total, 1)), 2)
+        dominance = round((e["kills"] / max(total, 1)) * 100, 1)
+        top_weapons = sorted(e["weapons"].items(), key=lambda x: -x[1])[:3]
+        top_maps = sorted(e["maps"].items(), key=lambda x: -x[1])[:3]
+        wins = sum(1 for r in e["results"] if r == "Sieg")
+        losses = sum(1 for r in e["results"] if r == "Niederlage")
+
+        enemies.append({
+            "name": e["name"], "steam_id": sid,
+            "kills": e["kills"], "deaths": e["deaths"],
+            "kd": kd, "total_duels": total,
+            "hs_kills": e["hs_kills"], "hs_deaths": e["hs_deaths"],
+            "matches": e["matches"], "threat": threat, "dominance": dominance,
+            "top_weapons": [w[0] for w in top_weapons],
+            "top_maps": [m[0] for m in top_maps],
+            "wins": wins, "losses": losses,
+        })
+
+    # Sort categories
+    nemeses = sorted([e for e in enemies if e["kd"] < 1.0 and e["matches"] >= 2],
+                     key=lambda x: x["threat"], reverse=True)[:10]
+    victims = sorted([e for e in enemies if e["kd"] > 1.0 and e["matches"] >= 2],
+                     key=lambda x: (x["kd"] * min(x["matches"], 5)), reverse=True)[:10]
+    frequent = sorted(enemies, key=lambda x: x["matches"], reverse=True)[:10]
+    all_sorted = sorted(enemies, key=lambda x: x["total_duels"], reverse=True)
+
+    # Stats summary
+    total_kills = sum(e["kills"] for e in enemies)
+    total_deaths = sum(e["deaths"] for e in enemies)
+    avg_kd = round(total_kills / max(total_deaths, 1), 2)
+
+    return {
+        "has_data": True,
+        "match_count": match_count,
+        "total_enemies": len(enemies),
+        "total_kills": total_kills,
+        "total_deaths": total_deaths,
+        "avg_kd": avg_kd,
+        "nemeses": nemeses,
+        "victims": victims,
+        "frequent": frequent,
+        "all": all_sorted,
+    }
+
+
+# ── Momentum ──────────────────────────────────────────────
+def _build_momentum(cfg: dict) -> dict:
+    """Analyze performance flow, streaks, tilt patterns, and session momentum."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    matches = []
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        m = data.get("match", {})
+        p = data.get("player", {})
+        timeline = data.get("round_timeline", [])
+        if not m or not p:
+            continue
+
+        result = m.get("result", "?")
+        matches.append({
+            "date": m.get("date", ""),
+            "datetime": m.get("datetime", m.get("date", "")),
+            "map": m.get("map", "?"),
+            "result": result,
+            "score": f"{m.get('score_own', '?')}:{m.get('score_enemy', '?')}",
+            "rating": p.get("rating", 0),
+            "kd": p.get("kd", 0),
+            "adr": p.get("adr", 0),
+            "kills": p.get("kills", 0),
+            "deaths": p.get("deaths", 0),
+            "won": result == "Sieg",
+            "rounds": len(timeline),
+            "round_data": [{
+                "round": r.get("round", 0),
+                "won": r.get("won", False),
+                "kills": r.get("player_kills", 0),
+                "died": r.get("player_died", False),
+                "side": r.get("side", "?"),
+            } for r in timeline],
+        })
+
+    if len(matches) < 3:
+        return {"has_data": False}
+
+    # ── Streaks ──
+    streaks = []
+    cur_type = None
+    cur_count = 0
+    best_win_streak = 0
+    worst_loss_streak = 0
+    current_streak_type = None
+    current_streak_count = 0
+
+    for i, m in enumerate(matches):
+        w = m["won"]
+        st = "win" if w else "loss"
+        if st == cur_type:
+            cur_count += 1
+        else:
+            if cur_type and cur_count >= 2:
+                streaks.append({"type": cur_type, "count": cur_count, "end_idx": i - 1})
+            cur_type = st
+            cur_count = 1
+        if w:
+            best_win_streak = max(best_win_streak, cur_count)
+        else:
+            worst_loss_streak = max(worst_loss_streak, cur_count)
+    if cur_type and cur_count >= 2:
+        streaks.append({"type": cur_type, "count": cur_count, "end_idx": len(matches) - 1})
+    # Current streak
+    current_streak_type = cur_type or "none"
+    current_streak_count = cur_count
+
+    # ── Tilt detection ──
+    # Tilt = 2+ losses where rating drops below 0.85 progressively
+    tilt_sessions = []
+    i = 0
+    while i < len(matches):
+        if not matches[i]["won"] and matches[i]["rating"] < 0.85:
+            start = i
+            while i < len(matches) and not matches[i]["won"]:
+                i += 1
+            length = i - start
+            if length >= 2:
+                avg_rating = round(sum(matches[j]["rating"] for j in range(start, i)) / length, 2)
+                tilt_sessions.append({
+                    "start_idx": start,
+                    "length": length,
+                    "avg_rating": avg_rating,
+                    "start_date": matches[start]["date"],
+                    "maps": [matches[j]["map"] for j in range(start, i)],
+                })
+        else:
+            i += 1
+
+    # ── Comeback detection ──
+    comebacks = []
+    for i, m in enumerate(matches):
+        rd = m["round_data"]
+        if not rd or not m["won"]:
+            continue
+        # Check for losing at halftime but winning overall
+        half = len(rd) // 2
+        if half < 6:
+            continue
+        first_half_wins = sum(1 for r in rd[:half] if r["won"])
+        first_half_losses = half - first_half_wins
+        if first_half_losses >= first_half_wins + 3:
+            comebacks.append({
+                "idx": i, "date": m["date"], "map": m["map"],
+                "score": m["score"],
+                "deficit": f"{first_half_wins}:{first_half_losses}",
+            })
+
+    # ── Match-to-match momentum ──
+    flow = []
+    for i, m in enumerate(matches):
+        label = "neutral"
+        if i > 0:
+            prev = matches[i - 1]
+            rating_diff = m["rating"] - prev["rating"]
+            if m["won"] and prev["won"]:
+                label = "hot"
+            elif not m["won"] and not prev["won"]:
+                label = "cold"
+            elif m["won"] and not prev["won"] and m["rating"] >= 1.0:
+                label = "bounce"
+            elif not m["won"] and prev["won"] and m["rating"] < 0.8:
+                label = "tilt"
+
+        flow.append({
+            "date": m["date"], "map": m["map"], "result": m["result"],
+            "score": m["score"], "rating": m["rating"], "kd": m["kd"],
+            "won": m["won"], "label": label,
+        })
+
+    # ── Session grouping (games on same day) ──
+    sessions: dict[str, list] = {}
+    for i, m in enumerate(matches):
+        day = m["date"]
+        if day not in sessions:
+            sessions[day] = []
+        sessions[day].append(m)
+
+    session_analysis = []
+    for day, games in sorted(sessions.items()):
+        if len(games) < 2:
+            continue
+        ratings = [g["rating"] for g in games]
+        first_rating = ratings[0]
+        last_rating = ratings[-1]
+        trend = "improving" if last_rating > first_rating + 0.1 else \
+                "declining" if last_rating < first_rating - 0.1 else "stable"
+        wins = sum(1 for g in games if g["won"])
+        session_analysis.append({
+            "date": day, "games": len(games),
+            "wins": wins, "losses": len(games) - wins,
+            "first_rating": first_rating, "last_rating": last_rating,
+            "avg_rating": round(sum(ratings) / len(ratings), 2),
+            "trend": trend,
+        })
+
+    # ── After-loss performance ──
+    after_loss_ratings = []
+    for i in range(1, len(matches)):
+        if not matches[i - 1]["won"]:
+            after_loss_ratings.append(matches[i]["rating"])
+    after_loss_avg = round(sum(after_loss_ratings) / len(after_loss_ratings), 2) if after_loss_ratings else 0
+
+    after_win_ratings = []
+    for i in range(1, len(matches)):
+        if matches[i - 1]["won"]:
+            after_win_ratings.append(matches[i]["rating"])
+    after_win_avg = round(sum(after_win_ratings) / len(after_win_ratings), 2) if after_win_ratings else 0
+
+    return {
+        "has_data": True,
+        "total_matches": len(matches),
+        "flow": flow,
+        "best_win_streak": best_win_streak,
+        "worst_loss_streak": worst_loss_streak,
+        "current_streak": {"type": current_streak_type, "count": current_streak_count},
+        "streaks": sorted(streaks, key=lambda x: x["count"], reverse=True)[:10],
+        "tilt_sessions": tilt_sessions,
+        "comebacks": comebacks,
+        "sessions": session_analysis,
+        "after_loss_avg": after_loss_avg,
+        "after_win_avg": after_win_avg,
     }

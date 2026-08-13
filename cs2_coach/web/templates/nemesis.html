@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Nemesis{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Nemesis-Analyse</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Gegner ueber alle Matches — wer dominiert dich, und wen dominierst du?
+</p>
+
+<style>
+    .nm-hero {
+        display: flex; gap: var(--space-5); margin-bottom: var(--space-5); flex-wrap: wrap;
+    }
+    .nm-stat-card {
+        flex: 1; min-width: 140px; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .nm-stat-val { font-family: var(--font-heading); font-size: 24px; font-weight: 700; line-height: 1; }
+    .nm-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .nm-section { margin-bottom: var(--space-5); }
+    .nm-section-title {
+        font-size: 14px; font-weight: 600; margin-bottom: 8px;
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    .nm-grid { display: flex; flex-direction: column; gap: 4px; }
+    .nm-row {
+        display: grid; grid-template-columns: 40px 1fr 80px 80px 60px 100px 120px;
+        gap: 8px; align-items: center; padding: 10px 14px;
+        border-radius: var(--radius-sm); background: var(--color-surface);
+        font-size: 13px; transition: background 0.15s;
+    }
+    .nm-row:hover { background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface)); }
+    .nm-rank { font-size: 11px; font-weight: 600; color: var(--color-neutral-600); text-align: center; }
+    .nm-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nm-kd { font-weight: 600; text-align: center; }
+    .nm-duels { text-align: center; font-size: 12px; color: var(--color-neutral-400); }
+    .nm-matches { text-align: center; font-size: 12px; color: var(--color-neutral-500); }
+
+    .nm-bar-wrap { height: 6px; border-radius: 3px; overflow: hidden; display: flex; background: var(--color-neutral-800); }
+    .nm-bar-k { height: 100%; background: #4ade80; }
+    .nm-bar-d { height: 100%; background: #f87171; }
+
+    .nm-weapons { font-size: 11px; color: var(--color-neutral-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .nm-tabs { display: flex; gap: 4px; margin-bottom: var(--space-4); flex-wrap: wrap; }
+    .nm-tab {
+        padding: 6px 16px; border-radius: 20px; cursor: pointer;
+        font-size: 12px; border: 1px solid var(--color-divider);
+        background: transparent; color: var(--color-neutral-400);
+        font-family: var(--font-body); transition: all 0.15s;
+    }
+    .nm-tab:hover { border-color: var(--color-neutral-600); color: var(--color-text); }
+    .nm-tab.active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(145,132,217,0.1); font-weight: 600; }
+
+    .nm-header {
+        display: grid; grid-template-columns: 40px 1fr 80px 80px 60px 100px 120px;
+        gap: 8px; padding: 6px 14px; font-size: 10px; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--color-neutral-600);
+    }
+
+    @media (max-width: 768px) {
+        .nm-row, .nm-header { grid-template-columns: 30px 1fr 60px 60px; }
+        .nm-matches, .nm-bar-wrap, .nm-weapons { display: none; }
+    }
+</style>
+
+{% if not nem.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Duel-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- Hero stats -->
+<div class="nm-hero">
+    <div class="nm-stat-card">
+        <div class="nm-stat-val">{{ nem.match_count }}</div>
+        <div class="nm-stat-lbl">Matches</div>
+    </div>
+    <div class="nm-stat-card">
+        <div class="nm-stat-val">{{ nem.total_enemies }}</div>
+        <div class="nm-stat-lbl">Gegner</div>
+    </div>
+    <div class="nm-stat-card">
+        <div class="nm-stat-val {% if nem.avg_kd >= 1.2 %}win{% elif nem.avg_kd < 0.9 %}loss{% endif %}">{{ nem.avg_kd }}</div>
+        <div class="nm-stat-lbl">Avg Duel K/D</div>
+    </div>
+    <div class="nm-stat-card">
+        <div class="nm-stat-val win">{{ nem.total_kills }}</div>
+        <div class="nm-stat-lbl">Kills</div>
+    </div>
+    <div class="nm-stat-card">
+        <div class="nm-stat-val loss">{{ nem.total_deaths }}</div>
+        <div class="nm-stat-lbl">Deaths</div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="nm-tabs">
+    <button class="nm-tab active" data-tab="nemeses">Nemeses</button>
+    <button class="nm-tab" data-tab="victims">Victims</button>
+    <button class="nm-tab" data-tab="frequent">Haeufigste</button>
+    <button class="nm-tab" data-tab="all">Alle</button>
+</div>
+
+<!-- Nemeses -->
+<div class="nm-section" id="tab-nemeses">
+    <div class="nm-section-title">
+        <i data-lucide="skull" style="width:16px;height:16px;color:#f87171;"></i>
+        <span style="color:#f87171;">Deine Nemeses</span>
+        <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">— Gegner die dich dominieren</span>
+    </div>
+    {% if nem.nemeses %}
+    <div class="nm-header">
+        <span>#</span><span>Gegner</span><span style="text-align:center;">K/D</span><span style="text-align:center;">Duelle</span><span style="text-align:center;">Matches</span><span>Bilanz</span><span>Waffen</span>
+    </div>
+    <div class="nm-grid">
+        {% for e in nem.nemeses %}
+        <div class="nm-row">
+            <div class="nm-rank">{{ loop.index }}</div>
+            <div class="nm-name">{{ e.name }}</div>
+            <div class="nm-kd loss">{{ e.kd }}</div>
+            <div class="nm-duels">{{ e.kills }}K / {{ e.deaths }}D</div>
+            <div class="nm-matches">{{ e.matches }}x</div>
+            <div>
+                {% if e.total_duels > 0 %}
+                <div class="nm-bar-wrap">
+                    <div class="nm-bar-k" style="width:{{ (e.kills / e.total_duels * 100)|round }}%;"></div>
+                    <div class="nm-bar-d" style="width:{{ (e.deaths / e.total_duels * 100)|round }}%;"></div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="nm-weapons">{{ e.top_weapons|join(', ') }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="padding:var(--space-4);color:var(--color-neutral-500);font-size:13px;">Keine Nemeses gefunden — du dominierst alle!</div>
+    {% endif %}
+</div>
+
+<!-- Victims -->
+<div class="nm-section" id="tab-victims" style="display:none;">
+    <div class="nm-section-title">
+        <i data-lucide="target" style="width:16px;height:16px;color:#4ade80;"></i>
+        <span style="color:#4ade80;">Deine Victims</span>
+        <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">— Gegner die du dominierst</span>
+    </div>
+    {% if nem.victims %}
+    <div class="nm-header">
+        <span>#</span><span>Gegner</span><span style="text-align:center;">K/D</span><span style="text-align:center;">Duelle</span><span style="text-align:center;">Matches</span><span>Bilanz</span><span>Waffen</span>
+    </div>
+    <div class="nm-grid">
+        {% for e in nem.victims %}
+        <div class="nm-row">
+            <div class="nm-rank">{{ loop.index }}</div>
+            <div class="nm-name">{{ e.name }}</div>
+            <div class="nm-kd win">{{ e.kd }}</div>
+            <div class="nm-duels">{{ e.kills }}K / {{ e.deaths }}D</div>
+            <div class="nm-matches">{{ e.matches }}x</div>
+            <div>
+                {% if e.total_duels > 0 %}
+                <div class="nm-bar-wrap">
+                    <div class="nm-bar-k" style="width:{{ (e.kills / e.total_duels * 100)|round }}%;"></div>
+                    <div class="nm-bar-d" style="width:{{ (e.deaths / e.total_duels * 100)|round }}%;"></div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="nm-weapons">{{ e.top_weapons|join(', ') }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="padding:var(--space-4);color:var(--color-neutral-500);font-size:13px;">Keine klaren Victims gefunden.</div>
+    {% endif %}
+</div>
+
+<!-- Frequent -->
+<div class="nm-section" id="tab-frequent" style="display:none;">
+    <div class="nm-section-title">
+        <i data-lucide="repeat" style="width:16px;height:16px;color:var(--color-accent);"></i>
+        <span>Haeufigste Gegner</span>
+    </div>
+    <div class="nm-header">
+        <span>#</span><span>Gegner</span><span style="text-align:center;">K/D</span><span style="text-align:center;">Duelle</span><span style="text-align:center;">Matches</span><span>Bilanz</span><span>Maps</span>
+    </div>
+    <div class="nm-grid">
+        {% for e in nem.frequent %}
+        <div class="nm-row">
+            <div class="nm-rank">{{ loop.index }}</div>
+            <div class="nm-name">{{ e.name }}</div>
+            <div class="nm-kd {% if e.kd >= 1.2 %}win{% elif e.kd < 0.9 %}loss{% endif %}">{{ e.kd }}</div>
+            <div class="nm-duels">{{ e.kills }}K / {{ e.deaths }}D</div>
+            <div class="nm-matches">{{ e.matches }}x</div>
+            <div>
+                {% if e.total_duels > 0 %}
+                <div class="nm-bar-wrap">
+                    <div class="nm-bar-k" style="width:{{ (e.kills / e.total_duels * 100)|round }}%;"></div>
+                    <div class="nm-bar-d" style="width:{{ (e.deaths / e.total_duels * 100)|round }}%;"></div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="nm-weapons">{{ e.top_maps|join(', ') }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- All -->
+<div class="nm-section" id="tab-all" style="display:none;">
+    <div class="nm-section-title">
+        <i data-lucide="users" style="width:16px;height:16px;color:var(--color-neutral-400);"></i>
+        <span>Alle Gegner ({{ nem.total_enemies }})</span>
+    </div>
+    <div class="nm-header">
+        <span>#</span><span>Gegner</span><span style="text-align:center;">K/D</span><span style="text-align:center;">Duelle</span><span style="text-align:center;">Matches</span><span>Bilanz</span><span>Waffen</span>
+    </div>
+    <div class="nm-grid">
+        {% for e in nem.all %}
+        <div class="nm-row">
+            <div class="nm-rank">{{ loop.index }}</div>
+            <div class="nm-name">{{ e.name }}</div>
+            <div class="nm-kd {% if e.kd >= 1.2 %}win{% elif e.kd < 0.9 %}loss{% endif %}">{{ e.kd }}</div>
+            <div class="nm-duels">{{ e.kills }}K / {{ e.deaths }}D</div>
+            <div class="nm-matches">{{ e.matches }}x</div>
+            <div>
+                {% if e.total_duels > 0 %}
+                <div class="nm-bar-wrap">
+                    <div class="nm-bar-k" style="width:{{ (e.kills / e.total_duels * 100)|round }}%;"></div>
+                    <div class="nm-bar-d" style="width:{{ (e.deaths / e.total_duels * 100)|round }}%;"></div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="nm-weapons">{{ e.top_weapons|join(', ') }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if nem.has_data %}
+<script>
+(function() {
+    var tabs = document.querySelectorAll('.nm-tab');
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            tabs.forEach(function(t) { t.classList.remove('active'); });
+            this.classList.add('active');
+            var target = this.dataset.tab;
+            document.querySelectorAll('.nm-section').forEach(function(s) {
+                s.style.display = s.id === 'tab-' + target ? '' : 'none';
+            });
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

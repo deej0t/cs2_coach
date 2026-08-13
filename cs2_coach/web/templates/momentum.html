@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Momentum{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Momentum & Tilt</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Dein Performance-Flow — Streaks, Tilts und wie du nach Niederlagen performst.
+</p>
+
+<style>
+    .mo-hero {
+        display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap;
+    }
+    .mo-stat-card {
+        flex: 1; min-width: 130px; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .mo-stat-val { font-family: var(--font-heading); font-size: 22px; font-weight: 700; line-height: 1; }
+    .mo-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .mo-flow {
+        display: flex; gap: 3px; margin-bottom: var(--space-5);
+        overflow-x: auto; padding-bottom: 8px;
+    }
+    .mo-flow-item {
+        display: flex; flex-direction: column; align-items: center;
+        min-width: 44px; padding: 6px 4px; border-radius: var(--radius-sm);
+        font-size: 10px; cursor: default; transition: background 0.15s;
+        position: relative;
+    }
+    .mo-flow-item:hover { background: rgba(255,255,255,0.04); }
+    .mo-flow-dot {
+        width: 12px; height: 12px; border-radius: 50%; margin-bottom: 4px;
+    }
+    .mo-flow-w { background: #4ade80; }
+    .mo-flow-l { background: #f87171; }
+    .mo-flow-rating { font-weight: 600; font-size: 11px; margin-bottom: 2px; }
+    .mo-flow-map { font-size: 9px; color: var(--color-neutral-600); }
+    .mo-flow-label {
+        position: absolute; top: -16px; font-size: 8px; font-weight: 700;
+        letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
+    }
+    .mo-flow-hot { color: #4ade80; }
+    .mo-flow-cold { color: #f87171; }
+    .mo-flow-bounce { color: #fbbf24; }
+    .mo-flow-tilt { color: #f87171; }
+
+    .mo-section { margin-bottom: var(--space-5); }
+    .mo-section-title {
+        font-size: 14px; font-weight: 600; margin-bottom: 10px;
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    .mo-streak-grid { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+    .mo-streak-card {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        background: var(--color-surface); box-shadow: var(--shadow-sm);
+        min-width: 140px; text-align: center;
+    }
+    .mo-streak-count { font-family: var(--font-heading); font-size: 28px; font-weight: 700; }
+    .mo-streak-label { font-size: 11px; color: var(--color-neutral-500); }
+
+    .mo-tilt-card {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        background: rgba(248,113,113,0.04); border: 1px solid rgba(248,113,113,0.15);
+        margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .mo-tilt-info { font-size: 13px; }
+    .mo-tilt-badge {
+        font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 10px;
+        background: rgba(248,113,113,0.15); color: #f87171;
+    }
+
+    .mo-comeback-card {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        background: rgba(74,222,128,0.04); border: 1px solid rgba(74,222,128,0.15);
+        margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .mo-session-grid { display: flex; flex-direction: column; gap: 4px; }
+    .mo-session-row {
+        display: grid; grid-template-columns: 100px 60px 80px 80px 100px 1fr;
+        gap: 8px; align-items: center; padding: 10px 14px;
+        border-radius: var(--radius-sm); background: var(--color-surface);
+        font-size: 13px;
+    }
+    .mo-session-header {
+        display: grid; grid-template-columns: 100px 60px 80px 80px 100px 1fr;
+        gap: 8px; padding: 6px 14px; font-size: 10px; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--color-neutral-600);
+    }
+    .mo-trend-badge {
+        font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+    }
+    .mo-trend-improving { background: rgba(74,222,128,0.12); color: #4ade80; }
+    .mo-trend-declining { background: rgba(248,113,113,0.12); color: #f87171; }
+    .mo-trend-stable { background: rgba(145,132,217,0.12); color: #9184d9; }
+
+    .mo-insight {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        border-left: 3px solid var(--color-accent);
+        background: rgba(145,132,217,0.04); font-size: 13px;
+        color: var(--color-neutral-300); margin-bottom: var(--space-3);
+    }
+    .mo-insight strong { color: var(--color-text); }
+
+    @media (max-width: 768px) {
+        .mo-session-row, .mo-session-header { grid-template-columns: 80px 50px 1fr 80px; }
+    }
+</style>
+
+{% if not mom.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Mindestens 3 Matches noetig fuer Momentum-Analyse.</p>
+</div>
+{% else %}
+
+<!-- Hero stats -->
+<div class="mo-hero">
+    <div class="mo-stat-card" style="border-top: 3px solid #4ade80;">
+        <div class="mo-stat-val win">{{ mom.best_win_streak }}</div>
+        <div class="mo-stat-lbl">Beste Win-Streak</div>
+    </div>
+    <div class="mo-stat-card" style="border-top: 3px solid #f87171;">
+        <div class="mo-stat-val loss">{{ mom.worst_loss_streak }}</div>
+        <div class="mo-stat-lbl">Laengste Loss-Streak</div>
+    </div>
+    <div class="mo-stat-card" style="border-top: 3px solid {% if mom.current_streak.type == 'win' %}#4ade80{% else %}#f87171{% endif %};">
+        <div class="mo-stat-val {% if mom.current_streak.type == 'win' %}win{% else %}loss{% endif %}">
+            {{ mom.current_streak.count }}{% if mom.current_streak.type == 'win' %}W{% else %}L{% endif %}
+        </div>
+        <div class="mo-stat-lbl">Aktuelle Streak</div>
+    </div>
+    <div class="mo-stat-card">
+        <div class="mo-stat-val {% if mom.after_loss_avg >= 1.0 %}win{% elif mom.after_loss_avg < 0.85 %}loss{% endif %}">{{ mom.after_loss_avg }}</div>
+        <div class="mo-stat-lbl">Rating nach Niederlage</div>
+    </div>
+    <div class="mo-stat-card">
+        <div class="mo-stat-val {% if mom.after_win_avg >= 1.0 %}win{% elif mom.after_win_avg < 0.85 %}loss{% endif %}">{{ mom.after_win_avg }}</div>
+        <div class="mo-stat-lbl">Rating nach Sieg</div>
+    </div>
+</div>
+
+<!-- Mental resilience insight -->
+{% if mom.after_loss_avg > 0 and mom.after_win_avg > 0 %}
+<div class="mo-insight">
+    {% if mom.after_loss_avg >= mom.after_win_avg %}
+        <strong>Stark mental!</strong> Dein Rating nach Niederlagen ({{ mom.after_loss_avg }}) ist gleich oder besser als nach Siegen ({{ mom.after_win_avg }}). Du laesst dich nicht von Niederlagen runterziehen.
+    {% elif mom.after_loss_avg < 0.85 %}
+        <strong>Tilt-Tendenz erkannt.</strong> Dein Rating nach Niederlagen ({{ mom.after_loss_avg }}) ist deutlich niedriger als nach Siegen ({{ mom.after_win_avg }}). Nimm dir nach einer Niederlage eine kurze Pause.
+    {% else %}
+        <strong>Solide Mentalitaet.</strong> Dein Rating nach Niederlagen ({{ mom.after_loss_avg }}) ist leicht unter dem nach Siegen ({{ mom.after_win_avg }}). Normal und gesund.
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Performance flow -->
+<div class="mo-section">
+    <div class="mo-section-title">
+        <i data-lucide="activity" style="width:16px;height:16px;color:var(--color-accent);"></i>
+        Performance-Flow (chronologisch)
+    </div>
+    <div class="mo-flow">
+        {% for f in mom.flow %}
+        <div class="mo-flow-item" title="{{ f.date }} — {{ f.map }} {{ f.score }} ({{ f.rating }})">
+            {% if f.label != 'neutral' %}
+            <span class="mo-flow-label mo-flow-{{ f.label }}">
+                {% if f.label == 'hot' %}hot{% elif f.label == 'cold' %}cold{% elif f.label == 'bounce' %}bounce{% elif f.label == 'tilt' %}tilt{% endif %}
+            </span>
+            {% endif %}
+            <div class="mo-flow-rating {% if f.rating >= 1.0 %}win{% elif f.rating < 0.85 %}loss{% endif %}">{{ f.rating }}</div>
+            <div class="mo-flow-dot mo-flow-{% if f.won %}w{% else %}l{% endif %}"></div>
+            <div class="mo-flow-map">{{ f.map[:3] }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Tilt sessions -->
+{% if mom.tilt_sessions %}
+<div class="mo-section">
+    <div class="mo-section-title">
+        <i data-lucide="alert-triangle" style="width:16px;height:16px;color:#f87171;"></i>
+        <span style="color:#f87171;">Tilt-Phasen</span>
+        <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">— 2+ Niederlagen mit Rating &lt; 0.85</span>
+    </div>
+    {% for t in mom.tilt_sessions %}
+    <div class="mo-tilt-card">
+        <div class="mo-tilt-info">
+            <strong>{{ t.start_date }}</strong> — {{ t.length }} Matches, Avg Rating {{ t.avg_rating }}
+            <div style="font-size:11px;color:var(--color-neutral-500);margin-top:2px;">{{ t.maps|join(' → ') }}</div>
+        </div>
+        <div class="mo-tilt-badge">{{ t.length }}x Loss</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Comebacks -->
+{% if mom.comebacks %}
+<div class="mo-section">
+    <div class="mo-section-title">
+        <i data-lucide="trophy" style="width:16px;height:16px;color:#fbbf24;"></i>
+        <span style="color:#fbbf24;">Comebacks</span>
+        <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">— Siege trotz Halbzeit-Rueckstand</span>
+    </div>
+    {% for c in mom.comebacks %}
+    <div class="mo-comeback-card">
+        <div>
+            <strong>{{ c.map }}</strong> — {{ c.score }}
+            <div style="font-size:11px;color:var(--color-neutral-500);margin-top:2px;">{{ c.date }} | Halbzeit {{ c.deficit }}</div>
+        </div>
+        <span class="tag tag-win">Comeback!</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Session analysis -->
+{% if mom.sessions %}
+<div class="mo-section">
+    <div class="mo-section-title">
+        <i data-lucide="calendar-days" style="width:16px;height:16px;color:var(--color-accent);"></i>
+        Session-Analyse (Tage mit 2+ Matches)
+    </div>
+    <div class="mo-session-header">
+        <span>Datum</span><span>Matches</span><span>Bilanz</span><span>Avg Rating</span><span>Trend</span><span>Rating-Verlauf</span>
+    </div>
+    <div class="mo-session-grid">
+        {% for s in mom.sessions|reverse %}
+        <div class="mo-session-row">
+            <div style="color:var(--color-neutral-400);">{{ s.date }}</div>
+            <div style="text-align:center;">{{ s.games }}</div>
+            <div><span class="win">{{ s.wins }}W</span> / <span class="loss">{{ s.losses }}L</span></div>
+            <div class="{% if s.avg_rating >= 1.0 %}win{% elif s.avg_rating < 0.85 %}loss{% endif %}" style="font-weight:600;">{{ s.avg_rating }}</div>
+            <div>
+                <span class="mo-trend-badge mo-trend-{{ s.trend }}">
+                    {% if s.trend == 'improving' %}Aufwaerts{% elif s.trend == 'declining' %}Abwaerts{% else %}Stabil{% endif %}
+                </span>
+            </div>
+            <div style="font-size:12px;color:var(--color-neutral-500);">
+                {{ s.first_rating }} → {{ s.last_rating }}
+                {% if s.last_rating > s.first_rating %}<span style="color:#4ade80;">+{{ (s.last_rating - s.first_rating)|round(2) }}</span>
+                {% elif s.last_rating < s.first_rating %}<span style="color:#f87171;">{{ (s.last_rating - s.first_rating)|round(2) }}</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Notable streaks -->
+{% if mom.streaks %}
+<div class="mo-section">
+    <div class="mo-section-title">
+        <i data-lucide="zap" style="width:16px;height:16px;color:#fbbf24;"></i>
+        Laengste Streaks
+    </div>
+    <div class="mo-streak-grid">
+        {% for s in mom.streaks[:6] %}
+        <div class="mo-streak-card" style="border-top: 3px solid {% if s.type == 'win' %}#4ade80{% else %}#f87171{% endif %};">
+            <div class="mo-streak-count {% if s.type == 'win' %}win{% else %}loss{% endif %}">{{ s.count }}</div>
+            <div class="mo-streak-label">{% if s.type == 'win' %}Siege{% else %}Niederlagen{% endif %} in Folge</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}
