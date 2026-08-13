@@ -490,7 +490,7 @@ def create_app() -> Flask:
     def compare():
         export_list = _get_exports(cfg)
         periods = _build_period_comparison(export_list)
-        achievements = _build_achievements(export_list, cfg)
+        achievements = _build_compare_achievements(export_list, cfg)
         return render_template("compare.html", periods=periods,
                                achievements=achievements, exports=export_list, config=cfg)
 
@@ -1140,8 +1140,8 @@ def _build_period_comparison(exports: list[dict]) -> list[dict]:
     return periods
 
 
-def _build_achievements(exports: list[dict], cfg: dict) -> list[dict]:
-    """Check which achievements have been unlocked."""
+def _build_compare_achievements(exports: list[dict], cfg: dict) -> list[dict]:
+    """Check which achievements have been unlocked (simple list for compare page)."""
     n = len(exports)
     if not n:
         return []
@@ -3244,9 +3244,23 @@ def _build_nemesis(cfg: dict) -> dict:
             continue
         match_count += 1
 
+        # Build teammate set to filter them out
+        player = data.get("player", {})
+        target_sid = player.get("steam_id", "")
+        scoreboard = data.get("scoreboard", [])
+        teammate_sids = {target_sid} if target_sid else set()
+        target_idx = next((i for i, s in enumerate(scoreboard) if s.get("is_target")), None)
+        if target_idx is not None:
+            team_start = 0 if target_idx < 5 else 5
+            for i in range(team_start, team_start + 5):
+                if i < len(scoreboard):
+                    sid_sb = scoreboard[i].get("steam_id", "")
+                    if sid_sb:
+                        teammate_sids.add(sid_sb)
+
         for d in duels:
             sid = d.get("steam_id", d.get("name", ""))
-            if not sid:
+            if not sid or sid in teammate_sids:
                 continue
             if sid not in agg:
                 agg[sid] = {
@@ -3296,12 +3310,13 @@ def _build_nemesis(cfg: dict) -> dict:
             "wins": wins, "losses": losses,
         })
 
-    # Sort categories
-    nemeses = sorted([e for e in enemies if e["kd"] < 1.0 and e["matches"] >= 2],
+    # Sort categories — use total_duels >= 4 to filter out trivial encounters
+    min_duels = 4
+    nemeses = sorted([e for e in enemies if e["kd"] < 1.0 and e["total_duels"] >= min_duels],
                      key=lambda x: x["threat"], reverse=True)[:10]
-    victims = sorted([e for e in enemies if e["kd"] > 1.0 and e["matches"] >= 2],
-                     key=lambda x: (x["kd"] * min(x["matches"], 5)), reverse=True)[:10]
-    frequent = sorted(enemies, key=lambda x: x["matches"], reverse=True)[:10]
+    victims = sorted([e for e in enemies if e["kd"] > 1.0 and e["total_duels"] >= min_duels],
+                     key=lambda x: (x["kd"] * x["total_duels"]), reverse=True)[:10]
+    frequent = sorted(enemies, key=lambda x: x["total_duels"], reverse=True)[:10]
     all_sorted = sorted(enemies, key=lambda x: x["total_duels"], reverse=True)
 
     # Stats summary
