@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Teammates{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Teammate-Analyse</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Mit wem spielst du am meisten — und wie performst du mit ihnen?
+</p>
+
+<style>
+    .tm-hero { display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap; }
+    .tm-stat-card {
+        flex: 1; min-width: 130px; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm);
+    }
+    .tm-stat-val { font-family: var(--font-heading); font-size: 22px; font-weight: 700; line-height: 1; }
+    .tm-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .tm-tabs { display: flex; gap: 4px; margin-bottom: var(--space-4); flex-wrap: wrap; }
+    .tm-tab {
+        padding: 6px 16px; border-radius: 20px; cursor: pointer;
+        font-size: 12px; border: 1px solid var(--color-divider);
+        background: transparent; color: var(--color-neutral-400);
+        font-family: var(--font-body); transition: all 0.15s;
+    }
+    .tm-tab:hover { border-color: var(--color-neutral-600); color: var(--color-text); }
+    .tm-tab.active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(145,132,217,0.1); font-weight: 600; }
+
+    .tm-section { margin-bottom: var(--space-5); }
+    .tm-section-title {
+        font-size: 14px; font-weight: 600; margin-bottom: 10px;
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    .tm-grid { display: flex; flex-direction: column; gap: 4px; }
+    .tm-header {
+        display: grid; grid-template-columns: 40px 1fr 60px 70px 80px 80px 80px 100px;
+        gap: 8px; padding: 6px 14px; font-size: 10px; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--color-neutral-600);
+    }
+    .tm-row {
+        display: grid; grid-template-columns: 40px 1fr 60px 70px 80px 80px 80px 100px;
+        gap: 8px; align-items: center; padding: 10px 14px;
+        border-radius: var(--radius-sm); background: var(--color-surface);
+        font-size: 13px; transition: background 0.15s;
+    }
+    .tm-row:hover { background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface)); }
+    .tm-rank { font-size: 11px; font-weight: 600; color: var(--color-neutral-600); text-align: center; }
+    .tm-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tm-center { text-align: center; }
+    .tm-maps { font-size: 11px; color: var(--color-neutral-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .tm-chemistry {
+        display: inline-block; font-size: 11px; font-weight: 600;
+        padding: 2px 8px; border-radius: 10px;
+    }
+    .tm-chem-high { background: rgba(74,222,128,0.12); color: #4ade80; }
+    .tm-chem-mid { background: rgba(145,132,217,0.12); color: #9184d9; }
+    .tm-chem-low { background: rgba(248,113,113,0.12); color: #f87171; }
+
+    .tm-wr-bar { width: 60px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--color-neutral-800); display: inline-block; vertical-align: middle; margin-left: 4px; }
+    .tm-wr-fill { height: 100%; border-radius: 3px; }
+
+    @media (max-width: 768px) {
+        .tm-row, .tm-header { grid-template-columns: 30px 1fr 50px 60px 60px; }
+        .tm-row > :nth-child(n+6), .tm-header > :nth-child(n+6) { display: none; }
+    }
+</style>
+
+{% if not tm.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Teammate-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- Hero stats -->
+<div class="tm-hero">
+    <div class="tm-stat-card">
+        <div class="tm-stat-val">{{ tm.match_count }}</div>
+        <div class="tm-stat-lbl">Matches</div>
+    </div>
+    <div class="tm-stat-card">
+        <div class="tm-stat-val">{{ tm.total_unique }}</div>
+        <div class="tm-stat-lbl">Unique Teammates</div>
+    </div>
+    <div class="tm-stat-card">
+        <div class="tm-stat-val">{{ tm.regulars_count }}</div>
+        <div class="tm-stat-lbl">Regulars (3+)</div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tm-tabs">
+    <button class="tm-tab active" data-tab="matches">Haeufigste</button>
+    <button class="tm-tab" data-tab="chemistry">Beste Chemie</button>
+    <button class="tm-tab" data-tab="winrate">Beste Winrate</button>
+    <button class="tm-tab" data-tab="all">Alle</button>
+</div>
+
+<!-- By matches -->
+<div class="tm-section" id="tab-matches">
+    <div class="tm-section-title">
+        <i data-lucide="users" style="width:16px;height:16px;color:var(--color-accent);"></i>
+        Haeufigste Teammates
+    </div>
+    <div class="tm-header">
+        <span>#</span><span>Spieler</span><span>Matches</span><span>Bilanz</span><span>Win%</span><span>K/D</span><span>ADR</span><span>Dein Rating</span>
+    </div>
+    <div class="tm-grid">
+        {% for t in tm.by_matches %}
+        <div class="tm-row">
+            <div class="tm-rank">{{ loop.index }}</div>
+            <div class="tm-name">{{ t.name }}</div>
+            <div class="tm-center" style="font-weight:600;">{{ t.matches }}</div>
+            <div class="tm-center"><span class="win">{{ t.wins }}W</span>/<span class="loss">{{ t.losses }}L</span></div>
+            <div class="tm-center">
+                <span class="{% if t.win_rate >= 60 %}win{% elif t.win_rate < 40 %}loss{% endif %}" style="font-weight:600;">{{ t.win_rate }}%</span>
+            </div>
+            <div class="tm-center {% if t.kd >= 1.2 %}win{% elif t.kd < 0.9 %}loss{% endif %}" style="font-weight:600;">{{ t.kd }}</div>
+            <div class="tm-center">{{ t.avg_adr }}</div>
+            <div class="tm-center {% if t.my_rating_with >= 1.0 %}win{% elif t.my_rating_with < 0.85 %}loss{% endif %}" style="font-weight:600;">{{ t.my_rating_with }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- By chemistry -->
+<div class="tm-section" id="tab-chemistry" style="display:none;">
+    <div class="tm-section-title">
+        <i data-lucide="heart" style="width:16px;height:16px;color:#4ade80;"></i>
+        <span style="color:#4ade80;">Beste Chemie</span>
+        <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">— mit wem ihr am besten harmoniert (min. 2 Matches)</span>
+    </div>
+    {% if tm.by_chemistry %}
+    <div class="tm-header">
+        <span>#</span><span>Spieler</span><span>Matches</span><span>Bilanz</span><span>Win%</span><span>K/D</span><span>ADR</span><span>Dein Rating</span>
+    </div>
+    <div class="tm-grid">
+        {% for t in tm.by_chemistry %}
+        <div class="tm-row">
+            <div class="tm-rank">{{ loop.index }}</div>
+            <div class="tm-name">
+                {{ t.name }}
+                <span class="tm-chemistry {% if t.chemistry >= 60 %}tm-chem-high{% elif t.chemistry >= 45 %}tm-chem-mid{% else %}tm-chem-low{% endif %}">
+                    {{ t.chemistry }}
+                </span>
+            </div>
+            <div class="tm-center" style="font-weight:600;">{{ t.matches }}</div>
+            <div class="tm-center"><span class="win">{{ t.wins }}W</span>/<span class="loss">{{ t.losses }}L</span></div>
+            <div class="tm-center">
+                <span class="{% if t.win_rate >= 60 %}win{% elif t.win_rate < 40 %}loss{% endif %}" style="font-weight:600;">{{ t.win_rate }}%</span>
+            </div>
+            <div class="tm-center {% if t.kd >= 1.2 %}win{% elif t.kd < 0.9 %}loss{% endif %}" style="font-weight:600;">{{ t.kd }}</div>
+            <div class="tm-center">{{ t.avg_adr }}</div>
+            <div class="tm-center {% if t.my_rating_with >= 1.0 %}win{% elif t.my_rating_with < 0.85 %}loss{% endif %}" style="font-weight:600;">{{ t.my_rating_with }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="padding:var(--space-4);color:var(--color-neutral-500);font-size:13px;">Mindestens 2 Matches mit einem Teammate noetig.</div>
+    {% endif %}
+</div>
+
+<!-- By winrate -->
+<div class="tm-section" id="tab-winrate" style="display:none;">
+    <div class="tm-section-title">
+        <i data-lucide="trophy" style="width:16px;height:16px;color:#fbbf24;"></i>
+        <span style="color:#fbbf24;">Hoechste Winrate</span>
+        <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">— min. 2 Matches</span>
+    </div>
+    {% if tm.by_winrate %}
+    <div class="tm-header">
+        <span>#</span><span>Spieler</span><span>Matches</span><span>Bilanz</span><span>Win%</span><span>K/D</span><span>ADR</span><span>Maps</span>
+    </div>
+    <div class="tm-grid">
+        {% for t in tm.by_winrate %}
+        <div class="tm-row">
+            <div class="tm-rank">{{ loop.index }}</div>
+            <div class="tm-name">{{ t.name }}</div>
+            <div class="tm-center" style="font-weight:600;">{{ t.matches }}</div>
+            <div class="tm-center"><span class="win">{{ t.wins }}W</span>/<span class="loss">{{ t.losses }}L</span></div>
+            <div class="tm-center">
+                <span class="{% if t.win_rate >= 60 %}win{% elif t.win_rate < 40 %}loss{% endif %}" style="font-weight:600;">{{ t.win_rate }}%</span>
+            </div>
+            <div class="tm-center {% if t.kd >= 1.2 %}win{% elif t.kd < 0.9 %}loss{% endif %}" style="font-weight:600;">{{ t.kd }}</div>
+            <div class="tm-center">{{ t.avg_adr }}</div>
+            <div class="tm-maps">{{ t.top_maps|join(', ') }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="padding:var(--space-4);color:var(--color-neutral-500);font-size:13px;">Mindestens 2 Matches mit einem Teammate noetig.</div>
+    {% endif %}
+</div>
+
+<!-- All -->
+<div class="tm-section" id="tab-all" style="display:none;">
+    <div class="tm-section-title">
+        <i data-lucide="list" style="width:16px;height:16px;color:var(--color-neutral-400);"></i>
+        Alle Teammates ({{ tm.total_unique }})
+    </div>
+    <div class="tm-header">
+        <span>#</span><span>Spieler</span><span>Matches</span><span>Bilanz</span><span>Win%</span><span>K/D</span><span>ADR</span><span>Maps</span>
+    </div>
+    <div class="tm-grid">
+        {% for t in tm.all %}
+        <div class="tm-row">
+            <div class="tm-rank">{{ loop.index }}</div>
+            <div class="tm-name">{{ t.name }}</div>
+            <div class="tm-center" style="font-weight:600;">{{ t.matches }}</div>
+            <div class="tm-center"><span class="win">{{ t.wins }}W</span>/<span class="loss">{{ t.losses }}L</span></div>
+            <div class="tm-center">
+                <span class="{% if t.win_rate >= 60 %}win{% elif t.win_rate < 40 %}loss{% endif %}" style="font-weight:600;">{{ t.win_rate }}%</span>
+            </div>
+            <div class="tm-center {% if t.kd >= 1.2 %}win{% elif t.kd < 0.9 %}loss{% endif %}" style="font-weight:600;">{{ t.kd }}</div>
+            <div class="tm-center">{{ t.avg_adr }}</div>
+            <div class="tm-maps">{{ t.top_maps|join(', ') }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if tm.has_data %}
+<script>
+(function() {
+    var tabs = document.querySelectorAll('.tm-tab');
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            tabs.forEach(function(t) { t.classList.remove('active'); });
+            this.classList.add('active');
+            var target = this.dataset.tab;
+            document.querySelectorAll('.tm-section').forEach(function(s) {
+                s.style.display = s.id === 'tab-' + target ? '' : 'none';
+            });
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -675,6 +675,16 @@ def create_app() -> Flask:
         mom_data = _build_momentum(cfg)
         return render_template("momentum.html", mom=mom_data, config=cfg)
 
+    @app.route("/teammates")
+    def teammates():
+        tm_data = _build_teammates(cfg)
+        return render_template("teammates.html", tm=tm_data, config=cfg)
+
+    @app.route("/leaderboard")
+    def leaderboard():
+        lb_data = _build_leaderboard(cfg)
+        return render_template("leaderboard.html", lb=lb_data, config=cfg)
+
     @app.route("/settings")
     def settings():
         # Always reload config from disk
@@ -3529,4 +3539,238 @@ def _build_momentum(cfg: dict) -> dict:
         "sessions": session_analysis,
         "after_loss_avg": after_loss_avg,
         "after_win_avg": after_win_avg,
+    }
+
+
+# ── Teammates ─────────────────────────────────────────────
+def _build_teammates(cfg: dict) -> dict:
+    """Analyze teammate performance and chemistry across all matches."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    agg: dict[str, dict] = {}
+    my_stats: dict[str, list] = {}  # my rating when playing with this teammate
+    match_count = 0
+
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        sb = data.get("scoreboard", [])
+        match = data.get("match", {})
+        player = data.get("player", {})
+        if not sb or not match:
+            continue
+        match_count += 1
+
+        target_idx = next((i for i, s in enumerate(sb) if s.get("is_target")), None)
+        if target_idx is None:
+            continue
+
+        target_sid = player.get("steam_id", "") or sb[target_idx].get("steam_id", "")
+        my_rating = player.get("rating", 0)
+        my_kd = player.get("kd", 0)
+        result = match.get("result", "?")
+        map_name = match.get("map", "?")
+        team_start = 0 if target_idx < 5 else 5
+
+        # Collect teammates from same team half
+        match_teammates = []
+        for i in range(team_start, team_start + 5):
+            if i >= len(sb):
+                continue
+            s = sb[i]
+            if s.get("is_target"):
+                continue
+            sid = s.get("steam_id", "")
+            if not sid or sid == target_sid:
+                continue
+            match_teammates.append(sid)
+
+            if sid not in agg:
+                agg[sid] = {
+                    "name": s["name"], "steam_id": sid,
+                    "matches": 0, "wins": 0, "losses": 0,
+                    "kills": 0, "deaths": 0, "assists": 0,
+                    "adr_sum": 0, "rating_sum": 0,
+                    "maps": {}, "dates": [],
+                }
+            t = agg[sid]
+            t["name"] = s["name"]
+            t["matches"] += 1
+            t["kills"] += s.get("kills", 0)
+            t["deaths"] += s.get("deaths", 0)
+            t["assists"] += s.get("assists", 0)
+            t["adr_sum"] += s.get("adr", 0)
+            t["maps"][map_name] = t["maps"].get(map_name, 0) + 1
+            t["dates"].append(match.get("date", ""))
+            if result == "Sieg":
+                t["wins"] += 1
+            elif result == "Niederlage":
+                t["losses"] += 1
+
+            # Track my performance when playing with this teammate
+            if sid not in my_stats:
+                my_stats[sid] = []
+            my_stats[sid].append({"rating": my_rating, "kd": my_kd, "won": result == "Sieg"})
+
+    if not agg:
+        return {"has_data": False}
+
+    # Build teammate list
+    teammates = []
+    for sid, t in agg.items():
+        kd = round(t["kills"] / max(t["deaths"], 1), 2)
+        avg_adr = round(t["adr_sum"] / t["matches"], 1)
+        win_rate = round(t["wins"] / t["matches"] * 100, 1)
+        top_maps = sorted(t["maps"].items(), key=lambda x: -x[1])[:3]
+
+        # My stats when playing with this teammate
+        ms = my_stats.get(sid, [])
+        my_avg_rating = round(sum(m["rating"] for m in ms) / len(ms), 2) if ms else 0
+        my_avg_kd = round(sum(m["kd"] for m in ms) / len(ms), 2) if ms else 0
+        my_wr = round(sum(1 for m in ms if m["won"]) / len(ms) * 100, 1) if ms else 0
+
+        # Chemistry score: combination of win rate and my performance with them
+        chemistry = round((win_rate * 0.4 + my_avg_rating * 30 + min(kd, 2.0) * 15) / 1, 1)
+
+        teammates.append({
+            "name": t["name"], "steam_id": sid,
+            "matches": t["matches"], "wins": t["wins"], "losses": t["losses"],
+            "kills": t["kills"], "deaths": t["deaths"],
+            "kd": kd, "avg_adr": avg_adr, "win_rate": win_rate,
+            "top_maps": [m[0] for m in top_maps],
+            "last_played": t["dates"][-1] if t["dates"] else "",
+            "my_rating_with": my_avg_rating, "my_kd_with": my_avg_kd,
+            "my_wr_with": my_wr, "chemistry": chemistry,
+        })
+
+    # Sort by matches played
+    by_matches = sorted(teammates, key=lambda x: -x["matches"])
+    by_chemistry = sorted([t for t in teammates if t["matches"] >= 2],
+                          key=lambda x: -x["chemistry"])
+    by_winrate = sorted([t for t in teammates if t["matches"] >= 2],
+                        key=lambda x: -x["win_rate"])
+
+    # Overall stats
+    total_unique = len(teammates)
+    regulars = [t for t in teammates if t["matches"] >= 3]
+
+    return {
+        "has_data": True,
+        "match_count": match_count,
+        "total_unique": total_unique,
+        "regulars_count": len(regulars),
+        "by_matches": by_matches[:20],
+        "by_chemistry": by_chemistry[:10],
+        "by_winrate": by_winrate[:10],
+        "all": by_matches,
+    }
+
+
+# ── Leaderboard ───────────────────────────────────────────
+def _build_leaderboard(cfg: dict) -> dict:
+    """Rank all players encountered across all matches by various metrics."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    agg: dict[str, dict] = {}
+    self_sids: set[str] = set()
+
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        sb = data.get("scoreboard", [])
+        match = data.get("match", {})
+        if not sb or not match:
+            continue
+
+        # Detect self steam_id from is_target flag
+        for s in sb:
+            if s.get("is_target"):
+                sid = s.get("steam_id", "")
+                if sid:
+                    self_sids.add(sid)
+
+        for s in sb:
+            sid = s.get("steam_id", "")
+            if not sid:
+                continue
+            if sid not in agg:
+                agg[sid] = {
+                    "name": s["name"], "steam_id": sid, "is_self": s.get("is_target", False),
+                    "matches": 0, "kills": 0, "deaths": 0, "assists": 0,
+                    "adr_sum": 0, "hs_pct_sum": 0,
+                    "wins": 0, "losses": 0,
+                }
+            p = agg[sid]
+            p["name"] = s["name"]
+            p["matches"] += 1
+            p["kills"] += s.get("kills", 0)
+            p["deaths"] += s.get("deaths", 0)
+            p["assists"] += s.get("assists", 0)
+            p["adr_sum"] += s.get("adr", 0)
+            p["hs_pct_sum"] += s.get("hs_pct", 0)
+
+            # Determine if this player's team won
+            target_idx = next((i for i, x in enumerate(sb) if x.get("is_target")), None)
+            if target_idx is not None:
+                target_team = 0 if target_idx < 5 else 5
+                player_team = 0 if sb.index(s) < 5 else 5
+                same_team = target_team == player_team
+                result = match.get("result", "?")
+                if same_team:
+                    won = result == "Sieg"
+                else:
+                    won = result == "Niederlage"
+                if won:
+                    p["wins"] += 1
+                elif (same_team and result == "Niederlage") or (not same_team and result == "Sieg"):
+                    p["losses"] += 1
+
+    if not agg:
+        return {"has_data": False}
+
+    players = []
+    for sid, p in agg.items():
+        kd = round(p["kills"] / max(p["deaths"], 1), 2)
+        avg_adr = round(p["adr_sum"] / max(p["matches"], 1), 1)
+        avg_hs = round(p["hs_pct_sum"] / max(p["matches"], 1), 1)
+        kpr = round(p["kills"] / max(p["matches"], 1), 1)
+        win_rate = round(p["wins"] / max(p["matches"], 1) * 100, 1)
+
+        players.append({
+            "name": p["name"], "steam_id": sid, "is_self": p["is_self"],
+            "matches": p["matches"], "kills": p["kills"], "deaths": p["deaths"],
+            "assists": p["assists"], "kd": kd, "avg_adr": avg_adr,
+            "avg_hs": avg_hs, "kpr": kpr, "win_rate": win_rate,
+        })
+
+    by_kd = sorted(players, key=lambda x: (-x["kd"], -x["kills"]))
+    by_kills = sorted(players, key=lambda x: -x["kills"])
+    by_adr = sorted(players, key=lambda x: -x["avg_adr"])
+
+    # Find self rank
+    self_rank_kd = next((i + 1 for i, p in enumerate(by_kd) if p["is_self"]), 0)
+    self_rank_kills = next((i + 1 for i, p in enumerate(by_kills) if p["is_self"]), 0)
+
+    return {
+        "has_data": True,
+        "total_players": len(players),
+        "by_kd": by_kd,
+        "by_kills": by_kills,
+        "by_adr": by_adr,
+        "self_rank_kd": self_rank_kd,
+        "self_rank_kills": self_rank_kills,
     }

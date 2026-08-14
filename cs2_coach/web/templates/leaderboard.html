@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Leaderboard{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Leaderboard</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Alle Spieler aus deinen Matches im Vergleich — wo stehst du?
+</p>
+
+<style>
+    .lb-hero { display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap; }
+    .lb-stat-card {
+        flex: 1; min-width: 140px; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm);
+    }
+    .lb-stat-val { font-family: var(--font-heading); font-size: 22px; font-weight: 700; line-height: 1; }
+    .lb-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .lb-tabs { display: flex; gap: 4px; margin-bottom: var(--space-4); flex-wrap: wrap; }
+    .lb-tab {
+        padding: 6px 16px; border-radius: 20px; cursor: pointer;
+        font-size: 12px; border: 1px solid var(--color-divider);
+        background: transparent; color: var(--color-neutral-400);
+        font-family: var(--font-body); transition: all 0.15s;
+    }
+    .lb-tab:hover { border-color: var(--color-neutral-600); color: var(--color-text); }
+    .lb-tab.active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(145,132,217,0.1); font-weight: 600; }
+
+    .lb-section { margin-bottom: var(--space-5); }
+
+    .lb-grid { display: flex; flex-direction: column; gap: 2px; }
+    .lb-header {
+        display: grid; grid-template-columns: 50px 1fr 70px 70px 50px 60px 60px;
+        gap: 8px; padding: 6px 14px; font-size: 10px; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--color-neutral-600);
+    }
+    .lb-row {
+        display: grid; grid-template-columns: 50px 1fr 70px 70px 50px 60px 60px;
+        gap: 8px; align-items: center; padding: 8px 14px;
+        border-radius: var(--radius-sm); background: var(--color-surface);
+        font-size: 13px; transition: background 0.15s;
+    }
+    .lb-row:hover { background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface)); }
+    .lb-row.lb-self {
+        background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+        border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+    }
+    .lb-rank { font-weight: 600; color: var(--color-neutral-500); text-align: center; }
+    .lb-rank-1 { color: #fbbf24; font-size: 15px; }
+    .lb-rank-2 { color: #c0c0c0; font-size: 14px; }
+    .lb-rank-3 { color: #cd7f32; font-size: 14px; }
+    .lb-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-center { text-align: center; }
+    .lb-self-tag {
+        display: inline-block; font-size: 9px; font-weight: 600; padding: 1px 6px;
+        border-radius: 4px; background: var(--color-accent-800); color: var(--color-accent-100);
+        margin-left: 4px; vertical-align: middle;
+    }
+
+    .lb-search {
+        margin-bottom: var(--space-3);
+    }
+    .lb-search input {
+        max-width: 300px;
+    }
+
+    @media (max-width: 768px) {
+        .lb-row, .lb-header { grid-template-columns: 40px 1fr 60px 60px; }
+        .lb-row > :nth-child(n+5), .lb-header > :nth-child(n+5) { display: none; }
+    }
+</style>
+
+{% if not lb.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Daten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- Hero stats -->
+<div class="lb-hero">
+    <div class="lb-stat-card">
+        <div class="lb-stat-val">{{ lb.total_players }}</div>
+        <div class="lb-stat-lbl">Spieler gesehen</div>
+    </div>
+    <div class="lb-stat-card" style="border-top: 3px solid var(--color-accent);">
+        <div class="lb-stat-val" style="color:var(--color-accent);">#{{ lb.self_rank_kd }}</div>
+        <div class="lb-stat-lbl">Dein K/D Rang</div>
+    </div>
+    <div class="lb-stat-card" style="border-top: 3px solid #fbbf24;">
+        <div class="lb-stat-val" style="color:#fbbf24;">#{{ lb.self_rank_kills }}</div>
+        <div class="lb-stat-lbl">Dein Kills Rang</div>
+    </div>
+    <div class="lb-stat-card">
+        <div class="lb-stat-val">Top {{ ((lb.self_rank_kd / lb.total_players) * 100)|round(0)|int }}%</div>
+        <div class="lb-stat-lbl">K/D Perzentil</div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="lb-tabs">
+    <button class="lb-tab active" data-tab="kd">K/D</button>
+    <button class="lb-tab" data-tab="kills">Total Kills</button>
+    <button class="lb-tab" data-tab="adr">ADR</button>
+</div>
+
+<!-- Search -->
+<div class="lb-search">
+    <input class="input" type="text" id="lb-search" placeholder="Spieler suchen..." style="font-size:13px;">
+</div>
+
+<!-- By K/D -->
+<div class="lb-section" id="tab-kd">
+    <div class="lb-header">
+        <span>#</span><span>Spieler</span><span style="text-align:center;">K/D</span><span style="text-align:center;">Kills</span><span style="text-align:center;">Matches</span><span style="text-align:center;">ADR</span><span style="text-align:center;">HS%</span>
+    </div>
+    <div class="lb-grid" id="grid-kd">
+        {% for p in lb.by_kd %}
+        <div class="lb-row {% if p.is_self %}lb-self{% endif %}" data-name="{{ p.name|lower }}">
+            <div class="lb-rank {% if loop.index == 1 %}lb-rank-1{% elif loop.index == 2 %}lb-rank-2{% elif loop.index == 3 %}lb-rank-3{% endif %}">{{ loop.index }}</div>
+            <div class="lb-name">{{ p.name }}{% if p.is_self %}<span class="lb-self-tag">Du</span>{% endif %}</div>
+            <div class="lb-center {% if p.kd >= 1.2 %}win{% elif p.kd < 0.9 %}loss{% endif %}" style="font-weight:600;">{{ p.kd }}</div>
+            <div class="lb-center">{{ p.kills }}</div>
+            <div class="lb-center" style="color:var(--color-neutral-500);">{{ p.matches }}</div>
+            <div class="lb-center">{{ p.avg_adr }}</div>
+            <div class="lb-center">{{ p.avg_hs }}%</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- By Kills -->
+<div class="lb-section" id="tab-kills" style="display:none;">
+    <div class="lb-header">
+        <span>#</span><span>Spieler</span><span style="text-align:center;">Kills</span><span style="text-align:center;">Deaths</span><span style="text-align:center;">Matches</span><span style="text-align:center;">K/D</span><span style="text-align:center;">KPM</span>
+    </div>
+    <div class="lb-grid" id="grid-kills">
+        {% for p in lb.by_kills %}
+        <div class="lb-row {% if p.is_self %}lb-self{% endif %}" data-name="{{ p.name|lower }}">
+            <div class="lb-rank {% if loop.index == 1 %}lb-rank-1{% elif loop.index == 2 %}lb-rank-2{% elif loop.index == 3 %}lb-rank-3{% endif %}">{{ loop.index }}</div>
+            <div class="lb-name">{{ p.name }}{% if p.is_self %}<span class="lb-self-tag">Du</span>{% endif %}</div>
+            <div class="lb-center" style="font-weight:600;color:#4ade80;">{{ p.kills }}</div>
+            <div class="lb-center" style="color:#f87171;">{{ p.deaths }}</div>
+            <div class="lb-center" style="color:var(--color-neutral-500);">{{ p.matches }}</div>
+            <div class="lb-center {% if p.kd >= 1.2 %}win{% elif p.kd < 0.9 %}loss{% endif %}">{{ p.kd }}</div>
+            <div class="lb-center">{{ p.kpr }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- By ADR -->
+<div class="lb-section" id="tab-adr" style="display:none;">
+    <div class="lb-header">
+        <span>#</span><span>Spieler</span><span style="text-align:center;">ADR</span><span style="text-align:center;">Kills</span><span style="text-align:center;">Matches</span><span style="text-align:center;">K/D</span><span style="text-align:center;">HS%</span>
+    </div>
+    <div class="lb-grid" id="grid-adr">
+        {% for p in lb.by_adr %}
+        <div class="lb-row {% if p.is_self %}lb-self{% endif %}" data-name="{{ p.name|lower }}">
+            <div class="lb-rank {% if loop.index == 1 %}lb-rank-1{% elif loop.index == 2 %}lb-rank-2{% elif loop.index == 3 %}lb-rank-3{% endif %}">{{ loop.index }}</div>
+            <div class="lb-name">{{ p.name }}{% if p.is_self %}<span class="lb-self-tag">Du</span>{% endif %}</div>
+            <div class="lb-center" style="font-weight:600;">{{ p.avg_adr }}</div>
+            <div class="lb-center">{{ p.kills }}</div>
+            <div class="lb-center" style="color:var(--color-neutral-500);">{{ p.matches }}</div>
+            <div class="lb-center {% if p.kd >= 1.2 %}win{% elif p.kd < 0.9 %}loss{% endif %}">{{ p.kd }}</div>
+            <div class="lb-center">{{ p.avg_hs }}%</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if lb.has_data %}
+<script>
+(function() {
+    // Tabs
+    var tabs = document.querySelectorAll('.lb-tab');
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            tabs.forEach(function(t) { t.classList.remove('active'); });
+            this.classList.add('active');
+            var target = this.dataset.tab;
+            document.querySelectorAll('.lb-section').forEach(function(s) {
+                s.style.display = s.id === 'tab-' + target ? '' : 'none';
+            });
+        });
+    });
+
+    // Search
+    var search = document.getElementById('lb-search');
+    search.addEventListener('input', function() {
+        var q = this.value.toLowerCase();
+        document.querySelectorAll('.lb-row').forEach(function(row) {
+            var name = row.dataset.name || '';
+            row.style.display = !q || name.indexOf(q) >= 0 ? '' : 'none';
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}
