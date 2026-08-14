@@ -685,6 +685,17 @@ def create_app() -> Flask:
         lb_data = _build_leaderboard(cfg)
         return render_template("leaderboard.html", lb=lb_data, config=cfg)
 
+    @app.route("/h2h")
+    def h2h():
+        target_sid = request.args.get("vs", "")
+        h2h_data = _build_h2h(cfg, target_sid)
+        return render_template("h2h.html", h2h=h2h_data, config=cfg)
+
+    @app.route("/clutches")
+    def clutches():
+        cl_data = _build_clutch_analysis(cfg)
+        return render_template("clutches.html", cl=cl_data, config=cfg)
+
     @app.route("/settings")
     def settings():
         # Always reload config from disk
@@ -3773,4 +3784,260 @@ def _build_leaderboard(cfg: dict) -> dict:
         "by_adr": by_adr,
         "self_rank_kd": self_rank_kd,
         "self_rank_kills": self_rank_kills,
+    }
+
+
+# ── Head-to-Head ──────────────────────────────────────────
+def _build_h2h(cfg: dict, vs_sid: str) -> dict:
+    """Compare yourself against another player across shared matches."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False, "players": []}
+
+    # First pass: collect all players for the dropdown
+    all_players: dict[str, dict] = {}
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for s in data.get("scoreboard", []):
+            sid = s.get("steam_id", "")
+            if sid and not s.get("is_target"):
+                if sid not in all_players:
+                    all_players[sid] = {"name": s["name"], "steam_id": sid, "matches": 0}
+                all_players[sid]["name"] = s["name"]
+                all_players[sid]["matches"] += 1
+
+    players_list = sorted(all_players.values(), key=lambda x: -x["matches"])
+
+    if not vs_sid or vs_sid not in all_players:
+        return {"has_data": False, "players": players_list, "selected": None}
+
+    # Second pass: build comparison for shared matches
+    me = {"kills": 0, "deaths": 0, "assists": 0, "adr_sum": 0, "hs_sum": 0,
+          "kast_sum": 0, "ok": 0, "od": 0, "trades": 0, "utility_sum": 0,
+          "matches": 0, "wins": 0, "multikills": {"2k": 0, "3k": 0, "4k": 0, "5k": 0},
+          "clutch_wins": 0, "clutch_attempts": 0, "ratings": []}
+    them = {k: (v.copy() if isinstance(v, dict) else v) for k, v in me.items()}
+    them["ratings"] = []
+    them["multikills"] = {"2k": 0, "3k": 0, "4k": 0, "5k": 0}
+    shared_matches = []
+
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        sb = data.get("scoreboard", [])
+        match = data.get("match", {})
+        player = data.get("player", {})
+
+        # Check if vs_sid is in this match
+        vs_entry = None
+        me_entry = None
+        for s in sb:
+            if s.get("steam_id") == vs_sid:
+                vs_entry = s
+            if s.get("is_target"):
+                me_entry = s
+
+        if not vs_entry or not me_entry:
+            continue
+
+        result = match.get("result", "?")
+
+        for stats, entry, pdata in [(me, me_entry, player), (them, vs_entry, None)]:
+            stats["kills"] += entry.get("kills", 0)
+            stats["deaths"] += entry.get("deaths", 0)
+            stats["assists"] += entry.get("assists", 0)
+            stats["adr_sum"] += entry.get("adr", 0)
+            stats["hs_sum"] += entry.get("hs_pct", 0)
+            stats["kast_sum"] += entry.get("kast_pct", 0)
+            stats["ok"] += entry.get("opening_kills", 0)
+            stats["od"] += entry.get("opening_deaths", 0)
+            stats["trades"] += entry.get("trade_kills", 0)
+            stats["utility_sum"] += entry.get("utility_per_round", 0)
+            stats["matches"] += 1
+            mk = entry.get("multikills", {})
+            if mk:
+                for k in ["2k", "3k", "4k", "5k"]:
+                    stats["multikills"][k] += mk.get(k, 0)
+            cl = entry.get("clutches", {})
+            if cl:
+                stats["clutch_wins"] += cl.get("wins", 0)
+                stats["clutch_attempts"] += cl.get("attempts", 0)
+
+        # Rating only available for self
+        me["ratings"].append(player.get("rating", 0))
+        # Determine if they were on the same team
+        me_idx = next((i for i, s in enumerate(sb) if s.get("is_target")), 0)
+        vs_idx = next((i for i, s in enumerate(sb) if s.get("steam_id") == vs_sid), 0)
+        same_team = (me_idx < 5) == (vs_idx < 5)
+
+        if result == "Sieg":
+            me["wins"] += 1
+            if same_team:
+                them["wins"] += 1
+        elif result == "Niederlage" and not same_team:
+            them["wins"] += 1
+
+        shared_matches.append({
+            "date": match.get("date", ""), "map": match.get("map", "?"),
+            "score": f"{match.get('score_own', '?')}:{match.get('score_enemy', '?')}",
+            "result": result, "same_team": same_team,
+            "me_kills": me_entry.get("kills", 0), "me_deaths": me_entry.get("deaths", 0),
+            "me_adr": me_entry.get("adr", 0),
+            "them_kills": vs_entry.get("kills", 0), "them_deaths": vs_entry.get("deaths", 0),
+            "them_adr": vs_entry.get("adr", 0),
+        })
+
+    n = me["matches"]
+    if n == 0:
+        return {"has_data": False, "players": players_list, "selected": None}
+
+    def finalize(s):
+        n = max(s["matches"], 1)
+        return {
+            "kills": s["kills"], "deaths": s["deaths"], "assists": s["assists"],
+            "kd": round(s["kills"] / max(s["deaths"], 1), 2),
+            "avg_adr": round(s["adr_sum"] / n, 1),
+            "avg_hs": round(s["hs_sum"] / n, 1),
+            "avg_kast": round(s["kast_sum"] / n, 1),
+            "ok": s["ok"], "od": s["od"], "trades": s["trades"],
+            "avg_utility": round(s["utility_sum"] / n, 2),
+            "wins": s["wins"], "win_rate": round(s["wins"] / n * 100, 1),
+            "multikills": s["multikills"],
+            "clutch_wins": s["clutch_wins"], "clutch_attempts": s["clutch_attempts"],
+        }
+
+    me_final = finalize(me)
+    me_final["avg_rating"] = round(sum(me["ratings"]) / len(me["ratings"]), 2) if me["ratings"] else 0
+    them_final = finalize(them)
+
+    return {
+        "has_data": True,
+        "players": players_list,
+        "selected": all_players[vs_sid],
+        "shared_matches": len(shared_matches),
+        "matches": shared_matches,
+        "me": me_final,
+        "them": them_final,
+    }
+
+
+# ── Clutch Analysis ───────────────────────────────────────
+def _build_clutch_analysis(cfg: dict) -> dict:
+    """Deep analysis of clutch situations across all matches."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    total_attempts = 0
+    total_wins = 0
+    matches_with_clutches = []
+    by_map: dict[str, dict] = {}
+    by_side = {"CT": {"attempts": 0, "wins": 0}, "T": {"attempts": 0, "wins": 0}}
+    clutch_rounds = []
+
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        m = data.get("match", {})
+        p = data.get("player", {})
+        cl = p.get("clutches", {})
+        timeline = data.get("round_timeline", [])
+        attempts = cl.get("attempts", 0)
+        wins = cl.get("wins", 0)
+
+        if attempts == 0:
+            continue
+
+        total_attempts += attempts
+        total_wins += wins
+        map_name = m.get("map", "?")
+
+        if map_name not in by_map:
+            by_map[map_name] = {"attempts": 0, "wins": 0}
+        by_map[map_name]["attempts"] += attempts
+        by_map[map_name]["wins"] += wins
+
+        matches_with_clutches.append({
+            "date": m.get("date", ""), "map": map_name,
+            "score": f"{m.get('score_own', '?')}:{m.get('score_enemy', '?')}",
+            "result": m.get("result", "?"),
+            "attempts": attempts, "wins": wins,
+            "rating": p.get("rating", 0),
+        })
+
+        # Find clutch rounds from timeline (rounds where player got 1+ kills
+        # and was last alive — approximate by: survived + won + kills >= 1)
+        for r in timeline:
+            kills = r.get("player_kills", 0)
+            died = r.get("player_died", False)
+            won = r.get("won", False)
+            side = r.get("side", "?")
+
+            # Detect potential clutch rounds: player got kills and the round
+            # was close (we use a heuristic — died_early=False, kills >= 1)
+            events = r.get("events", [])
+            kill_count = sum(1 for e in events if e.get("type") == "kill")
+            death_events = [e for e in events if e.get("type") == "death"]
+
+            # A clutch-like round: player killed 1+ enemies after teammates
+            # died (approximate: player has kills, didn't die early, won)
+            if kill_count >= 2 and won and not r.get("died_early", False):
+                weapons_used = [e.get("weapon", "?") for e in events if e.get("type") == "kill"]
+                clutch_rounds.append({
+                    "round": r.get("round", 0), "side": side,
+                    "kills": kill_count, "won": won,
+                    "weapons": weapons_used,
+                    "date": m.get("date", ""), "map": map_name,
+                })
+                if side in by_side:
+                    by_side[side]["attempts"] += 1
+                    if won:
+                        by_side[side]["wins"] += 1
+
+    if total_attempts == 0:
+        return {"has_data": False}
+
+    # Map stats
+    map_stats = []
+    for map_name, ms in sorted(by_map.items(), key=lambda x: -x[1]["attempts"]):
+        wr = round(ms["wins"] / max(ms["attempts"], 1) * 100, 1)
+        map_stats.append({
+            "map": map_name, "attempts": ms["attempts"],
+            "wins": ms["wins"], "win_rate": wr,
+        })
+
+    # Overall
+    overall_wr = round(total_wins / max(total_attempts, 1) * 100, 1)
+
+    # Best/worst clutch matches
+    best = sorted([m for m in matches_with_clutches if m["wins"] > 0],
+                  key=lambda x: -x["wins"])[:5]
+    worst = sorted([m for m in matches_with_clutches if m["wins"] == 0 and m["attempts"] >= 2],
+                   key=lambda x: -x["attempts"])[:5]
+
+    return {
+        "has_data": True,
+        "total_attempts": total_attempts,
+        "total_wins": total_wins,
+        "win_rate": overall_wr,
+        "matches_count": len(matches_with_clutches),
+        "map_stats": map_stats,
+        "by_side": by_side,
+        "matches": sorted(matches_with_clutches, key=lambda x: x["date"], reverse=True),
+        "highlight_rounds": sorted(clutch_rounds, key=lambda x: -x["kills"])[:15],
+        "best_matches": best,
+        "worst_matches": worst,
     }

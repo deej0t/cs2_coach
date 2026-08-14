@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Head-to-Head{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Head-to-Head</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Vergleiche dich direkt mit einem Mitspieler oder Gegner aus deinen Matches.
+</p>
+
+<style>
+    .h2h-select { margin-bottom: var(--space-5); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .h2h-versus {
+        display: grid; grid-template-columns: 1fr auto 1fr; gap: var(--space-4);
+        margin-bottom: var(--space-5); align-items: start;
+    }
+    .h2h-player {
+        text-align: center; padding: var(--space-5);
+        border-radius: var(--radius-lg); background: var(--color-surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .h2h-player-name { font-family: var(--font-heading); font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .h2h-vs {
+        display: flex; align-items: center; justify-content: center;
+        font-family: var(--font-heading); font-size: 24px; font-weight: 700;
+        color: var(--color-neutral-600); padding-top: 40px;
+    }
+
+    .h2h-stats { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-5); }
+    .h2h-stat-row {
+        display: grid; grid-template-columns: 80px 1fr 100px 1fr 80px;
+        gap: 8px; align-items: center; padding: 8px 14px;
+        border-radius: var(--radius-sm); background: var(--color-surface); font-size: 13px;
+    }
+    .h2h-val { font-weight: 600; font-family: var(--font-heading); font-size: 15px; }
+    .h2h-val-left { text-align: right; }
+    .h2h-val-right { text-align: left; }
+    .h2h-label { text-align: center; font-size: 11px; color: var(--color-neutral-500); text-transform: uppercase; letter-spacing: 0.06em; }
+    .h2h-bar-wrap { height: 8px; border-radius: 4px; overflow: hidden; display: flex; }
+    .h2h-bar-me { height: 100%; background: var(--color-accent); }
+    .h2h-bar-them { height: 100%; background: var(--color-neutral-600); }
+
+    .h2h-winner { color: #4ade80; }
+    .h2h-loser { color: var(--color-neutral-500); }
+
+    .h2h-matches { margin-bottom: var(--space-5); }
+    .h2h-match-row {
+        display: grid; grid-template-columns: 90px 80px 80px 50px 50px 10px 50px 50px 80px;
+        gap: 8px; align-items: center; padding: 8px 14px;
+        border-radius: var(--radius-sm); background: var(--color-surface);
+        font-size: 12px; margin-bottom: 3px;
+    }
+    .h2h-match-header {
+        display: grid; grid-template-columns: 90px 80px 80px 50px 50px 10px 50px 50px 80px;
+        gap: 8px; padding: 4px 14px; font-size: 10px; letter-spacing: 0.06em;
+        text-transform: uppercase; color: var(--color-neutral-600);
+    }
+
+    @media (max-width: 768px) {
+        .h2h-versus { grid-template-columns: 1fr; }
+        .h2h-vs { padding-top: 0; }
+        .h2h-stat-row { grid-template-columns: 60px 1fr 80px 1fr 60px; }
+        .h2h-match-row, .h2h-match-header { grid-template-columns: 70px 60px 1fr 40px 40px; }
+        .h2h-match-row > :nth-child(n+6), .h2h-match-header > :nth-child(n+6) { display: none; }
+    }
+</style>
+
+<!-- Player selector -->
+<div class="h2h-select">
+    <label style="font-size:13px;color:var(--color-neutral-400);">Vergleich mit:</label>
+    <select class="input" id="h2h-player-select" style="max-width:300px;font-size:13px;" onchange="if(this.value)window.location='?vs='+this.value;">
+        <option value="">— Spieler waehlen —</option>
+        {% for p in h2h.players %}
+        <option value="{{ p.steam_id }}" {% if h2h.selected and p.steam_id == h2h.selected.steam_id %}selected{% endif %}>
+            {{ p.name }} ({{ p.matches }}x)
+        </option>
+        {% endfor %}
+    </select>
+</div>
+
+{% if h2h.has_data and h2h.selected %}
+{% set me = h2h.me %}
+{% set them = h2h.them %}
+
+<!-- Player cards -->
+<div class="h2h-versus">
+    <div class="h2h-player" style="border-top: 3px solid var(--color-accent);">
+        <div class="h2h-player-name" style="color:var(--color-accent);">{{ config.get('player_name', 'Du') }}</div>
+        <div style="font-size:12px;color:var(--color-neutral-500);">{{ h2h.shared_matches }} gemeinsame Matches</div>
+        <div style="margin-top:12px;">
+            <div style="font-family:var(--font-heading);font-size:32px;font-weight:700;{% if me.kd > them.kd %}color:#4ade80;{% endif %}">{{ me.kd }}</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;">K/D</div>
+        </div>
+        <div style="margin-top:8px;font-size:13px;">{{ me.kills }}K / {{ me.deaths }}D / {{ me.assists }}A</div>
+        {% if me.avg_rating %}<div style="margin-top:4px;font-size:12px;color:var(--color-neutral-400);">Rating: {{ me.avg_rating }}</div>{% endif %}
+    </div>
+    <div class="h2h-vs">VS</div>
+    <div class="h2h-player" style="border-top: 3px solid var(--color-neutral-600);">
+        <div class="h2h-player-name">{{ h2h.selected.name }}</div>
+        <div style="font-size:12px;color:var(--color-neutral-500);">{{ h2h.selected.matches }} Matches gesehen</div>
+        <div style="margin-top:12px;">
+            <div style="font-family:var(--font-heading);font-size:32px;font-weight:700;{% if them.kd > me.kd %}color:#4ade80;{% endif %}">{{ them.kd }}</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;">K/D</div>
+        </div>
+        <div style="margin-top:8px;font-size:13px;">{{ them.kills }}K / {{ them.deaths }}D / {{ them.assists }}A</div>
+    </div>
+</div>
+
+<!-- Stat comparison bars -->
+<div class="card-kicker" style="margin-bottom:8px;">Statistik-Vergleich</div>
+<div class="h2h-stats">
+    {% set comparisons = [
+        ("K/D", me.kd, them.kd),
+        ("Avg ADR", me.avg_adr, them.avg_adr),
+        ("Avg HS%", me.avg_hs, them.avg_hs),
+        ("KAST%", me.avg_kast, them.avg_kast),
+        ("Win-Rate", me.win_rate, them.win_rate),
+        ("Opening Kills", me.ok, them.ok),
+        ("Trade Kills", me.trades, them.trades),
+        ("Utility/R", me.avg_utility, them.avg_utility),
+        ("Clutch Wins", me.clutch_wins, them.clutch_wins),
+    ] %}
+    {% for label, mv, tv in comparisons %}
+    {% set total = mv + tv if (mv + tv) > 0 else 1 %}
+    {% set me_pct = (mv / total * 100)|round %}
+    <div class="h2h-stat-row">
+        <div class="h2h-val h2h-val-left {% if mv > tv %}h2h-winner{% elif mv < tv %}h2h-loser{% endif %}">{{ mv }}</div>
+        <div class="h2h-bar-wrap">
+            <div class="h2h-bar-me" style="width:{{ me_pct }}%;"></div>
+            <div class="h2h-bar-them" style="width:{{ 100 - me_pct }}%;"></div>
+        </div>
+        <div class="h2h-label">{{ label }}</div>
+        <div class="h2h-bar-wrap">
+            <div class="h2h-bar-them" style="width:{{ 100 - me_pct }}%;"></div>
+            <div class="h2h-bar-me" style="width:{{ me_pct }}%;"></div>
+        </div>
+        <div class="h2h-val h2h-val-right {% if tv > mv %}h2h-winner{% elif tv < mv %}h2h-loser{% endif %}">{{ tv }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Multi-kills comparison -->
+<div class="grid-2" style="margin-bottom:var(--space-5);">
+    <div class="card elev-sm" style="padding:var(--space-4);text-align:center;">
+        <div class="card-kicker">Multi-Kills (Du)</div>
+        <div style="display:flex;gap:var(--space-3);justify-content:center;margin-top:8px;">
+            {% for k in ['2k','3k','4k','5k'] %}
+            <div><div style="font-family:var(--font-heading);font-size:18px;font-weight:700;">{{ me.multikills[k] }}</div><div style="font-size:9px;color:var(--color-neutral-500);">{{ k|upper }}</div></div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="card elev-sm" style="padding:var(--space-4);text-align:center;">
+        <div class="card-kicker">Multi-Kills ({{ h2h.selected.name[:15] }})</div>
+        <div style="display:flex;gap:var(--space-3);justify-content:center;margin-top:8px;">
+            {% for k in ['2k','3k','4k','5k'] %}
+            <div><div style="font-family:var(--font-heading);font-size:18px;font-weight:700;">{{ them.multikills[k] }}</div><div style="font-size:9px;color:var(--color-neutral-500);">{{ k|upper }}</div></div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Shared matches -->
+{% if h2h.matches %}
+<div class="h2h-matches">
+    <div class="card-kicker" style="margin-bottom:8px;">Gemeinsame Matches</div>
+    <div class="h2h-match-header">
+        <span>Datum</span><span>Map</span><span>Score</span>
+        <span style="text-align:center;">Kills</span><span style="text-align:center;">ADR</span>
+        <span></span>
+        <span style="text-align:center;">Kills</span><span style="text-align:center;">ADR</span>
+        <span>Rolle</span>
+    </div>
+    {% for m in h2h.matches %}
+    <div class="h2h-match-row">
+        <div style="color:var(--color-neutral-500);">{{ m.date }}</div>
+        <div>{{ m.map }}</div>
+        <div>
+            <span class="tag tag-{% if m.result == 'Sieg' %}win{% elif m.result == 'Niederlage' %}loss{% else %}draw{% endif %}" style="font-size:10px;">{{ m.score }}</span>
+        </div>
+        <div style="text-align:center;font-weight:600;color:var(--color-accent);">{{ m.me_kills }}</div>
+        <div style="text-align:center;color:var(--color-neutral-400);">{{ m.me_adr }}</div>
+        <div style="text-align:center;color:var(--color-neutral-700);">|</div>
+        <div style="text-align:center;font-weight:600;">{{ m.them_kills }}</div>
+        <div style="text-align:center;color:var(--color-neutral-400);">{{ m.them_adr }}</div>
+        <div style="font-size:11px;">
+            {% if m.same_team %}<span style="color:#4ade80;">Teammate</span>{% else %}<span style="color:#f87171;">Gegner</span>{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% elif not h2h.has_data and h2h.selected %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine gemeinsamen Matches mit diesem Spieler gefunden.</p>
+</div>
+{% elif not h2h.selected %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Waehle einen Spieler oben aus, um den Vergleich zu starten.</p>
+</div>
+{% endif %}
+
+{% endblock %}
