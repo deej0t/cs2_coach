@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Mechanik{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Mechanik-Analyse</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Dein Aim, Movement und Schuss-Praezision im Detail — ueber {{ mech.matches_analyzed if mech.has_data else 0 }} Matches.
+</p>
+
+<style>
+    .mk-hero { display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap; }
+    .mk-card {
+        flex: 1; min-width: 140px; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm);
+    }
+    .mk-val { font-family: var(--font-heading); font-size: 24px; font-weight: 700; line-height: 1; }
+    .mk-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+    .mk-sub { font-size: 11px; color: var(--color-neutral-400); margin-top: 2px; }
+
+    .mk-section { margin-bottom: var(--space-5); }
+    .mk-section-title {
+        font-size: 14px; font-weight: 600; margin-bottom: 10px;
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    .mk-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
+    .mk-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
+
+    .mk-detail-card {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        background: var(--color-surface); box-shadow: var(--shadow-sm);
+    }
+    .mk-detail-title { font-size: 12px; font-weight: 600; color: var(--color-neutral-400); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; }
+
+    .mk-bar-wrap { margin-bottom: 8px; }
+    .mk-bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+    .mk-bar-label span:first-child { color: var(--color-neutral-400); }
+    .mk-bar-label span:last-child { font-weight: 600; }
+    .mk-bar { height: 8px; border-radius: 4px; background: var(--color-neutral-800); overflow: hidden; }
+    .mk-bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+
+    .mk-insight {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        border-left: 3px solid var(--color-accent);
+        background: rgba(145,132,217,0.04); font-size: 13px;
+        color: var(--color-neutral-300); margin-bottom: 8px;
+    }
+
+    .mk-ring { position: relative; width: 90px; height: 90px; margin: 0 auto 8px; }
+    .mk-ring-center {
+        position: absolute; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+    }
+
+    .mk-sparkline { display: flex; align-items: flex-end; gap: 2px; height: 40px; margin-top: 8px; }
+    .mk-spark-bar {
+        flex: 1; border-radius: 2px 2px 0 0; min-width: 6px;
+        background: var(--color-accent); opacity: 0.6; transition: opacity 0.15s;
+    }
+    .mk-spark-bar:hover { opacity: 1; }
+
+    .mk-match-grid { display: flex; flex-direction: column; gap: 3px; }
+    .mk-match-row {
+        display: grid; grid-template-columns: 90px 80px 70px 70px 70px 70px 70px;
+        gap: 8px; align-items: center; padding: 8px 14px;
+        border-radius: var(--radius-sm); background: var(--color-surface);
+        font-size: 13px;
+    }
+    .mk-match-header {
+        display: grid; grid-template-columns: 90px 80px 70px 70px 70px 70px 70px;
+        gap: 8px; padding: 4px 14px; font-size: 10px; letter-spacing: 0.06em;
+        text-transform: uppercase; color: var(--color-neutral-600);
+    }
+
+    @media (max-width: 768px) {
+        .mk-grid-3 { grid-template-columns: 1fr; }
+        .mk-grid-2 { grid-template-columns: 1fr; }
+        .mk-match-row, .mk-match-header { grid-template-columns: 70px 60px 60px 60px 60px; }
+        .mk-match-row > :nth-child(n+6), .mk-match-header > :nth-child(n+6) { display: none; }
+    }
+</style>
+
+{% if not mech.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Mechanik-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- Hero stats -->
+<div class="mk-hero">
+    <div class="mk-card" style="border-top: 3px solid var(--color-accent);">
+        <div class="mk-val" style="color:var(--color-accent);">{{ mech.avg_accuracy }}%</div>
+        <div class="mk-lbl">Accuracy</div>
+    </div>
+    <div class="mk-card" style="border-top: 3px solid #4ade80;">
+        <div class="mk-val {% if mech.avg_hs and mech.avg_hs >= 50 %}win{% endif %}">{{ mech.avg_hs }}%</div>
+        <div class="mk-lbl">Headshot-Rate</div>
+    </div>
+    <div class="mk-card" style="border-top: 3px solid #60a5fa;">
+        <div class="mk-val" style="color:#60a5fa;">{{ mech.avg_crosshair }}&deg;</div>
+        <div class="mk-lbl">Crosshair Placement</div>
+        <div class="mk-sub">{{ mech.ch_rating }}</div>
+    </div>
+    <div class="mk-card" style="border-top: 3px solid #fbbf24;">
+        <div class="mk-val {% if mech.avg_cs and mech.avg_cs >= 85 %}win{% elif mech.avg_cs and mech.avg_cs < 70 %}loss{% endif %}">{{ mech.avg_cs }}%</div>
+        <div class="mk-lbl">Counter-Strafe</div>
+        <div class="mk-sub">{{ mech.cs_rating }}</div>
+    </div>
+</div>
+
+<!-- Coaching Insights -->
+{% if mech.insights %}
+<div class="mk-section">
+    {% for insight in mech.insights %}
+    <div class="mk-insight">{{ insight }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Detail cards row -->
+<div class="mk-grid-3">
+    <!-- Spray Control -->
+    <div class="mk-detail-card">
+        <div class="mk-detail-title">
+            <i data-lucide="zap" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#fbbf24;"></i>
+            Spray Control
+        </div>
+        <div style="text-align:center;margin-bottom:12px;">
+            <div style="font-family:var(--font-heading);font-size:28px;font-weight:700;">{{ mech.burst_pct }}%</div>
+            <div style="font-size:11px;color:var(--color-neutral-500);">Burst-Kill-Rate</div>
+        </div>
+        <div class="mk-bar-wrap">
+            <div class="mk-bar-label"><span>Burst Kills</span><span style="color:#4ade80;">{{ mech.spray_burst }}</span></div>
+            <div class="mk-bar">
+                <div class="mk-bar-fill" style="width:{{ mech.burst_pct }}%;background:#4ade80;"></div>
+            </div>
+        </div>
+        <div class="mk-bar-wrap">
+            <div class="mk-bar-label"><span>Spray Kills</span><span style="color:#f87171;">{{ mech.spray_spray }}</span></div>
+            <div class="mk-bar">
+                <div class="mk-bar-fill" style="width:{{ 100 - mech.burst_pct }}%;background:#f87171;"></div>
+            </div>
+        </div>
+        {% if mech.avg_recoil %}
+        <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--color-neutral-400);">
+            Avg Recoil Index: <strong style="color:var(--color-text);">{{ mech.avg_recoil }}</strong>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Engagement Distance -->
+    <div class="mk-detail-card">
+        <div class="mk-detail-title">
+            <i data-lucide="ruler" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#60a5fa;"></i>
+            Kampfdistanz
+        </div>
+        {% if mech.engage.avg_distance %}
+        <div style="text-align:center;margin-bottom:12px;">
+            <div style="font-family:var(--font-heading);font-size:28px;font-weight:700;">{{ mech.engage.avg_distance|int }}</div>
+            <div style="font-size:11px;color:var(--color-neutral-500);">Avg Distanz (Units)</div>
+        </div>
+        {% endif %}
+        <div class="mk-bar-wrap">
+            <div class="mk-bar-label"><span>Nah</span><span>{{ mech.engage.close }} ({{ mech.engage.close_pct }}%)</span></div>
+            <div class="mk-bar">
+                <div class="mk-bar-fill" style="width:{{ mech.engage.close_pct }}%;background:#f87171;"></div>
+            </div>
+        </div>
+        <div class="mk-bar-wrap">
+            <div class="mk-bar-label"><span>Mittel</span><span>{{ mech.engage.mid }} ({{ mech.engage.mid_pct }}%)</span></div>
+            <div class="mk-bar">
+                <div class="mk-bar-fill" style="width:{{ mech.engage.mid_pct }}%;background:#fbbf24;"></div>
+            </div>
+        </div>
+        <div class="mk-bar-wrap">
+            <div class="mk-bar-label"><span>Weit</span><span>{{ mech.engage.long }} ({{ mech.engage.long_pct }}%)</span></div>
+            <div class="mk-bar">
+                <div class="mk-bar-fill" style="width:{{ mech.engage.long_pct }}%;background:#60a5fa;"></div>
+            </div>
+        </div>
+        <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--color-neutral-500);">
+            {{ mech.engage.total }} Engagements total
+        </div>
+    </div>
+
+    <!-- Death Timing -->
+    <div class="mk-detail-card">
+        <div class="mk-detail-title">
+            <i data-lucide="skull" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#f87171;"></i>
+            Tod-Timing
+        </div>
+        <div style="text-align:center;margin-bottom:12px;">
+            <div style="font-family:var(--font-heading);font-size:28px;font-weight:700;color:#f87171;">{{ mech.deaths.total }}</div>
+            <div style="font-size:11px;color:var(--color-neutral-500);">Tode analysiert</div>
+        </div>
+        <div class="mk-bar-wrap">
+            <div class="mk-bar-label"><span>Frueh (0-30s)</span><span {% if mech.deaths.early_pct > 35 %}style="color:#f87171;"{% endif %}>{{ mech.deaths.early }} ({{ mech.deaths.early_pct }}%)</span></div>
+            <div class="mk-bar">
+                <div class="mk-bar-fill" style="width:{{ mech.deaths.early_pct }}%;background:#f87171;"></div>
+            </div>
+        </div>
+        <div class="mk-bar-wrap">
+            <div class="mk-bar-label"><span>Mitte (30-60s)</span><span>{{ mech.deaths.mid }} ({{ mech.deaths.mid_pct }}%)</span></div>
+            <div class="mk-bar">
+                <div class="mk-bar-fill" style="width:{{ mech.deaths.mid_pct }}%;background:#fbbf24;"></div>
+            </div>
+        </div>
+        <div class="mk-bar-wrap">
+            <div class="mk-bar-label"><span>Spaet (60s+)</span><span>{{ mech.deaths.late }} ({{ mech.deaths.late_pct }}%)</span></div>
+            <div class="mk-bar">
+                <div class="mk-bar-fill" style="width:{{ mech.deaths.late_pct }}%;background:#4ade80;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Weapon Split + Trend -->
+<div class="mk-grid-2">
+    <!-- Weapon Split -->
+    <div class="mk-detail-card">
+        <div class="mk-detail-title">
+            <i data-lucide="crosshair" style="width:14px;height:14px;display:inline;vertical-align:middle;color:var(--color-accent);"></i>
+            Waffen-Split ({{ mech.total_kills }} Kills)
+        </div>
+        <div style="display:flex;gap:var(--space-4);justify-content:center;margin-bottom:16px;">
+            <div style="text-align:center;">
+                <div style="font-family:var(--font-heading);font-size:22px;font-weight:700;">{{ mech.weapons.rifle }}</div>
+                <div style="font-size:10px;color:var(--color-neutral-500);">RIFLE</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-family:var(--font-heading);font-size:22px;font-weight:700;color:#fbbf24;">{{ mech.weapons.awp }}</div>
+                <div style="font-size:10px;color:var(--color-neutral-500);">AWP</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-family:var(--font-heading);font-size:22px;font-weight:700;color:#60a5fa;">{{ mech.weapons.pistol }}</div>
+                <div style="font-size:10px;color:var(--color-neutral-500);">PISTOL</div>
+            </div>
+            {% if mech.weapons.other > 0 %}
+            <div style="text-align:center;">
+                <div style="font-family:var(--font-heading);font-size:22px;font-weight:700;color:var(--color-neutral-500);">{{ mech.weapons.other }}</div>
+                <div style="font-size:10px;color:var(--color-neutral-500);">OTHER</div>
+            </div>
+            {% endif %}
+        </div>
+        <div class="mk-bar" style="height:12px;display:flex;overflow:hidden;">
+            <div style="width:{{ mech.weapons.rifle_pct }}%;background:var(--color-accent);height:100%;"></div>
+            <div style="width:{{ mech.weapons.awp_pct }}%;background:#fbbf24;height:100%;"></div>
+            <div style="width:{{ mech.weapons.pistol_pct }}%;background:#60a5fa;height:100%;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--color-neutral-500);">
+            <span>Rifle {{ mech.weapons.rifle_pct }}%</span>
+            <span>AWP {{ mech.weapons.awp_pct }}%</span>
+            <span>Pistol {{ mech.weapons.pistol_pct }}%</span>
+        </div>
+    </div>
+
+    <!-- Accuracy Trend -->
+    <div class="mk-detail-card">
+        <div class="mk-detail-title">
+            <i data-lucide="trending-up" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#4ade80;"></i>
+            Accuracy-Trend (letzte {{ mech.trend|length }} Matches)
+        </div>
+        {% if mech.trend %}
+        <div class="mk-sparkline" title="Accuracy pro Match">
+            {% set max_acc = namespace(v=1) %}
+            {% for t in mech.trend %}{% if t.accuracy and t.accuracy > max_acc.v %}{% set max_acc.v = t.accuracy %}{% endif %}{% endfor %}
+            {% for t in mech.trend %}
+            <div class="mk-spark-bar" style="height:{{ ((t.accuracy or 0) / max_acc.v * 100)|round }}%;{% if t.accuracy and t.accuracy >= mech.avg_accuracy %}background:#4ade80;{% else %}background:var(--color-accent);{% endif %}" title="{{ t.date }}: {{ t.accuracy }}%"></div>
+            {% endfor %}
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--color-neutral-600);margin-top:4px;">
+            <span>{{ mech.trend[0].date }}</span>
+            <span>{{ mech.trend[-1].date }}</span>
+        </div>
+        <div style="margin-top:12px;">
+            <div class="mk-detail-title" style="margin-bottom:6px;">HS%-Trend</div>
+            <div class="mk-sparkline" title="HS% pro Match">
+                {% set max_hs = namespace(v=1) %}
+                {% for t in mech.trend %}{% if t.hs_pct and t.hs_pct > max_hs.v %}{% set max_hs.v = t.hs_pct %}{% endif %}{% endfor %}
+                {% for t in mech.trend %}
+                <div class="mk-spark-bar" style="height:{{ ((t.hs_pct or 0) / max_hs.v * 100)|round }}%;{% if t.hs_pct and t.hs_pct >= mech.avg_hs %}background:#4ade80;{% else %}background:#fbbf24;{% endif %}" title="{{ t.date }}: {{ t.hs_pct }}%"></div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Match-by-match table -->
+<div class="mk-section">
+    <div class="mk-section-title">
+        <i data-lucide="list" style="width:16px;height:16px;color:var(--color-neutral-400);"></i>
+        Alle Matches — Mechanik-Werte
+    </div>
+    <div class="mk-match-header">
+        <span>Datum</span><span>Map</span><span style="text-align:center;">Accuracy</span><span style="text-align:center;">HS%</span><span style="text-align:center;">Crosshair</span><span style="text-align:center;">C-Strafe</span><span style="text-align:center;">Recoil</span>
+    </div>
+    <div class="mk-match-grid">
+        {% for m in mech.matches %}
+        <div class="mk-match-row">
+            <div style="color:var(--color-neutral-500);">{{ m.date }}</div>
+            <div>{{ m.map }}</div>
+            <div style="text-align:center;font-weight:600;{% if m.accuracy and m.accuracy >= 30 %}color:#4ade80;{% elif m.accuracy and m.accuracy < 20 %}color:#f87171;{% endif %}">{{ m.accuracy if m.accuracy is not none else '—' }}%</div>
+            <div style="text-align:center;{% if m.hs_pct and m.hs_pct >= 50 %}color:#4ade80;font-weight:600;{% endif %}">{{ m.hs_pct if m.hs_pct is not none else '—' }}%</div>
+            <div style="text-align:center;{% if m.crosshair and m.crosshair <= 6 %}color:#4ade80;{% elif m.crosshair and m.crosshair > 12 %}color:#f87171;{% endif %}">{{ m.crosshair if m.crosshair is not none else '—' }}&deg;</div>
+            <div style="text-align:center;{% if m.cs_score and m.cs_score >= 85 %}color:#4ade80;{% elif m.cs_score and m.cs_score < 70 %}color:#f87171;{% endif %}">{{ m.cs_score if m.cs_score is not none else '—' }}%</div>
+            <div style="text-align:center;color:var(--color-neutral-400);">{{ m.recoil if m.recoil is not none else '—' }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}

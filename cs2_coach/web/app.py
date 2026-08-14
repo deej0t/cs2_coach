@@ -696,6 +696,16 @@ def create_app() -> Flask:
         cl_data = _build_clutch_analysis(cfg)
         return render_template("clutches.html", cl=cl_data, config=cfg)
 
+    @app.route("/mechanics")
+    def mechanics():
+        mech_data = _build_mechanics(cfg)
+        return render_template("mechanics.html", mech=mech_data, config=cfg)
+
+    @app.route("/rounds")
+    def rounds():
+        rd_data = _build_round_timeline(cfg)
+        return render_template("rounds.html", rd=rd_data, config=cfg)
+
     @app.route("/settings")
     def settings():
         # Always reload config from disk
@@ -4040,4 +4050,408 @@ def _build_clutch_analysis(cfg: dict) -> dict:
         "highlight_rounds": sorted(clutch_rounds, key=lambda x: -x["kills"])[:15],
         "best_matches": best,
         "worst_matches": worst,
+    }
+
+
+def _build_mechanics(cfg: dict) -> dict:
+    """Build aim/mechanics analysis data across all exports."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / subfolder / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    files = sorted(export_dir.glob("*_coach.json"))
+    if not files:
+        return {"has_data": False}
+
+    # Accumulators
+    crosshair_vals = []
+    spray_burst_total = 0
+    spray_spray_total = 0
+    recoil_vals = []
+    cs_scores = []
+    accuracy_vals = []
+    engage_close = 0
+    engage_mid = 0
+    engage_long = 0
+    engage_avg_vals = []
+    death_early = 0
+    death_mid = 0
+    death_late = 0
+    total_kills = 0
+    total_deaths = 0
+    awp_kills = 0
+    rifle_kills = 0
+    pistol_kills = 0
+    hs_vals = []
+    match_entries = []  # per-match mechanics snapshot
+    trend_data = []  # chronological for sparklines
+
+    for fp in files:
+        try:
+            with open(fp, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+        player = data.get("player", {})
+        match_info = data.get("match", {})
+        date_str = match_info.get("date", "")
+        map_name = match_info.get("map", "?")
+
+        ch = player.get("crosshair_placement", {})
+        sp = player.get("spray_control", {})
+        ed = player.get("engagement_distance", {})
+        dt = player.get("death_timing", {})
+        wp = player.get("weapons", {})
+        acc = player.get("accuracy")
+        cs_s = player.get("counter_strafe_score")
+        hs = player.get("hs_pct")
+
+        if ch.get("avg_degrees") is not None:
+            crosshair_vals.append(ch["avg_degrees"])
+        spray_burst_total += sp.get("burst_kills", 0)
+        spray_spray_total += sp.get("spray_kills", 0)
+        if sp.get("avg_recoil_index") is not None:
+            recoil_vals.append(sp["avg_recoil_index"])
+        if cs_s is not None:
+            cs_scores.append(cs_s)
+        if acc is not None:
+            accuracy_vals.append(acc)
+        if hs is not None:
+            hs_vals.append(hs)
+
+        engage_close += ed.get("close", 0)
+        engage_mid += ed.get("mid", 0)
+        engage_long += ed.get("long", 0)
+        if ed.get("avg") is not None:
+            engage_avg_vals.append(ed["avg"])
+
+        death_early += dt.get("early", 0)
+        death_mid += dt.get("mid", 0)
+        death_late += dt.get("late", 0)
+
+        k = player.get("kills", 0)
+        d = player.get("deaths", 0)
+        total_kills += k
+        total_deaths += d
+        awp_kills += wp.get("awp_kills", 0)
+        rifle_kills += wp.get("rifle_kills", 0)
+        pistol_kills += wp.get("pistol_kills", 0)
+
+        # Per-match entry
+        entry = {
+            "date": date_str,
+            "map": map_name,
+            "crosshair": ch.get("avg_degrees"),
+            "accuracy": acc,
+            "cs_score": cs_s,
+            "hs_pct": hs,
+            "recoil": sp.get("avg_recoil_index"),
+        }
+        match_entries.append(entry)
+        trend_data.append(entry)
+
+    n = len(match_entries)
+    if n == 0:
+        return {"has_data": False}
+
+    # Compute averages
+    avg_crosshair = round(sum(crosshair_vals) / len(crosshair_vals), 1) if crosshair_vals else None
+    avg_recoil = round(sum(recoil_vals) / len(recoil_vals), 2) if recoil_vals else None
+    avg_cs = round(sum(cs_scores) / len(cs_scores), 1) if cs_scores else None
+    avg_accuracy = round(sum(accuracy_vals) / len(accuracy_vals), 1) if accuracy_vals else None
+    avg_hs = round(sum(hs_vals) / len(hs_vals), 1) if hs_vals else None
+    avg_engage = round(sum(engage_avg_vals) / len(engage_avg_vals), 0) if engage_avg_vals else None
+
+    # Crosshair placement rating
+    if avg_crosshair is not None:
+        if avg_crosshair <= 5:
+            ch_rating = "Exzellent"
+        elif avg_crosshair <= 8:
+            ch_rating = "Gut"
+        elif avg_crosshair <= 12:
+            ch_rating = "Durchschnittlich"
+        else:
+            ch_rating = "Verbesserungswuerdig"
+    else:
+        ch_rating = "—"
+
+    # Counter-strafe rating
+    if avg_cs is not None:
+        if avg_cs >= 90:
+            cs_rating = "Elite"
+        elif avg_cs >= 80:
+            cs_rating = "Gut"
+        elif avg_cs >= 65:
+            cs_rating = "Durchschnittlich"
+        else:
+            cs_rating = "Schwach"
+    else:
+        cs_rating = "—"
+
+    # Spray discipline ratio
+    total_spray_kills = spray_burst_total + spray_spray_total
+    burst_pct = round(spray_burst_total / total_spray_kills * 100, 1) if total_spray_kills > 0 else 0
+
+    # Engagement distance breakdown
+    total_engagements = engage_close + engage_mid + engage_long
+    engage_breakdown = {
+        "close": engage_close,
+        "mid": engage_mid,
+        "long": engage_long,
+        "total": total_engagements,
+        "close_pct": round(engage_close / total_engagements * 100) if total_engagements > 0 else 0,
+        "mid_pct": round(engage_mid / total_engagements * 100) if total_engagements > 0 else 0,
+        "long_pct": round(engage_long / total_engagements * 100) if total_engagements > 0 else 0,
+        "avg_distance": avg_engage,
+    }
+
+    # Death timing breakdown
+    total_death_events = death_early + death_mid + death_late
+    death_breakdown = {
+        "early": death_early,
+        "mid": death_mid,
+        "late": death_late,
+        "total": total_death_events,
+        "early_pct": round(death_early / total_death_events * 100) if total_death_events > 0 else 0,
+        "mid_pct": round(death_mid / total_death_events * 100) if total_death_events > 0 else 0,
+        "late_pct": round(death_late / total_death_events * 100) if total_death_events > 0 else 0,
+    }
+
+    # Weapon split
+    total_typed = awp_kills + rifle_kills + pistol_kills
+    weapon_split = {
+        "awp": awp_kills,
+        "rifle": rifle_kills,
+        "pistol": pistol_kills,
+        "other": total_kills - total_typed if total_kills > total_typed else 0,
+        "awp_pct": round(awp_kills / total_typed * 100) if total_typed > 0 else 0,
+        "rifle_pct": round(rifle_kills / total_typed * 100) if total_typed > 0 else 0,
+        "pistol_pct": round(pistol_kills / total_typed * 100) if total_typed > 0 else 0,
+    }
+
+    # Trend (last 10 matches)
+    recent = trend_data[-10:]
+
+    # Coaching insights
+    insights = []
+    if avg_crosshair is not None and avg_crosshair > 10:
+        insights.append("Dein Crosshair-Placement ist zu hoch. Uebe auf Workshop-Maps wie 'Aim Botz' mit bewusstem Head-Level-Tracking.")
+    if avg_cs is not None and avg_cs < 75:
+        insights.append("Dein Counter-Strafe-Score ist niedrig. Uebe im Deathmatch, vor jedem Schuss kurz die Gegentaste zu druecken.")
+    if avg_accuracy is not None and avg_accuracy < 20:
+        insights.append("Deine Accuracy ist unterdurchschnittlich. Konzentriere dich auf weniger, aber praezisere Schuesse.")
+    if burst_pct < 80 and total_spray_kills > 20:
+        insights.append(f"Du sprayed zu viel ({100 - burst_pct:.0f}% Spray-Kills). Uebe kontrollierte Bursts von 3-5 Schuss.")
+    if death_breakdown["early_pct"] > 35 and total_death_events > 30:
+        insights.append(f"{death_breakdown['early_pct']}% deiner Tode sind frueh in der Runde. Ueberdenke deine Positionierung und spiele weniger aggressiv.")
+    if avg_hs is not None and avg_hs >= 55:
+        insights.append(f"Starke Headshot-Rate von {avg_hs}%! Deine Aim-Praezision ist ueberdurchschnittlich.")
+    if avg_cs is not None and avg_cs >= 88:
+        insights.append(f"Exzellentes Counter-Strafing ({avg_cs}%). Deine Bewegungsmechanik ist auf hohem Niveau.")
+
+    return {
+        "has_data": True,
+        "matches_analyzed": n,
+        "avg_crosshair": avg_crosshair,
+        "ch_rating": ch_rating,
+        "avg_recoil": avg_recoil,
+        "avg_cs": avg_cs,
+        "cs_rating": cs_rating,
+        "avg_accuracy": avg_accuracy,
+        "avg_hs": avg_hs,
+        "burst_pct": burst_pct,
+        "spray_burst": spray_burst_total,
+        "spray_spray": spray_spray_total,
+        "engage": engage_breakdown,
+        "deaths": death_breakdown,
+        "weapons": weapon_split,
+        "total_kills": total_kills,
+        "trend": recent,
+        "matches": sorted(match_entries, key=lambda x: x["date"], reverse=True),
+        "insights": insights,
+    }
+
+
+def _build_round_timeline(cfg: dict) -> dict:
+    """Build round-by-round timeline data for all matches."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / subfolder / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    files = sorted(export_dir.glob("*_coach.json"))
+    if not files:
+        return {"has_data": False}
+
+    matches = []
+    agg_side_rounds = {"ct_won": 0, "ct_total": 0, "t_won": 0, "t_total": 0}
+    agg_pistol = {"won": 0, "total": 0}
+    agg_post_plant = {"won": 0, "total": 0}
+    total_comebacks = 0
+    total_chokes = 0
+    kill_timeline_all = []  # kills per round across matches for avg
+
+    for fp in files:
+        try:
+            with open(fp, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+
+        rt = data.get("round_timeline", [])
+        if not rt:
+            continue
+
+        match_info = data.get("match", {})
+        economy = data.get("economy", {})
+        player = data.get("player", {})
+        date_str = match_info.get("date", "")
+        map_name = match_info.get("map", "?")
+        score_own = match_info.get("score_own", 0)
+        score_enemy = match_info.get("score_enemy", 0)
+        result = match_info.get("result", "")
+
+        rounds_data = []
+        running_own = 0
+        running_enemy = 0
+        max_deficit = 0
+        max_lead = 0
+
+        for r in rt:
+            rnum = r.get("round", 0)
+            side = r.get("side", "?")
+            won = r.get("won", False)
+            events = r.get("events", [])
+            pk = r.get("player_kills", 0)
+            died = r.get("player_died", False)
+            died_early = r.get("died_early", False)
+
+            if won:
+                running_own += 1
+            else:
+                running_enemy += 1
+
+            diff = running_own - running_enemy
+            if diff < max_deficit:
+                max_deficit = diff
+            if diff > max_lead:
+                max_lead = diff
+
+            # Classify events
+            has_bomb_plant = any(e.get("type") == "bomb_plant" for e in events)
+            has_bomb_defuse = any(e.get("type") == "bomb_defuse" for e in events)
+            player_planted = any(e.get("type") == "bomb_plant" and e.get("is_self") for e in events)
+            player_defused = any(e.get("type") == "bomb_defuse" and e.get("is_self") for e in events)
+
+            # Determine buy type for this round based on economy data
+            kill_weapons = [e.get("weapon", "") for e in events if e.get("type") == "kill"]
+
+            rounds_data.append({
+                "round": rnum,
+                "side": side,
+                "won": won,
+                "kills": pk,
+                "died": died,
+                "died_early": died_early,
+                "bomb_plant": has_bomb_plant,
+                "bomb_defuse": has_bomb_defuse,
+                "player_planted": player_planted,
+                "player_defused": player_defused,
+                "score_own": running_own,
+                "score_enemy": running_enemy,
+                "weapons": kill_weapons,
+            })
+
+            # Aggregates
+            side_key = side.lower()
+            if side_key in ("ct", "t"):
+                agg_side_rounds[f"{side_key}_total"] += 1
+                if won:
+                    agg_side_rounds[f"{side_key}_won"] += 1
+
+            # Pistol rounds
+            if rnum in (1, 13):
+                agg_pistol["total"] += 1
+                if won:
+                    agg_pistol["won"] += 1
+
+            # Post-plant
+            if has_bomb_plant:
+                agg_post_plant["total"] += 1
+                if (side == "T" and won) or (side == "CT" and not won):
+                    # T planted and won, or CT failed to defuse
+                    pass
+                if side == "T" and won:
+                    agg_post_plant["won"] += 1
+                elif side == "CT" and has_bomb_defuse and won:
+                    agg_post_plant["won"] += 1
+
+            kill_timeline_all.append(pk)
+
+        # Detect comebacks and chokes
+        if max_deficit <= -4 and result == "Sieg":
+            total_comebacks += 1
+        if max_lead >= 4 and result == "Niederlage":
+            total_chokes += 1
+
+        matches.append({
+            "date": date_str,
+            "map": map_name,
+            "score": f"{score_own}:{score_enemy}",
+            "result": result,
+            "total_rounds": len(rounds_data),
+            "rounds": rounds_data,
+            "max_deficit": max_deficit,
+            "max_lead": max_lead,
+        })
+
+    if not matches:
+        return {"has_data": False}
+
+    # Aggregated stats
+    ct_wr = round(agg_side_rounds["ct_won"] / agg_side_rounds["ct_total"] * 100, 1) if agg_side_rounds["ct_total"] > 0 else 0
+    t_wr = round(agg_side_rounds["t_won"] / agg_side_rounds["t_total"] * 100, 1) if agg_side_rounds["t_total"] > 0 else 0
+    pistol_wr = round(agg_pistol["won"] / agg_pistol["total"] * 100, 1) if agg_pistol["total"] > 0 else 0
+    avg_kills_per_round = round(sum(kill_timeline_all) / len(kill_timeline_all), 2) if kill_timeline_all else 0
+
+    # Round performance by number (which rounds are you best/worst at)
+    round_perf = {}
+    for m in matches:
+        for r in m["rounds"]:
+            rn = r["round"]
+            if rn not in round_perf:
+                round_perf[rn] = {"wins": 0, "total": 0, "kills": 0}
+            round_perf[rn]["total"] += 1
+            if r["won"]:
+                round_perf[rn]["wins"] += 1
+            round_perf[rn]["kills"] += r["kills"]
+
+    round_stats = []
+    for rn in sorted(round_perf.keys()):
+        rp = round_perf[rn]
+        if rp["total"] >= 3:
+            round_stats.append({
+                "round": rn,
+                "win_rate": round(rp["wins"] / rp["total"] * 100, 1),
+                "avg_kills": round(rp["kills"] / rp["total"], 2),
+                "total": rp["total"],
+            })
+
+    return {
+        "has_data": True,
+        "matches_count": len(matches),
+        "ct_wr": ct_wr,
+        "t_wr": t_wr,
+        "ct_rounds": agg_side_rounds,
+        "t_rounds": agg_side_rounds,
+        "pistol_wr": pistol_wr,
+        "pistol_stats": agg_pistol,
+        "avg_kpr": avg_kills_per_round,
+        "comebacks": total_comebacks,
+        "chokes": total_chokes,
+        "round_stats": round_stats,
+        "matches": sorted(matches, key=lambda x: x["date"], reverse=True),
     }

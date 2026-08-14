@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Rundenverlauf{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Rundenverlauf</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Runde fuer Runde — dein Match-Verlauf visuell aufbereitet ueber {{ rd.matches_count if rd.has_data else 0 }} Matches.
+</p>
+
+<style>
+    .rv-hero { display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap; }
+    .rv-card {
+        flex: 1; min-width: 130px; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm);
+    }
+    .rv-val { font-family: var(--font-heading); font-size: 22px; font-weight: 700; line-height: 1; }
+    .rv-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .rv-section { margin-bottom: var(--space-5); }
+    .rv-section-title {
+        font-size: 14px; font-weight: 600; margin-bottom: 10px;
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    /* Match selector */
+    .rv-match-select { margin-bottom: var(--space-4); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+    /* Round strip */
+    .rv-strip { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: var(--space-4); }
+    .rv-dot {
+        width: 28px; height: 28px; border-radius: var(--radius-sm);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 10px; font-weight: 700; cursor: default;
+        position: relative; transition: transform 0.1s;
+    }
+    .rv-dot:hover { transform: scale(1.2); z-index: 2; }
+    .rv-dot-win { background: rgba(74,222,128,0.2); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
+    .rv-dot-loss { background: rgba(248,113,113,0.15); color: #f87171; border: 1px solid rgba(248,113,113,0.2); }
+    .rv-dot-half { width: 4px; background: var(--color-neutral-700); border-radius: 2px; align-self: stretch; margin: 0 4px; }
+    .rv-dot-kill { position: absolute; top: -3px; right: -3px; width: 12px; height: 12px; border-radius: 50%; background: var(--color-accent); color: white; font-size: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+    .rv-dot-skull { position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); font-size: 8px; color: #f87171; }
+
+    /* Score graph */
+    .rv-graph-wrap {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        background: var(--color-surface); box-shadow: var(--shadow-sm);
+        margin-bottom: var(--space-5); overflow-x: auto;
+    }
+    .rv-graph { position: relative; height: 200px; min-width: 500px; }
+    .rv-graph-line { position: absolute; bottom: 50%; left: 0; right: 0; height: 1px; background: var(--color-neutral-800); }
+    .rv-graph-svg { width: 100%; height: 100%; }
+
+    /* Round perf table */
+    .rv-perf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 4px; }
+    .rv-perf-cell {
+        text-align: center; padding: 8px 4px; border-radius: var(--radius-sm);
+        background: var(--color-surface);
+    }
+    .rv-perf-rn { font-size: 10px; color: var(--color-neutral-500); }
+    .rv-perf-wr { font-family: var(--font-heading); font-size: 14px; font-weight: 700; }
+    .rv-perf-kpr { font-size: 10px; color: var(--color-neutral-400); }
+
+    /* Match list */
+    .rv-match-list { display: flex; flex-direction: column; gap: 8px; }
+    .rv-match-card {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        background: var(--color-surface); box-shadow: var(--shadow-sm);
+    }
+    .rv-match-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .rv-match-info { font-size: 13px; }
+    .rv-match-score { font-family: var(--font-heading); font-size: 18px; font-weight: 700; }
+
+    .rv-round-detail {
+        display: grid; grid-template-columns: 40px 50px 40px 1fr;
+        gap: 6px; align-items: center; padding: 4px 0;
+        font-size: 12px; border-bottom: 1px solid var(--color-neutral-900);
+    }
+    .rv-round-detail:last-child { border-bottom: none; }
+
+    .rv-sides { display: flex; gap: var(--space-3); margin-bottom: var(--space-5); }
+    .rv-side-card {
+        flex: 1; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .rv-side-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; margin-bottom: 6px; }
+
+    @media (max-width: 768px) {
+        .rv-dot { width: 22px; height: 22px; font-size: 8px; }
+    }
+</style>
+
+{% if not rd.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Rundenverlauf-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- Hero stats -->
+<div class="rv-hero">
+    <div class="rv-card" style="border-top: 3px solid #60a5fa;">
+        <div class="rv-val" style="color:#60a5fa;">{{ rd.ct_wr }}%</div>
+        <div class="rv-lbl">CT Win-Rate</div>
+    </div>
+    <div class="rv-card" style="border-top: 3px solid #fbbf24;">
+        <div class="rv-val" style="color:#fbbf24;">{{ rd.t_wr }}%</div>
+        <div class="rv-lbl">T Win-Rate</div>
+    </div>
+    <div class="rv-card" style="border-top: 3px solid #4ade80;">
+        <div class="rv-val {% if rd.pistol_wr >= 50 %}win{% else %}loss{% endif %}">{{ rd.pistol_wr }}%</div>
+        <div class="rv-lbl">Pistol-Runden</div>
+        <div style="font-size:10px;color:var(--color-neutral-500);margin-top:2px;">{{ rd.pistol_stats.won }}/{{ rd.pistol_stats.total }}</div>
+    </div>
+    <div class="rv-card">
+        <div class="rv-val">{{ rd.avg_kpr }}</div>
+        <div class="rv-lbl">Avg Kills/Runde</div>
+    </div>
+    <div class="rv-card" style="border-top: 3px solid var(--color-accent);">
+        <div class="rv-val" style="color:var(--color-accent);">{{ rd.matches_count }}</div>
+        <div class="rv-lbl">Matches</div>
+    </div>
+</div>
+
+<!-- Side comparison -->
+<div class="rv-sides">
+    <div class="rv-side-card" style="border-top: 3px solid #60a5fa;">
+        <div class="rv-side-label" style="color:#60a5fa;">CT-Side</div>
+        <div class="rv-val {% if rd.ct_wr >= 55 %}win{% elif rd.ct_wr < 45 %}loss{% endif %}" style="font-size:20px;">{{ rd.ct_wr }}%</div>
+        <div style="font-size:11px;color:var(--color-neutral-500);margin-top:4px;">{{ rd.ct_rounds.ct_won }}/{{ rd.ct_rounds.ct_total }} Runden</div>
+    </div>
+    <div class="rv-side-card" style="border-top: 3px solid #fbbf24;">
+        <div class="rv-side-label" style="color:#fbbf24;">T-Side</div>
+        <div class="rv-val {% if rd.t_wr >= 55 %}win{% elif rd.t_wr < 45 %}loss{% endif %}" style="font-size:20px;">{{ rd.t_wr }}%</div>
+        <div style="font-size:11px;color:var(--color-neutral-500);margin-top:4px;">{{ rd.ct_rounds.t_won }}/{{ rd.ct_rounds.t_total }} Runden</div>
+    </div>
+    {% if rd.comebacks > 0 or rd.chokes > 0 %}
+    <div class="rv-side-card">
+        <div class="rv-side-label" style="color:#4ade80;">Comebacks</div>
+        <div class="rv-val win" style="font-size:20px;">{{ rd.comebacks }}</div>
+        <div style="font-size:11px;color:var(--color-neutral-500);margin-top:8px;">Chokes</div>
+        <div class="rv-val loss" style="font-size:18px;">{{ rd.chokes }}</div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Round Performance Heatmap -->
+{% if rd.round_stats %}
+<div class="rv-section">
+    <div class="rv-section-title">
+        <i data-lucide="grid-3x3" style="width:16px;height:16px;color:var(--color-accent);"></i>
+        Win-Rate pro Runde
+        <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">— Runden mit mind. 3 Datenpunkten</span>
+    </div>
+    <div class="rv-perf-grid">
+        {% for rs in rd.round_stats %}
+        <div class="rv-perf-cell" style="{% if rs.win_rate >= 60 %}border-bottom:2px solid #4ade80;{% elif rs.win_rate < 40 %}border-bottom:2px solid #f87171;{% else %}border-bottom:2px solid var(--color-neutral-700);{% endif %}">
+            <div class="rv-perf-rn">R{{ rs.round }}</div>
+            <div class="rv-perf-wr {% if rs.win_rate >= 60 %}win{% elif rs.win_rate < 40 %}loss{% endif %}">{{ rs.win_rate|round(0)|int }}%</div>
+            <div class="rv-perf-kpr">{{ rs.avg_kills }}k</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Match selector & detail -->
+<div class="rv-section">
+    <div class="rv-section-title">
+        <i data-lucide="play" style="width:16px;height:16px;color:var(--color-accent);"></i>
+        Match-Verlauf
+    </div>
+    <div class="rv-match-select">
+        <label style="font-size:13px;color:var(--color-neutral-400);">Match:</label>
+        <select class="input" id="rv-match-select" style="max-width:350px;font-size:13px;">
+            {% for m in rd.matches %}
+            <option value="{{ loop.index0 }}">{{ m.date }} — {{ m.map }} ({{ m.score }}) {% if m.result == 'Sieg' %}W{% elif m.result == 'Niederlage' %}L{% else %}D{% endif %}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    {% for m in rd.matches %}
+    <div class="rv-match-detail" data-match-idx="{{ loop.index0 }}" {% if loop.index0 > 0 %}style="display:none;"{% endif %}>
+        <div class="rv-match-card">
+            <div class="rv-match-head">
+                <div class="rv-match-info">
+                    <strong>{{ m.map }}</strong>
+                    <span class="tag tag-{% if m.result == 'Sieg' %}win{% elif m.result == 'Niederlage' %}loss{% else %}draw{% endif %}" style="font-size:10px;margin-left:6px;">{{ m.result }}</span>
+                    <span style="color:var(--color-neutral-500);margin-left:6px;font-size:12px;">{{ m.date }}</span>
+                </div>
+                <div class="rv-match-score">{{ m.score }}</div>
+            </div>
+
+            <!-- Round strip -->
+            <div class="rv-strip">
+                {% for r in m.rounds %}
+                {% if r.round == 13 %}<div class="rv-dot-half" title="Seitenwechsel"></div>{% endif %}
+                <div class="rv-dot rv-dot-{% if r.won %}win{% else %}loss{% endif %}" title="R{{ r.round }} ({{ r.side }}) — {{ r.kills }}K{% if r.died %} +Tod{% endif %}{% if r.bomb_plant %} Bomb{% endif %}">
+                    {{ r.round }}
+                    {% if r.kills > 0 %}<span class="rv-dot-kill">{{ r.kills }}</span>{% endif %}
+                    {% if r.died %}<span class="rv-dot-skull">&#x2620;</span>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Score graph SVG -->
+            <div class="rv-graph-wrap">
+                <svg class="rv-graph-svg" viewBox="0 0 {{ m.total_rounds * 30 + 20 }} 160" preserveAspectRatio="xMinYMid meet">
+                    <!-- Center line -->
+                    <line x1="10" y1="80" x2="{{ m.total_rounds * 30 + 10 }}" y2="80" stroke="var(--color-neutral-800)" stroke-width="1" stroke-dasharray="4"/>
+                    <!-- Score difference line -->
+                    {% set prev_x = namespace(v=10) %}
+                    {% set prev_y = namespace(v=80) %}
+                    {% for r in m.rounds %}
+                    {% set diff = r.score_own - r.score_enemy %}
+                    {% set x = 10 + loop.index * 30 %}
+                    {% set y = 80 - diff * 8 %}
+                    <line x1="{{ prev_x.v }}" y1="{{ prev_y.v }}" x2="{{ x }}" y2="{{ y }}" stroke="{% if diff > 0 %}#4ade80{% elif diff < 0 %}#f87171{% else %}var(--color-neutral-500){% endif %}" stroke-width="2"/>
+                    <circle cx="{{ x }}" cy="{{ y }}" r="4" fill="{% if r.won %}#4ade80{% else %}#f87171{% endif %}" stroke="var(--color-bg)" stroke-width="1"/>
+                    {% if r.kills > 0 %}<text x="{{ x }}" y="{{ y - 8 }}" text-anchor="middle" fill="var(--color-accent)" font-size="9" font-weight="600">{{ r.kills }}K</text>{% endif %}
+                    {% set prev_x.v = x %}
+                    {% set prev_y.v = y %}
+                    {% endfor %}
+                    <!-- Round labels -->
+                    {% for r in m.rounds %}
+                    {% set x = 10 + loop.index * 30 %}
+                    <text x="{{ x }}" y="155" text-anchor="middle" fill="var(--color-neutral-600)" font-size="8">{{ r.round }}</text>
+                    {% endfor %}
+                </svg>
+            </div>
+
+            <!-- Round-by-round detail -->
+            <div style="max-height:400px;overflow-y:auto;">
+                {% for r in m.rounds %}
+                <div class="rv-round-detail">
+                    <div style="font-weight:600;{% if r.won %}color:#4ade80;{% else %}color:#f87171;{% endif %}">R{{ r.round }}</div>
+                    <div>
+                        <span style="font-size:10px;font-weight:600;{% if r.side == 'CT' %}color:#60a5fa;{% else %}color:#fbbf24;{% endif %}">{{ r.side }}</span>
+                    </div>
+                    <div style="text-align:center;">
+                        <span style="font-weight:600;">{{ r.score_own }}:{{ r.score_enemy }}</span>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        {% if r.kills > 0 %}<span style="color:#4ade80;font-weight:600;">{{ r.kills }}K</span>{% endif %}
+                        {% if r.died %}<span style="color:#f87171;font-size:11px;">&#x2620; Tod{% if r.died_early %} (frueh){% endif %}</span>{% endif %}
+                        {% if r.bomb_plant %}<span style="color:#fbbf24;font-size:10px;">&#x1f4a3;</span>{% endif %}
+                        {% if r.bomb_defuse %}<span style="color:#60a5fa;font-size:10px;">&#x1f6e1;</span>{% endif %}
+                        {% if r.player_planted %}<span style="color:#fbbf24;font-size:10px;font-weight:600;">(planted)</span>{% endif %}
+                        {% if r.player_defused %}<span style="color:#60a5fa;font-size:10px;font-weight:600;">(defused)</span>{% endif %}
+                        {% if r.weapons %}<span style="font-size:10px;color:var(--color-neutral-500);">{{ r.weapons|join(', ') }}</span>{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if rd.has_data %}
+<script>
+(function() {
+    var sel = document.getElementById('rv-match-select');
+    if (!sel) return;
+    sel.addEventListener('change', function() {
+        var idx = parseInt(this.value, 10);
+        document.querySelectorAll('.rv-match-detail').forEach(function(el) {
+            el.style.display = parseInt(el.dataset.matchIdx, 10) === idx ? '' : 'none';
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}
