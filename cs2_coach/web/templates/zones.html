@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Positions-Zonen{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Positions-Zonen</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Wo auf der Map bist du stark, wo stirbst du zu oft? Zonen-Effizienz pro Map.
+</p>
+
+<style>
+    .zn-hero {
+        display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap;
+    }
+    .zn-stat-card {
+        flex: 1; min-width: 130px; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .zn-stat-val { font-family: var(--font-heading); font-size: 24px; font-weight: 700; line-height: 1; }
+    .zn-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .zn-map-tabs {
+        display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: var(--space-4);
+    }
+    .zn-map-tab {
+        padding: 6px 14px; border-radius: var(--radius-md); font-size: 12px; font-weight: 600;
+        background: var(--color-surface); border: 1px solid var(--color-neutral-700);
+        cursor: pointer; text-transform: capitalize; transition: all 0.15s;
+        color: var(--color-neutral-400);
+    }
+    .zn-map-tab:hover { border-color: var(--color-neutral-500); color: var(--color-neutral-200); }
+    .zn-map-tab.active {
+        background: var(--color-accent); border-color: var(--color-accent);
+        color: #fff;
+    }
+
+    .zn-map-panel { display: none; }
+    .zn-map-panel.active { display: block; }
+
+    .zn-map-header {
+        display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-4);
+    }
+    .zn-map-kd {
+        font-family: var(--font-heading); font-size: 32px; font-weight: 700;
+    }
+    .zn-map-meta { font-size: 12px; color: var(--color-neutral-500); }
+
+    .zn-zone-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .zn-zone-table th {
+        text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+        color: var(--color-neutral-500); padding: 8px 10px; border-bottom: 1px solid var(--color-neutral-800);
+    }
+    .zn-zone-table td {
+        padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .zn-zone-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .zn-zone-name { font-weight: 600; }
+    .zn-kd-bar {
+        display: flex; align-items: center; gap: 8px;
+    }
+    .zn-kd-track { width: 80px; height: 6px; background: var(--color-neutral-800); border-radius: 3px; overflow: hidden; }
+    .zn-kd-fill { height: 100%; border-radius: 3px; }
+    .zn-kd-val { font-family: var(--font-heading); font-weight: 700; font-size: 15px; min-width: 40px; }
+
+    .zn-pct-badge {
+        display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px;
+        border-radius: 10px; background: rgba(255,255,255,0.06);
+    }
+
+    .zn-tips { margin-bottom: var(--space-5); }
+    .zn-tip {
+        display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+        border-radius: var(--radius-md); margin-bottom: var(--space-2); font-size: 13px;
+    }
+    .zn-tip-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.20); color: #4ade80; }
+    .zn-tip-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.20); color: #fbbf24; }
+    .zn-tip-info { background: rgba(145,132,217,0.08); border: 1px solid rgba(145,132,217,0.20); color: var(--color-accent); }
+
+    .zn-chart-wrap { position: relative; height: 260px; margin-top: var(--space-3); }
+    .zn-chart-wrap canvas { position: absolute; inset: 0; }
+
+    @media (max-width: 700px) {
+        .zn-hero { flex-direction: column; }
+        .zn-kd-track { width: 50px; }
+    }
+</style>
+
+{% if not zd.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Positions-Daten vorhanden. Analysiere Demos erneut — aeltere Exporte enthalten keine Positionsdaten.</p>
+</div>
+{% else %}
+
+<!-- Hero Stats -->
+<div class="zn-hero">
+    <div class="card elev-sm zn-stat-card">
+        <div class="zn-stat-val" style="color: var(--color-accent);">{{ zd.map_list|length }}</div>
+        <div class="zn-stat-lbl">Maps</div>
+    </div>
+    <div class="card elev-sm zn-stat-card">
+        <div class="zn-stat-val">{{ zd.total_matches }}</div>
+        <div class="zn-stat-lbl">Matches</div>
+    </div>
+    <div class="card elev-sm zn-stat-card">
+        <div class="zn-stat-val">{{ zd.total_positions }}</div>
+        <div class="zn-stat-lbl">Duelle analysiert</div>
+    </div>
+    {% set all_kills = namespace(v=0) %}
+    {% set all_deaths = namespace(v=0) %}
+    {% for m, md in zd.maps.items() %}
+        {% set all_kills.v = all_kills.v + md.kills %}
+        {% set all_deaths.v = all_deaths.v + md.deaths %}
+    {% endfor %}
+    <div class="card elev-sm zn-stat-card">
+        <div class="zn-stat-val {% if all_deaths.v and all_kills.v / all_deaths.v >= 1.2 %}win{% elif all_deaths.v and all_kills.v / all_deaths.v >= 0.9 %}draw{% else %}loss{% endif %}">
+            {{ (all_kills.v / all_deaths.v)|round(2) if all_deaths.v else '—' }}
+        </div>
+        <div class="zn-stat-lbl">Gesamt K/D</div>
+    </div>
+</div>
+
+<!-- Tips -->
+{% if zd.tips %}
+<div class="zn-tips">
+    {% for tip in zd.tips %}
+    <div class="zn-tip zn-tip-{{ tip.type }}">
+        <i data-lucide="{% if tip.type == 'success' %}check-circle{% elif tip.type == 'info' %}info{% else %}alert-triangle{% endif %}" style="width:16px;height:16px;flex-shrink:0;"></i>
+        <span>{{ tip.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Map Selector Tabs -->
+<div class="card-kicker" style="margin-bottom: 8px;">Map auswaehlen</div>
+<div class="zn-map-tabs">
+    {% for map_name in zd.map_list %}
+    <div class="zn-map-tab {% if map_name == zd.default_map %}active{% endif %}" data-map="{{ map_name }}">
+        {{ map_name }}
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Per-Map Panels -->
+{% for map_name in zd.map_list %}
+{% set md = zd.maps[map_name] %}
+<div class="zn-map-panel {% if map_name == zd.default_map %}active{% endif %}" id="zn-panel-{{ map_name }}">
+
+    <div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-4);">
+        <div class="zn-map-header">
+            <div>
+                <div class="zn-map-kd {% if md.kd >= 1.2 %}win{% elif md.kd >= 0.9 %}draw{% else %}loss{% endif %}">{{ md.kd }}</div>
+                <div class="zn-map-meta">K/D auf {{ map_name|capitalize }}</div>
+            </div>
+            <div style="margin-left: auto; text-align: right;">
+                <div style="font-size: 13px; color: var(--color-neutral-400);">{{ md.kills }}K / {{ md.deaths }}D</div>
+                <div style="font-size: 11px; color: var(--color-neutral-600);">{{ md.zones|length }} Zonen erfasst</div>
+            </div>
+        </div>
+
+        <!-- Zone Table -->
+        <table class="zn-zone-table">
+            <thead>
+                <tr>
+                    <th>Zone</th>
+                    <th>K/D</th>
+                    <th>Kills</th>
+                    <th>Deaths</th>
+                    <th>HS%</th>
+                    <th>Top Kill-Waffe</th>
+                    <th>Getoetet durch</th>
+                    <th>Anteil</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set map_total = md.kills + md.deaths %}
+                {% for z in md.zones %}
+                <tr>
+                    <td class="zn-zone-name">{{ z.name }}</td>
+                    <td>
+                        <div class="zn-kd-bar">
+                            <div class="zn-kd-val {% if z.kd >= 1.2 %}win{% elif z.kd >= 0.9 %}draw{% else %}loss{% endif %}">{{ z.kd }}</div>
+                            {% set kd_width = [z.kd / 3.0 * 100, 100]|min %}
+                            <div class="zn-kd-track">
+                                <div class="zn-kd-fill" style="width: {{ kd_width|round }}%; background: {% if z.kd >= 1.2 %}#4ade80{% elif z.kd >= 0.9 %}#fbbf24{% else %}#f87171{% endif %};"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="color: #4ade80;">{{ z.kills }}</td>
+                    <td style="color: #f87171;">{{ z.deaths }}</td>
+                    <td>{{ z.hs_pct }}%</td>
+                    <td style="font-size: 11px; color: var(--color-neutral-400);">{{ z.top_kill_weapon }}</td>
+                    <td style="font-size: 11px; color: var(--color-neutral-400);">{{ z.top_death_weapon }}</td>
+                    <td>
+                        {% if map_total %}
+                        <span class="zn-pct-badge">{{ (z.total / map_total * 100)|round(1) }}%</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Zone K/D Bar Chart -->
+    {% if md.zones|length >= 2 %}
+    <div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
+        <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">Zonen-Effizienz</div>
+        <div class="zn-chart-wrap">
+            <canvas id="zn-chart-{{ map_name }}"></canvas>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if zd.has_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    // Tab switching
+    var tabs = document.querySelectorAll('.zn-map-tab');
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            tabs.forEach(function(t) { t.classList.remove('active'); });
+            tab.classList.add('active');
+            document.querySelectorAll('.zn-map-panel').forEach(function(p) { p.classList.remove('active'); });
+            var panel = document.getElementById('zn-panel-' + tab.dataset.map);
+            if (panel) panel.classList.add('active');
+        });
+    });
+
+    // Per-map bar charts
+    var mapsData = {{ zd.maps | tojson }};
+    Object.keys(mapsData).forEach(function(mapName) {
+        var canvas = document.getElementById('zn-chart-' + mapName);
+        if (!canvas) return;
+        var zones = mapsData[mapName].zones.filter(function(z) { return z.total >= 3; });
+        if (zones.length < 2) return;
+
+        var labels = zones.map(function(z) { return z.name; });
+        var kills = zones.map(function(z) { return z.kills; });
+        var deaths = zones.map(function(z) { return -z.deaths; });
+
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Kills',
+                        data: kills,
+                        backgroundColor: 'rgba(74, 222, 128, 0.7)',
+                        borderRadius: 3,
+                    },
+                    {
+                        label: 'Deaths',
+                        data: deaths,
+                        backgroundColor: 'rgba(248, 113, 113, 0.7)',
+                        borderRadius: 3,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: {
+                        labels: { color: '#9a9dae', font: { family: 'Inter', size: 11 }, usePointStyle: true, pointStyle: 'circle' }
+                    },
+                    tooltip: {
+                        backgroundColor: '#232532', borderColor: '#3f424d', borderWidth: 1,
+                        titleColor: '#e9e9ed', bodyColor: '#e9e9ed',
+                        callbacks: {
+                            label: function(ctx) {
+                                return ctx.dataset.label + ': ' + Math.abs(ctx.parsed.x);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: '#75798c', font: { size: 10, family: 'Inter' },
+                            callback: function(v) { return Math.abs(v); }
+                        },
+                        grid: { color: 'rgba(255,255,255,0.04)' },
+                    },
+                    y: {
+                        ticks: { color: '#9a9dae', font: { size: 11, family: 'Inter' } },
+                        grid: { display: false },
+                    }
+                }
+            }
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

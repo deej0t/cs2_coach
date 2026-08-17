@@ -113,4 +113,152 @@
 </div>
 
 {% endif %}
+
+<!-- ── Opponent Strength Analysis ── -->
+{% if ostr and ostr.has_data %}
+<style>
+    .os-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+    .os-card { padding: var(--space-4) !important; border-top: 3px solid var(--color-neutral-700); text-align: center; }
+    .os-card-label { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .os-card-sub { font-size: 10px; color: var(--color-neutral-500); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; }
+    .os-stat-row { display: flex; justify-content: space-around; gap: 8px; }
+    .os-stat { text-align: center; }
+    .os-stat-val { font-family: var(--font-heading); font-size: 20px; font-weight: 700; line-height: 1.1; }
+    .os-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); margin-top: 2px; }
+
+    .os-tips { margin-bottom: var(--space-5); }
+    .os-tip {
+        display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+        border-radius: var(--radius-md); margin-bottom: var(--space-2); font-size: 13px;
+    }
+    .os-tip-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.20); color: #4ade80; }
+    .os-tip-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.20); color: #fbbf24; }
+    .os-tip-info { background: rgba(145,132,217,0.08); border: 1px solid rgba(145,132,217,0.20); color: var(--color-accent); }
+
+    .os-chart-wrap { position: relative; height: 220px; }
+    .os-chart-wrap canvas { position: absolute; inset: 0; }
+</style>
+
+<div class="card-kicker" style="margin-bottom: 8px;">Gegner-Staerke — Deine Performance nach Gegner-Level</div>
+
+{% if ostr.tips %}
+<div class="os-tips">
+    {% for tip in ostr.tips %}
+    <div class="os-tip os-tip-{{ tip.type }}">
+        <i data-lucide="{% if tip.type == 'success' %}check-circle{% elif tip.type == 'info' %}info{% else %}alert-triangle{% endif %}" style="width:16px;height:16px;flex-shrink:0;"></i>
+        <span>{{ tip.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="os-grid">
+    {% for t in ostr.tiers %}
+    <div class="card elev-sm os-card" style="border-top-color: {{ t.color }};">
+        <div class="os-card-label" style="color: {{ t.color }};">{{ t.label }}</div>
+        <div class="os-card-sub">Gegner K/D {{ t.threshold }} (Ø {{ t.avg_enemy_kd }})</div>
+        <div class="os-stat-row">
+            <div class="os-stat">
+                <div class="os-stat-val {% if t.win_rate >= 55 %}win{% elif t.win_rate >= 45 %}draw{% else %}loss{% endif %}">{{ t.win_rate }}%</div>
+                <div class="os-stat-lbl">Win-Rate</div>
+            </div>
+            <div class="os-stat">
+                <div class="os-stat-val {% if t.avg_kd >= 1.2 %}win{% elif t.avg_kd >= 0.9 %}draw{% else %}loss{% endif %}">{{ t.avg_kd }}</div>
+                <div class="os-stat-lbl">Dein K/D</div>
+            </div>
+            <div class="os-stat">
+                <div class="os-stat-val">{{ t.avg_adr }}</div>
+                <div class="os-stat-lbl">Dein ADR</div>
+            </div>
+            <div class="os-stat">
+                <div class="os-stat-val">{{ t.matches }}</div>
+                <div class="os-stat-lbl">Matches</div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if ostr.tiers|length >= 2 %}
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
+    <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">Performance nach Gegner-Staerke</div>
+    <div class="os-chart-wrap">
+        <canvas id="os-chart"></canvas>
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if ostr and ostr.has_data and ostr.tiers|length >= 2 %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var tiers = {{ ostr.tiers | tojson }};
+    var labels = tiers.map(function(t) { return t.label + ' (' + t.threshold + ')'; });
+
+    new Chart(document.getElementById('os-chart'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Win-Rate %',
+                    data: tiers.map(function(t) { return t.win_rate; }),
+                    backgroundColor: tiers.map(function(t) { return t.color + '99'; }),
+                    borderRadius: 3,
+                    yAxisID: 'y',
+                },
+                {
+                    label: 'Dein K/D',
+                    data: tiers.map(function(t) { return t.avg_kd; }),
+                    type: 'line',
+                    borderColor: '#9184d9',
+                    backgroundColor: 'rgba(145,132,217,0.1)',
+                    borderWidth: 2,
+                    pointRadius: 5,
+                    pointBackgroundColor: '#9184d9',
+                    yAxisID: 'y1',
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#9a9dae', font: { family: 'Inter', size: 11 }, usePointStyle: true, pointStyle: 'circle' }
+                },
+                tooltip: {
+                    backgroundColor: '#232532', borderColor: '#3f424d', borderWidth: 1,
+                    titleColor: '#e9e9ed', bodyColor: '#e9e9ed',
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#9a9dae', font: { size: 11, family: 'Inter' } },
+                    grid: { display: false },
+                },
+                y: {
+                    position: 'left',
+                    min: 0, max: 100,
+                    ticks: { color: '#75798c', font: { size: 10, family: 'Inter' }, callback: function(v) { return v + '%'; } },
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                    title: { display: true, text: 'Win-Rate', color: '#75798c', font: { size: 10 } },
+                },
+                y1: {
+                    position: 'right',
+                    min: 0,
+                    ticks: { color: '#9184d9', font: { size: 10, family: 'Inter' } },
+                    grid: { display: false },
+                    title: { display: true, text: 'K/D', color: '#9184d9', font: { size: 10 } },
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}

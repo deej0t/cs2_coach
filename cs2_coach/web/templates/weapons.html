@@ -35,6 +35,14 @@
     .sc-green { color: #4ade80; }
     .sc-yellow { color: #fbbf24; }
     .sc-red { color: #f87171; }
+
+    @media (max-width: 600px) {
+        .wp-grid { grid-template-columns: 1fr; }
+        .wp-stats { grid-template-columns: repeat(4, 1fr); gap: 2px; }
+        .wp-stat-val { font-size: 14px; }
+        .wp-stat { padding: 4px 1px; }
+        .wp-name { font-size: 14px; }
+    }
 </style>
 
 {% set max_kills = weapons[0].kills if weapons else 1 %}

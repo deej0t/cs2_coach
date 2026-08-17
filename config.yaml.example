@@ -1,0 +1,15 @@
+# CS2-Coach Konfiguration
+# Kopiere diese Datei nach config.yaml und trage deine Werte ein.
+ai_model: ''
+ai_provider: ollama
+coach_subfolder: CS2-Coach
+cs2_auth_token: ''
+demo_folder: ''
+discord_webhook: ''
+gemini_api_key: ''
+language: de
+obsidian_vault_path: ''
+ollama_url: http://192.168.188.71:11434
+player_name: ''
+steam_api_key: ''
+steam_id: ''

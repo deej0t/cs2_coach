@@ -44,6 +44,13 @@
     .add-goal-form { display: flex; gap: var(--space-2); align-items: end; flex-wrap: wrap; }
     .add-goal-form select, .add-goal-form input { background: var(--color-surface); border: 1px solid var(--color-neutral-700); color: var(--color-text); padding: 6px 10px; border-radius: var(--radius-sm); font-size: 13px; }
     .add-goal-form label { font-size: 11px; color: var(--color-neutral-500); display: block; margin-bottom: 2px; }
+
+    @media (max-width: 600px) {
+        .rec-grid { grid-template-columns: repeat(2, 1fr); }
+        .rec-val { font-size: 20px; }
+        .add-goal-form { flex-direction: column; }
+        .add-goal-form select, .add-goal-form input { width: 100%; }
+    }
 </style>
 
 <!-- ══════ Personal Records ══════ -->

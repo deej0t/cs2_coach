@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — AI Chat{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<style>
+    .ch-layout { display: flex; flex-direction: column; height: calc(100vh - 120px); min-height: 400px; }
+    .ch-header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); flex-shrink: 0; }
+    .ch-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; border-radius: 20px; }
+    .ch-status-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .ch-status.online { background: rgba(74,222,128,0.1); color: #4ade80; }
+    .ch-status.online .ch-status-dot { background: #4ade80; }
+    .ch-status.offline { background: rgba(248,113,113,0.1); color: #f87171; }
+    .ch-status.offline .ch-status-dot { background: #f87171; }
+    .ch-provider { font-size: 11px; color: var(--color-neutral-500); padding: 3px 10px; background: var(--color-surface); border-radius: 20px; }
+
+    .ch-messages { flex: 1; overflow-y: auto; padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-3); background: var(--color-bg); border-radius: var(--radius-md); border: 1px solid var(--color-divider); }
+    .ch-msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.6; word-wrap: break-word; }
+    .ch-msg-user { align-self: flex-end; background: var(--color-accent); color: #fff; border-bottom-right-radius: 4px; }
+    .ch-msg-ai { align-self: flex-start; background: var(--color-surface); border: 1px solid var(--color-divider); border-bottom-left-radius: 4px; }
+    .ch-msg-ai p { margin: 0 0 8px; }
+    .ch-msg-ai p:last-child { margin-bottom: 0; }
+    .ch-msg-ai strong { color: var(--color-accent); }
+    .ch-msg-ai code { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+    .ch-msg-system { align-self: center; background: transparent; color: var(--color-neutral-500); font-size: 12px; font-style: italic; padding: 4px 12px; }
+    .ch-msg-thinking { align-self: flex-start; background: var(--color-surface); border: 1px solid var(--color-divider); border-bottom-left-radius: 4px; color: var(--color-neutral-400); }
+    .ch-msg-thinking .ch-dots { display: inline-flex; gap: 4px; }
+    .ch-msg-thinking .ch-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--color-neutral-500); animation: ch-bounce 1.4s infinite ease-in-out; }
+    .ch-msg-thinking .ch-dots span:nth-child(2) { animation-delay: 0.16s; }
+    .ch-msg-thinking .ch-dots span:nth-child(3) { animation-delay: 0.32s; }
+    @keyframes ch-bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+    .ch-input-bar { display: flex; gap: var(--space-2); margin-top: var(--space-3); flex-shrink: 0; }
+    .ch-input { flex: 1; min-height: 44px; padding: 10px 14px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); font-size: 14px; font-family: inherit; resize: none; outline: none; transition: border-color 0.15s; }
+    .ch-input:focus { border-color: var(--color-accent); }
+    .ch-send { min-width: 44px; min-height: 44px; padding: 0 16px; background: var(--color-accent); color: #fff; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 14px; font-weight: 500; transition: opacity 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .ch-send:hover { opacity: 0.9; }
+    .ch-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .ch-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--space-2); flex-shrink: 0; }
+    .ch-suggestion { padding: 6px 12px; font-size: 12px; border: 1px solid var(--color-divider); background: var(--color-surface); color: var(--color-neutral-400); cursor: pointer; border-radius: 20px; transition: all 0.15s; }
+    .ch-suggestion:hover { border-color: var(--color-accent); color: var(--color-text); }
+
+    @media (max-width: 600px) {
+        .ch-layout { height: calc(100vh - 100px); }
+        .ch-msg { max-width: 95%; font-size: 13px; padding: 8px 12px; }
+        .ch-suggestions { gap: 4px; }
+        .ch-suggestion { font-size: 11px; padding: 4px 10px; }
+    }
+</style>
+
+<div class="ch-layout">
+    <!-- Header -->
+    <div class="ch-header">
+        <h2 style="margin: 0;">AI Coach</h2>
+        {% set provider = config.get('ai_provider', 'ollama') %}
+        {% if provider == 'ollama' %}
+            {% if ollama_status.online %}
+                <span class="ch-status online"><span class="ch-status-dot"></span> Ollama Online</span>
+                {% if ollama_status.models %}
+                {% set active_model = config.get('ai_model', '') or ollama_status.models[0] %}
+                <span class="ch-provider" title="Verfuegbar: {{ ollama_status.models|join(', ') }}">{{ active_model }}</span>
+                {% endif %}
+            {% else %}
+                <span class="ch-status offline"><span class="ch-status-dot"></span> Ollama Offline</span>
+                <span class="ch-provider">{{ config.get('ollama_url', 'http://192.168.188.71:11434') }}</span>
+            {% endif %}
+        {% else %}
+            <span class="ch-status online"><span class="ch-status-dot"></span> Gemini</span>
+            <span class="ch-provider">{{ config.get('ai_model', '') or 'gemini-2.0-flash' }}</span>
+        {% endif %}
+    </div>
+
+    <!-- Messages -->
+    <div class="ch-messages" id="ch-messages">
+        <div class="ch-msg ch-msg-system">
+            Frag mich etwas ueber deine CS2-Performance. Ich kenne alle deine analysierten Demos.
+        </div>
+    </div>
+
+    <!-- Suggestions -->
+    <div class="ch-suggestions" id="ch-suggestions">
+        <button class="ch-suggestion" data-q="Wie ist meine aktuelle Form?">Aktuelle Form?</button>
+        <button class="ch-suggestion" data-q="Was sind meine groessten Schwaechen?">Schwaechen?</button>
+        <button class="ch-suggestion" data-q="Was soll ich heute trainieren?">Training?</button>
+        <button class="ch-suggestion" data-q="Warum sterbe ich so oft?">Warum sterbe ich?</button>
+        <button class="ch-suggestion" data-q="Auf welcher Map bin ich am besten?">Beste Map?</button>
+        <button class="ch-suggestion" data-q="Gib mir einen kompletten Analyse-Report">Voller Report</button>
+    </div>
+
+    <!-- Input -->
+    <div class="ch-input-bar">
+        <textarea class="ch-input" id="ch-input" rows="1" placeholder="Frag deinen AI Coach..." autofocus></textarea>
+        <button class="ch-send" id="ch-send" onclick="sendMessage()">
+            <i data-lucide="send" style="width:18px;height:18px;"></i>
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var messagesEl = document.getElementById('ch-messages');
+    var inputEl = document.getElementById('ch-input');
+    var sendBtn = document.getElementById('ch-send');
+    var suggestionsEl = document.getElementById('ch-suggestions');
+    var history = []; // {role, content}
+    var streaming = false;
+
+    // Auto-resize textarea
+    inputEl.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+
+    // Enter to send (Shift+Enter for newline)
+    inputEl.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    // Suggestion buttons
+    document.querySelectorAll('.ch-suggestion').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            inputEl.value = this.dataset.q;
+            sendMessage();
+        });
+    });
+
+    window.sendMessage = function() {
+        var text = inputEl.value.trim();
+        if (!text || streaming) return;
+
+        // Add user message
+        addMessage('user', text);
+        history.push({role: 'user', content: text});
+        inputEl.value = '';
+        inputEl.style.height = 'auto';
+
+        // Hide suggestions after first message
+        suggestionsEl.style.display = 'none';
+
+        // Show thinking indicator
+        var thinkingEl = document.createElement('div');
+        thinkingEl.className = 'ch-msg ch-msg-thinking';
+        thinkingEl.innerHTML = '<div class="ch-dots"><span></span><span></span><span></span></div>';
+        messagesEl.appendChild(thinkingEl);
+        scrollToBottom();
+
+        streaming = true;
+        sendBtn.disabled = true;
+
+        // SSE request
+        fetch('{{ url_for("api_chat") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({messages: history}),
+        }).then(function(response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder();
+            var aiText = '';
+            var aiMsgEl = null;
+            var buffer = '';
+
+            function processChunk(result) {
+                if (result.done) {
+                    finishStream(aiText);
+                    return;
+                }
+                buffer += decoder.decode(result.value, {stream: true});
+                var lines = buffer.split('\n');
+                buffer = lines.pop(); // keep incomplete line
+
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim();
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        var data = JSON.parse(line.substring(6));
+                        if (data.done) {
+                            finishStream(aiText);
+                            return;
+                        }
+                        if (data.text) {
+                            if (!aiMsgEl) {
+                                // Remove thinking indicator
+                                if (thinkingEl.parentNode) thinkingEl.remove();
+                                aiMsgEl = document.createElement('div');
+                                aiMsgEl.className = 'ch-msg ch-msg-ai';
+                                messagesEl.appendChild(aiMsgEl);
+                            }
+                            aiText += data.text;
+                            aiMsgEl.innerHTML = renderMarkdown(aiText);
+                            scrollToBottom();
+                        }
+                    } catch(e) {}
+                }
+                return reader.read().then(processChunk);
+            }
+
+            return reader.read().then(processChunk);
+        }).catch(function(err) {
+            if (thinkingEl.parentNode) thinkingEl.remove();
+            addMessage('system', 'Fehler: ' + err.message);
+            streaming = false;
+            sendBtn.disabled = false;
+        });
+    };
+
+    function finishStream(text) {
+        if (text) {
+            history.push({role: 'assistant', content: text});
+        }
+        streaming = false;
+        sendBtn.disabled = false;
+        inputEl.focus();
+    }
+
+    function addMessage(role, text) {
+        var el = document.createElement('div');
+        el.className = 'ch-msg ch-msg-' + (role === 'user' ? 'user' : role === 'system' ? 'system' : 'ai');
+        if (role === 'user') {
+            el.textContent = text;
+        } else {
+            el.innerHTML = renderMarkdown(text);
+        }
+        messagesEl.appendChild(el);
+        scrollToBottom();
+    }
+
+    function scrollToBottom() {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function renderMarkdown(text) {
+        // Simple markdown: bold, code, lists, paragraphs
+        var html = text
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+            .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+            .replace(/\n{2,}/g, '</p><p>')
+            .replace(/\n/g, '<br>');
+        return '<p>' + html + '</p>';
+    }
+
+    // Init lucide icons for send button
+    if (window.lucide) lucide.createIcons();
+})();
+</script>
+{% endblock %}

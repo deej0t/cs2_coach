@@ -54,7 +54,36 @@
     .dg-trend.flat { color: var(--color-neutral-500); }
 
     .dg-actions { display: flex; gap: var(--space-2); align-items: center; }
+
+    .dg-deltas { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; padding: 8px 12px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.02); }
+    .dg-delta { font-size: 11px; display: flex; align-items: center; gap: 3px; }
+    .dg-delta-label { color: var(--color-neutral-600); }
+    .dg-delta-val { font-weight: 600; }
+    .dg-delta-up { color: #4ade80; }
+    .dg-delta-down { color: #f87171; }
+    .dg-delta-flat { color: var(--color-neutral-500); }
+
+    @media (max-width: 600px) {
+        .dg-highlights { grid-template-columns: 1fr; }
+        .dg-stats { grid-template-columns: repeat(3, 1fr); }
+        .dg-stat-val { font-size: 17px; }
+        .dg-card-head { flex-direction: column; align-items: flex-start; gap: 6px; }
+        .dg-tabs { flex-wrap: wrap; }
+    }
 </style>
+
+{% macro delta_row(p) %}
+{% if p.delta is defined and p.delta %}
+<div class="dg-deltas">
+    <span style="font-size:10px;color:var(--color-neutral-600);margin-right:4px;">vs. Vorperiode:</span>
+    {% for key, label, invert in [('win_rate','WR%',false),('rating','Rating',false),('kd','K/D',false),('adr','ADR',false),('hs','HS%',false),('kast','KAST%',false)] %}
+    {% set v = p.delta[key] %}
+    {% set cls = 'dg-delta-up' if (v > 0 and not invert) or (v < 0 and invert) else 'dg-delta-down' if (v < 0 and not invert) or (v > 0 and invert) else 'dg-delta-flat' %}
+    <span class="dg-delta"><span class="dg-delta-label">{{ label }}</span> <span class="dg-delta-val {{ cls }}">{% if v > 0 %}+{% endif %}{{ v }}</span></span>
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
 
 {% if not digest.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
@@ -88,6 +117,14 @@
                     <i data-lucide="file-down" style="width:14px;height:14px;"></i> Export
                 </button>
             </form>
+            {% if config.get('discord_webhook') %}
+            <form method="post" action="{{ url_for('digest_discord') }}" style="margin:0;">
+                <input type="hidden" name="period" value="{{ p.key }}">
+                <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;color:#5865F2;" title="An Discord senden">
+                    <i data-lucide="message-circle" style="width:14px;height:14px;"></i> Discord
+                </button>
+            </form>
+            {% endif %}
         </div>
     </div>
 
@@ -135,6 +172,9 @@
         </div>
     </div>
 
+    <!-- Deltas -->
+    {{ delta_row(p) }}
+
     <!-- Maps -->
     <div class="dg-maps">
         {% for m in p.maps %}
@@ -177,6 +217,14 @@
                     <i data-lucide="file-down" style="width:14px;height:14px;"></i> Export
                 </button>
             </form>
+            {% if config.get('discord_webhook') %}
+            <form method="post" action="{{ url_for('digest_discord') }}" style="margin:0;">
+                <input type="hidden" name="period" value="{{ p.key }}">
+                <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;color:#5865F2;" title="An Discord senden">
+                    <i data-lucide="message-circle" style="width:14px;height:14px;"></i> Discord
+                </button>
+            </form>
+            {% endif %}
         </div>
     </div>
 
@@ -213,6 +261,9 @@
             <div class="dg-stat-label">Bilanz</div>
         </div>
     </div>
+
+    <!-- Deltas -->
+    {{ delta_row(p) }}
 
     <div class="dg-maps">
         {% for m in p.maps %}

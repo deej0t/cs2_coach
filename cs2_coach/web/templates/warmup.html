@@ -110,6 +110,13 @@
         display: none;
     }
     .wu-live-timer.active { display: block; }
+
+    @media (max-width: 600px) {
+        .wu-hero { flex-direction: column; text-align: center; padding: var(--space-4); gap: var(--space-3); }
+        .wu-timer { font-size: 36px; }
+        .wu-card { flex-direction: column; gap: 10px; }
+        .wu-controls { flex-wrap: wrap; }
+    }
 </style>
 
 {% if not wu.has_data %}

@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Share-Code Analyse{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Share-Code Analyse</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Fuege einen CS2 Match Share-Code ein — die Demo wird heruntergeladen und analysiert.
+</p>
+
+<style>
+    .sc-input-wrap {
+        display: flex; gap: var(--space-3); align-items: center;
+        margin-bottom: var(--space-5); flex-wrap: wrap;
+    }
+    .sc-input {
+        flex: 1; min-width: 320px; padding: 12px 16px; font-size: 15px;
+        font-family: monospace; letter-spacing: 0.05em;
+        background: var(--color-surface); border: 1px solid var(--color-neutral-700);
+        border-radius: var(--radius-md); color: var(--color-text);
+        outline: none; transition: border-color 0.15s;
+    }
+    .sc-input:focus { border-color: var(--color-accent); }
+    .sc-input::placeholder { color: var(--color-neutral-600); }
+    .sc-btn {
+        padding: 12px 24px; font-size: 14px; font-weight: 600;
+        background: var(--color-accent); color: #fff; border: none;
+        border-radius: var(--radius-md); cursor: pointer; transition: opacity 0.15s;
+        white-space: nowrap;
+    }
+    .sc-btn:hover { opacity: 0.9; }
+    .sc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .sc-options {
+        display: flex; gap: var(--space-4); margin-bottom: var(--space-5);
+        flex-wrap: wrap;
+    }
+    .sc-option {
+        display: flex; align-items: center; gap: 8px; font-size: 13px;
+        color: var(--color-neutral-400);
+    }
+    .sc-option input {
+        padding: 6px 12px; font-size: 13px;
+        background: var(--color-surface); border: 1px solid var(--color-neutral-700);
+        border-radius: var(--radius-sm); color: var(--color-text); outline: none;
+    }
+    .sc-option input:focus { border-color: var(--color-accent); }
+
+    .sc-log {
+        padding: var(--space-4) !important; margin-bottom: var(--space-5);
+        font-family: monospace; font-size: 12px; line-height: 1.8;
+        max-height: 400px; overflow-y: auto;
+    }
+    .sc-log-entry { display: flex; align-items: center; gap: 8px; }
+    .sc-log-status { color: var(--color-accent); }
+    .sc-log-error { color: #f87171; }
+    .sc-log-success { color: #4ade80; }
+    .sc-log-info { color: var(--color-neutral-400); }
+
+    .sc-result {
+        padding: var(--space-4) !important; border-left: 3px solid #4ade80;
+    }
+    .sc-result-grid {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: var(--space-3); margin-top: 12px;
+    }
+    .sc-result-stat { text-align: center; }
+    .sc-result-val { font-family: var(--font-heading); font-size: 22px; font-weight: 700; }
+    .sc-result-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); }
+
+    .sc-info {
+        padding: var(--space-4) !important; margin-bottom: var(--space-5);
+        border-left: 3px solid var(--color-accent);
+    }
+    .sc-info h4 { margin: 0 0 8px; font-size: 14px; }
+    .sc-info p { margin: 0 0 4px; font-size: 12px; color: var(--color-neutral-400); }
+    .sc-info code { background: var(--color-neutral-800); padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+
+    @media (max-width: 600px) {
+        .sc-input { min-width: 100%; font-size: 13px; padding: 10px 12px; }
+        .sc-input-wrap { flex-direction: column; }
+        .sc-btn { width: 100%; }
+        .sc-result-grid { grid-template-columns: repeat(3, 1fr); }
+        .sc-result-val { font-size: 18px; }
+    }
+</style>
+
+<!-- Input -->
+<div class="sc-input-wrap">
+    <input type="text" id="sc-code" class="sc-input"
+           placeholder="CSGO-xxxxx-xxxxx-xxxxx-xxxxx-xxxxx"
+           autocomplete="off" spellcheck="false">
+    <button id="sc-analyze-btn" class="sc-btn" onclick="startAnalysis()">
+        <i data-lucide="play" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i>
+        Analysieren
+    </button>
+</div>
+
+<!-- Optional: player override -->
+<div class="sc-options">
+    <div class="sc-option">
+        <label>Spieler (optional):</label>
+        <input type="text" id="sc-player" placeholder="{{ config.get('player_name', '') }}" style="width: 140px;">
+    </div>
+    <div class="sc-option">
+        <label>SteamID (optional):</label>
+        <input type="text" id="sc-steamid" placeholder="{{ config.get('steam_id', '') }}" style="width: 160px;">
+    </div>
+</div>
+
+<!-- Recommended: CS2 Auto-Download -->
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-4); border-left: 3px solid var(--color-accent);">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <i data-lucide="lightbulb" style="width:16px;height:16px;color:var(--color-accent);"></i>
+        <span style="font-size:14px;font-weight:600;">Empfohlen: CS2 Auto-Download + Folder-Watch</span>
+    </div>
+    <p style="font-size:12px;color:var(--color-neutral-400);margin:0 0 6px;">
+        Der zuverlaessigste Weg fuer eigene Demos: CS2 laedt sie automatisch herunter.
+    </p>
+    <ol style="font-size:12px;color:var(--color-neutral-300);margin:0;padding-left:18px;line-height:1.8;">
+        <li>CS2 → <strong>Einstellungen</strong> → <strong>Spiel</strong> → <strong>"Match-Demos herunterladen"</strong> auf <strong>"Immer"</strong></li>
+        <li>Demo-Ordner in <a href="{{ url_for('settings') }}" style="color:var(--color-accent);">Einstellungen</a> eintragen (z.B. <code style="background:var(--color-neutral-800);padding:1px 6px;border-radius:3px;font-size:11px;">C:/Program Files/Steam/steamapps/common/Counter-Strike Global Offensive/game/csgo/replays</code>)</li>
+        <li><a href="{{ url_for('watch') }}" style="color:var(--color-accent);">Folder-Watch</a> nutzen — analysiert neue Demos automatisch</li>
+    </ol>
+    <p style="font-size:11px;color:var(--color-neutral-500);margin:6px 0 0;">
+        Share-Code Download funktioniert nur fuer Demos die noch auf Valve-Servern liegen (~14 Tage). CS2 Auto-Download ist sofort und zuverlaessig.
+    </p>
+</div>
+
+<!-- Info Box -->
+<div class="card elev-sm sc-info">
+    <h4>So findest du deinen Share-Code</h4>
+    <p>1. Oeffne CS2 und gehe zu <strong>Persoenlich</strong> → <strong>Deine Matches</strong></p>
+    <p>2. Klicke auf ein Match und dann auf <strong>Share-Code kopieren</strong></p>
+    <p>3. Oder nutze den Befehl in der Konsole: <code>cs_print_match_sharing_codes</code></p>
+    <p style="margin-top: 8px; color: var(--color-neutral-500);">Share-Code Analyse ist ideal fuer <strong>Demos anderer Spieler</strong> oder zum Nachschauen aelterer Matches.</p>
+</div>
+
+<!-- Auto-Sync Section -->
+{% set has_sync_config = config.get('steam_api_key') and config.get('cs2_auth_token') and config.get('steam_id') %}
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5); border-left: 3px solid {% if has_sync_config %}#4ade80{% else %}var(--color-neutral-700){% endif %};">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+        <i data-lucide="refresh-cw" style="width:18px;height:18px;color:{% if has_sync_config %}#4ade80{% else %}var(--color-neutral-500){% endif %};"></i>
+        <div style="font-size: 15px; font-weight: 600;">Auto-Sync</div>
+        {% if has_sync_config %}
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(74,222,128,0.15);color:#4ade80;">Bereit</span>
+        {% else %}
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(248,113,113,0.15);color:#f87171;">Nicht konfiguriert</span>
+        {% endif %}
+    </div>
+    <p style="font-size: 12px; color: var(--color-neutral-400); margin: 0 0 12px;">
+        Automatisch alle neuen Matches herunterladen und analysieren. Braucht Steam API Key + CS2 Auth Token in den <a href="{{ url_for('settings') }}" style="color:var(--color-accent);">Einstellungen</a>.
+    </p>
+
+    {% if has_sync_config %}
+    <div style="display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;">
+        {% if config.get('last_sharecode') %}
+        <div style="font-size: 11px; color: var(--color-neutral-500);">
+            Letzter Code: <code style="background:var(--color-neutral-800);padding:1px 6px;border-radius:3px;font-size:10px;">{{ config.get('last_sharecode', '')[:20] }}...</code>
+        </div>
+        {% else %}
+        <div style="font-size: 11px; color: var(--color-neutral-500);">
+            Kein Start-Code gesetzt. Analysiere zuerst einen Share-Code oben oder setze ihn hier:
+        </div>
+        <input type="text" id="sc-start-code" class="sc-input" placeholder="CSGO-xxxxx-xxxxx-xxxxx-xxxxx-xxxxx" style="min-width:200px;flex:1;font-size:12px;padding:6px 10px;">
+        <button class="sc-btn" style="padding:6px 14px;font-size:12px;" onclick="setStartCode()">Setzen</button>
+        {% endif %}
+        <button id="sc-sync-btn" class="sc-btn" style="margin-left:auto;" onclick="startSync()" {% if not config.get('last_sharecode') %}disabled{% endif %}>
+            <i data-lucide="download-cloud" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i>
+            Jetzt synchronisieren
+        </button>
+    </div>
+    {% else %}
+    <div style="font-size: 12px; color: var(--color-neutral-500);">
+        Fehlend:
+        {% if not config.get('steam_api_key') %}<span style="color:#f87171;">Steam API Key</span> {% endif %}
+        {% if not config.get('cs2_auth_token') %}<span style="color:#f87171;">CS2 Auth Token</span> {% endif %}
+        {% if not config.get('steam_id') %}<span style="color:#f87171;">Steam ID</span>{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Log Output -->
+<div id="sc-log-wrap" style="display: none;">
+    <div class="card-kicker" style="margin-bottom: 8px;">Fortschritt</div>
+    <div class="card elev-sm sc-log" id="sc-log"></div>
+</div>
+
+<!-- Result -->
+<div id="sc-result-wrap" style="display: none;">
+    <div class="card-kicker" style="margin-bottom: 8px;">Ergebnis</div>
+    <div class="card elev-sm sc-result" id="sc-result"></div>
+</div>
+
+<script>
+function startAnalysis() {
+    var code = document.getElementById('sc-code').value.trim();
+    if (!code) return;
+
+    var player = document.getElementById('sc-player').value.trim();
+    var steamid = document.getElementById('sc-steamid').value.trim();
+    var btn = document.getElementById('sc-analyze-btn');
+    var logWrap = document.getElementById('sc-log-wrap');
+    var log = document.getElementById('sc-log');
+    var resultWrap = document.getElementById('sc-result-wrap');
+    var result = document.getElementById('sc-result');
+
+    btn.disabled = true;
+    logWrap.style.display = 'block';
+    resultWrap.style.display = 'none';
+    log.innerHTML = '';
+    result.innerHTML = '';
+
+    function addLog(text, cls) {
+        var div = document.createElement('div');
+        div.className = 'sc-log-entry';
+        div.innerHTML = '<span class="sc-log-' + (cls || 'info') + '">' + text + '</span>';
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    addLog('Verbinde...', 'status');
+
+    var url = '/api/sharecode-analyze?code=' + encodeURIComponent(code);
+    if (player) url += '&player=' + encodeURIComponent(player);
+    if (steamid) url += '&steamid=' + encodeURIComponent(steamid);
+
+    var es = new EventSource(url);
+    es.onmessage = function(e) {
+        var d = JSON.parse(e.data);
+        if (d.type === 'status') {
+            addLog(d.message, 'status');
+        } else if (d.type === 'decoded') {
+            addLog('Match ID: ' + d.match_id + ' | Outcome: ' + d.outcome_id + ' | Token: ' + d.token, 'info');
+        } else if (d.type === 'error') {
+            addLog('Fehler: ' + d.message, 'error');
+            es.close();
+            btn.disabled = false;
+        } else if (d.type === 'result') {
+            addLog('Analyse abgeschlossen!', 'success');
+            resultWrap.style.display = 'block';
+            var rclass = d.result_str === 'Sieg' ? 'win' : (d.result_str === 'Niederlage' ? 'loss' : 'draw');
+            result.innerHTML = '<div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:12px;">'
+                + '<div style="font-size:18px;font-weight:700;">' + d.map + ' ' + d.score + '</div>'
+                + '<span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:10px;'
+                + (d.result_str === 'Sieg' ? 'background:rgba(74,222,128,0.15);color:#4ade80' : d.result_str === 'Niederlage' ? 'background:rgba(248,113,113,0.15);color:#f87171' : 'background:rgba(251,191,36,0.15);color:#fbbf24')
+                + ';">' + d.result_str + '</span>'
+                + '<span style="font-size:12px;color:var(--color-neutral-400);">Spieler: ' + d.player + '</span>'
+                + '</div>'
+                + '<div class="sc-result-grid">'
+                + '<div class="sc-result-stat"><div class="sc-result-val">' + d.rating + '</div><div class="sc-result-lbl">Rating</div></div>'
+                + '<div class="sc-result-stat"><div class="sc-result-val">' + d.kd + '</div><div class="sc-result-lbl">K/D</div></div>'
+                + '<div class="sc-result-stat"><div class="sc-result-val">' + d.kills + '</div><div class="sc-result-lbl">Kills</div></div>'
+                + '<div class="sc-result-stat"><div class="sc-result-val">' + d.deaths + '</div><div class="sc-result-lbl">Deaths</div></div>'
+                + '<div class="sc-result-stat"><div class="sc-result-val">' + d.adr + '</div><div class="sc-result-lbl">ADR</div></div>'
+                + '</div>';
+        } else if (d.type === 'done') {
+            addLog('Fertig! Export wurde gespeichert.', 'success');
+            es.close();
+            btn.disabled = false;
+        }
+    };
+    es.onerror = function() {
+        addLog('Verbindung verloren.', 'error');
+        es.close();
+        btn.disabled = false;
+    };
+}
+
+// Allow Enter key to trigger analysis
+document.getElementById('sc-code').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') startAnalysis();
+});
+
+function setStartCode() {
+    var code = document.getElementById('sc-start-code').value.trim();
+    if (!code) return;
+    fetch('/api/set-last-sharecode', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'code=' + encodeURIComponent(code),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.ok) {
+            location.reload();
+        } else {
+            alert('Fehler: ' + (d.error || 'Unbekannt'));
+        }
+    });
+}
+
+function startSync() {
+    var btn = document.getElementById('sc-sync-btn');
+    var logWrap = document.getElementById('sc-log-wrap');
+    var log = document.getElementById('sc-log');
+    var resultWrap = document.getElementById('sc-result-wrap');
+
+    btn.disabled = true;
+    logWrap.style.display = 'block';
+    resultWrap.style.display = 'none';
+    log.innerHTML = '';
+
+    function addLog(text, cls) {
+        var div = document.createElement('div');
+        div.className = 'sc-log-entry';
+        div.innerHTML = '<span class="sc-log-' + (cls || 'info') + '">' + text + '</span>';
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    addLog('Auto-Sync gestartet...', 'status');
+
+    var es = new EventSource('/api/auto-sync');
+    es.onmessage = function(e) {
+        var d = JSON.parse(e.data);
+        if (d.type === 'status') {
+            addLog(d.message, 'status');
+        } else if (d.type === 'progress') {
+            addLog('Match ' + d.current + '/' + d.total + ': ' + d.code, 'info');
+        } else if (d.type === 'result') {
+            addLog('OK: ' + d.map + ' ' + d.score + ' (' + d.result_str + ') — Rating ' + d.rating + ', ' + d.kills + 'K/' + d.deaths + 'D', 'success');
+        } else if (d.type === 'skip') {
+            addLog('Uebersprungen #' + d.current + ': ' + d.message, 'info');
+        } else if (d.type === 'error') {
+            addLog('Fehler: ' + d.message, 'error');
+            es.close();
+            btn.disabled = false;
+        } else if (d.type === 'done') {
+            addLog(d.message, d.count > 0 ? 'success' : 'info');
+            es.close();
+            btn.disabled = false;
+        }
+    };
+    es.onerror = function() {
+        addLog('Verbindung verloren.', 'error');
+        es.close();
+        btn.disabled = false;
+    };
+}
+</script>
+{% endblock %}

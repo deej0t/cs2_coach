@@ -15,6 +15,144 @@
 </div>
 {% else %}
 
+{% if insights and insights.has_data %}
+<!-- ── Session Insights ── -->
+<style>
+    .si-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
+    .si-card { padding: var(--space-4) !important; }
+    .si-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .si-insight {
+        padding: var(--space-3); border-radius: var(--radius-sm); font-size: 13px;
+        border-left: 3px solid var(--color-accent); background: rgba(145,132,217,0.04);
+        color: var(--color-neutral-300); margin-bottom: var(--space-3);
+    }
+    .si-insight strong { color: var(--color-text); }
+    .si-bracket-grid { display: flex; flex-direction: column; gap: 4px; }
+    .si-bracket-row {
+        display: grid; grid-template-columns: 1fr 50px 60px 60px 70px; gap: 8px; align-items: center;
+        padding: 8px 12px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.02); font-size: 12px;
+    }
+    .si-bracket-row.si-best { border: 1px solid rgba(74,222,128,0.25); background: rgba(74,222,128,0.04); }
+    .si-bracket-header {
+        display: grid; grid-template-columns: 1fr 50px 60px 60px 70px; gap: 8px;
+        padding: 4px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-600);
+    }
+    .si-fatigue-bar { display: flex; align-items: end; gap: 8px; height: 80px; padding-top: 8px; }
+    .si-fatigue-col { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+    .si-fatigue-fill { width: 100%; border-radius: 4px 4px 0 0; min-height: 4px; transition: height 0.3s; }
+    .si-fatigue-label { font-size: 10px; color: var(--color-neutral-500); }
+    .si-fatigue-val { font-size: 12px; font-weight: 600; }
+    .si-hour-chart { display: flex; align-items: end; gap: 2px; height: 60px; }
+    .si-hour-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; position: relative; cursor: default; }
+    .si-hour-bar:hover::after {
+        content: attr(data-tip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+        padding: 3px 8px; border-radius: 4px; background: var(--color-surface); border: 1px solid var(--color-neutral-700);
+        font-size: 10px; white-space: nowrap; z-index: 10; pointer-events: none;
+    }
+    @media (max-width: 768px) {
+        .si-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+        .si-bracket-header, .si-bracket-row { grid-template-columns: 1fr 40px 50px 50px 50px; gap: 4px; font-size: 11px; }
+        .si-fatigue-val { font-size: 11px; }
+        .si-fatigue-label { font-size: 9px; }
+    }
+</style>
+
+<div class="si-grid">
+    <!-- Optimal Play Time -->
+    <div class="card elev-sm si-card">
+        <div class="si-title">
+            <i data-lucide="clock" style="width:16px;height:16px;color:var(--color-accent);"></i>
+            Optimale Spielzeit
+        </div>
+        {% if insights.best_time %}
+        <div class="si-insight">
+            <strong>Beste Zeit: {{ insights.best_time.bracket }}</strong> — Rating {{ insights.best_time.avg_rating }}, Win-Rate {{ insights.best_time.win_rate }}%
+            {% if insights.worst_time and insights.worst_time.bracket != insights.best_time.bracket %}
+            <br><span style="font-size:12px;">Schlechteste: {{ insights.worst_time.bracket }} (Rating {{ insights.worst_time.avg_rating }})</span>
+            {% endif %}
+        </div>
+        {% endif %}
+        <div class="si-bracket-header">
+            <span>Zeitraum</span><span>Games</span><span>Rating</span><span>K/D</span><span>Win%</span>
+        </div>
+        <div class="si-bracket-grid">
+            {% for b in insights.playtime %}
+            <div class="si-bracket-row {% if insights.best_time and b.bracket == insights.best_time.bracket %}si-best{% endif %}">
+                <span style="font-weight:500;">{{ b.bracket }}</span>
+                <span style="text-align:center;">{{ b.matches }}</span>
+                <span style="font-weight:600;" class="{% if b.avg_rating >= 1.0 %}win{% elif b.avg_rating < 0.85 %}loss{% endif %}">{{ b.avg_rating }}</span>
+                <span class="{% if b.avg_kd >= 1.2 %}win{% elif b.avg_kd < 0.9 %}loss{% endif %}">{{ b.avg_kd }}</span>
+                <span class="{% if b.win_rate >= 55 %}win{% elif b.win_rate < 45 %}loss{% endif %}">{{ b.win_rate }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% if insights.hourly %}
+        <div style="margin-top:var(--space-3);">
+            <div style="font-size:10px;color:var(--color-neutral-500);margin-bottom:4px;">Matches pro Stunde</div>
+            <div class="si-hour-chart">
+                {% set max_matches = insights.hourly|map(attribute='matches')|max %}
+                {% for h in insights.hourly %}
+                {% if h.matches > 0 %}
+                <div class="si-hour-bar"
+                     style="height:{{ (h.matches / max_matches * 50 + 4)|round }}px;background:{% if h.avg_rating >= 1.0 %}#4ade80{% elif h.avg_rating >= 0.85 %}#9184d9{% else %}#f87171{% endif %};"
+                     data-tip="{{ h.hour }}:00 — {{ h.matches }} Games, Rating {{ h.avg_rating }}"></div>
+                {% else %}
+                <div class="si-hour-bar" style="height:2px;background:var(--color-neutral-800);"></div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--color-neutral-600);margin-top:2px;">
+                <span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Fatigue Detection -->
+    <div class="card elev-sm si-card">
+        <div class="si-title">
+            <i data-lucide="battery-low" style="width:16px;height:16px;color:#fbbf24;"></i>
+            Ermuedung & Session-Laenge
+        </div>
+        {% if insights.fatigue_drop %}
+        <div class="si-insight" style="border-left-color:#f87171;">
+            <strong>Ermuedung erkannt!</strong> {{ insights.fatigue_drop.recommendation }}
+            <br><span style="font-size:12px;">Spiel 1–2: Rating {{ insights.fatigue_drop.early_avg }} → Spiel 4+: Rating {{ insights.fatigue_drop.late_avg }} (−{{ insights.fatigue_drop.drop }})</span>
+        </div>
+        {% elif insights.fatigue_curve|length > 2 %}
+        <div class="si-insight" style="border-left-color:#4ade80;">
+            <strong>Keine Ermuedung erkannt.</strong> Dein Rating bleibt ueber die Session stabil.
+        </div>
+        {% endif %}
+        {% if insights.fatigue_curve %}
+        <div style="font-size:11px;color:var(--color-neutral-500);margin-bottom:6px;">Rating nach Spielnummer in der Session</div>
+        <div class="si-fatigue-bar">
+            {% set max_fat = insights.fatigue_curve|map(attribute='avg_rating')|max %}
+            {% set min_fat = insights.fatigue_curve|map(attribute='avg_rating')|min %}
+            {% set range_fat = max_fat - min_fat if max_fat != min_fat else 0.1 %}
+            {% for f in insights.fatigue_curve %}
+            <div class="si-fatigue-col">
+                <div class="si-fatigue-val {% if f.avg_rating >= 1.0 %}win{% elif f.avg_rating < 0.85 %}loss{% endif %}">{{ f.avg_rating }}</div>
+                <div class="si-fatigue-fill"
+                     style="height:{{ ((f.avg_rating - min_fat) / range_fat * 50 + 10)|round }}px;background:{% if f.avg_rating >= 1.0 %}#4ade80{% elif f.avg_rating >= 0.85 %}#9184d9{% else %}#f87171{% endif %};"></div>
+                <div class="si-fatigue-label">{{ f.label }}<br><span style="font-size:9px;">({{ f.matches }}x)</span></div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if insights.optimal_length %}
+        <div style="margin-top:var(--space-3);padding:8px 12px;border-radius:var(--radius-sm);background:rgba(255,255,255,0.02);font-size:12px;">
+            <span style="color:var(--color-neutral-500);">Optimale Session-Laenge:</span>
+            <span style="font-weight:600;color:var(--color-text);">{{ insights.optimal_length.label }}</span>
+            <span style="color:var(--color-neutral-500);">(Rating {{ insights.optimal_length.avg_rating }}, {{ insights.optimal_length.sessions }} Sessions)</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <style>
     .sess-card { padding: var(--space-4) !important; margin-bottom: var(--space-3); border-left: 3px solid var(--color-neutral-700); transition: border-color 0.2s; }
     .sess-card-win { border-left-color: #4ade80; }
@@ -52,6 +190,16 @@
     .sc-green { color: #4ade80; }
     .sc-yellow { color: #fbbf24; }
     .sc-red { color: #f87171; }
+
+    @media (max-width: 600px) {
+        .sess-header { flex-direction: column; align-items: flex-start; }
+        .sess-stats { gap: var(--space-3); }
+        .sess-stat { min-width: 50px; }
+        .sess-stat-val { font-size: 17px; }
+        .sess-match-row { grid-template-columns: 80px 50px 50px 50px 1fr; font-size: 11px; }
+        .sess-match-row > :nth-child(5) { display: none; }
+        .sess-date { font-size: 15px; }
+    }
 </style>
 
 {% for s in sessions %}

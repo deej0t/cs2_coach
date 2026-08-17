@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Team-Analyse{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Team-Analyse</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Wie gut funktionierst du mit deinen Teammates? Duo-Synergien, Stack-Performance und Solo vs. Premade.
+</p>
+
+<style>
+    .ta-hero {
+        display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap;
+    }
+    .ta-stat-card {
+        flex: 1; min-width: 130px; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .ta-stat-val { font-family: var(--font-heading); font-size: 24px; font-weight: 700; line-height: 1; }
+    .ta-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .ta-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
+
+    .ta-vs-bar {
+        display: flex; height: 14px; border-radius: 7px; overflow: hidden; margin: 8px 0;
+    }
+    .ta-vs-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-neutral-500); }
+
+    .ta-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ta-table th {
+        text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+        color: var(--color-neutral-500); padding: 8px 10px; border-bottom: 1px solid var(--color-neutral-800);
+    }
+    .ta-table td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .ta-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .ta-wr-badge {
+        display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+    }
+
+    .ta-stack-card {
+        padding: var(--space-4) !important; margin-bottom: var(--space-3);
+        border-left: 3px solid var(--color-accent);
+    }
+    .ta-stack-names { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+    .ta-stack-name {
+        font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+        background: rgba(145,132,217,0.12); color: var(--color-accent);
+    }
+    .ta-stack-stats { display: flex; gap: var(--space-4); font-size: 12px; color: var(--color-neutral-400); }
+
+    .ta-tips { margin-bottom: var(--space-5); }
+    .ta-tip {
+        display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+        border-radius: var(--radius-md); margin-bottom: var(--space-2); font-size: 13px;
+    }
+    .ta-tip-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.20); color: #4ade80; }
+    .ta-tip-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.20); color: #fbbf24; }
+    .ta-tip-info { background: rgba(145,132,217,0.08); border: 1px solid rgba(145,132,217,0.20); color: var(--color-accent); }
+
+    .ta-chart-wrap { position: relative; height: 240px; }
+    .ta-chart-wrap canvas { position: absolute; inset: 0; }
+
+    @media (max-width: 700px) {
+        .ta-grid-2 { grid-template-columns: 1fr; }
+        .ta-hero { flex-direction: column; }
+    }
+</style>
+
+{% if not td.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Nicht genug Daten — mindestens 3 Matches noetig.</p>
+</div>
+{% else %}
+
+<!-- Hero Stats -->
+<div class="ta-hero">
+    <div class="card elev-sm ta-stat-card">
+        <div class="ta-stat-val" style="color: var(--color-accent);">{{ td.total_matches }}</div>
+        <div class="ta-stat-lbl">Matches</div>
+    </div>
+    <div class="card elev-sm ta-stat-card">
+        <div class="ta-stat-val">{{ td.total_teammates }}</div>
+        <div class="ta-stat-lbl">Teammates</div>
+    </div>
+    <div class="card elev-sm ta-stat-card">
+        <div class="ta-stat-val">{{ td.regulars_count }}</div>
+        <div class="ta-stat-lbl">Stammteam</div>
+    </div>
+    <div class="card elev-sm ta-stat-card">
+        <div class="ta-stat-val">{{ td.stacks|length }}</div>
+        <div class="ta-stat-lbl">5-Stacks</div>
+    </div>
+</div>
+
+<!-- Tips -->
+{% if td.tips %}
+<div class="ta-tips">
+    {% for tip in td.tips %}
+    <div class="ta-tip ta-tip-{{ tip.type }}">
+        <i data-lucide="{% if tip.type == 'success' %}check-circle{% elif tip.type == 'info' %}info{% else %}alert-triangle{% endif %}" style="width:16px;height:16px;flex-shrink:0;"></i>
+        <span>{{ tip.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Solo vs Group -->
+<div class="card-kicker" style="margin-bottom: 8px;">Solo vs. Premade</div>
+<div class="ta-grid-2">
+    <div class="card elev-sm" style="padding: var(--space-4);">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <i data-lucide="user" style="width: 18px; height: 18px; color: var(--color-neutral-400);"></i>
+            <div style="font-size: 15px; font-weight: 600;">Solo / Random</div>
+        </div>
+        <div style="display: flex; gap: var(--space-4);">
+            <div style="text-align: center; flex: 1;">
+                <div class="ta-stat-val {% if td.solo.win_rate >= 55 %}win{% elif td.solo.win_rate >= 45 %}draw{% else %}loss{% endif %}">{{ td.solo.win_rate }}%</div>
+                <div class="ta-stat-lbl">Win-Rate</div>
+            </div>
+            <div style="text-align: center; flex: 1;">
+                <div class="ta-stat-val">{{ td.solo.avg_rating }}</div>
+                <div class="ta-stat-lbl">Avg Rating</div>
+            </div>
+            <div style="text-align: center; flex: 1;">
+                <div class="ta-stat-val">{{ td.solo.matches }}</div>
+                <div class="ta-stat-lbl">Matches</div>
+            </div>
+        </div>
+    </div>
+    <div class="card elev-sm" style="padding: var(--space-4);">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <i data-lucide="users" style="width: 18px; height: 18px; color: var(--color-accent);"></i>
+            <div style="font-size: 15px; font-weight: 600;">Premade / Stack</div>
+        </div>
+        <div style="display: flex; gap: var(--space-4);">
+            <div style="text-align: center; flex: 1;">
+                <div class="ta-stat-val {% if td.group.win_rate >= 55 %}win{% elif td.group.win_rate >= 45 %}draw{% else %}loss{% endif %}">{{ td.group.win_rate }}%</div>
+                <div class="ta-stat-lbl">Win-Rate</div>
+            </div>
+            <div style="text-align: center; flex: 1;">
+                <div class="ta-stat-val">{{ td.group.avg_rating }}</div>
+                <div class="ta-stat-lbl">Avg Rating</div>
+            </div>
+            <div style="text-align: center; flex: 1;">
+                <div class="ta-stat-val">{{ td.group.matches }}</div>
+                <div class="ta-stat-lbl">Matches</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 5-Stacks -->
+{% if td.stacks %}
+<div class="card-kicker" style="margin-bottom: 8px;">Wiederkehrende 5-Stacks</div>
+{% for st in td.stacks %}
+<div class="card elev-sm ta-stack-card">
+    <div class="ta-stack-names">
+        {% for n in st.names %}
+        <span class="ta-stack-name">{{ n }}</span>
+        {% endfor %}
+    </div>
+    <div class="ta-stack-stats">
+        <span>{{ st.matches }} Matches</span>
+        <span>
+            <span class="ta-wr-badge" style="background: {% if st.win_rate >= 55 %}rgba(74,222,128,0.15);color:#4ade80{% elif st.win_rate >= 45 %}rgba(251,191,36,0.15);color:#fbbf24{% else %}rgba(248,113,113,0.15);color:#f87171{% endif %};">
+                {{ st.win_rate }}% WR
+            </span>
+        </span>
+        <span>{{ st.wins }}W / {{ st.losses }}L</span>
+        <span>Dein Rating: {{ st.my_avg_rating }}</span>
+        <span>Top-Map: {{ st.top_map }}</span>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- Best & Worst Duos -->
+{% if td.best_duos or td.worst_duos %}
+<div class="ta-grid-2">
+    {% if td.best_duos %}
+    <div>
+        <div class="card-kicker" style="margin-bottom: 8px;">Beste Duos</div>
+        <div class="card elev-sm" style="padding: var(--space-4);">
+            <table class="ta-table">
+                <thead>
+                    <tr><th>Duo</th><th>WR</th><th>Matches</th><th>Dein Rating</th></tr>
+                </thead>
+                <tbody>
+                    {% for d in td.best_duos %}
+                    <tr>
+                        <td style="font-weight: 600;">{{ d.player_a }} + {{ d.player_b }}</td>
+                        <td>
+                            <span class="ta-wr-badge" style="background: rgba(74,222,128,0.15); color: #4ade80;">{{ d.win_rate }}%</span>
+                        </td>
+                        <td>{{ d.matches }}</td>
+                        <td>{{ d.my_avg_rating }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if td.worst_duos %}
+    <div>
+        <div class="card-kicker" style="margin-bottom: 8px;">Schwierigste Duos</div>
+        <div class="card elev-sm" style="padding: var(--space-4);">
+            <table class="ta-table">
+                <thead>
+                    <tr><th>Duo</th><th>WR</th><th>Matches</th><th>Dein Rating</th></tr>
+                </thead>
+                <tbody>
+                    {% for d in td.worst_duos %}
+                    <tr>
+                        <td style="font-weight: 600;">{{ d.player_a }} + {{ d.player_b }}</td>
+                        <td>
+                            <span class="ta-wr-badge" style="background: {% if d.win_rate < 40 %}rgba(248,113,113,0.15);color:#f87171{% else %}rgba(251,191,36,0.15);color:#fbbf24{% endif %};">{{ d.win_rate }}%</span>
+                        </td>
+                        <td>{{ d.matches }}</td>
+                        <td>{{ d.my_avg_rating }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- All Duos Table -->
+{% if td.duos %}
+<div class="card-kicker" style="margin-bottom: 8px;">Alle Duos <span style="color:var(--color-neutral-600);font-size:10px;">(min. 2 Matches)</span></div>
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
+    <table class="ta-table">
+        <thead>
+            <tr>
+                <th>Spieler A</th>
+                <th>Spieler B</th>
+                <th>Win-Rate</th>
+                <th>Matches</th>
+                <th>W/L</th>
+                <th>Dein Avg Rating</th>
+                <th>Top-Map</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in td.duos %}
+            <tr>
+                <td style="font-weight: 600;">{{ d.player_a }}</td>
+                <td style="font-weight: 600;">{{ d.player_b }}</td>
+                <td>
+                    <span class="ta-wr-badge" style="background: {% if d.win_rate >= 55 %}rgba(74,222,128,0.15);color:#4ade80{% elif d.win_rate >= 45 %}rgba(251,191,36,0.15);color:#fbbf24{% else %}rgba(248,113,113,0.15);color:#f87171{% endif %};">
+                        {{ d.win_rate }}%
+                    </span>
+                </td>
+                <td>{{ d.matches }}</td>
+                <td>{{ d.wins }}W / {{ d.losses }}L</td>
+                <td>{{ d.my_avg_rating }}</td>
+                <td style="text-transform: capitalize;">{{ d.top_map }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Duo WR Chart -->
+{% if td.duos|length >= 3 %}
+<div class="card-kicker" style="margin-bottom: 8px;">Duo Win-Rate Vergleich</div>
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
+    <div class="ta-chart-wrap">
+        <canvas id="ta-duo-chart"></canvas>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if td.has_data and td.duos|length >= 3 %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var duos = {{ td.duos | tojson }};
+    var top = duos.slice(0, 12);
+    var labels = top.map(function(d) { return d.player_a + ' + ' + d.player_b; });
+    var wrs = top.map(function(d) { return d.win_rate; });
+    var colors = wrs.map(function(wr) {
+        if (wr >= 55) return 'rgba(74, 222, 128, 0.7)';
+        if (wr >= 45) return 'rgba(251, 191, 36, 0.7)';
+        return 'rgba(248, 113, 113, 0.7)';
+    });
+
+    new Chart(document.getElementById('ta-duo-chart'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Win-Rate %',
+                data: wrs,
+                backgroundColor: colors,
+                borderRadius: 3,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#232532', borderColor: '#3f424d', borderWidth: 1,
+                    titleColor: '#e9e9ed', bodyColor: '#e9e9ed',
+                    callbacks: {
+                        label: function(ctx) { return ctx.parsed.x + '% Win-Rate'; }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    min: 0, max: 100,
+                    ticks: { color: '#75798c', font: { size: 10, family: 'Inter' }, callback: function(v) { return v + '%'; } },
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                },
+                y: {
+                    ticks: { color: '#9a9dae', font: { size: 11, family: 'Inter' } },
+                    grid: { display: false },
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

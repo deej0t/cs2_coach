@@ -1,0 +1,459 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — 2D Viewer{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+{% if not vd.has_data %}
+<h2>2D Viewer</h2>
+<div class="card elev-sm">
+    <p class="card-body">Noch keine Positionsdaten vorhanden. Analysiere Demos, um Kill/Death-Positionen auf der Map zu sehen.</p>
+</div>
+{% else %}
+
+<style>
+    .vw-layout { display: grid; grid-template-columns: 1fr 300px; gap: var(--space-4); align-items: start; }
+    .vw-map-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: var(--space-3); }
+    .vw-map-tab { padding: 5px 14px; font-size: 12px; font-weight: 500; border: 1px solid var(--color-neutral-700); background: transparent; color: var(--color-neutral-400); cursor: pointer; border-radius: var(--radius-sm); transition: all 0.15s; text-transform: capitalize; }
+    .vw-map-tab:hover { border-color: var(--color-neutral-500); color: var(--color-text); }
+    .vw-map-tab.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+    .vw-map-tab .vw-tab-count { font-size: 10px; opacity: 0.7; margin-left: 4px; }
+
+    .vw-canvas-wrap { position: relative; width: 100%; aspect-ratio: 1; background: var(--color-bg); border-radius: var(--radius-md); overflow: hidden; }
+    .vw-canvas-wrap canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    #vw-tooltip { display: none; position: absolute; background: var(--color-surface); border: 1px solid var(--color-divider); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 11px; pointer-events: none; white-space: nowrap; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+
+    .vw-sidebar .card { padding: var(--space-3); }
+    .vw-section { margin-bottom: var(--space-3); }
+    .vw-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-neutral-500); margin-bottom: 6px; }
+
+    .vw-layers { display: flex; flex-direction: column; gap: 4px; }
+    .vw-layer { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; user-select: none; padding: 3px 6px; border-radius: var(--radius-sm); transition: background 0.15s; }
+    .vw-layer:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
+    .vw-layer input { accent-color: var(--color-accent); }
+    .vw-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    .vw-mode-group { display: flex; gap: 2px; }
+    .vw-mode { padding: 4px 12px; font-size: 11px; border: 1px solid var(--color-neutral-700); background: transparent; color: var(--color-neutral-400); cursor: pointer; transition: all 0.15s; }
+    .vw-mode:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+    .vw-mode:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+    .vw-mode.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+
+    .vw-stat-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 12px; border-bottom: 1px solid color-mix(in srgb, var(--color-divider) 40%, transparent); }
+    .vw-stat-row:last-child { border-bottom: none; }
+    .vw-stat-label { color: var(--color-neutral-500); }
+    .vw-stat-value { font-weight: 500; }
+
+    .vw-match-list { max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+    .vw-match-item { display: flex; align-items: center; gap: 6px; font-size: 11px; padding: 3px 6px; border-radius: var(--radius-sm); cursor: pointer; user-select: none; transition: background 0.15s; }
+    .vw-match-item:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
+    .vw-match-item input { accent-color: var(--color-accent); }
+    .vw-match-result { font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; }
+
+    .vw-wpn-filter { display: flex; flex-wrap: wrap; gap: 3px; max-height: 120px; overflow-y: auto; }
+    .vw-wpn-tag { padding: 2px 8px; font-size: 10px; border: 1px solid var(--color-neutral-700); background: transparent; color: var(--color-neutral-500); cursor: pointer; border-radius: 10px; transition: all 0.15s; }
+    .vw-wpn-tag:hover { border-color: var(--color-neutral-500); color: var(--color-text); }
+    .vw-wpn-tag.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+
+    .vw-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; font-size: 11px; color: var(--color-neutral-500); }
+    .vw-legend-item { display: flex; align-items: center; gap: 4px; }
+
+    @media (max-width: 900px) {
+        .vw-layout { grid-template-columns: 1fr; }
+        .vw-sidebar { order: -1; }
+        .vw-match-list { max-height: 100px; }
+    }
+    @media (max-width: 600px) {
+        .vw-map-tabs { gap: 3px; }
+        .vw-map-tab { padding: 4px 10px; font-size: 11px; }
+    }
+</style>
+
+<div style="display: flex; align-items: center; gap: 10px; margin-bottom: var(--space-2);">
+    <h2 style="margin: 0;">2D Viewer</h2>
+    <span class="tag tag-neutral" id="vw-dot-count" style="vertical-align: middle;"></span>
+</div>
+
+<!-- Map Tabs -->
+<div class="vw-map-tabs" id="vw-map-tabs">
+    {% for ms in vd.map_summaries %}
+    <button class="vw-map-tab{% if ms.name == vd.default_map %} active{% endif %}" data-map="{{ ms.name }}">
+        {{ ms.name }}<span class="vw-tab-count">({{ ms.matches }})</span>
+    </button>
+    {% endfor %}
+</div>
+
+<div class="vw-layout">
+    <!-- Map Canvas -->
+    <div>
+        <div class="vw-canvas-wrap" id="vw-canvas-wrap">
+            <canvas id="vw-canvas" width="1024" height="1024"></canvas>
+            <div id="vw-tooltip"></div>
+        </div>
+        <div class="vw-legend">
+            <span class="vw-legend-item"><span class="vw-dot" style="background:#4ade80;"></span> Kill</span>
+            <span class="vw-legend-item"><span class="vw-dot" style="background:#fbbf24;"></span> HS Kill</span>
+            <span class="vw-legend-item"><span class="vw-dot" style="background:#f87171;"></span> Death</span>
+            <span class="vw-legend-item"><span style="display:inline-block;width:20px;height:2px;background:rgba(255,255,255,0.15);vertical-align:middle;"></span> Sichtlinie</span>
+        </div>
+    </div>
+
+    <!-- Sidebar Controls -->
+    <div class="vw-sidebar">
+        <!-- Stats -->
+        <div class="card elev-sm vw-section">
+            <div class="vw-section-title">Statistik</div>
+            <div class="vw-stat-row"><span class="vw-stat-label">Kills</span><span class="vw-stat-value win" id="vw-kills">-</span></div>
+            <div class="vw-stat-row"><span class="vw-stat-label">Deaths</span><span class="vw-stat-value loss" id="vw-deaths">-</span></div>
+            <div class="vw-stat-row"><span class="vw-stat-label">K/D</span><span class="vw-stat-value" id="vw-kd">-</span></div>
+            <div class="vw-stat-row"><span class="vw-stat-label">HS%</span><span class="vw-stat-value" id="vw-hs">-</span></div>
+            <div class="vw-stat-row"><span class="vw-stat-label">Matches</span><span class="vw-stat-value" id="vw-matches">-</span></div>
+        </div>
+
+        <!-- Display Mode -->
+        <div class="card elev-sm vw-section">
+            <div class="vw-section-title">Darstellung</div>
+            <div class="vw-mode-group" style="margin-bottom: 8px;">
+                <button class="vw-mode active" data-mode="dots">Dots</button>
+                <button class="vw-mode" data-mode="lines">Sichtlinien</button>
+                <button class="vw-mode" data-mode="heatmap">Heatmap</button>
+            </div>
+            <div class="vw-layers">
+                <label class="vw-layer"><input type="checkbox" id="vw-show-kills" checked><span class="vw-dot" style="background:#4ade80;"></span> Kills</label>
+                <label class="vw-layer"><input type="checkbox" id="vw-show-deaths" checked><span class="vw-dot" style="background:#f87171;"></span> Deaths</label>
+                <label class="vw-layer"><input type="checkbox" id="vw-hs-only"><span class="vw-dot" style="background:#fbbf24;"></span> Nur Headshots</label>
+            </div>
+        </div>
+
+        <!-- Weapon Filter -->
+        <div class="card elev-sm vw-section">
+            <div class="vw-section-title">Waffen</div>
+            <div class="vw-wpn-filter" id="vw-weapons">
+                <button class="vw-wpn-tag active" data-weapon="all">Alle</button>
+            </div>
+        </div>
+
+        <!-- Match Filter -->
+        <div class="card elev-sm vw-section">
+            <div class="vw-section-title">Matches <button id="vw-toggle-all" style="float:right;font-size:10px;background:none;border:none;color:var(--color-accent);cursor:pointer;">Alle</button></div>
+            <div class="vw-match-list" id="vw-match-list"></div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if vd.has_data %}
+<script>
+(function() {
+    var mapsData = {{ vd.maps_data | tojson }};
+    var matchIndex = {{ vd.match_index | tojson }};
+    var currentMap = '{{ vd.default_map }}';
+    var mode = 'dots';
+    var showKills = true, showDeaths = true, hsOnly = false;
+    var selectedWeapon = 'all';
+    var selectedMatches = new Set(); // empty = all
+
+    var canvas = document.getElementById('vw-canvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+
+    var img = new Image();
+
+    // UI elements
+    var tooltip = document.getElementById('vw-tooltip');
+    var dotCountEl = document.getElementById('vw-dot-count');
+    var killsEl = document.getElementById('vw-kills');
+    var deathsEl = document.getElementById('vw-deaths');
+    var kdEl = document.getElementById('vw-kd');
+    var hsEl = document.getElementById('vw-hs');
+    var matchesEl = document.getElementById('vw-matches');
+    var weaponContainer = document.getElementById('vw-weapons');
+    var matchListEl = document.getElementById('vw-match-list');
+
+    // ── Map tab switching ──
+    document.querySelectorAll('.vw-map-tab').forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('.vw-map-tab').forEach(function(t) { t.classList.remove('active'); });
+            this.classList.add('active');
+            currentMap = this.dataset.map;
+            selectedMatches.clear();
+            selectedWeapon = 'all';
+            loadMap();
+        });
+    });
+
+    // ── Mode switching ──
+    document.querySelectorAll('.vw-mode').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.vw-mode').forEach(function(b) { b.classList.remove('active'); });
+            this.classList.add('active');
+            mode = this.dataset.mode;
+            redraw();
+        });
+    });
+
+    // ── Layer toggles ──
+    document.getElementById('vw-show-kills').addEventListener('change', function() { showKills = this.checked; redraw(); });
+    document.getElementById('vw-show-deaths').addEventListener('change', function() { showDeaths = this.checked; redraw(); });
+    document.getElementById('vw-hs-only').addEventListener('change', function() { hsOnly = this.checked; redraw(); });
+
+    // ── Toggle all matches ──
+    document.getElementById('vw-toggle-all').addEventListener('click', function() {
+        if (selectedMatches.size === 0) return; // already showing all
+        selectedMatches.clear();
+        matchListEl.querySelectorAll('input').forEach(function(cb) { cb.checked = true; });
+        redraw();
+    });
+
+    function loadMap() {
+        img = new Image();
+        img.src = '{{ url_for("static", filename="radars/") }}' + currentMap + '.png';
+        img.onload = function() { buildUI(); redraw(); };
+        img.onerror = function() { buildUI(); redraw(); };
+        if (img.complete) { buildUI(); redraw(); }
+    }
+
+    function getCurrentDots() {
+        if (!mapsData[currentMap]) return [];
+        return mapsData[currentMap].dots;
+    }
+
+    function getFilteredDots() {
+        var all = getCurrentDots();
+        var filtered = [];
+        for (var i = 0; i < all.length; i++) {
+            var d = all[i];
+            if (d.type === 'kill' && !showKills) continue;
+            if (d.type === 'death' && !showDeaths) continue;
+            if (hsOnly && !d.headshot) continue;
+            if (selectedWeapon !== 'all' && d.weapon !== selectedWeapon) continue;
+            if (selectedMatches.size > 0 && !selectedMatches.has(d.match)) continue;
+            filtered.push(d);
+        }
+        return filtered;
+    }
+
+    function buildUI() {
+        var dots = getCurrentDots();
+
+        // Build weapon tags
+        var weapons = {};
+        for (var i = 0; i < dots.length; i++) {
+            var w = dots[i].weapon;
+            if (w) weapons[w] = (weapons[w] || 0) + 1;
+        }
+        var sorted = Object.entries(weapons).sort(function(a, b) { return b[1] - a[1]; });
+        weaponContainer.innerHTML = '<button class="vw-wpn-tag active" data-weapon="all">Alle</button>';
+        for (var j = 0; j < sorted.length; j++) {
+            var btn = document.createElement('button');
+            btn.className = 'vw-wpn-tag';
+            btn.dataset.weapon = sorted[j][0];
+            btn.textContent = sorted[j][0] + ' (' + sorted[j][1] + ')';
+            weaponContainer.appendChild(btn);
+        }
+        weaponContainer.querySelectorAll('.vw-wpn-tag').forEach(function(tag) {
+            tag.addEventListener('click', function() {
+                weaponContainer.querySelectorAll('.vw-wpn-tag').forEach(function(t) { t.classList.remove('active'); });
+                this.classList.add('active');
+                selectedWeapon = this.dataset.weapon;
+                redraw();
+            });
+        });
+
+        // Build match list
+        var mapMatches = mapsData[currentMap] ? mapsData[currentMap].matches : [];
+        matchListEl.innerHTML = '';
+        for (var k = 0; k < mapMatches.length; k++) {
+            var mid = mapMatches[k];
+            var m = matchIndex[mid];
+            if (!m) continue;
+            var item = document.createElement('label');
+            item.className = 'vw-match-item';
+            var resultColor = m.result === 'Sieg' ? 'var(--color-green)' : m.result === 'Niederlage' ? 'var(--color-red)' : 'var(--color-yellow)';
+            var resultBg = m.result === 'Sieg' ? 'rgba(74,222,128,0.12)' : m.result === 'Niederlage' ? 'rgba(248,113,113,0.12)' : 'rgba(250,204,21,0.12)';
+            item.innerHTML = '<input type="checkbox" checked data-match="' + mid + '">' +
+                '<span style="color:var(--color-neutral-500);">' + m.date + '</span>' +
+                '<span class="vw-match-result" style="color:' + resultColor + ';background:' + resultBg + ';">' + m.score + '</span>' +
+                '<span style="text-transform:capitalize;">' + m.map + '</span>';
+            matchListEl.appendChild(item);
+        }
+        matchListEl.querySelectorAll('input').forEach(function(cb) {
+            cb.addEventListener('change', function() {
+                // Rebuild selectedMatches from current checkbox state
+                selectedMatches.clear();
+                var allCbs = matchListEl.querySelectorAll('input');
+                var checkedCount = 0;
+                allCbs.forEach(function(c) {
+                    if (c.checked) checkedCount++;
+                });
+                // If all checked, no filter (empty set = show all)
+                if (checkedCount < allCbs.length) {
+                    allCbs.forEach(function(c) {
+                        if (c.checked) selectedMatches.add(parseInt(c.dataset.match));
+                    });
+                }
+                redraw();
+            });
+        });
+    }
+
+    function updateStats() {
+        var dots = getFilteredDots();
+        var kills = 0, deaths = 0, hs = 0;
+        for (var i = 0; i < dots.length; i++) {
+            if (dots[i].type === 'kill') { kills++; if (dots[i].headshot) hs++; }
+            else deaths++;
+        }
+        killsEl.textContent = kills;
+        deathsEl.textContent = deaths;
+        kdEl.textContent = deaths ? (kills / deaths).toFixed(2) : kills || '-';
+        hsEl.textContent = kills ? Math.round(hs / kills * 100) + '%' : '-';
+
+        var mapMatches = mapsData[currentMap] ? mapsData[currentMap].matches : [];
+        matchesEl.textContent = selectedMatches.size > 0 ? selectedMatches.size : mapMatches.length;
+        dotCountEl.textContent = dots.length + ' Events';
+    }
+
+    function hex2rgba(hex, a) {
+        var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+        return 'rgba('+r+','+g+','+b+','+a+')';
+    }
+
+    function drawDots(dots) {
+        var deaths = [], kills = [];
+        for (var i = 0; i < dots.length; i++) {
+            if (dots[i].type === 'death') deaths.push(dots[i]); else kills.push(dots[i]);
+        }
+
+        function drawDot(d) {
+            var x = d.x, y = d.y;
+            if (x < 0 || x > W || y < 0 || y > H) return;
+            var color = d.type === 'kill' ? (d.headshot ? '#fbbf24' : '#4ade80') : '#f87171';
+            var radius = d.headshot ? 5 : 4;
+            // Glow
+            var grad = ctx.createRadialGradient(x, y, 0, x, y, radius + 6);
+            grad.addColorStop(0, hex2rgba(color, 0.3)); grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.beginPath(); ctx.arc(x, y, radius + 6, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
+            // Dot
+            ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+            // Highlight
+            ctx.beginPath(); ctx.arc(x, y, 1.2, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fill();
+            // X for deaths
+            if (d.type === 'death') {
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.6;
+                ctx.beginPath(); ctx.moveTo(x-4,y-4); ctx.lineTo(x+4,y+4); ctx.moveTo(x+4,y-4); ctx.lineTo(x-4,y+4); ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+        deaths.forEach(drawDot);
+        kills.forEach(drawDot);
+    }
+
+    function drawLines(dots) {
+        // Draw line from player position to enemy position
+        for (var i = 0; i < dots.length; i++) {
+            var d = dots[i];
+            if (d.ex == null || d.ey == null) continue;
+            var x1 = d.x, y1 = d.y, x2 = d.ex, y2 = d.ey;
+            if (x1 < 0 || x1 > W || y1 < 0 || y1 > H) continue;
+            var color = d.type === 'kill' ? (d.headshot ? '#fbbf24' : '#4ade80') : '#f87171';
+            ctx.strokeStyle = hex2rgba(color, 0.15);
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        }
+        drawDots(dots);
+    }
+
+    function drawHeatmap(dots) {
+        var hc = document.createElement('canvas'); hc.width = W; hc.height = H;
+        var hctx = hc.getContext('2d');
+        for (var i = 0; i < dots.length; i++) {
+            var d = dots[i], x = d.x, y = d.y;
+            if (x < 0 || x > W || y < 0 || y > H) continue;
+            var r = 36;
+            var g = hctx.createRadialGradient(x, y, 0, x, y, r);
+            g.addColorStop(0, 'rgba(255,255,255,0.35)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+            hctx.beginPath(); hctx.arc(x, y, r, 0, Math.PI * 2); hctx.fillStyle = g; hctx.fill();
+        }
+        var imageData = hctx.getImageData(0, 0, W, H);
+        var pix = imageData.data;
+        for (var p = 0; p < pix.length; p += 4) {
+            var v = pix[p + 3];
+            if (v < 3) { pix[p+3] = 0; continue; }
+            var t = v / 255;
+            var r2, g2, b2;
+            if (t < 0.25) { r2 = 0; g2 = Math.round(t/0.25*255); b2 = 255; }
+            else if (t < 0.5) { r2 = 0; g2 = 255; b2 = Math.round((1-(t-0.25)/0.25)*255); }
+            else if (t < 0.75) { r2 = Math.round((t-0.5)/0.25*255); g2 = 255; b2 = 0; }
+            else { r2 = 255; g2 = Math.round((1-(t-0.75)/0.25)*255); b2 = 0; }
+            pix[p] = r2; pix[p+1] = g2; pix[p+2] = b2; pix[p+3] = Math.min(200, v * 2);
+        }
+        hctx.putImageData(imageData, 0, 0);
+        ctx.globalAlpha = 0.75; ctx.drawImage(hc, 0, 0); ctx.globalAlpha = 1.0;
+    }
+
+    function redraw() {
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = '#0d0f1a'; ctx.fillRect(0, 0, W, H);
+        if (img.complete && img.naturalWidth > 0) {
+            ctx.globalAlpha = 0.65; ctx.drawImage(img, 0, 0, W, H); ctx.globalAlpha = 1.0;
+        }
+
+        var dots = getFilteredDots();
+        if (mode === 'heatmap') {
+            drawHeatmap(dots);
+        } else if (mode === 'lines') {
+            drawLines(dots);
+        } else {
+            drawDots(dots);
+        }
+
+        // Map watermark
+        ctx.font = '500 14px Inter, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.textAlign = 'right';
+        ctx.fillText(currentMap.toUpperCase(), W - 14, H - 14);
+
+        updateStats();
+    }
+
+    // ── Tooltip ──
+    canvas.addEventListener('mousemove', function(e) {
+        var rect = canvas.getBoundingClientRect();
+        var mx = (e.clientX - rect.left) * (W / rect.width);
+        var my = (e.clientY - rect.top) * (H / rect.height);
+
+        var dots = getFilteredDots();
+        var found = null;
+        for (var i = 0; i < dots.length; i++) {
+            var d = dots[i];
+            var dx = d.x - mx, dy = d.y - my;
+            if (dx*dx + dy*dy < 200) {
+                var label = d.type === 'kill' ? 'Kill: ' + d.enemy : 'Death by ' + d.enemy;
+                found = { label: label, weapon: d.weapon, hs: d.headshot, match: d.match, round: d.round };
+                break;
+            }
+        }
+
+        if (found) {
+            var m = matchIndex[found.match];
+            var matchInfo = m ? m.date + ' ' + m.score : '';
+            tooltip.innerHTML = '<strong>' + found.label + '</strong>' +
+                (found.weapon ? ' <span style="color:var(--color-neutral-500);">(' + found.weapon + (found.hs ? ' HS' : '') + ')</span>' : '') +
+                '<br><span style="color:var(--color-neutral-500);">R' + found.round + ' — ' + matchInfo + '</span>';
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+            tooltip.style.top = (e.clientY - rect.top - 10) + 'px';
+        } else {
+            tooltip.style.display = 'none';
+        }
+    });
+    canvas.addEventListener('mouseleave', function() { tooltip.style.display = 'none'; });
+
+    // Init
+    loadMap();
+})();
+</script>
+{% endif %}
+{% endblock %}

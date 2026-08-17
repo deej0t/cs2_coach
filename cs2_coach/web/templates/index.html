@@ -119,6 +119,7 @@
     }
     .alert-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.25); color: var(--color-yellow); }
     .alert-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.25); color: var(--color-green); }
+    .alert-info { background: rgba(145,132,217,0.08); border: 1px solid rgba(145,132,217,0.25); color: var(--color-accent); }
 
     /* ── Role Badge ── */
     .role-badge {
@@ -156,7 +157,19 @@
         .bm-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 600px) {
+        .dash-top { grid-template-columns: 1fr 1fr; }
+        .hero-banner { flex-direction: column; text-align: center; padding: var(--space-4); gap: var(--space-3); }
+        .hero-meta { justify-content: center; flex-wrap: wrap; }
+        .hero-rating-val { font-size: 28px; }
+        .dash-maps { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 440px) {
         .dash-top { grid-template-columns: 1fr; }
+        .qs-value { font-size: 26px; }
+        .dash-maps { grid-template-columns: 1fr; }
+        .hero-avatar { width: 44px; height: 44px; font-size: 14px; }
+        .training-item { flex-wrap: wrap; }
+        .training-dur { margin-left: auto; }
     }
 </style>
 
@@ -215,6 +228,36 @@
         <div class="qs-sub">{% if dashboard.streak_type == 'Sieg' %}Siege{% elif dashboard.streak_type == 'Niederlage' %}Niederlagen{% else %}Unentschieden{% endif %} in Folge</div>
     </div>
 </div>
+
+<!-- ── Formkurve ── -->
+{% if dashboard.form_sparkline and dashboard.form_sparkline|length > 3 %}
+<div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-4);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+        <span class="card-kicker" style="margin:0;">Formkurve</span>
+        <div style="display:flex;gap:var(--space-3);font-size:12px;flex-wrap:wrap;">
+            {% set fc = dashboard.form_curve %}
+            <span>Letztes Spiel: <strong class="{% if fc.last1 >= 1.0 %}win{% elif fc.last1 < 0.85 %}loss{% endif %}">{{ fc.last1 }}</strong></span>
+            <span>Letzte 5: <strong class="{% if fc.last5 >= 1.0 %}win{% elif fc.last5 < 0.85 %}loss{% endif %}">{{ fc.last5 }}</strong></span>
+            <span>Letzte 20: <strong class="{% if fc.last20 >= 1.0 %}win{% elif fc.last20 < 0.85 %}loss{% endif %}">{{ fc.last20 }}</strong></span>
+            <span>Gesamt: <strong>{{ fc.all_time }}</strong></span>
+        </div>
+    </div>
+    <div style="display:flex;align-items:end;gap:3px;height:40px;">
+        {% set ratings = dashboard.form_sparkline|map(attribute='rating')|list %}
+        {% set max_r = ratings|max %}
+        {% set min_r = ratings|min %}
+        {% set range_r = max_r - min_r if max_r != min_r else 0.1 %}
+        {% for m in dashboard.form_sparkline %}
+        <div style="flex:1;border-radius:2px 2px 0 0;min-height:3px;height:{{ ((m.rating - min_r) / range_r * 32 + 6)|round }}px;background:{% if m.result == 'Sieg' %}#4ade80{% elif m.result == 'Niederlage' %}#f87171{% else %}#fbbf24{% endif %};cursor:default;"
+             title="{{ m.date }} {{ m.map }} {{ m.result }} — {{ m.rating }}"></div>
+        {% endfor %}
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--color-neutral-600);margin-top:3px;">
+        <span>{{ dashboard.form_sparkline[0].date }}</span>
+        <span>{{ dashboard.form_sparkline[-1].date }}</span>
+    </div>
+</div>
+{% endif %}
 
 <!-- ── Trend Alerts ── -->
 {% if dashboard.alerts %}
@@ -405,6 +448,7 @@
 {% if exports %}
 <div class="hr"></div>
 <h3>Letzte Analysen</h3>
+<div class="table-scroll">
 <table class="table">
     <thead>
         <tr>
@@ -436,6 +480,7 @@
         {% endfor %}
     </tbody>
 </table>
+</div>
 {% if exports|length > 10 %}
 <p style="margin-top: var(--space-4);"><a href="{{ url_for('exports') }}" class="btn btn-ghost">Alle {{ exports|length }} Exports anzeigen &#8594;</a></p>
 {% endif %}

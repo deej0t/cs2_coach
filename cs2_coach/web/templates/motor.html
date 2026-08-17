@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Muskelgedaechtnis{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Muskelgedaechtnis</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Motorische Faehigkeiten ueber Zeit — Spray, Counter-Strafe, Crosshair Placement, Headshot-Rate.
+</p>
+
+<style>
+    .ms-hero {
+        display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap;
+    }
+    .ms-stat-card {
+        flex: 1; min-width: 130px; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .ms-stat-val { font-family: var(--font-heading); font-size: 24px; font-weight: 700; line-height: 1; }
+    .ms-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .ms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+    .ms-skill-card { padding: var(--space-4) !important; border-top: 3px solid var(--color-neutral-700); }
+    .ms-skill-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .ms-skill-icon {
+        width: 36px; height: 36px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .ms-skill-label { font-size: 15px; font-weight: 600; }
+    .ms-skill-desc { font-size: 11px; color: var(--color-neutral-500); }
+
+    .ms-stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .ms-stat { text-align: center; }
+    .ms-stat .ms-stat-val { font-size: 20px; }
+
+    .ms-trend-row {
+        display: flex; align-items: center; gap: 8px; padding: 8px 0;
+        border-top: 1px solid rgba(255,255,255,0.04); font-size: 12px;
+    }
+    .ms-trend-arrow { font-size: 16px; font-weight: 700; }
+    .ms-trend-text { color: var(--color-neutral-400); }
+
+    .ms-delta-badge {
+        display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700;
+        padding: 2px 8px; border-radius: 10px;
+    }
+
+    .ms-range-row {
+        display: flex; justify-content: space-between; font-size: 10px; color: var(--color-neutral-500);
+        margin-top: 4px;
+    }
+
+    .ms-tips { margin-bottom: var(--space-5); }
+    .ms-tip {
+        display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+        border-radius: var(--radius-md); margin-bottom: var(--space-2); font-size: 13px;
+    }
+    .ms-tip-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.20); color: #4ade80; }
+    .ms-tip-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.20); color: #fbbf24; }
+
+    .ms-chart-wrap { position: relative; height: 280px; }
+    .ms-chart-wrap canvas { position: absolute; inset: 0; }
+
+    @media (max-width: 700px) {
+        .ms-grid { grid-template-columns: 1fr; }
+        .ms-hero { flex-direction: column; }
+    }
+</style>
+
+{% if not ms.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Nicht genug Daten — mindestens 3 Matches mit Mechanik-Daten noetig.</p>
+</div>
+{% else %}
+
+<!-- Hero -->
+<div class="ms-hero">
+    <div class="card elev-sm ms-stat-card">
+        <div class="ms-stat-val" style="color: var(--color-accent);">{{ ms.total_matches }}</div>
+        <div class="ms-stat-lbl">Matches analysiert</div>
+    </div>
+    <div class="card elev-sm ms-stat-card">
+        <div class="ms-stat-val">{{ ms.skills|length }}</div>
+        <div class="ms-stat-lbl">Skills getrackt</div>
+    </div>
+    {% set improved_count = ms.skills|selectattr("improved")|list|length %}
+    <div class="card elev-sm ms-stat-card">
+        <div class="ms-stat-val {% if improved_count >= ms.skills|length // 2 + 1 %}win{% else %}loss{% endif %}">{{ improved_count }}/{{ ms.skills|length }}</div>
+        <div class="ms-stat-lbl">Verbessert</div>
+    </div>
+</div>
+
+<!-- Tips -->
+{% if ms.tips %}
+<div class="ms-tips">
+    {% for tip in ms.tips %}
+    <div class="ms-tip ms-tip-{{ tip.type }}">
+        <i data-lucide="{% if tip.type == 'success' %}trending-up{% else %}trending-down{% endif %}" style="width:16px;height:16px;flex-shrink:0;"></i>
+        <span>{{ tip.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Skill Cards -->
+<div class="card-kicker" style="margin-bottom: 8px;">Motor-Skills im Detail</div>
+<div class="ms-grid">
+    {% for sk in ms.skills %}
+    <div class="card elev-sm ms-skill-card" style="border-top-color: {{ sk.color }};">
+        <div class="ms-skill-head">
+            <div class="ms-skill-icon" style="background: {{ sk.color }}15; color: {{ sk.color }};">
+                <i data-lucide="{{ sk.icon }}" style="width:18px;height:18px;"></i>
+            </div>
+            <div>
+                <div class="ms-skill-label">{{ sk.label }}</div>
+                <div class="ms-skill-desc">{{ sk.desc }}</div>
+            </div>
+        </div>
+
+        <div class="ms-stat-grid">
+            <div class="ms-stat">
+                <div class="ms-stat-val" style="color: {{ sk.color }};">{{ sk.current }}{{ sk.unit }}</div>
+                <div class="ms-stat-lbl">Aktuell</div>
+            </div>
+            <div class="ms-stat">
+                <div class="ms-stat-val">{{ sk.all_avg }}{{ sk.unit }}</div>
+                <div class="ms-stat-lbl">Durchschnitt</div>
+            </div>
+            <div class="ms-stat">
+                <div class="ms-stat-val {% if sk.improved %}win{% else %}loss{% endif %}">{{ sk.best }}{{ sk.unit }}</div>
+                <div class="ms-stat-lbl">Bestwert</div>
+            </div>
+        </div>
+
+        <div class="ms-trend-row">
+            <span class="ms-trend-arrow" style="color: {% if sk.improved %}#4ade80{% else %}#f87171{% endif %};">
+                {% if sk.improved %}&#9650;{% else %}&#9660;{% endif %}
+            </span>
+            <span class="ms-trend-text">Erste 5: {{ sk.first5_avg }}{{ sk.unit }} → Letzte 5: {{ sk.last5_avg }}{{ sk.unit }}</span>
+            <span class="ms-delta-badge" style="margin-left: auto; background: {% if sk.improved %}rgba(74,222,128,0.15);color:#4ade80{% else %}rgba(248,113,113,0.15);color:#f87171{% endif %};">
+                {% if sk.improved %}+{% else %}-{% endif %}{{ sk.delta_abs }}{{ sk.unit }}
+            </span>
+        </div>
+
+        <div class="ms-range-row">
+            <span>Worst: {{ sk.worst }}{{ sk.unit }}</span>
+            <span>{{ sk.count }} Matches</span>
+            <span>Best: {{ sk.best }}{{ sk.unit }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Trend Chart -->
+<div class="card-kicker" style="margin-bottom: 8px;">Verlauf (Rolling 5-Match Average)</div>
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
+    <div class="ms-chart-wrap">
+        <canvas id="ms-trend-chart"></canvas>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if ms.has_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var skills = {{ ms.skills | tojson }};
+    var labels = {{ ms.chart_labels | tojson }};
+
+    // Use the longest skill's rolling values for label alignment
+    var maxLen = 0;
+    skills.forEach(function(sk) { if (sk.rolling.length > maxLen) maxLen = sk.rolling.length; });
+    var chartLabels = labels.slice(0, maxLen);
+
+    var datasets = skills.map(function(sk) {
+        return {
+            label: sk.label,
+            data: sk.rolling,
+            borderColor: sk.color,
+            backgroundColor: sk.color + '15',
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+            pointBackgroundColor: sk.color,
+            yAxisID: sk.higher_better ? 'y' : 'y1',
+            spanGaps: true,
+        };
+    });
+
+    new Chart(document.getElementById('ms-trend-chart'), {
+        type: 'line',
+        data: { labels: chartLabels, datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    labels: { color: '#9a9dae', font: { family: 'Inter', size: 11 }, usePointStyle: true, pointStyle: 'circle' }
+                },
+                tooltip: {
+                    backgroundColor: '#232532', borderColor: '#3f424d', borderWidth: 1,
+                    titleColor: '#e9e9ed', bodyColor: '#e9e9ed',
+                    titleFont: { family: 'Inter' }, bodyFont: { family: 'Inter' },
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#75798c', font: { size: 9, family: 'Inter' }, maxRotation: 45, maxTicksLimit: 15 },
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                },
+                y: {
+                    position: 'left',
+                    title: { display: true, text: 'Hoeher = besser', color: '#4ade80', font: { size: 10 } },
+                    ticks: { color: '#75798c', font: { size: 10, family: 'Inter' } },
+                    grid: { color: 'rgba(255,255,255,0.06)' },
+                },
+                y1: {
+                    position: 'right',
+                    title: { display: true, text: 'Niedriger = besser', color: '#f87171', font: { size: 10 } },
+                    ticks: { color: '#75798c', font: { size: 10, family: 'Inter' } },
+                    grid: { display: false },
+                    reverse: true,
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -278,10 +278,51 @@
         details summary { cursor: pointer; color: var(--color-accent-300); font-size: 13px; }
         details summary:hover { color: var(--color-accent); }
 
+        /* ── Mobile Responsive ── */
         @media (max-width: 768px) {
             .grid-2, .grid-3 { grid-template-columns: 1fr; }
             .container, .container-wide { padding: var(--space-4); }
             .topbar { padding: var(--space-3) var(--space-4); }
+            h1 { font-size: 22px; } h2 { font-size: 19px; } h3 { font-size: 16px; }
+
+            /* Tables: horizontal scroll wrapper */
+            .table { font-size: 13px; }
+            .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 calc(-1 * var(--space-4)); padding: 0 var(--space-4); }
+            .table th, .table td { padding: var(--space-1) var(--space-2); white-space: nowrap; }
+
+            /* Cards: tighter on mobile */
+            .card { padding: var(--space-3); }
+
+            /* Filter bar: scroll horizontally */
+            .filter-bar { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+            .filter-btn { flex-shrink: 0; }
+
+            /* Touch-friendly buttons */
+            .btn { min-height: 40px; padding: var(--space-3) var(--space-4); }
+
+            /* Drop zone: tighter */
+            .drop-zone { padding: 18px 12px; }
+        }
+
+        @media (max-width: 480px) {
+            body { font-size: 14px; }
+            .container, .container-wide { padding: var(--space-3); }
+            h1 { font-size: 20px; } h2 { font-size: 17px; } h3 { font-size: 15px; }
+
+            /* Stat values: slightly smaller */
+            .qs-value, .da-stat-val, .da-ctx-val { font-size: 22px !important; }
+
+            /* Cards: minimal padding */
+            .card { padding: var(--space-2); gap: var(--space-1); }
+
+            /* Tags: slightly smaller */
+            .tag { font-size: 10px; padding: 2px 8px; }
+
+            /* Sidebar: full width on very small screens */
+            .sidebar { width: 100%; }
+
+            /* Topbar brand: shorter */
+            .topbar-brand { font-size: 15px; }
         }
     </style>
 </head>
@@ -322,6 +363,7 @@
             <div class="sidebar-group-label">Analyse</div>
             <a href="{{ url_for('index') }}"      data-page="index"><i data-lucide="layout-dashboard"></i> Dashboard</a>
             <a href="{{ url_for('batch') }}"       data-page="batch"><i data-lucide="layers"></i> Batch-Analyse</a>
+            <a href="{{ url_for('sharecode') }}"   data-page="sharecode"><i data-lucide="share-2"></i> Share-Code</a>
             <a href="{{ url_for('watch') }}"       data-page="watch"><i data-lucide="folder-search"></i> Watch</a>
             <a href="{{ url_for('exports') }}"     data-page="exports"><i data-lucide="archive"></i> Exports</a>
         </div>
@@ -335,12 +377,18 @@
             <a href="{{ url_for('maps') }}"        data-page="maps"><i data-lucide="map"></i> Maps</a>
             <a href="{{ url_for('opponents') }}"   data-page="opponents"><i data-lucide="swords"></i> Gegner</a>
             <a href="{{ url_for('nemesis') }}"     data-page="nemesis"><i data-lucide="skull"></i> Nemesis</a>
+            <a href="{{ url_for('scout') }}"       data-page="scout"><i data-lucide="binoculars"></i> Gegner-Scout</a>
             <a href="{{ url_for('teammates') }}"   data-page="teammates"><i data-lucide="users"></i> Teammates</a>
+            <a href="{{ url_for('team') }}"         data-page="team"><i data-lucide="shield"></i> Team-Analyse</a>
             <a href="{{ url_for('leaderboard') }}" data-page="leaderboard"><i data-lucide="bar-chart-3"></i> Leaderboard</a>
             <a href="{{ url_for('h2h') }}"         data-page="h2h"><i data-lucide="git-compare"></i> Head-to-Head</a>
             <a href="{{ url_for('compare') }}"     data-page="compare"><i data-lucide="trophy"></i> Fortschritt</a>
             <a href="{{ url_for('momentum') }}"    data-page="momentum"><i data-lucide="flame"></i> Momentum</a>
             <a href="{{ url_for('mechanics') }}"   data-page="mechanics"><i data-lucide="focus"></i> Mechanik</a>
+            <a href="{{ url_for('motor') }}"       data-page="motor"><i data-lucide="brain"></i> Muskelgedaechtnis</a>
+            <a href="{{ url_for('deaths') }}"      data-page="deaths"><i data-lucide="heart-crack"></i> Death-Analyse</a>
+            <a href="{{ url_for('zones') }}"       data-page="zones"><i data-lucide="scan"></i> Positions-Zonen</a>
+            <a href="{{ url_for('viewer') }}"      data-page="viewer"><i data-lucide="map-pin"></i> 2D Viewer</a>
             <a href="{{ url_for('rounds') }}"      data-page="rounds"><i data-lucide="clock"></i> Rundenverlauf</a>
         </div>
 
@@ -354,10 +402,14 @@
             <a href="{{ url_for('digest') }}"      data-page="digest"><i data-lucide="notebook-pen"></i> Digest</a>
             <a href="{{ url_for('clutches') }}"      data-page="clutches"><i data-lucide="shield"></i> Clutches</a>
             <a href="{{ url_for('achievements') }}" data-page="achievements"><i data-lucide="award"></i> Achievements</a>
+            <a href="{{ url_for('bookmarks') }}"   data-page="bookmarks"><i data-lucide="bookmark"></i> Replay-Bookmarks</a>
+            <a href="{{ url_for('chat') }}"        data-page="chat"><i data-lucide="message-circle"></i> AI Coach</a>
         </div>
 
         <div class="sidebar-group">
             <div class="sidebar-group-label">System</div>
+            <a href="{{ url_for('graph') }}"       data-page="graph"><i data-lucide="git-fork"></i> Wissensgraph</a>
+            <a href="{{ url_for('export_csv') }}"  data-page="export_csv"><i data-lucide="download"></i> CSV-Export</a>
             <a href="{{ url_for('settings') }}"    data-page="settings"><i data-lucide="settings"></i> Einstellungen</a>
         </div>
 

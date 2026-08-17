@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Replay-Bookmarks{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Replay-Bookmarks</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Automatisch erkannte Schluesselrunden — schau dir diese Momente im Demo-Viewer an.
+</p>
+
+<style>
+    .bm-hero {
+        display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap;
+    }
+    .bm-stat-card {
+        flex: 1; min-width: 120px; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .bm-stat-val { font-family: var(--font-heading); font-size: 24px; font-weight: 700; line-height: 1; }
+    .bm-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .bm-match {
+        margin-bottom: var(--space-4); border-left: 3px solid var(--color-neutral-700);
+        padding: var(--space-4) !important;
+    }
+    .bm-match-head {
+        display: flex; align-items: center; gap: var(--space-3); margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .bm-match-title { font-size: 15px; font-weight: 600; }
+    .bm-match-meta { font-size: 11px; color: var(--color-neutral-500); }
+    .bm-match-result {
+        font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+    }
+    .bm-match-demo {
+        font-size: 10px; color: var(--color-neutral-500); background: var(--color-neutral-800);
+        padding: 2px 8px; border-radius: 4px; margin-left: auto; font-family: monospace;
+    }
+
+    .bm-list { display: flex; flex-direction: column; gap: 6px; }
+    .bm-item {
+        display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+        border-radius: var(--radius-md); font-size: 13px;
+        background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04);
+    }
+    .bm-item:hover { background: rgba(255,255,255,0.04); }
+    .bm-item-icon {
+        width: 28px; height: 28px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .bm-round {
+        font-family: var(--font-heading); font-size: 14px; font-weight: 700;
+        min-width: 50px; color: var(--color-neutral-400);
+    }
+    .bm-side {
+        font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 8px;
+        min-width: 24px; text-align: center;
+    }
+    .bm-label { font-weight: 600; }
+    .bm-tip { font-size: 11px; color: var(--color-neutral-500); margin-top: 2px; }
+    .bm-won { font-size: 10px; margin-left: auto; flex-shrink: 0; }
+
+    .bm-type-legend {
+        display: flex; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-4);
+        font-size: 12px; color: var(--color-neutral-400);
+    }
+    .bm-legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; }
+
+    @media (max-width: 600px) {
+        .bm-stat-card { min-width: 80px; padding: 8px; }
+        .bm-stat-val { font-size: 20px; }
+        .bm-item { flex-wrap: wrap; gap: 6px; }
+        .bm-match-demo { margin-left: 0; }
+        .bm-match-head { flex-direction: column; align-items: flex-start; }
+    }
+</style>
+
+{% if not bm.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Bookmarks gefunden — analysiere Demos mit Rundenverlauf-Daten.</p>
+</div>
+{% else %}
+
+<!-- Hero Stats -->
+<div class="bm-hero">
+    <div class="card elev-sm bm-stat-card">
+        <div class="bm-stat-val" style="color: var(--color-accent);">{{ bm.total_bookmarks }}</div>
+        <div class="bm-stat-lbl">Bookmarks</div>
+    </div>
+    <div class="card elev-sm bm-stat-card">
+        <div class="bm-stat-val">{{ bm.total_matches }}</div>
+        <div class="bm-stat-lbl">Matches</div>
+    </div>
+    {% if bm.type_counts.get('clutch_win') %}
+    <div class="card elev-sm bm-stat-card">
+        <div class="bm-stat-val" style="color: #4ade80;">{{ bm.type_counts.clutch_win }}</div>
+        <div class="bm-stat-lbl">Clutch Wins</div>
+    </div>
+    {% endif %}
+    {% if bm.type_counts.get('multi_kill') %}
+    <div class="card elev-sm bm-stat-card">
+        <div class="bm-stat-val" style="color: #fbbf24;">{{ bm.type_counts.multi_kill }}</div>
+        <div class="bm-stat-lbl">Multi-Kills</div>
+    </div>
+    {% endif %}
+    {% if bm.type_counts.get('early_death') %}
+    <div class="card elev-sm bm-stat-card">
+        <div class="bm-stat-val" style="color: #f87171;">{{ bm.type_counts.early_death }}</div>
+        <div class="bm-stat-lbl">Fruehe Tode</div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Type Legend -->
+<div class="bm-type-legend">
+    <span><span class="bm-legend-dot" style="background: #4ade80;"></span> Clutch gewonnen</span>
+    <span><span class="bm-legend-dot" style="background: #f87171;"></span> Clutch verloren / Frueher Tod</span>
+    <span><span class="bm-legend-dot" style="background: #fbbf24;"></span> Multi-Kill</span>
+    <span><span class="bm-legend-dot" style="background: #fb923c;"></span> Vorteil verspielt</span>
+    <span><span class="bm-legend-dot" style="background: #75798c;"></span> Invisible Round</span>
+</div>
+
+<!-- Per-Match Bookmarks -->
+{% for m in bm.matches %}
+<div class="card elev-sm bm-match" style="border-left-color: {% if m.result == 'Sieg' %}#4ade80{% elif m.result == 'Niederlage' %}#f87171{% else %}#fbbf24{% endif %};">
+    <div class="bm-match-head">
+        <div class="bm-match-title">{{ m.match_label }}</div>
+        <span class="bm-match-result" style="background: {% if m.result == 'Sieg' %}rgba(74,222,128,0.15);color:#4ade80{% elif m.result == 'Niederlage' %}rgba(248,113,113,0.15);color:#f87171{% else %}rgba(251,191,36,0.15);color:#fbbf24{% endif %};">
+            {{ m.result }}
+        </span>
+        <span class="bm-match-meta">{{ m.date }}</span>
+        {% if m.demo_file %}
+        <span class="bm-match-demo">{{ m.demo_file }}</span>
+        {% endif %}
+        {% if m.total_bookmarks > m.bookmarks|length %}
+        <span class="bm-match-meta">+{{ m.total_bookmarks - m.bookmarks|length }} weitere</span>
+        {% endif %}
+    </div>
+
+    <div class="bm-list">
+        {% for b in m.bookmarks %}
+        <div class="bm-item">
+            <div class="bm-item-icon" style="background: {{ b.color }}15; color: {{ b.color }};">
+                <i data-lucide="{{ b.icon }}" style="width:14px;height:14px;"></i>
+            </div>
+            <div class="bm-round">R{{ b.round }}</div>
+            <span class="bm-side" style="background: {% if b.side == 'CT' %}rgba(96,165,250,0.15);color:#60a5fa{% else %}rgba(251,191,36,0.15);color:#fbbf24{% endif %};">
+                {{ b.side }}
+            </span>
+            <div style="flex: 1;">
+                <div class="bm-label">{{ b.label }}</div>
+                <div class="bm-tip">{{ b.tip }}</div>
+            </div>
+            <div class="bm-won">
+                {% if b.won %}
+                <span style="color: #4ade80;">W</span>
+                {% else %}
+                <span style="color: #f87171;">L</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+{% endif %}
+{% endblock %}

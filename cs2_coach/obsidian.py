@@ -41,6 +41,28 @@ def export_match(result: MatchResult, coach_report: str, vault_path: str,
     return md_path
 
 
+def _compact_kill_positions(positions: list[dict], target_id: str) -> list[dict]:
+    """Filter kill positions to target player's kills/deaths, compact format."""
+    compact = []
+    for kp in positions:
+        is_kill = kp["attacker_id"] == target_id
+        is_death = kp["victim_id"] == target_id
+        if not is_kill and not is_death:
+            continue
+        compact.append({
+            "t": "k" if is_kill else "d",
+            "x": round(kp["attacker_x" if is_kill else "victim_x"], 1),
+            "y": round(kp["attacker_y" if is_kill else "victim_y"], 1),
+            "ex": round(kp["victim_x" if is_kill else "attacker_x"], 1),
+            "ey": round(kp["victim_y" if is_kill else "attacker_y"], 1),
+            "w": kp["weapon"],
+            "hs": kp["headshot"],
+            "r": kp["round"],
+            "e": kp["victim_name"] if is_kill else kp["attacker_name"],
+        })
+    return compact
+
+
 def _build_export_json(result: MatchResult, coach_report: str) -> dict:
     """Build JSON export with all stats for web UI consumption."""
     s = result.player_stats
@@ -65,6 +87,7 @@ def _build_export_json(result: MatchResult, coach_report: str) -> dict:
         "duel_matrix": result.duel_matrix,
         "round_timeline": result.round_timeline,
         "economy": result.economy_performance,
+        "kill_positions": _compact_kill_positions(result.kill_positions, s.steam_id),
     }
 
 

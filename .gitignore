@@ -26,6 +26,12 @@ Desktop.ini
 # Obsidian
 .obsidian/
 
+# Config (contains API keys and personal data)
+config.yaml
+
+# UI mockups
+cs2-coach-ui-mockups/
+
 # Exports (user-generated data)
 CS2-Coach/exports/
 CS2-Coach/Konzepte/
@@ -38,7 +44,7 @@ graphify-out/
 
 # Temp JSON exports
 *.json
-!config.yaml
+!config.yaml.example
 
 # Claude
 .claudian/

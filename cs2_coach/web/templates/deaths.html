@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Death-Analyse{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Death-Analyse</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Warum stirbst du? Tod-Muster, Timing, Kontext und was du verbessern kannst.
+</p>
+
+<style>
+    .da-hero {
+        display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap;
+    }
+    .da-stat-card {
+        flex: 1; min-width: 130px; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface);
+        box-shadow: var(--shadow-sm);
+    }
+    .da-stat-val { font-family: var(--font-heading); font-size: 24px; font-weight: 700; line-height: 1; }
+    .da-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .da-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
+    .da-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
+
+    .da-section { margin-bottom: var(--space-5); }
+    .da-section-title {
+        font-size: 14px; font-weight: 600; margin-bottom: 10px;
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    /* Donut chart */
+    .da-donut-wrap {
+        display: flex; align-items: center; justify-content: center; gap: var(--space-5);
+        padding: var(--space-4);
+    }
+    .da-donut-legend { display: flex; flex-direction: column; gap: 8px; }
+    .da-legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .da-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .da-legend-pct { font-weight: 600; min-width: 40px; text-align: right; }
+
+    /* Bars */
+    .da-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .da-bar-label { font-size: 12px; min-width: 80px; text-align: right; color: var(--color-neutral-400); }
+    .da-bar-track { flex: 1; height: 8px; background: var(--color-neutral-800); border-radius: 4px; overflow: hidden; }
+    .da-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+    .da-bar-val { font-size: 12px; font-weight: 600; min-width: 50px; }
+
+    /* Side split */
+    .da-side-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin: 8px 0; }
+    .da-side-ct { background: #7eaadb; }
+    .da-side-t { background: #deb23e; }
+    .da-side-labels { display: flex; justify-content: space-between; font-size: 12px; }
+
+    /* Killer/weapon rows */
+    .da-row {
+        display: grid; grid-template-columns: 30px 1fr 60px 50px 80px;
+        gap: 8px; align-items: center; padding: 8px 12px;
+        border-radius: var(--radius-sm); background: var(--color-surface);
+        font-size: 13px; transition: background 0.15s;
+    }
+    .da-row:hover { background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface)); }
+    .da-row-rank { font-size: 11px; font-weight: 600; color: var(--color-neutral-600); text-align: center; }
+    .da-row-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .da-row-val { text-align: center; font-weight: 600; }
+    .da-row-sub { text-align: center; font-size: 11px; color: var(--color-neutral-500); }
+    .da-row-bar { height: 4px; background: var(--color-neutral-800); border-radius: 2px; overflow: hidden; }
+    .da-row-bar-fill { height: 100%; background: var(--color-red); border-radius: 2px; }
+
+    .da-wpn-row {
+        display: grid; grid-template-columns: 1fr 50px 1fr;
+        gap: 8px; align-items: center; padding: 6px 12px;
+        font-size: 13px;
+    }
+    .da-wpn-name { font-weight: 500; }
+    .da-wpn-count { text-align: center; font-weight: 600; }
+    .da-wpn-bar { height: 6px; background: var(--color-neutral-800); border-radius: 3px; overflow: hidden; }
+    .da-wpn-bar-fill { height: 100%; border-radius: 3px; }
+
+    /* Context cards */
+    .da-ctx-card {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        background: var(--color-surface); box-shadow: var(--shadow-sm);
+        text-align: center;
+    }
+    .da-ctx-val { font-family: var(--font-heading); font-size: 28px; font-weight: 700; line-height: 1; }
+    .da-ctx-sub { font-size: 11px; color: var(--color-neutral-500); margin-top: 4px; }
+    .da-ctx-detail { font-size: 12px; color: var(--color-neutral-400); margin-top: 6px; }
+
+    /* Match table */
+    .da-match-header {
+        display: grid; grid-template-columns: 90px 80px 70px 60px 60px 80px 70px 1fr;
+        gap: 6px; padding: 6px 12px; font-size: 10px; letter-spacing: 0.08em;
+        text-transform: uppercase; color: var(--color-neutral-600);
+    }
+    .da-match-row {
+        display: grid; grid-template-columns: 90px 80px 70px 60px 60px 80px 70px 1fr;
+        gap: 6px; align-items: center; padding: 8px 12px;
+        border-radius: var(--radius-sm); font-size: 13px;
+        border-bottom: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent);
+    }
+
+    @media (max-width: 900px) {
+        .da-grid-2, .da-grid-3 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+        .da-match-header, .da-match-row { grid-template-columns: 80px 70px 60px 60px 1fr; }
+        .da-match-header > :nth-child(5),
+        .da-match-header > :nth-child(6),
+        .da-match-header > :nth-child(7),
+        .da-match-row > :nth-child(5),
+        .da-match-row > :nth-child(6),
+        .da-match-row > :nth-child(7) { display: none; }
+        .da-row { grid-template-columns: 24px 1fr 50px 50px; }
+        .da-row > :nth-child(5) { display: none; }
+    }
+</style>
+
+{% if not da.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Daten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- ── Tips ── -->
+{% if da.tips %}
+<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:var(--space-5);">
+    {% for tip in da.tips %}
+    <div class="alert-bar alert-{{ tip.type }}">
+        <i data-lucide="{{ tip.icon }}" style="width:15px;height:15px;flex-shrink:0;"></i>
+        <span>{{ tip.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── Hero Stats ── -->
+<div class="da-hero">
+    <div class="da-stat-card">
+        <div class="da-stat-val">{{ da.total_deaths }}</div>
+        <div class="da-stat-lbl">Tode gesamt</div>
+    </div>
+    <div class="da-stat-card">
+        <div class="da-stat-val">{{ da.avg_deaths }}</div>
+        <div class="da-stat-lbl">&#216; Tode / Match</div>
+    </div>
+    <div class="da-stat-card">
+        <div class="da-stat-val {% if da.death_rate > 55 %}loss{% elif da.death_rate < 45 %}win{% endif %}">{{ da.death_rate }}%</div>
+        <div class="da-stat-lbl">Death Rate / Runde</div>
+    </div>
+    <div class="da-stat-card">
+        <div class="da-stat-val {% if da.survival_rate >= 55 %}win{% elif da.survival_rate < 45 %}loss{% endif %}">{{ da.survival_rate }}%</div>
+        <div class="da-stat-lbl">Survival Rate</div>
+    </div>
+    <div class="da-stat-card">
+        <div class="da-stat-val {% if da.opening_death_rate > 15 %}loss{% elif da.opening_death_rate < 8 %}win{% endif %}">{{ da.opening_death_rate }}%</div>
+        <div class="da-stat-lbl">Opening Death Rate</div>
+    </div>
+    <div class="da-stat-card">
+        <div class="da-stat-val {% if da.opening_duel_wr >= 55 %}win{% elif da.opening_duel_wr < 45 %}loss{% endif %}">{{ da.opening_duel_wr }}%</div>
+        <div class="da-stat-lbl"><abbr title="Opening Duel Winrate">OD Winrate</abbr></div>
+    </div>
+</div>
+
+<!-- ── Timing + Side + Context ── -->
+<div class="da-grid-3">
+    <!-- Timing Donut -->
+    <div class="card elev-sm">
+        <span class="card-kicker">Wann stirbst du?</span>
+        <div class="da-donut-wrap">
+            <canvas id="timing-donut" width="140" height="140"></canvas>
+            <div class="da-donut-legend">
+                <div class="da-legend-item">
+                    <span class="da-legend-dot" style="background:#f87171;"></span>
+                    <span>Frueh</span>
+                    <span class="da-legend-pct">{{ da.timing_pcts.early }}%</span>
+                </div>
+                <div class="da-legend-item">
+                    <span class="da-legend-dot" style="background:#fbbf24;"></span>
+                    <span>Mitte</span>
+                    <span class="da-legend-pct">{{ da.timing_pcts.mid }}%</span>
+                </div>
+                <div class="da-legend-item">
+                    <span class="da-legend-dot" style="background:#4ade80;"></span>
+                    <span>Spaet</span>
+                    <span class="da-legend-pct">{{ da.timing_pcts.late }}%</span>
+                </div>
+            </div>
+        </div>
+        <div style="font-size:12px;color:var(--color-neutral-500);text-align:center;">
+            {{ da.timing.early }} frueh / {{ da.timing.mid }} mitte / {{ da.timing.late }} spaet
+        </div>
+    </div>
+
+    <!-- Side Split -->
+    <div class="card elev-sm">
+        <span class="card-kicker">Auf welcher Seite?</span>
+        <div style="padding:var(--space-4) var(--space-3);">
+            <div class="da-side-bar">
+                <div class="da-side-ct" style="width:{{ da.side.ct_pct }}%;"></div>
+                <div class="da-side-t" style="width:{{ da.side.t_pct }}%;"></div>
+            </div>
+            <div class="da-side-labels">
+                <span style="color:#7eaadb;font-weight:600;">CT {{ da.side.ct_pct }}%</span>
+                <span style="color:#deb23e;font-weight:600;">T {{ da.side.t_pct }}%</span>
+            </div>
+            <div style="margin-top:var(--space-4);">
+                <div class="da-bar-row">
+                    <span class="da-bar-label" style="color:#7eaadb;">CT Death Rate</span>
+                    <div class="da-bar-track">
+                        <div class="da-bar-fill" style="width:{{ da.side.ct_death_rate }}%;background:#7eaadb;"></div>
+                    </div>
+                    <span class="da-bar-val" style="color:#7eaadb;">{{ da.side.ct_death_rate }}%</span>
+                </div>
+                <div class="da-bar-row">
+                    <span class="da-bar-label" style="color:#deb23e;">T Death Rate</span>
+                    <div class="da-bar-track">
+                        <div class="da-bar-fill" style="width:{{ da.side.t_death_rate }}%;background:#deb23e;"></div>
+                    </div>
+                    <span class="da-bar-val" style="color:#deb23e;">{{ da.side.t_death_rate }}%</span>
+                </div>
+            </div>
+            <div style="font-size:12px;color:var(--color-neutral-500);text-align:center;margin-top:8px;">
+                {{ da.side.ct_deaths }} CT-Tode / {{ da.side.t_deaths }} T-Tode
+            </div>
+        </div>
+    </div>
+
+    <!-- Death Context -->
+    <div class="card elev-sm">
+        <span class="card-kicker">Tod-Kontext</span>
+        <div style="padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-3);">
+            <div class="da-ctx-card" style="background:rgba(255,255,255,0.02);">
+                <div class="da-ctx-val">{{ da.trade.trade_kills }}</div>
+                <div class="da-ctx-sub"><abbr title="Kills innerhalb 3s nach einem Teammate-Tod">Trade-Kills</abbr></div>
+                <div class="da-ctx-detail">{{ da.trade.trade_rate }}% <abbr title="Trade-Kills pro Runde">Trade Rate</abbr></div>
+            </div>
+            <div class="da-ctx-card" style="background:rgba(255,255,255,0.02);">
+                <div class="da-ctx-val {% if da.impact.impact_pct >= 50 %}win{% elif da.impact.impact_pct < 30 %}loss{% endif %}">{{ da.impact.impact_pct }}%</div>
+                <div class="da-ctx-sub">Produktive Tode</div>
+                <div class="da-ctx-detail">{{ da.impact.with_kill }}x mit Kill / {{ da.impact.no_impact }}x ohne Impact</div>
+            </div>
+            <div class="da-ctx-card" style="background:rgba(255,255,255,0.02);">
+                <div class="da-ctx-val">{{ da.hs_death_pct }}%</div>
+                <div class="da-ctx-sub">Headshot-Tode</div>
+                <div class="da-ctx-detail">{{ da.hs_deaths }} von {{ da.total_deaths }} Toden durch HS</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Weapons + Killers ── -->
+<div class="da-grid-2">
+    <!-- Top Death Weapons -->
+    <div class="card elev-sm">
+        <span class="card-kicker">Womit wirst du getoetet?</span>
+        <div style="padding:var(--space-3) 0;">
+            {% for w in da.top_weapons %}
+            <div class="da-wpn-row">
+                <span class="da-wpn-name">{{ w.weapon }}</span>
+                <span class="da-wpn-count">{{ w.count }}</span>
+                <div class="da-wpn-bar">
+                    <div class="da-wpn-bar-fill" style="width:{{ w.pct }}%;background:
+                        {% if loop.index <= 3 %}var(--color-red)
+                        {% elif loop.index <= 6 %}var(--color-yellow)
+                        {% else %}var(--color-neutral-600){% endif %};"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Top Killers -->
+    <div class="card elev-sm">
+        <span class="card-kicker">Wer toetet dich am meisten?</span>
+        <div style="display:flex;flex-direction:column;gap:3px;padding:var(--space-3) 0;">
+            {% for k in da.top_killers %}
+            <div class="da-row">
+                <span class="da-row-rank">#{{ loop.index }}</span>
+                <span class="da-row-name">{{ k.name }}</span>
+                <span class="da-row-val" style="color:var(--color-red);">{{ k.deaths }}x</span>
+                <span class="da-row-sub">{{ k.hs_pct }}% HS</span>
+                <span class="da-row-sub">{{ k.weapon }}</span>
+            </div>
+            {% endfor %}
+            {% if not da.top_killers %}
+            <div style="text-align:center;color:var(--color-neutral-600);font-size:13px;padding:var(--space-4);">Keine Daten</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ── Death Trend Chart ── -->
+<div class="da-section">
+    <div class="card elev-sm">
+        <span class="card-kicker">Trend — Tode pro Match</span>
+        <div style="padding:var(--space-3);">
+            <canvas id="death-trend-chart" height="80"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ── Per-Match Table ── -->
+<div class="da-section">
+    <div class="da-section-title">
+        <i data-lucide="list" style="width:16px;height:16px;color:var(--color-accent);"></i>
+        <span>Tode pro Match</span>
+    </div>
+    <div class="da-match-header">
+        <span>Datum</span>
+        <span>Map</span>
+        <span>Score</span>
+        <span>Ergebnis</span>
+        <span>Tode</span>
+        <span>Death Rate</span>
+        <span>Opening</span>
+        <span>Top Waffen</span>
+    </div>
+    {% for m in da.matches %}
+    <div class="da-match-row">
+        <span style="color:var(--color-neutral-500);">{{ m.date }}</span>
+        <span>{{ m.map }}</span>
+        <span>{{ m.score }}</span>
+        <span>
+            {% if m.result == 'Sieg' %}<span class="tag tag-win">Sieg</span>
+            {% elif m.result == 'Niederlage' %}<span class="tag tag-loss">Niederlage</span>
+            {% else %}<span class="tag tag-draw">{{ m.result }}</span>{% endif %}
+        </span>
+        <span style="font-weight:600;">{{ m.deaths }}</span>
+        <span style="font-weight:500;{% if m.death_rate > 60 %}color:var(--color-red);{% elif m.death_rate < 40 %}color:var(--color-green);{% endif %}">{{ m.death_rate }}%</span>
+        <span>{{ m.opening_deaths }}</span>
+        <span style="font-size:12px;color:var(--color-neutral-500);">{{ m.top_weapons }}</span>
+    </div>
+    {% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if da.has_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    if (window.lucide) lucide.createIcons();
+
+    // ── Timing Donut ──
+    var donutEl = document.getElementById('timing-donut');
+    if (donutEl) {
+        new Chart(donutEl, {
+            type: 'doughnut',
+            data: {
+                labels: ['Frueh', 'Mitte', 'Spaet'],
+                datasets: [{
+                    data: [{{ da.timing.early }}, {{ da.timing.mid }}, {{ da.timing.late }}],
+                    backgroundColor: ['#f87171', '#fbbf24', '#4ade80'],
+                    borderWidth: 0,
+                    spacing: 2,
+                }]
+            },
+            options: {
+                responsive: false,
+                cutout: '60%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                                var pct = total ? Math.round(ctx.raw / total * 100) : 0;
+                                return ctx.label + ': ' + ctx.raw + ' (' + pct + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // ── Death Trend ──
+    var trendEl = document.getElementById('death-trend-chart');
+    if (trendEl) {
+        var trend = {{ da.trend | tojson }};
+        new Chart(trendEl, {
+            type: 'line',
+            data: {
+                labels: trend.map(function(t) { return t.date; }),
+                datasets: [{
+                    label: 'Tode',
+                    data: trend.map(function(t) { return t.deaths; }),
+                    borderColor: '#f87171',
+                    backgroundColor: 'rgba(248,113,113,0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointBackgroundColor: trend.map(function(t) {
+                        return t.result === 'Sieg' ? '#4ade80' : t.result === 'Niederlage' ? '#f87171' : '#fbbf24';
+                    }),
+                    pointHoverRadius: 6,
+                }, {
+                    label: 'Death Rate %',
+                    data: trend.map(function(t) { return t.death_rate; }),
+                    borderColor: 'rgba(145,132,217,0.6)',
+                    borderWidth: 1.5,
+                    borderDash: [4, 4],
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 0,
+                    yAxisID: 'y1',
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: true, labels: { color: 'rgba(233,233,237,0.6)', font: { size: 10 } } },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(ctx) {
+                                var t = trend[ctx.dataIndex];
+                                return t.map + ' (' + t.result + ')';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: 'rgba(233,233,237,0.5)', font: { size: 10 }, maxRotation: 45 },
+                        grid: { display: false }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: 'rgba(233,233,237,0.5)', font: { size: 10 } },
+                        grid: { color: 'rgba(233,233,237,0.06)' }
+                    },
+                    y1: {
+                        position: 'right',
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { color: 'rgba(145,132,217,0.5)', font: { size: 10 }, callback: function(v) { return v + '%'; } },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+})();
+</script>
+{% endif %}
+{% endblock %}

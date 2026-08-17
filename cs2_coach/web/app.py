@@ -23,6 +23,7 @@ from ..parser import parse_demo, MatchResult
 from ..coach import generate_report
 from ..obsidian import export_match
 from ..maps import MAP_RADAR_DATA, game_to_radar
+from ..ai_chat import build_player_context, stream_gemini, stream_ollama, check_ollama_status
 
 CONFIG_PATH = Path(__file__).parent.parent.parent / "config.yaml"
 UPLOAD_FOLDER = tempfile.mkdtemp(prefix="cs2coach_")
@@ -147,7 +148,7 @@ def create_app() -> Flask:
         sid = _resolve_steam_id()
         return {"steam_avatar_url": _fetch_steam_avatar(sid) if sid else ""}
 
-    @app.route("/")
+    @app.route("/", methods=["GET", "POST"])
     def index():
         exports = _get_exports(cfg)
         map_stats = _get_map_stats(exports)
@@ -155,8 +156,10 @@ def create_app() -> Flask:
         return render_template("index.html", exports=exports, map_stats=map_stats,
                                dashboard=dashboard, config=cfg)
 
-    @app.route("/analyze", methods=["POST"])
+    @app.route("/analyze", methods=["GET", "POST"])
     def analyze():
+        if request.method == "GET":
+            return redirect(url_for("index"))
         player_name = request.form.get("player", cfg.get("player_name", ""))
         steam_id = request.form.get("steamid", cfg.get("steam_id", ""))
 
@@ -211,9 +214,11 @@ def create_app() -> Flask:
             if os.path.exists(filepath):
                 os.remove(filepath)
 
-    @app.route("/analyze-path", methods=["POST"])
+    @app.route("/analyze-path", methods=["GET", "POST"])
     def analyze_path():
         """Analyze a demo from a local file path (no upload needed)."""
+        if request.method == "GET":
+            return redirect(url_for("index"))
         demo_path = request.form.get("demo_path", "").strip()
         player_name = request.form.get("player", cfg.get("player_name", ""))
         steam_id = request.form.get("steamid", cfg.get("steam_id", ""))
@@ -437,7 +442,8 @@ def create_app() -> Flask:
     def sessions():
         export_list = _get_exports(cfg)
         session_data = _build_sessions(export_list)
-        return render_template("sessions.html", sessions=session_data, config=cfg)
+        insights = _build_session_insights(export_list)
+        return render_template("sessions.html", sessions=session_data, insights=insights, config=cfg)
 
     @app.route("/weapons")
     def weapons():
@@ -484,7 +490,8 @@ def create_app() -> Flask:
     @app.route("/opponents")
     def opponents():
         opponent_data = _build_opponent_stats(cfg)
-        return render_template("opponents.html", opponents=opponent_data, config=cfg)
+        strength = _build_opponent_strength(cfg)
+        return render_template("opponents.html", opponents=opponent_data, ostr=strength, config=cfg)
 
     @app.route("/compare")
     def compare():
@@ -532,6 +539,67 @@ def create_app() -> Flask:
         md = _render_digest_markdown(period)
         filepath.write_text(md, encoding="utf-8")
         flash(f"Digest exportiert: {fname}", "success")
+        return redirect(url_for("digest"))
+
+    @app.route("/digest/discord", methods=["POST"])
+    def digest_discord():
+        webhook_url = cfg.get("discord_webhook", "")
+        if not webhook_url:
+            flash("Kein Discord-Webhook konfiguriert (Einstellungen).", "error")
+            return redirect(url_for("digest"))
+        export_list = _get_exports(cfg)
+        digest_data = _build_digest(export_list)
+        period_key = request.form.get("period", "")
+        period = None
+        for source in [digest_data.get("periods", []), digest_data.get("weekly", [])]:
+            for p in source:
+                if p["key"] == period_key:
+                    period = p
+                    break
+        if not period:
+            flash("Zeitraum nicht gefunden.", "error")
+            return redirect(url_for("digest"))
+        try:
+            p = period
+            result_emoji = ":green_circle:" if p["win_rate"] >= 55 else (":red_circle:" if p["win_rate"] < 45 else ":yellow_circle:")
+            player = cfg.get("player_name", "Spieler")
+            delta_text = ""
+            if p.get("delta"):
+                d = p["delta"]
+                parts = []
+                for key, label in [("rating", "Rating"), ("win_rate", "WR"), ("kd", "K/D")]:
+                    v = d.get(key, 0)
+                    if v != 0:
+                        sign = "+" if v > 0 else ""
+                        parts.append(f"{label} {sign}{v}")
+                if parts:
+                    delta_text = f"\n📊 vs. Vorperiode: {' | '.join(parts)}"
+            embed = {
+                "title": f"{result_emoji} Digest: {p['label']}",
+                "color": 0x4ade80 if p["win_rate"] >= 55 else (0xf87171 if p["win_rate"] < 45 else 0xfbbf24),
+                "description": f"**{p['matches']}** Matches — {p['wins']}W / {p['losses']}L{delta_text}",
+                "fields": [
+                    {"name": "Win-Rate", "value": f"**{p['win_rate']}%**", "inline": True},
+                    {"name": "Rating", "value": f"**{p['avg_rating']}**", "inline": True},
+                    {"name": "K/D", "value": f"**{p['avg_kd']}**", "inline": True},
+                    {"name": "ADR", "value": f"**{p['avg_adr']}**", "inline": True},
+                    {"name": "HS%", "value": f"{p['avg_hs']}%", "inline": True},
+                    {"name": "KAST%", "value": f"{p['avg_kast']}%", "inline": True},
+                ],
+                "footer": {"text": f"{player} • CS2 Coach Digest"},
+                "timestamp": datetime.now().isoformat(),
+            }
+            if p.get("best"):
+                embed["fields"].append({"name": "Bestes Match", "value": f"{p['best']['map']} ({p['best']['score']}) — {p['best']['rating']}", "inline": False})
+            payload = json.dumps({"embeds": [embed]}).encode("utf-8")
+            req = urllib.request.Request(
+                webhook_url, data=payload,
+                headers={"Content-Type": "application/json", "User-Agent": "CS2-Coach/1.0"},
+            )
+            urllib.request.urlopen(req, timeout=5)
+            flash(f"Digest an Discord gesendet: {p['label']}", "success")
+        except Exception as exc:
+            flash(f"Discord-Fehler: {exc}", "error")
         return redirect(url_for("digest"))
 
     @app.route("/exports")
@@ -626,6 +694,206 @@ def create_app() -> Flask:
 
         return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
+    @app.route("/sharecode")
+    def sharecode():
+        return render_template("sharecode.html", config=cfg)
+
+    @app.route("/api/sharecode-decode", methods=["POST"])
+    def sharecode_decode():
+        """Decode a share code and return match info."""
+        from ..sharecode import decode_sharecode, validate_sharecode
+        code = request.form.get("code", "").strip()
+        if not code:
+            return jsonify({"error": "Kein Share-Code angegeben"}), 400
+        if not validate_sharecode(code):
+            return jsonify({"error": "Ungueltiges Format. Erwartet: CSGO-xxxxx-xxxxx-xxxxx-xxxxx-xxxxx"}), 400
+        try:
+            info = decode_sharecode(code)
+            return jsonify({"ok": True, **info})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+    @app.route("/api/sharecode-analyze")
+    def sharecode_analyze():
+        """SSE endpoint: download demo via share code and analyze it."""
+        from ..sharecode import decode_sharecode, validate_sharecode, download_demo
+        code = request.args.get("code", "").strip()
+        player_name = request.args.get("player", "") or cfg.get("player_name", "")
+        steam_id = request.args.get("steamid", "") or _resolve_steam_id()
+        api_key = cfg.get("steam_api_key", "")
+
+        if not validate_sharecode(code):
+            def err():
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Ungueltiger Share-Code'})}\n\n"
+            return Response(err(), mimetype="text/event-stream")
+
+        def generate():
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Share-Code wird dekodiert...'})}\n\n"
+            try:
+                info = decode_sharecode(code)
+                yield f"data: {json.dumps({'type': 'decoded', 'match_id': info['match_id'], 'outcome_id': info['outcome_id'], 'token': info['token']})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': f'Dekodierung fehlgeschlagen: {e}'})}\n\n"
+                return
+
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Suche Demo auf Valve-Servern...'})}\n\n"
+            import time as _time
+            t0 = _time.monotonic()
+            # status_msgs collects sub-status from download_demo
+            status_msgs = []
+            def _on_dl_status(msg):
+                status_msgs.append(msg)
+            try:
+                dem_path = download_demo(code, steam_api_key=api_key,
+                                         on_status=_on_dl_status)
+                elapsed = round(_time.monotonic() - t0, 1)
+                if not dem_path:
+                    detail = status_msgs[-1] if status_msgs else "Nicht verfuegbar"
+                    yield f"data: {json.dumps({'type': 'error', 'message': f'Demo nicht gefunden ({elapsed}s). {detail} — Tipp: CS2 > Einstellungen > Spiel > \"Match-Demos herunterladen\" aktivieren und Folder-Watch nutzen.'})}\n\n"
+                    return
+                yield f"data: {json.dumps({'type': 'status', 'message': f'Demo heruntergeladen ({elapsed}s): {dem_path.name}'})}\n\n"
+            except Exception as e:
+                elapsed = round(_time.monotonic() - t0, 1)
+                yield f"data: {json.dumps({'type': 'error', 'message': f'Download fehlgeschlagen ({elapsed}s): {e}'})}\n\n"
+                return
+
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Demo wird analysiert...'})}\n\n"
+            try:
+                result = parse_demo(str(dem_path), player_name, steam_id)
+                report = generate_report(result)
+                vault_path = cfg.get("obsidian_vault_path", "")
+                sub = cfg.get("coach_subfolder", "CS2-Coach")
+                if vault_path:
+                    export_match(result, report, vault_path, sub)
+
+                s = result.player_stats
+                yield f"data: {json.dumps({'type': 'result', 'map': result.map_name, 'score': f'{result.score_team1}:{result.score_team2}', 'result_str': result.result_str, 'rating': result.rating, 'kills': s.kills, 'deaths': s.deaths, 'kd': round(s.kd_ratio, 2), 'adr': round(s.adr, 1), 'player': s.name})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': f'Analyse fehlgeschlagen: {e}'})}\n\n"
+                return
+
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+    @app.route("/api/auto-sync")
+    def auto_sync():
+        """SSE endpoint: fetch all new matches via Steam API, download and analyze."""
+        from ..sharecode import fetch_all_new_codes, download_demo, decode_sharecode
+        api_key = cfg.get("steam_api_key", "")
+        auth_token = cfg.get("cs2_auth_token", "")
+        steam_id = _resolve_steam_id()
+        last_code = cfg.get("last_sharecode", "")
+        player_name = cfg.get("player_name", "")
+
+        if not api_key or not auth_token or not steam_id:
+            def err():
+                missing = []
+                if not api_key:
+                    missing.append("Steam API Key")
+                if not auth_token:
+                    missing.append("CS2 Auth Token")
+                if not steam_id:
+                    missing.append("Steam ID")
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Fehlende Konfiguration: ' + ', '.join(missing) + '. Bitte in Einstellungen eintragen.'})}\n\n"
+            return Response(err(), mimetype="text/event-stream")
+
+        if not last_code:
+            def err():
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Kein Start-Code gesetzt. Bitte zuerst einen Match Share-Code manuell analysieren oder unter Share-Code einfuegen.'})}\n\n"
+            return Response(err(), mimetype="text/event-stream")
+
+        def generate():
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Pruefe auf neue Matches...'})}\n\n"
+
+            try:
+                new_codes = fetch_all_new_codes(api_key, steam_id, auth_token, last_code)
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': f'API-Fehler: {e}'})}\n\n"
+                return
+
+            if not new_codes:
+                yield f"data: {json.dumps({'type': 'done', 'message': 'Keine neuen Matches gefunden.', 'count': 0})}\n\n"
+                return
+
+            yield f"data: {json.dumps({'type': 'status', 'message': f'{len(new_codes)} neue Matches gefunden!'})}\n\n"
+
+            success_count = 0
+            latest_code = last_code
+
+            for i, code in enumerate(new_codes):
+                yield f"data: {json.dumps({'type': 'progress', 'current': i+1, 'total': len(new_codes), 'code': code})}\n\n"
+
+                # Download demo
+                yield f"data: {json.dumps({'type': 'status', 'message': f'Match {i+1}/{len(new_codes)}: Suche Demo auf Valve-Servern...'})}\n\n"
+                import time as _time
+                t0 = _time.monotonic()
+                try:
+                    dem_path = download_demo(code, steam_api_key=api_key)
+                    elapsed = round(_time.monotonic() - t0, 1)
+                    if not dem_path:
+                        yield f"data: {json.dumps({'type': 'skip', 'current': i+1, 'message': f'Demo nicht verfuegbar ({elapsed}s) — abgelaufen oder noch nicht bereit.'})}\n\n"
+                        latest_code = code
+                        continue
+                    yield f"data: {json.dumps({'type': 'status', 'message': f'Match {i+1}/{len(new_codes)}: Demo geladen ({elapsed}s), analysiere...'})}\n\n"
+                except Exception as e:
+                    elapsed = round(_time.monotonic() - t0, 1)
+                    yield f"data: {json.dumps({'type': 'skip', 'current': i+1, 'message': f'Download fehlgeschlagen ({elapsed}s): {e}'})}\n\n"
+                    latest_code = code
+                    continue
+
+                # Analyze
+                yield f"data: {json.dumps({'type': 'status', 'message': f'Match {i+1}/{len(new_codes)}: Analysiere...'})}\n\n"
+                try:
+                    result = parse_demo(str(dem_path), player_name, steam_id)
+                    report = generate_report(result)
+                    vault_path = cfg.get("obsidian_vault_path", "")
+                    sub = cfg.get("coach_subfolder", "CS2-Coach")
+                    if vault_path:
+                        export_match(result, report, vault_path, sub)
+                    _post_discord(cfg.get("discord_webhook", ""), result, cfg)
+
+                    s = result.player_stats
+                    yield f"data: {json.dumps({'type': 'result', 'current': i+1, 'total': len(new_codes), 'map': result.map_name, 'score': f'{result.score_team1}:{result.score_team2}', 'result_str': result.result_str, 'rating': result.rating, 'kills': s.kills, 'deaths': s.deaths})}\n\n"
+                    success_count += 1
+                except Exception as e:
+                    yield f"data: {json.dumps({'type': 'skip', 'current': i+1, 'message': f'Analyse fehlgeschlagen: {e}'})}\n\n"
+
+                latest_code = code
+
+            # Save the latest code for next sync
+            cfg["last_sharecode"] = latest_code
+            try:
+                import yaml as _yaml
+                config_data = dict(cfg)
+                with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                    f.write("# CS2-Coach Konfiguration\n")
+                    _yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+            except Exception:
+                pass
+
+            yield f"data: {json.dumps({'type': 'done', 'message': f'{success_count} Matches analysiert.', 'count': success_count})}\n\n"
+
+        return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+    @app.route("/api/set-last-sharecode", methods=["POST"])
+    def set_last_sharecode():
+        """Set the starting share code for auto-sync."""
+        code = request.form.get("code", "").strip()
+        from ..sharecode import validate_sharecode
+        if not code or not validate_sharecode(code):
+            return jsonify({"error": "Ungueltiger Share-Code"}), 400
+        cfg["last_sharecode"] = code
+        try:
+            import yaml as _yaml
+            config_data = dict(cfg)
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                f.write("# CS2-Coach Konfiguration\n")
+                _yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+        except Exception:
+            pass
+        return jsonify({"ok": True, "code": code})
+
     @app.route("/achievements")
     def achievements():
         exports = _get_exports(cfg)
@@ -670,6 +938,11 @@ def create_app() -> Flask:
         nem_data = _build_nemesis(cfg)
         return render_template("nemesis.html", nem=nem_data, config=cfg)
 
+    @app.route("/scout")
+    def scout():
+        scout_data = _build_scout_data(cfg)
+        return render_template("scout.html", scout=scout_data, config=cfg)
+
     @app.route("/momentum")
     def momentum():
         mom_data = _build_momentum(cfg)
@@ -706,6 +979,11 @@ def create_app() -> Flask:
         rd_data = _build_round_timeline(cfg)
         return render_template("rounds.html", rd=rd_data, config=cfg)
 
+    @app.route("/deaths")
+    def deaths():
+        death_data = _build_death_analysis(cfg)
+        return render_template("deaths.html", da=death_data, config=cfg)
+
     @app.route("/settings")
     def settings():
         # Always reload config from disk
@@ -741,6 +1019,13 @@ def create_app() -> Flask:
             "demo_folder": request.form.get("demo_folder", "").strip(),
             "language": request.form.get("language", "de").strip(),
             "discord_webhook": request.form.get("discord_webhook", "").strip(),
+            "steam_api_key": request.form.get("steam_api_key", "").strip(),
+            "cs2_auth_token": request.form.get("cs2_auth_token", "").strip(),
+            "last_sharecode": cfg.get("last_sharecode", ""),
+            "ai_provider": request.form.get("ai_provider", cfg.get("ai_provider", "ollama")).strip(),
+            "gemini_api_key": request.form.get("gemini_api_key", cfg.get("gemini_api_key", "")).strip(),
+            "ollama_url": request.form.get("ollama_url", cfg.get("ollama_url", "http://192.168.188.71:11434")).strip(),
+            "ai_model": request.form.get("ai_model", cfg.get("ai_model", "")).strip(),
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             f.write("# CS2-Coach Konfiguration\n")
@@ -814,6 +1099,158 @@ def create_app() -> Flask:
         flash(f"Komplett-Reset: {removed} Dateien + __pycache__ geloescht.", "success")
         return redirect(url_for("settings"))
 
+    @app.route("/graph")
+    def graph():
+        vault_path = cfg.get("obsidian_vault_path", "")
+        subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+        graph_data: dict = {"has_data": False}
+        if vault_path:
+            graph_dir = Path(vault_path) / subfolder / "_graph"
+            analysis_file = graph_dir / "Graph-Analyse.md"
+            json_file = graph_dir / "cs2_graph.json"
+            if analysis_file.exists():
+                graph_data["has_data"] = True
+                graph_data["analysis_md"] = analysis_file.read_text(encoding="utf-8")
+            if json_file.exists():
+                try:
+                    gdata = json.loads(json_file.read_text(encoding="utf-8"))
+                    graph_data["nodes"] = len(gdata.get("nodes", []))
+                    graph_data["edges"] = len(gdata.get("edges", gdata.get("links", [])))
+                    graph_data["top_nodes"] = sorted(
+                        gdata.get("nodes", []),
+                        key=lambda n: n.get("degree", n.get("size", 0)),
+                        reverse=True,
+                    )[:15]
+                except Exception:
+                    pass
+        return render_template("graph.html", graph=graph_data, config=cfg)
+
+    @app.route("/graph/rebuild", methods=["POST"])
+    def graph_rebuild():
+        vault_path = cfg.get("obsidian_vault_path", "")
+        subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+        if not vault_path:
+            flash("Vault-Pfad nicht konfiguriert.", "error")
+            return redirect(url_for("graph"))
+        try:
+            from ..graph import index_vault
+            stats = index_vault(vault_path, subfolder)
+            flash(f"Graph neu gebaut: {stats['nodes']} Knoten, {stats['edges']} Kanten, {stats['clusters']} Cluster", "success")
+        except Exception as exc:
+            flash(f"Graph-Fehler: {exc}", "error")
+        return redirect(url_for("graph"))
+
+    @app.route("/zones")
+    def zones():
+        zone_data = _build_zone_analysis(cfg)
+        return render_template("zones.html", zd=zone_data, config=cfg)
+
+    @app.route("/team")
+    def team():
+        team_data = _build_team_analysis(cfg)
+        return render_template("team.html", td=team_data, config=cfg)
+
+    @app.route("/motor")
+    def motor():
+        motor_data = _build_motor_skills(cfg)
+        return render_template("motor.html", ms=motor_data, config=cfg)
+
+    @app.route("/export/csv")
+    def export_csv():
+        import csv
+        import io
+        exports = _get_exports(cfg)
+        if not exports:
+            flash("Keine Daten zum Exportieren.", "error")
+            return redirect(url_for("settings"))
+
+        buf = io.StringIO()
+        fields = [
+            "date", "map", "result", "score", "kills", "deaths", "assists",
+            "kd", "adr", "rating", "hs_pct", "kast",
+            "counter_strafe", "crosshair_placement", "utility_per_round",
+            "opening_kills", "opening_deaths", "trade_kills", "survival_rate",
+            "clutch_wins", "clutch_attempts",
+        ]
+        writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        for e in exports:
+            writer.writerow({f: e.get(f, "") for f in fields})
+
+        output = buf.getvalue()
+        return Response(
+            output,
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment; filename=cs2_coach_stats.csv"},
+        )
+
+    @app.route("/bookmarks")
+    def bookmarks():
+        bm_data = _build_bookmarks(cfg)
+        return render_template("bookmarks.html", bm=bm_data, config=cfg)
+
+    @app.route("/viewer")
+    def viewer():
+        vd = _build_viewer_data(cfg)
+        return render_template("viewer.html", vd=vd, config=cfg)
+
+    @app.route("/chat")
+    def chat():
+        provider = cfg.get("ai_provider", "ollama")
+        ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
+        ollama_status = check_ollama_status(ollama_url) if provider == "ollama" else {"online": False, "models": []}
+        return render_template("chat.html", config=cfg,
+                               ollama_status=ollama_status)
+
+    @app.route("/api/chat", methods=["POST"])
+    def api_chat():
+        """SSE endpoint for AI coach chat streaming."""
+        data = request.get_json(silent=True) or {}
+        messages = data.get("messages", [])
+        if not messages:
+            return jsonify({"error": "Keine Nachricht"}), 400
+
+        provider = cfg.get("ai_provider", "ollama")
+        exports = _get_exports(cfg)
+        context = build_player_context(exports, cfg.get("player_name", ""))
+
+        def generate():
+            try:
+                if provider == "gemini":
+                    api_key = cfg.get("gemini_api_key", "")
+                    if not api_key:
+                        yield f"data: {json.dumps({'text': '**Fehler:** Kein Gemini API Key konfiguriert. Gehe zu Einstellungen.'})}\n\n"
+                        yield f"data: {json.dumps({'done': True})}\n\n"
+                        return
+                    model = cfg.get("ai_model", "") or "gemini-2.0-flash"
+                    for chunk in stream_gemini(messages, context, api_key, model):
+                        yield f"data: {json.dumps({'text': chunk})}\n\n"
+                else:
+                    ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
+                    model = cfg.get("ai_model", "")
+                    if not model:
+                        # Auto-detect first available model
+                        status = check_ollama_status(ollama_url)
+                        if status["online"] and status["models"]:
+                            model = status["models"][0]
+                        else:
+                            model = "llama3.1:8b"
+                    for chunk in stream_ollama(messages, context, ollama_url, model):
+                        yield f"data: {json.dumps({'text': chunk})}\n\n"
+
+                yield f"data: {json.dumps({'done': True})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'text': f'**Fehler:** {e}'})}\n\n"
+                yield f"data: {json.dumps({'done': True})}\n\n"
+
+        return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+    @app.route("/api/ollama-status")
+    def api_ollama_status():
+        ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
+        status = check_ollama_status(ollama_url)
+        return jsonify(status)
+
     return app
 
 
@@ -835,9 +1272,19 @@ def _get_exports(cfg: dict) -> list[dict]:
             player = data.get("player", {})
             weapons = player.get("weapons", {})
             side = player.get("side_split", {})
+            # Extract time of day from datetime field or filename
+            dt_str = match.get("datetime", "")
+            time_hour = -1
+            if dt_str and " " in dt_str:
+                try:
+                    time_hour = int(dt_str.split(" ")[1].split(":")[0])
+                except (ValueError, IndexError):
+                    pass
             exports.append({
                 "filename": f.name,
                 "date": match.get("date", match.get("datetime", "?")),
+                "datetime": dt_str,
+                "time_hour": time_hour,
                 "map": match.get("map", "?"),
                 "total_rounds": match.get("total_rounds", 0),
                 "score": f"{match.get('score_own', '?')}:{match.get('score_enemy', '?')}",
@@ -974,6 +1421,101 @@ def _build_kill_map_data(result: MatchResult) -> dict | None:
         "dots": dots,
         "utils": utils,
         "total_rounds": total_rounds,
+    }
+
+
+def _build_viewer_data(cfg: dict) -> dict:
+    """Build aggregated kill/death positions across all exports for the 2D viewer."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+    if not vault_path:
+        return {"has_data": False}
+
+    export_dir = Path(vault_path) / subfolder / "exports"
+    if not export_dir.exists():
+        return {"has_data": False}
+
+    # Aggregate per-map positions from all exports
+    maps_data: dict[str, dict] = {}  # map -> {dots, matches}
+    match_index: list[dict] = []  # list of matches for filter UI
+
+    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        positions = data.get("kill_positions", [])
+        match_info = data.get("match", {})
+        map_name = match_info.get("map", "").lower()
+        if not map_name or map_name not in MAP_RADAR_DATA:
+            continue
+
+        match_date = match_info.get("date", "")
+        result_str = match_info.get("result", "")
+        score = f"{match_info.get('score_own', 0)}:{match_info.get('score_enemy', 0)}"
+        match_id = len(match_index)
+
+        match_index.append({
+            "id": match_id,
+            "date": match_date,
+            "map": map_name,
+            "result": result_str,
+            "score": score,
+        })
+
+        if map_name not in maps_data:
+            maps_data[map_name] = {"dots": [], "matches": []}
+
+        maps_data[map_name]["matches"].append(match_id)
+
+        for pos in positions:
+            px = game_to_radar(pos["x"], pos["y"], map_name)
+            epx = game_to_radar(pos.get("ex", 0), pos.get("ey", 0), map_name)
+            if not px:
+                continue
+
+            dot = {
+                "x": round(px[0], 1),
+                "y": round(px[1], 1),
+                "type": "kill" if pos.get("t") == "k" else "death",
+                "weapon": pos.get("w", "").replace("weapon_", ""),
+                "headshot": pos.get("hs", False),
+                "round": pos.get("r", 0),
+                "enemy": pos.get("e", ""),
+                "match": match_id,
+            }
+            if epx:
+                dot["ex"] = round(epx[0], 1)
+                dot["ey"] = round(epx[1], 1)
+            maps_data[map_name]["dots"].append(dot)
+
+    if not maps_data:
+        return {"has_data": False}
+
+    # Pick the map with the most data as default
+    default_map = max(maps_data, key=lambda m: len(maps_data[m]["dots"]))
+
+    # Summary per map
+    map_summaries = []
+    for m in sorted(maps_data.keys()):
+        dots = maps_data[m]["dots"]
+        kills = sum(1 for d in dots if d["type"] == "kill")
+        deaths = sum(1 for d in dots if d["type"] == "death")
+        map_summaries.append({
+            "name": m,
+            "kills": kills,
+            "deaths": deaths,
+            "matches": len(maps_data[m]["matches"]),
+            "kd": round(kills / deaths, 2) if deaths else kills,
+        })
+
+    return {
+        "has_data": True,
+        "maps_data": maps_data,
+        "map_summaries": map_summaries,
+        "default_map": default_map,
+        "match_index": match_index,
     }
 
 
@@ -1123,6 +1665,161 @@ def _build_opponent_stats(cfg: dict) -> list[dict]:
         })
 
     return sorted(result, key=lambda x: -x["total_duels"])
+
+
+def _build_opponent_strength(cfg: dict) -> dict:
+    """Analyze performance by opponent strength tier using enemy team ratings."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+    if not vault_path:
+        return {"has_data": False}
+
+    export_dir = Path(vault_path) / subfolder / "exports"
+    if not export_dir.exists():
+        return {"has_data": False}
+
+    # Tiers: weak (<0.85 avg enemy rating), average (0.85-1.05), strong (>1.05)
+    tiers = {
+        "weak": {"label": "Schwach", "threshold": "< 0.85", "color": "#4ade80",
+                 "matches": 0, "wins": 0, "rating_sum": 0, "kd_sum": 0,
+                 "adr_sum": 0, "enemy_rating_sum": 0},
+        "average": {"label": "Mittel", "threshold": "0.85 – 1.05", "color": "#fbbf24",
+                    "matches": 0, "wins": 0, "rating_sum": 0, "kd_sum": 0,
+                    "adr_sum": 0, "enemy_rating_sum": 0},
+        "strong": {"label": "Stark", "threshold": "> 1.05", "color": "#f87171",
+                   "matches": 0, "wins": 0, "rating_sum": 0, "kd_sum": 0,
+                   "adr_sum": 0, "enemy_rating_sum": 0},
+    }
+    match_details = []
+
+    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        sb = data.get("scoreboard", [])
+        match = data.get("match", {})
+        player = data.get("player", {})
+        if not sb or not player:
+            continue
+
+        target_idx = next((i for i, s in enumerate(sb) if s.get("is_target")), None)
+        if target_idx is None:
+            continue
+
+        team_start = 0 if target_idx < 5 else 5
+        enemy_start = 5 if target_idx < 5 else 0
+
+        # Compute enemy team average KD and ADR (rating not always available for enemies)
+        enemy_kds = []
+        enemy_adrs = []
+        for i in range(enemy_start, enemy_start + 5):
+            if i >= len(sb):
+                continue
+            s = sb[i]
+            enemy_kds.append(s.get("kd", 0))
+            enemy_adrs.append(s.get("adr", 0))
+
+        if not enemy_kds:
+            continue
+
+        avg_enemy_kd = sum(enemy_kds) / len(enemy_kds)
+        avg_enemy_adr = sum(enemy_adrs) / len(enemy_adrs)
+        # Use enemy K/D as proxy for strength (more reliable than rating which may be 0)
+        enemy_strength = avg_enemy_kd
+
+        my_rating = player.get("rating", 0)
+        my_kd = player.get("kd", 0)
+        my_adr = player.get("adr", 0)
+        won = match.get("result") == "Sieg"
+
+        if enemy_strength < 0.85:
+            tier_key = "weak"
+        elif enemy_strength <= 1.05:
+            tier_key = "average"
+        else:
+            tier_key = "strong"
+
+        t = tiers[tier_key]
+        t["matches"] += 1
+        t["wins"] += 1 if won else 0
+        t["rating_sum"] += my_rating
+        t["kd_sum"] += my_kd
+        t["adr_sum"] += my_adr
+        t["enemy_rating_sum"] += enemy_strength
+
+        match_details.append({
+            "date": match.get("date", ""),
+            "map": match.get("map", "?"),
+            "result": match.get("result", "?"),
+            "my_rating": my_rating,
+            "my_kd": my_kd,
+            "enemy_kd": round(avg_enemy_kd, 2),
+            "enemy_adr": round(avg_enemy_adr, 1),
+            "tier": tier_key,
+        })
+
+    total_matches = sum(t["matches"] for t in tiers.values())
+    if total_matches < 3:
+        return {"has_data": False}
+
+    # Compute tier averages
+    tier_list = []
+    for key in ["weak", "average", "strong"]:
+        t = tiers[key]
+        n = t["matches"]
+        if n == 0:
+            continue
+        tier_list.append({
+            "key": key,
+            "label": t["label"],
+            "threshold": t["threshold"],
+            "color": t["color"],
+            "matches": n,
+            "win_rate": round(t["wins"] / n * 100, 1),
+            "avg_rating": round(t["rating_sum"] / n, 2),
+            "avg_kd": round(t["kd_sum"] / n, 2),
+            "avg_adr": round(t["adr_sum"] / n, 1),
+            "avg_enemy_kd": round(t["enemy_rating_sum"] / n, 2),
+        })
+
+    # Tips
+    tips = []
+    strong_t = tiers["strong"]
+    weak_t = tiers["weak"]
+    if strong_t["matches"] >= 3 and weak_t["matches"] >= 3:
+        strong_kd = round(strong_t["kd_sum"] / strong_t["matches"], 2)
+        weak_kd = round(weak_t["kd_sum"] / weak_t["matches"], 2)
+        drop = round((1 - strong_kd / weak_kd) * 100, 1) if weak_kd > 0 else 0
+        if drop > 15:
+            tips.append({
+                "type": "warning",
+                "text": f"Gegen starke Gegner faellt dein K/D um {drop}% ({weak_kd} vs. {strong_kd}) — an Positioning und Utility arbeiten.",
+            })
+        elif drop < 5:
+            tips.append({
+                "type": "success",
+                "text": f"Dein K/D bleibt stabil gegen starke Gegner ({strong_kd} vs. {weak_kd}) — du adaptierst gut.",
+            })
+
+    avg_t = tiers["average"]
+    if strong_t["matches"] >= 3:
+        strong_wr = round(strong_t["wins"] / strong_t["matches"] * 100, 1)
+        if strong_wr >= 45:
+            tips.append({"type": "success",
+                         "text": f"Du gewinnst {strong_wr}% gegen starke Gegner — du kannst mit guten Spielern mithalten."})
+        elif strong_wr < 30:
+            tips.append({"type": "warning",
+                         "text": f"Nur {strong_wr}% Winrate gegen starke Gegner — fokussiere auf Fundamentals (Utility, Positioning)."})
+
+    return {
+        "has_data": True,
+        "total_matches": total_matches,
+        "tiers": tier_list,
+        "tips": tips[:4],
+        "matches": match_details[:30],
+    }
 
 
 def _build_period_comparison(exports: list[dict]) -> list[dict]:
@@ -1643,6 +2340,153 @@ def _build_sessions(exports: list[dict]) -> list[dict]:
     return sessions
 
 
+def _build_session_insights(exports: list[dict]) -> dict:
+    """Analyze optimal play time and fatigue patterns across all sessions."""
+    if len(exports) < 5:
+        return {"has_data": False}
+
+    # ── Optimal Play Time ──
+    # Group by time bracket: 6-12=Morgens, 12-17=Nachmittags, 17-21=Abends, 21-6=Nachts
+    brackets = {
+        "Morgens (6–12h)": (6, 12),
+        "Nachmittags (12–17h)": (12, 17),
+        "Abends (17–21h)": (17, 21),
+        "Nachts (21–6h)": (21, 6),
+    }
+
+    bracket_data: dict[str, list[dict]] = {b: [] for b in brackets}
+    hourly_data: dict[int, list[dict]] = {h: [] for h in range(24)}
+
+    for e in exports:
+        h = e.get("time_hour", -1)
+        if h < 0:
+            continue
+        hourly_data[h].append(e)
+        for bname, (start, end) in brackets.items():
+            if start < end:
+                if start <= h < end:
+                    bracket_data[bname].append(e)
+            else:  # wraps around midnight (21-6)
+                if h >= start or h < end:
+                    bracket_data[bname].append(e)
+
+    playtime = []
+    for bname in brackets:
+        matches = bracket_data[bname]
+        if not matches:
+            continue
+        n = len(matches)
+        avg_rating = round(sum(m.get("rating", 0) for m in matches) / n, 2)
+        avg_kd = round(sum(m.get("kd", 0) for m in matches) / n, 2)
+        wins = sum(1 for m in matches if m.get("result") == "Sieg")
+        wr = round(wins / n * 100, 1)
+        playtime.append({
+            "bracket": bname,
+            "matches": n,
+            "avg_rating": avg_rating,
+            "avg_kd": avg_kd,
+            "win_rate": wr,
+        })
+
+    # Find best/worst bracket
+    best_time = max(playtime, key=lambda b: b["avg_rating"]) if playtime else None
+    worst_time = min(playtime, key=lambda b: b["avg_rating"]) if playtime else None
+
+    # Hourly breakdown for chart
+    hourly = []
+    for h in range(24):
+        matches = hourly_data[h]
+        if matches:
+            hourly.append({
+                "hour": h,
+                "matches": len(matches),
+                "avg_rating": round(sum(m.get("rating", 0) for m in matches) / len(matches), 2),
+                "win_rate": round(sum(1 for m in matches if m.get("result") == "Sieg") / len(matches) * 100, 1),
+            })
+        else:
+            hourly.append({"hour": h, "matches": 0, "avg_rating": 0, "win_rate": 0})
+
+    # ── Fatigue Detection ──
+    # Group by date, then analyze performance by game number within session
+    by_date: dict[str, list[dict]] = {}
+    for e in exports:
+        date = e.get("date", "?")[:10]
+        by_date.setdefault(date, []).append(e)
+
+    # Collect ratings by game position (game 1, 2, 3, 4, 5+)
+    pos_ratings: dict[int, list[float]] = {}
+    for date, matches in by_date.items():
+        if len(matches) < 2:
+            continue
+        # Sort by datetime within a day
+        day_sorted = sorted(matches, key=lambda m: m.get("datetime", m.get("date", "")))
+        for i, m in enumerate(day_sorted):
+            pos = min(i + 1, 6)  # cap at position 6 ("6+")
+            pos_ratings.setdefault(pos, []).append(m.get("rating", 0))
+
+    fatigue_curve = []
+    for pos in sorted(pos_ratings.keys()):
+        ratings = pos_ratings[pos]
+        if ratings:
+            label = f"Spiel {pos}" if pos < 6 else "Spiel 6+"
+            fatigue_curve.append({
+                "position": pos,
+                "label": label,
+                "avg_rating": round(sum(ratings) / len(ratings), 2),
+                "matches": len(ratings),
+            })
+
+    # Detect fatigue: compare game 1-2 avg with game 4+ avg
+    early_games = [r for p, rs in pos_ratings.items() if p <= 2 for r in rs]
+    late_games = [r for p, rs in pos_ratings.items() if p >= 4 for r in rs]
+    fatigue_drop = None
+    if early_games and late_games:
+        early_avg = sum(early_games) / len(early_games)
+        late_avg = sum(late_games) / len(late_games)
+        drop = early_avg - late_avg
+        if drop > 0.05:
+            fatigue_drop = {
+                "early_avg": round(early_avg, 2),
+                "late_avg": round(late_avg, 2),
+                "drop": round(drop, 2),
+                "recommendation": f"Nach 3 Spielen sinkt dein Rating um {drop:.2f} — nimm dir eine Pause nach dem 3. Match",
+            }
+
+    # Optimal session length
+    session_lengths: dict[int, list[float]] = {}
+    for date, matches in by_date.items():
+        n = len(matches)
+        if n >= 1:
+            avg_r = sum(m.get("rating", 0) for m in matches) / n
+            wr = sum(1 for m in matches if m.get("result") == "Sieg") / n * 100
+            session_lengths.setdefault(n, []).append(avg_r)
+
+    length_stats = []
+    for length in sorted(session_lengths.keys()):
+        ratings = session_lengths[length]
+        label = f"{length} Match{'es' if length != 1 else ''}"
+        length_stats.append({
+            "length": length,
+            "label": label,
+            "sessions": len(ratings),
+            "avg_rating": round(sum(ratings) / len(ratings), 2),
+        })
+
+    optimal_length = max(length_stats, key=lambda l: l["avg_rating"]) if length_stats else None
+
+    return {
+        "has_data": True,
+        "playtime": playtime,
+        "best_time": best_time,
+        "worst_time": worst_time,
+        "hourly": hourly,
+        "fatigue_curve": fatigue_curve,
+        "fatigue_drop": fatigue_drop,
+        "length_stats": length_stats,
+        "optimal_length": optimal_length,
+    }
+
+
 def _analyze_rounds(data: dict) -> dict:
     """Analyze round_timeline for death categories and round highlights."""
     timeline = data.get("round_timeline", [])
@@ -1938,16 +2782,44 @@ def _build_digest(exports: list[dict]) -> dict:
 
     periods = []
     # Monthly summaries (most recent first)
-    for mk in sorted(monthly.keys(), reverse=True):
+    sorted_months = sorted(monthly.keys(), reverse=True)
+    for i, mk in enumerate(sorted_months):
         mm = mk[-2:]
         label = f"{month_names.get(mm, mm)} {mk[:4]}"
-        periods.append(_summarize(monthly[mk], label, mk))
+        summary = _summarize(monthly[mk], label, mk)
+        # Delta to previous month
+        if i + 1 < len(sorted_months):
+            prev = _summarize(monthly[sorted_months[i + 1]], "", "")
+            summary["delta"] = {
+                "rating": round(summary["avg_rating"] - prev["avg_rating"], 2),
+                "kd": round(summary["avg_kd"] - prev["avg_kd"], 2),
+                "adr": round(summary["avg_adr"] - prev["avg_adr"], 1),
+                "hs": round(summary["avg_hs"] - prev["avg_hs"], 1),
+                "kast": round(summary["avg_kast"] - prev["avg_kast"], 1),
+                "win_rate": round(summary["win_rate"] - prev["win_rate"], 1),
+                "prev_label": prev["label"] if prev["label"] else sorted_months[i + 1],
+            }
+        periods.append(summary)
 
     # Weekly summaries (most recent first)
+    sorted_weeks = sorted(weekly.keys(), reverse=True)[:8]
     weekly_periods = []
-    for wk in sorted(weekly.keys(), reverse=True)[:8]:  # last 8 weeks max
+    for i, wk in enumerate(sorted_weeks):
         label = f"KW {wk.split('-W')[1]} / {wk.split('-W')[0]}"
-        weekly_periods.append(_summarize(weekly[wk], label, wk))
+        summary = _summarize(weekly[wk], label, wk)
+        if i + 1 < len(sorted_weeks):
+            prev_wk = sorted_weeks[i + 1]
+            prev = _summarize(weekly[prev_wk], "", "")
+            summary["delta"] = {
+                "rating": round(summary["avg_rating"] - prev["avg_rating"], 2),
+                "kd": round(summary["avg_kd"] - prev["avg_kd"], 2),
+                "adr": round(summary["avg_adr"] - prev["avg_adr"], 1),
+                "hs": round(summary["avg_hs"] - prev["avg_hs"], 1),
+                "kast": round(summary["avg_kast"] - prev["avg_kast"], 1),
+                "win_rate": round(summary["win_rate"] - prev["win_rate"], 1),
+                "prev_label": prev["label"] if prev["label"] else prev_wk,
+            }
+        weekly_periods.append(summary)
 
     return {
         "has_data": True,
@@ -2070,18 +2942,50 @@ def _build_economy_iq(exports: list[dict], cfg: dict) -> dict:
 
     # Recommendations
     tips = []
-    if summary.get("eco") and summary["eco"]["win_rate"] >= 30:
-        tips.append({"type": "positive", "text": f"Starke Eco-Runden: {summary['eco']['win_rate']}% Win-Rate — du holst viel aus wenig Equipment raus."})
-    elif summary.get("eco") and summary["eco"]["win_rate"] < 15:
-        tips.append({"type": "warning", "text": f"Eco-Runden: Nur {summary['eco']['win_rate']}% Win-Rate. Spar lieber konsequent und investiere in Force-Buys."})
-    if summary.get("force") and summary["force"]["win_rate"] >= 50:
-        tips.append({"type": "positive", "text": f"Force-Buys zahlen sich aus: {summary['force']['win_rate']}% Win-Rate — gute Kaufentscheidungen."})
-    elif summary.get("force") and summary["force"]["win_rate"] < 30:
-        tips.append({"type": "warning", "text": f"Force-Buys: Nur {summary['force']['win_rate']}% Win-Rate. Ueberlege, ob Full-Save nicht effektiver waere."})
-    if summary.get("fullbuy") and summary["fullbuy"]["win_rate"] < 50:
-        tips.append({"type": "warning", "text": f"Full-Buy Win-Rate nur {summary['fullbuy']['win_rate']}% — moegliche Ursachen: Utility-Einsatz, Positionierung oder Teamplay."})
-    if summary.get("pistol") and summary["pistol"]["win_rate"] >= 60:
-        tips.append({"type": "positive", "text": f"Pistolrunden-Spezialist: {summary['pistol']['win_rate']}% Win-Rate — das verschafft dir oekonomische Vorteile."})
+    eco_s = summary.get("eco", {})
+    force_s = summary.get("force", {})
+    full_s = summary.get("fullbuy", {})
+    pistol_s = summary.get("pistol", {})
+
+    # Pistol rounds
+    if pistol_s:
+        if pistol_s["win_rate"] >= 48:
+            tips.append({"type": "positive", "text": f"Starke Pistolrunden: {pistol_s['win_rate']}% Win-Rate — oekonomischer Vorteil fuers Team."})
+        elif pistol_s["win_rate"] < 40:
+            tips.append({"type": "warning", "text": f"Pistolrunden-WR nur {pistol_s['win_rate']}% — trainiere USP/Glock-Aim und Pistol-Setups."})
+
+    # Eco rounds
+    if eco_s:
+        if eco_s["kd"] >= 0.7:
+            tips.append({"type": "positive", "text": f"Eco K/D {eco_s['kd']} — du machst auch ohne Equipment Impact."})
+        elif eco_s["kd"] < 0.5:
+            tips.append({"type": "warning", "text": f"Eco K/D nur {eco_s['kd']} — in Sparrunden passiver spielen und auf Picks lauern."})
+
+    # Force buys
+    if force_s:
+        if force_s["win_rate"] >= 42:
+            tips.append({"type": "positive", "text": f"Force-Buys effektiv: {force_s['win_rate']}% Win-Rate — gute Kaufentscheidungen."})
+        elif force_s["win_rate"] < 30:
+            tips.append({"type": "warning", "text": f"Force-Buys nur {force_s['win_rate']}% WR — Full-Save koennte effektiver sein."})
+
+    # Full buys
+    if full_s:
+        if full_s["win_rate"] < 52:
+            tips.append({"type": "warning", "text": f"Full-Buy WR nur {full_s['win_rate']}% — Utility-Einsatz und Teamplay verbessern."})
+        elif full_s["win_rate"] >= 58:
+            tips.append({"type": "positive", "text": f"Starke Full-Buys: {full_s['win_rate']}% Win-Rate — Equipment wird effektiv genutzt."})
+
+    # Cross-category insights
+    if force_s and full_s and force_s.get("kd", 0) > full_s.get("kd", 0) * 0.9:
+        tips.append({"type": "info", "text": f"Force-Buy K/D ({force_s['kd']}) fast wie Full-Buy ({full_s['kd']}) — du spielst mit wenig Equipment aehnlich gut."})
+
+    if eco_s and full_s and eco_s.get("total_rounds", 0) > full_s.get("total_rounds", 0) * 0.3:
+        eco_ratio = round(eco_s["total_rounds"] / max(full_s["total_rounds"], 1) * 100)
+        tips.append({"type": "info", "text": f"Eco-Anteil {eco_ratio}% der Full-Buy-Runden — Pistolrunden gewinnen spart Economy-Stress."})
+
+    # Best/worst comparison insight (always show)
+    if best_cat and worst_cat and best_cat != worst_cat:
+        tips.append({"type": "info", "text": f"Staerkste Kategorie: {summary[best_cat]['label']} ({summary[best_cat]['win_rate']}% WR) — Schwaeche: {summary[worst_cat]['label']} ({summary[worst_cat]['win_rate']}% WR)"})
 
     # Overall eco efficiency score (weighted win rate)
     total_rounds_all = sum(s["total_rounds"] for s in summary.values())
@@ -2380,6 +3284,83 @@ def _build_dashboard_data(exports: list[dict], map_stats: list[dict]) -> dict:
             alerts.append({"type": "warning", "icon": "alert-triangle",
                            "text": f"Opening Duels negativ: {last5_ok_val} First-Kills vs. {last5_od} First-Deaths (letzte 5)"})
 
+        # CT-Side performance trend
+        last5_ct_kills = sum(e.get("ct_kills", 0) for e in last5)
+        last5_ct_deaths = sum(e.get("ct_deaths", 0) for e in last5)
+        all_ct_kills = sum(e.get("ct_kills", 0) for e in exports)
+        all_ct_deaths = sum(e.get("ct_deaths", 0) for e in exports)
+        last5_ct_kd = last5_ct_kills / max(last5_ct_deaths, 1)
+        all_ct_kd = all_ct_kills / max(all_ct_deaths, 1)
+        if all_ct_kd > 0 and last5_ct_kd < all_ct_kd * 0.75:
+            alerts.append({"type": "warning", "icon": "shield-alert",
+                           "text": f"CT-Side schwaecher: K/D {last5_ct_kd:.2f} (letzte 5) vs. {all_ct_kd:.2f} (gesamt)"})
+        elif all_ct_kd > 0 and last5_ct_kd > all_ct_kd * 1.25:
+            alerts.append({"type": "success", "icon": "shield-check",
+                           "text": f"CT-Side staerker: K/D {last5_ct_kd:.2f} (letzte 5) vs. {all_ct_kd:.2f} (gesamt)"})
+
+        # T-Side performance trend
+        last5_t_kills = sum(e.get("t_kills", 0) for e in last5)
+        last5_t_deaths = sum(e.get("t_deaths", 0) for e in last5)
+        all_t_kills = sum(e.get("t_kills", 0) for e in exports)
+        all_t_deaths = sum(e.get("t_deaths", 0) for e in exports)
+        last5_t_kd = last5_t_kills / max(last5_t_deaths, 1)
+        all_t_kd = all_t_kills / max(all_t_deaths, 1)
+        if all_t_kd > 0 and last5_t_kd < all_t_kd * 0.75:
+            alerts.append({"type": "warning", "icon": "swords",
+                           "text": f"T-Side schwaecher: K/D {last5_t_kd:.2f} (letzte 5) vs. {all_t_kd:.2f} (gesamt)"})
+        elif all_t_kd > 0 and last5_t_kd > all_t_kd * 1.25:
+            alerts.append({"type": "success", "icon": "swords",
+                           "text": f"T-Side staerker: K/D {last5_t_kd:.2f} (letzte 5) vs. {all_t_kd:.2f} (gesamt)"})
+
+        # Crosshair placement trend
+        last5_cp = last5_avg("crosshair_placement")
+        all_cp = all_avg("crosshair_placement")
+        if all_cp > 0 and last5_cp > 0:
+            cp_diff = last5_cp - all_cp
+            if cp_diff > 3:  # higher degrees = worse
+                alerts.append({"type": "warning", "icon": "crosshair",
+                               "text": f"Crosshair Placement verschlechtert: {last5_cp:.1f}° (letzte 5) vs. {all_cp:.1f}° (gesamt)"})
+            elif cp_diff < -3:
+                alerts.append({"type": "success", "icon": "crosshair",
+                               "text": f"Crosshair Placement verbessert: {last5_cp:.1f}° (letzte 5) vs. {all_cp:.1f}° (gesamt)"})
+
+        # Survival rate trend
+        last5_sr = last5_avg("survival_rate")
+        all_sr = all_avg("survival_rate")
+        sr_diff = last5_sr - all_sr
+        if sr_diff < -5:
+            alerts.append({"type": "warning", "icon": "heart-crack",
+                           "text": f"Survival Rate sinkt: {last5_sr:.1f}% (letzte 5) vs. {all_sr:.1f}% (gesamt) — mehr Tode pro Match"})
+
+        # Map-specific losing streak (3+ losses on same map recently)
+        last10 = sorted(exports, key=lambda e: e.get("date", ""))[-10:]
+        map_results: dict[str, list[str]] = {}
+        for e in last10:
+            m = e.get("map", "")
+            if m:
+                map_results.setdefault(m, []).append(e.get("result", ""))
+        for m, results in map_results.items():
+            # Check tail of results for consecutive losses
+            consecutive_losses = 0
+            for r in reversed(results):
+                if r == "Niederlage":
+                    consecutive_losses += 1
+                else:
+                    break
+            if consecutive_losses >= 3:
+                alerts.append({"type": "warning", "icon": "map-pin",
+                               "text": f"{consecutive_losses} Niederlagen in Folge auf {m} — Map meiden oder gezielt trainieren"})
+
+        # Consistency alert: rating variance increasing
+        if n >= 10:
+            last5_ratings = [e.get("rating", 0) for e in last5]
+            all_ratings = [e.get("rating", 0) for e in exports]
+            last5_var = sum((r - sum(last5_ratings) / 5) ** 2 for r in last5_ratings) / 5
+            all_var = sum((r - sum(all_ratings) / n) ** 2 for r in all_ratings) / n
+            if last5_var > all_var * 2 and last5_var > 0.02:
+                alerts.append({"type": "info", "icon": "activity",
+                               "text": f"Inkonsistent: Dein Rating schwankt stark in den letzten 5 Spielen — versuche konstanter zu spielen"})
+
         # Win streak / loss streak
         if streak >= 3 and streak_type == "Sieg":
             alerts.append({"type": "success", "icon": "flame",
@@ -2387,6 +3368,18 @@ def _build_dashboard_data(exports: list[dict], map_stats: list[dict]) -> dict:
         elif streak >= 3 and streak_type == "Niederlage":
             alerts.append({"type": "warning", "icon": "alert-triangle",
                            "text": f"{streak} Niederlagen in Folge — Zeit fuer eine Pause?"})
+
+    # ── Formkurve ──
+    chronological = sorted(exports, key=lambda e: e.get("date", ""))
+    last20 = chronological[-20:]
+    form_sparkline = [{"rating": round(e.get("rating", 0), 2), "map": e.get("map", "?"),
+                       "result": e.get("result", "?"), "date": e.get("date", "?")} for e in last20]
+    form_curve = {
+        "last1": round(chronological[-1].get("rating", 0), 2) if chronological else 0,
+        "last5": round(sum(e.get("rating", 0) for e in chronological[-5:]) / min(n, 5), 2),
+        "last20": round(sum(e.get("rating", 0) for e in last20) / len(last20), 2) if last20 else 0,
+        "all_time": avg_rating,
+    }
 
     return {
         "has_data": True,
@@ -2400,6 +3393,8 @@ def _build_dashboard_data(exports: list[dict], map_stats: list[dict]) -> dict:
         "last5_wins": last5_wins,
         "last5_rating": last5_rating,
         "form_trend": round(form_trend, 2),
+        "form_sparkline": form_sparkline,
+        "form_curve": form_curve,
         "spider": spider,
         "benchmarks": benchmarks,
         "strengths": strengths,
@@ -3369,6 +4364,480 @@ def _build_nemesis(cfg: dict) -> dict:
     }
 
 
+# ── Opponent Scouting (Gegner-Vorhersage) ─────────────────
+def _build_scout_data(cfg: dict) -> dict:
+    """Build deep per-opponent scouting intel for pre-match preparation."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    agg: dict[str, dict] = {}
+    match_count = 0
+
+    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        duels = data.get("duel_matrix", [])
+        match_info = data.get("match", {})
+        kill_positions = data.get("kill_positions", [])
+        if not duels:
+            continue
+        match_count += 1
+
+        # Build teammate set to filter them out
+        player = data.get("player", {})
+        target_sid = player.get("steam_id", "")
+        scoreboard = data.get("scoreboard", [])
+        teammate_sids = {target_sid} if target_sid else set()
+        target_idx = next((i for i, s in enumerate(scoreboard) if s.get("is_target")), None)
+        if target_idx is not None:
+            team_start = 0 if target_idx < 5 else 5
+            for i in range(team_start, team_start + 5):
+                if i < len(scoreboard):
+                    sid_sb = scoreboard[i].get("steam_id", "")
+                    if sid_sb:
+                        teammate_sids.add(sid_sb)
+
+        map_name = match_info.get("map", "?")
+        match_result = match_info.get("result", "?")
+        match_date = match_info.get("date", "?")
+
+        for d in duels:
+            sid = d.get("steam_id", d.get("name", ""))
+            if not sid or sid in teammate_sids:
+                continue
+            if sid not in agg:
+                agg[sid] = {
+                    "name": d["name"], "steam_id": sid,
+                    "kills": 0, "deaths": 0, "hs_kills": 0, "hs_deaths": 0,
+                    "matches": 0, "weapons_them": {}, "weapons_you": {},
+                    "maps": {}, "results": [], "dates": [],
+                    "positions": {},  # map_name -> {kills: [], deaths: []}
+                }
+            entry = agg[sid]
+            entry["name"] = d["name"]
+            entry["kills"] += d.get("kills", 0)
+            entry["deaths"] += d.get("deaths", 0)
+            entry["hs_kills"] += d.get("hs_kills", 0)
+            entry["hs_deaths"] += d.get("hs_deaths", 0)
+            entry["matches"] += 1
+            entry["dates"].append(match_date)
+
+            # Weapons they used to kill you (from top_weapons in duel_matrix)
+            for w in d.get("top_weapons", []):
+                entry["weapons_them"][w] = entry["weapons_them"].get(w, 0) + 1
+
+            # Map tracking with win/loss
+            if map_name not in entry["maps"]:
+                entry["maps"][map_name] = {"played": 0, "wins": 0, "losses": 0}
+            entry["maps"][map_name]["played"] += 1
+            if match_result == "Sieg":
+                entry["maps"][map_name]["wins"] += 1
+            elif match_result == "Niederlage":
+                entry["maps"][map_name]["losses"] += 1
+            entry["results"].append(match_result)
+
+        # Collect per-opponent kill positions
+        for kp in kill_positions:
+            enemy_name = kp.get("e", "")
+            kp_type = kp.get("t", "")
+            if not enemy_name:
+                continue
+            # Find matching opponent by name
+            for sid, entry in agg.items():
+                if entry["name"] == enemy_name:
+                    if map_name not in entry["positions"]:
+                        entry["positions"][map_name] = {"kills": [], "deaths": []}
+                    pos = {
+                        "x": kp.get("x", 0), "y": kp.get("y", 0),
+                        "ex": kp.get("ex", 0), "ey": kp.get("ey", 0),
+                        "w": kp.get("w", ""), "hs": kp.get("hs", False),
+                    }
+                    if kp_type == "k":
+                        entry["positions"][map_name]["kills"].append(pos)
+                    elif kp_type == "d":
+                        entry["positions"][map_name]["deaths"].append(pos)
+                    break
+
+    if not agg:
+        return {"has_data": False}
+
+    # Build opponent profiles with tactical tips
+    opponents = []
+    for sid, e in agg.items():
+        total = e["kills"] + e["deaths"]
+        if total < 2:
+            continue
+        kd = round(e["kills"] / max(e["deaths"], 1), 2)
+        hs_pct_you = round(e["hs_kills"] / max(e["kills"], 1) * 100, 1)
+        hs_pct_them = round(e["hs_deaths"] / max(e["deaths"], 1) * 100, 1)
+        win_rate = round(sum(1 for r in e["results"] if r == "Sieg") / max(len(e["results"]), 1) * 100, 1)
+
+        # Threat classification
+        if e["deaths"] > e["kills"] + 2 and total >= 6:
+            threat = "nemesis"
+        elif e["kills"] > e["deaths"] + 2 and total >= 6:
+            threat = "victim"
+        else:
+            threat = "even"
+
+        # Top weapons they use against you
+        top_weapons_them = sorted(e["weapons_them"].items(), key=lambda x: -x[1])[:5]
+
+        # Map stats
+        map_stats = []
+        for m, ms in sorted(e["maps"].items(), key=lambda x: -x[1]["played"]):
+            map_stats.append({"name": m, "played": ms["played"], "wins": ms["wins"], "losses": ms["losses"]})
+
+        # Last seen
+        valid_dates = [d for d in e["dates"] if d != "?"]
+        last_seen = sorted(valid_dates, reverse=True)[0] if valid_dates else "?"
+
+        # Position counts per map (for visualization)
+        pos_summary = {}
+        for m, p in e["positions"].items():
+            pos_summary[m] = {"kills": len(p["kills"]), "deaths": len(p["deaths"])}
+
+        # ── Generate tactical tips ──
+        tips = []
+
+        # AWP warning
+        awp_count = e["weapons_them"].get("awp", 0)
+        total_weapon_uses = sum(e["weapons_them"].values()) if e["weapons_them"] else 1
+        if awp_count > 0 and awp_count / max(total_weapon_uses, 1) > 0.3:
+            tips.append({"type": "warning", "icon": "crosshair",
+                         "text": f"AWP-Spieler — {round(awp_count/total_weapon_uses*100)}% seiner Kills mit AWP. Smokes und Off-Angles vorbereiten."})
+
+        # Headshot machine
+        if hs_pct_them >= 55 and e["deaths"] >= 4:
+            tips.append({"type": "warning", "icon": "target",
+                         "text": f"Headshot-Maschine ({hs_pct_them}% HS gegen dich) — nicht wide-peeken, Jiggle-Peeks nutzen."})
+
+        # You dominate them
+        if kd >= 1.5 and total >= 6:
+            tips.append({"type": "success", "icon": "trending-up",
+                         "text": f"Du dominierst ({kd} K/D, {e['kills']}K/{e['deaths']}D) — selbstbewusst spielen."})
+
+        # They dominate you
+        if kd <= 0.7 and total >= 6:
+            tips.append({"type": "danger", "icon": "alert-triangle",
+                         "text": f"Gefaehrlich! ({kd} K/D, {e['deaths']}D gegen dich) — direkte Duelle vermeiden, Utility und Trades nutzen."})
+
+        # Win rate warning
+        if win_rate < 40 and len(e["results"]) >= 3:
+            tips.append({"type": "danger", "icon": "trending-down",
+                         "text": f"Nur {win_rate}% Win-Rate in {len(e['results'])} Matches gegen diesen Spieler."})
+        elif win_rate > 65 and len(e["results"]) >= 3:
+            tips.append({"type": "success", "icon": "trophy",
+                         "text": f"{win_rate}% Win-Rate in {len(e['results'])} Matches — du gewinnst meistens."})
+
+        # Deagle/pistol specialist
+        deagle_count = e["weapons_them"].get("deagle", 0)
+        if deagle_count > 0 and deagle_count / max(total_weapon_uses, 1) > 0.25:
+            tips.append({"type": "info", "icon": "zap",
+                         "text": f"Deagle-Spieler — {deagle_count} Kills mit Deagle. In Eco-Runden vorsichtig."})
+
+        # SMG/rush tendency
+        smg_kills = sum(e["weapons_them"].get(w, 0) for w in ["mac10", "mp9", "mp5sd", "mp7", "p90"])
+        if smg_kills > 0 and smg_kills / max(total_weapon_uses, 1) > 0.3:
+            tips.append({"type": "info", "icon": "zap",
+                         "text": f"SMG-/Rush-Tendenz ({round(smg_kills/total_weapon_uses*100)}% SMG-Kills) — Abstand halten, Angles halten."})
+
+        # Low headshot rate = spray player
+        if hs_pct_them < 25 and e["deaths"] >= 5:
+            tips.append({"type": "info", "icon": "info",
+                         "text": f"Spray-Spieler ({hs_pct_them}% HS) — Aim-Duelle solltest du gewinnen."})
+
+        # Multi-map opponent
+        if len(e["maps"]) >= 3:
+            tips.append({"type": "info", "icon": "map",
+                         "text": f"Auf {len(e['maps'])} verschiedenen Maps getroffen — vielseitiger Spieler."})
+
+        opponents.append({
+            "name": e["name"], "steam_id": sid,
+            "kills": e["kills"], "deaths": e["deaths"],
+            "kd": kd, "total_duels": total,
+            "hs_pct_you": hs_pct_you, "hs_pct_them": hs_pct_them,
+            "matches": e["matches"], "threat": threat,
+            "top_weapons_them": [{"name": w[0], "count": w[1]} for w in top_weapons_them],
+            "maps": map_stats, "win_rate": win_rate,
+            "last_seen": last_seen, "tips": tips,
+            "positions": pos_summary,
+        })
+
+    opponents.sort(key=lambda x: x["total_duels"], reverse=True)
+
+    return {
+        "has_data": True,
+        "opponents": opponents,
+        "match_count": match_count,
+        "total_opponents": len(opponents),
+    }
+
+
+# ── Death Analysis ────────────────────────────────────────
+def _build_death_analysis(cfg: dict) -> dict:
+    """Analyze death patterns across all matches — why and when do you die?"""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    matches = []
+    # Aggregates
+    total_deaths = 0
+    total_kills = 0
+    total_rounds = 0
+    total_opening_deaths = 0
+    total_opening_kills = 0
+    total_trade_kills = 0
+    agg_timing = {"early": 0, "mid": 0, "late": 0}
+    agg_side = {"ct_deaths": 0, "t_deaths": 0, "ct_rounds": 0, "t_rounds": 0}
+    agg_weapons: dict[str, int] = {}  # weapon -> times killed by
+    agg_killers: dict[str, dict] = {}  # killer name -> {kills, hs, weapons}
+    # Per-round death context from timeline
+    deaths_with_kill = 0  # got a kill before dying
+    deaths_no_impact = 0  # died without any kill/assist
+    hs_deaths = 0
+    total_death_events = 0
+
+    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        match_info = data.get("match", {})
+        player = data.get("player", {})
+        timeline = data.get("round_timeline", [])
+
+        if not player.get("deaths") and not timeline:
+            continue
+
+        m_deaths = player.get("deaths", 0)
+        m_kills = player.get("kills", 0)
+        m_rounds = match_info.get("total_rounds", 0)
+        m_opening_d = player.get("opening_deaths", 0)
+        m_opening_k = player.get("opening_kills", 0)
+        m_trade_k = player.get("trade_kills", 0)
+
+        total_deaths += m_deaths
+        total_kills += m_kills
+        total_rounds += m_rounds
+        total_opening_deaths += m_opening_d
+        total_opening_kills += m_opening_k
+        total_trade_kills += m_trade_k
+
+
+        # Death timing
+        dt = player.get("death_timing", {})
+        agg_timing["early"] += dt.get("early", 0)
+        agg_timing["mid"] += dt.get("mid", 0)
+        agg_timing["late"] += dt.get("late", 0)
+
+        # Side split
+        side = player.get("side_split", {})
+        agg_side["ct_deaths"] += side.get("ct_deaths", player.get("ct_deaths", 0))
+        agg_side["t_deaths"] += side.get("t_deaths", player.get("t_deaths", 0))
+
+        # Per-round timeline analysis
+        match_death_weapons: dict[str, int] = {}
+        round_details = []
+        for rd in timeline:
+            rnum = rd.get("round", 0)
+            rd_side = rd.get("side", "?")
+            events = rd.get("events", [])
+            died = rd.get("player_died", False)
+            kills_in_round = rd.get("player_kills", 0)
+
+            if rd_side == "CT":
+                agg_side["ct_rounds"] += 1
+            elif rd_side == "T":
+                agg_side["t_rounds"] += 1
+
+            kill_events = [e for e in events if e.get("type") == "kill"]
+            death_events = [e for e in events if e.get("type") == "death"]
+
+            if died and death_events:
+                de = death_events[0]
+                total_death_events += 1
+                weapon = de.get("weapon", "unknown")
+                killer = de.get("killer", "?")
+                is_hs = de.get("headshot", False)
+                death_pct = de.get("pct", 50)
+
+                # Weapon that killed us
+                w_clean = weapon.replace("weapon_", "")
+                agg_weapons[w_clean] = agg_weapons.get(w_clean, 0) + 1
+                match_death_weapons[w_clean] = match_death_weapons.get(w_clean, 0) + 1
+
+                # Killer tracking
+                if killer != "?" and killer:
+                    if killer not in agg_killers:
+                        agg_killers[killer] = {"kills": 0, "hs": 0, "weapons": {}}
+                    agg_killers[killer]["kills"] += 1
+                    if is_hs:
+                        agg_killers[killer]["hs"] += 1
+                    agg_killers[killer]["weapons"][w_clean] = agg_killers[killer]["weapons"].get(w_clean, 0) + 1
+
+                if is_hs:
+                    hs_deaths += 1
+
+                # Did we get a kill before dying?
+                if kills_in_round > 0:
+                    deaths_with_kill += 1
+                else:
+                    deaths_no_impact += 1
+
+                round_details.append({
+                    "round": rnum,
+                    "side": rd_side,
+                    "weapon": w_clean,
+                    "killer": killer,
+                    "headshot": is_hs,
+                    "pct": death_pct,
+                    "had_kill": kills_in_round > 0,
+                    "won": rd.get("won", False),
+                })
+
+        # Top death weapons this match
+        top_wpn = sorted(match_death_weapons.items(), key=lambda x: x[1], reverse=True)
+        top_wpn_str = ", ".join(f"{w}" for w, _ in top_wpn[:3]) if top_wpn else "-"
+
+        matches.append({
+            "date": match_info.get("date", "?"),
+            "map": match_info.get("map", "?"),
+            "score": f"{match_info.get('score_own', '?')}:{match_info.get('score_enemy', '?')}",
+            "result": match_info.get("result", "?"),
+            "rating": player.get("rating", 0),
+            "kills": m_kills,
+            "deaths": m_deaths,
+            "rounds": m_rounds,
+            "opening_deaths": m_opening_d,
+            "death_rate": round(m_deaths / m_rounds * 100, 1) if m_rounds else 0,
+            "top_weapons": top_wpn_str,
+            "round_deaths": round_details,
+        })
+
+    if not matches:
+        return {"has_data": False}
+
+    match_count = len(matches)
+    avg_deaths = round(total_deaths / match_count, 1) if match_count else 0
+    death_rate = round(total_deaths / total_rounds * 100, 1) if total_rounds else 0
+    survival_rate = round((1 - total_deaths / total_rounds) * 100, 1) if total_rounds else 0
+    opening_death_rate = round(total_opening_deaths / total_rounds * 100, 1) if total_rounds else 0
+    opening_duel_wr = round(total_opening_kills / (total_opening_kills + total_opening_deaths) * 100, 1) if (total_opening_kills + total_opening_deaths) else 0
+
+    # Top weapons that kill us
+    top_weapons = sorted(agg_weapons.items(), key=lambda x: x[1], reverse=True)[:10]
+    top_weapons_total = sum(v for _, v in top_weapons)
+
+    # Top killers (nemeses by death count)
+    top_killers = sorted(agg_killers.items(), key=lambda x: x[1]["kills"], reverse=True)[:8]
+    top_killers_list = []
+    for name, info in top_killers:
+        top_wpn = max(info["weapons"], key=info["weapons"].get) if info["weapons"] else "?"
+        top_killers_list.append({
+            "name": name,
+            "deaths": info["kills"],
+            "hs": info["hs"],
+            "hs_pct": round(info["hs"] / info["kills"] * 100) if info["kills"] else 0,
+            "weapon": top_wpn,
+        })
+
+    # Timing percentages
+    timing_total = agg_timing["early"] + agg_timing["mid"] + agg_timing["late"]
+    timing_pcts = {
+        k: round(v / timing_total * 100, 1) if timing_total else 0
+        for k, v in agg_timing.items()
+    }
+
+    # Side percentages
+    side_total = agg_side["ct_deaths"] + agg_side["t_deaths"]
+    ct_death_pct = round(agg_side["ct_deaths"] / side_total * 100, 1) if side_total else 0
+    t_death_pct = round(agg_side["t_deaths"] / side_total * 100, 1) if side_total else 0
+    ct_death_rate = round(agg_side["ct_deaths"] / agg_side["ct_rounds"] * 100, 1) if agg_side["ct_rounds"] else 0
+    t_death_rate = round(agg_side["t_deaths"] / agg_side["t_rounds"] * 100, 1) if agg_side["t_rounds"] else 0
+
+    # Trade and impact stats
+    trade_rate = round(total_trade_kills / total_rounds * 100, 1) if total_rounds else 0
+    impact_pct = round(deaths_with_kill / total_death_events * 100, 1) if total_death_events else 0
+
+    # Trend data (deaths per match, chronological)
+    trend = [{"date": m["date"], "deaths": m["deaths"], "death_rate": m["death_rate"],
+              "map": m["map"], "result": m["result"]} for m in reversed(matches)]
+
+    # Actionable tips
+    tips = []
+    if timing_pcts["early"] > 40:
+        tips.append({"type": "warning", "icon": "alert-triangle",
+                     "text": f"{timing_pcts['early']}% deiner Tode passieren frueh in der Runde — spiel passiver oder warte auf Utility."})
+    if opening_death_rate > 15:
+        tips.append({"type": "warning", "icon": "skull",
+                     "text": f"Opening Death Rate {opening_death_rate}% — du stirbst zu oft als Erster. Lass einen Teammate vorgehen."})
+    if trade_rate < 5 and total_rounds > 50:
+        tips.append({"type": "warning", "icon": "users",
+                     "text": f"Nur {total_trade_kills} Trade-Kills in {total_rounds} Runden — achte darauf, Teammates schneller zu traden."})
+    if impact_pct > 50:
+        tips.append({"type": "success", "icon": "check-circle",
+                     "text": f"In {impact_pct}% deiner Tode hattest du vorher einen Kill — du stirbst produktiv."})
+    if opening_duel_wr >= 55:
+        tips.append({"type": "success", "icon": "swords",
+                     "text": f"Opening Duel Winrate {opening_duel_wr}% — starke Erstduelle, weiter so."})
+
+    worse_side = "CT" if ct_death_rate > t_death_rate + 5 else ("T" if t_death_rate > ct_death_rate + 5 else None)
+    if worse_side:
+        worse_rate = ct_death_rate if worse_side == "CT" else t_death_rate
+        tips.append({"type": "warning", "icon": "shield",
+                     "text": f"Auf {worse_side}-Side stirbst du haeufiger ({worse_rate}% Death Rate) — ueberdenke dein Positioning."})
+
+    return {
+        "has_data": True,
+        "match_count": match_count,
+        "total_deaths": total_deaths,
+        "total_rounds": total_rounds,
+        "avg_deaths": avg_deaths,
+        "death_rate": death_rate,
+        "survival_rate": survival_rate,
+        "opening_deaths": total_opening_deaths,
+        "opening_death_rate": opening_death_rate,
+        "opening_duel_wr": opening_duel_wr,
+        "timing": agg_timing,
+        "timing_pcts": timing_pcts,
+        "side": {
+            "ct_deaths": agg_side["ct_deaths"],
+            "t_deaths": agg_side["t_deaths"],
+            "ct_pct": ct_death_pct,
+            "t_pct": t_death_pct,
+            "ct_death_rate": ct_death_rate,
+            "t_death_rate": t_death_rate,
+        },
+        "trade": {
+            "trade_kills": total_trade_kills,
+            "trade_rate": trade_rate,
+        },
+        "impact": {
+            "with_kill": deaths_with_kill,
+            "no_impact": deaths_no_impact,
+            "impact_pct": impact_pct,
+        },
+        "hs_deaths": hs_deaths,
+        "hs_death_pct": round(hs_deaths / total_death_events * 100, 1) if total_death_events else 0,
+        "top_weapons": [{"weapon": w, "count": c, "pct": round(c / top_weapons_total * 100, 1) if top_weapons_total else 0} for w, c in top_weapons],
+        "top_killers": top_killers_list,
+        "trend": trend,
+        "matches": matches[:20],
+        "tips": tips,
+    }
+
+
 # ── Momentum ──────────────────────────────────────────────
 def _build_momentum(cfg: dict) -> dict:
     """Analyze performance flow, streaks, tilt patterns, and session momentum."""
@@ -3691,6 +5160,215 @@ def _build_teammates(cfg: dict) -> dict:
         "by_chemistry": by_chemistry[:10],
         "by_winrate": by_winrate[:10],
         "all": by_matches,
+    }
+
+
+# ── Team / Squad Analysis ─────────────────────────────────
+def _build_team_analysis(cfg: dict) -> dict:
+    """Analyze squad compositions — duos, trios, 5-stacks and their synergies."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    from itertools import combinations
+
+    # Per-match: collect teammates + result
+    match_squads: list[dict] = []  # {teammates: set, result, map, date, my_rating, team_rating}
+
+    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        sb = data.get("scoreboard", [])
+        match = data.get("match", {})
+        player = data.get("player", {})
+        if not sb or not match:
+            continue
+
+        target_idx = next((i for i, s in enumerate(sb) if s.get("is_target")), None)
+        if target_idx is None:
+            continue
+
+        target_sid = player.get("steam_id", "") or sb[target_idx].get("steam_id", "")
+        team_start = 0 if target_idx < 5 else 5
+
+        teammates = {}
+        team_kills = 0
+        team_deaths = 0
+        team_adr_sum = 0
+        team_count = 0
+        for i in range(team_start, team_start + 5):
+            if i >= len(sb):
+                continue
+            s = sb[i]
+            sid = s.get("steam_id", "")
+            if s.get("is_target") or sid == target_sid or not sid:
+                continue
+            teammates[sid] = s.get("name", "?")
+            team_kills += s.get("kills", 0)
+            team_deaths += s.get("deaths", 0)
+            team_adr_sum += s.get("adr", 0)
+            team_count += 1
+
+        if not teammates:
+            continue
+
+        team_kd = round(team_kills / max(team_deaths, 1), 2)
+        team_avg_adr = round(team_adr_sum / max(team_count, 1), 1)
+
+        match_squads.append({
+            "teammates": teammates,
+            "result": match.get("result", "?"),
+            "map": match.get("map", "?"),
+            "date": match.get("date", ""),
+            "my_rating": player.get("rating", 0),
+            "my_kd": player.get("kd", 0),
+            "team_kd": team_kd,
+            "team_adr": team_avg_adr,
+        })
+
+    if len(match_squads) < 3:
+        return {"has_data": False}
+
+    # Build duo stats: for every pair of teammates, track win/loss and my performance
+    duo_stats: dict[tuple, dict] = {}
+    # Also track solo vs group performance
+    solo_matches = []  # matches with mostly randoms (<=1 repeat teammate)
+    group_matches = []  # matches with 2+ repeat teammates
+
+    # First pass: count how often each teammate appears (to detect regulars)
+    tm_freq: dict[str, int] = {}
+    tm_names: dict[str, str] = {}
+    for ms in match_squads:
+        for sid, name in ms["teammates"].items():
+            tm_freq[sid] = tm_freq.get(sid, 0) + 1
+            tm_names[sid] = name
+
+    regulars = {sid for sid, cnt in tm_freq.items() if cnt >= 2}
+
+    for ms in match_squads:
+        tm_sids = set(ms["teammates"].keys())
+        regular_in_match = tm_sids & regulars
+        won = ms["result"] == "Sieg"
+
+        if len(regular_in_match) >= 2:
+            group_matches.append(ms)
+        else:
+            solo_matches.append(ms)
+
+        # Duo combinations
+        for a, b in combinations(sorted(tm_sids), 2):
+            key = (a, b)
+            if key not in duo_stats:
+                duo_stats[key] = {"wins": 0, "losses": 0, "matches": 0,
+                                  "my_rating_sum": 0, "maps": {}}
+            duo_stats[key]["matches"] += 1
+            duo_stats[key]["my_rating_sum"] += ms["my_rating"]
+            duo_stats[key]["maps"][ms["map"]] = duo_stats[key]["maps"].get(ms["map"], 0) + 1
+            if won:
+                duo_stats[key]["wins"] += 1
+            elif ms["result"] == "Niederlage":
+                duo_stats[key]["losses"] += 1
+
+    # Build duo list (min 2 matches together)
+    duos = []
+    for (a, b), ds in duo_stats.items():
+        if ds["matches"] < 2:
+            continue
+        wr = round(ds["wins"] / ds["matches"] * 100, 1)
+        avg_rating = round(ds["my_rating_sum"] / ds["matches"], 2)
+        top_map = max(ds["maps"], key=ds["maps"].get) if ds["maps"] else "?"
+        duos.append({
+            "player_a": tm_names.get(a, "?"),
+            "player_b": tm_names.get(b, "?"),
+            "matches": ds["matches"],
+            "wins": ds["wins"],
+            "losses": ds["losses"],
+            "win_rate": wr,
+            "my_avg_rating": avg_rating,
+            "top_map": top_map,
+        })
+
+    duos.sort(key=lambda x: (-x["matches"], -x["win_rate"]))
+    best_duos = sorted([d for d in duos if d["matches"] >= 3], key=lambda x: -x["win_rate"])[:5]
+    worst_duos = sorted([d for d in duos if d["matches"] >= 3], key=lambda x: x["win_rate"])[:5]
+
+    # Detect full stacks (same 4 teammates)
+    stack_tracker: dict[tuple, dict] = {}
+    for ms in match_squads:
+        sids = tuple(sorted(ms["teammates"].keys()))
+        if len(sids) != 4:
+            continue
+        if sids not in stack_tracker:
+            stack_tracker[sids] = {"wins": 0, "losses": 0, "matches": 0,
+                                   "names": [ms["teammates"][s] for s in sids],
+                                   "my_rating_sum": 0, "maps": {}}
+        stack_tracker[sids]["matches"] += 1
+        stack_tracker[sids]["my_rating_sum"] += ms["my_rating"]
+        stack_tracker[sids]["maps"][ms["map"]] = stack_tracker[sids]["maps"].get(ms["map"], 0) + 1
+        if ms["result"] == "Sieg":
+            stack_tracker[sids]["wins"] += 1
+        elif ms["result"] == "Niederlage":
+            stack_tracker[sids]["losses"] += 1
+
+    stacks = []
+    for sids, st in stack_tracker.items():
+        if st["matches"] < 2:
+            continue
+        wr = round(st["wins"] / st["matches"] * 100, 1)
+        stacks.append({
+            "names": st["names"],
+            "matches": st["matches"],
+            "wins": st["wins"],
+            "losses": st["losses"],
+            "win_rate": wr,
+            "my_avg_rating": round(st["my_rating_sum"] / st["matches"], 2),
+            "top_map": max(st["maps"], key=st["maps"].get) if st["maps"] else "?",
+        })
+    stacks.sort(key=lambda x: -x["matches"])
+
+    # Solo vs group performance
+    solo_wr = round(sum(1 for m in solo_matches if m["result"] == "Sieg") / len(solo_matches) * 100, 1) if solo_matches else 0
+    solo_rating = round(sum(m["my_rating"] for m in solo_matches) / len(solo_matches), 2) if solo_matches else 0
+    group_wr = round(sum(1 for m in group_matches if m["result"] == "Sieg") / len(group_matches) * 100, 1) if group_matches else 0
+    group_rating = round(sum(m["my_rating"] for m in group_matches) / len(group_matches), 2) if group_matches else 0
+
+    # Tips
+    tips = []
+    if solo_matches and group_matches:
+        if group_wr > solo_wr + 10:
+            tips.append({"type": "success",
+                         "text": f"Im Stack gewinnst du {group_wr}% vs. {solo_wr}% solo — spiel oefter mit Premades."})
+        elif solo_wr > group_wr + 10:
+            tips.append({"type": "info",
+                         "text": f"Solo gewinnst du {solo_wr}% vs. {group_wr}% im Stack — du adaptierst gut an Randoms."})
+
+    if best_duos:
+        d = best_duos[0]
+        tips.append({"type": "success",
+                     "text": f"Bestes Duo: {d['player_a']} + {d['player_b']} ({d['win_rate']}% WR in {d['matches']} Matches)."})
+
+    if worst_duos and worst_duos[0]["win_rate"] < 40:
+        d = worst_duos[0]
+        tips.append({"type": "warning",
+                     "text": f"Schwieriges Duo: {d['player_a']} + {d['player_b']} (nur {d['win_rate']}% WR in {d['matches']} Matches)."})
+
+    return {
+        "has_data": True,
+        "total_matches": len(match_squads),
+        "total_teammates": len(tm_freq),
+        "regulars_count": len(regulars),
+        "solo": {"matches": len(solo_matches), "win_rate": solo_wr, "avg_rating": solo_rating},
+        "group": {"matches": len(group_matches), "win_rate": group_wr, "avg_rating": group_rating},
+        "duos": duos[:20],
+        "best_duos": best_duos,
+        "worst_duos": worst_duos,
+        "stacks": stacks[:10],
+        "tips": tips[:6],
     }
 
 
@@ -4454,4 +6132,560 @@ def _build_round_timeline(cfg: dict) -> dict:
         "chokes": total_chokes,
         "round_stats": round_stats,
         "matches": sorted(matches, key=lambda x: x["date"], reverse=True),
+    }
+
+
+# ── Positions-Zonen ──────────────────────────────────────────
+# Game-coordinate bounding boxes for named zones per map.
+# Format: (x_min, x_max, y_min, y_max)
+MAP_ZONES: dict[str, dict[str, tuple]] = {
+    "mirage": {
+        "A-Site":   (-1900, -750, -1000, 200),
+        "A-Ramp":   (-1500, -300, 200, 700),
+        "Palace":   (-2300, -1550, 300, 1100),
+        "Jungle":   (-2400, -1500, -600, 200),
+        "CT-Spawn": (-2600, -1600, -2200, -1200),
+        "Mid":      (-400, 400, -1200, 600),
+        "Top-Mid":  (-400, 400, 600, 1100),
+        "B-Site":   (-700, 400, -2300, -1300),
+        "B-Apps":   (200, 900, -1600, -400),
+        "T-Spawn":  (800, 1700, -200, 800),
+    },
+    "dust2": {
+        "A-Site":    (400, 1500, 2200, 3200),
+        "A-Long":    (-200, 700, 500, 2200),
+        "A-Short":   (-800, 200, 1800, 2800),
+        "Mid":       (-900, -200, 300, 1800),
+        "CT-Spawn":  (300, 1200, 3000, 3600),
+        "B-Site":    (-2100, -1100, 2200, 3000),
+        "B-Tunnel":  (-1900, -900, 800, 2200),
+        "T-Spawn":   (-700, 200, -800, 200),
+        "Lower-Tunnel": (-1600, -600, 200, 900),
+    },
+    "inferno": {
+        "A-Site":  (1800, 2800, 200, 1100),
+        "Apps":    (500, 1600, 100, 1200),
+        "Mid":     (100, 900, -700, 200),
+        "Banana":  (-100, 600, -2000, -700),
+        "B-Site":  (-600, 500, -2800, -2000),
+        "CT-Spawn": (2000, 2800, -800, 200),
+        "T-Spawn": (-800, 200, 1200, 2200),
+        "Arch":    (1200, 2000, -600, 200),
+    },
+    "ancient": {
+        "A-Site":   (-500, 600, -1100, -200),
+        "A-Main":   (-500, 500, -200, 700),
+        "Mid":      (-1200, -400, -400, 600),
+        "B-Site":   (-2000, -1000, -1400, -400),
+        "B-Main":   (-1500, -500, 600, 1200),
+        "CT-Spawn": (-600, 600, -2000, -1100),
+        "T-Spawn":  (-300, 600, 1000, 1800),
+    },
+    "anubis": {
+        "A-Site":   (-500, 600, -1200, -300),
+        "A-Main":   (-500, 500, -300, 600),
+        "Mid":      (-1000, -200, -600, 400),
+        "B-Site":   (-2000, -1000, -1200, -200),
+        "B-Main":   (-1500, -400, 400, 1200),
+        "CT-Spawn": (-400, 600, -2200, -1200),
+        "T-Spawn":  (-200, 600, 1000, 1800),
+    },
+    "nuke": {
+        "Outside":  (-1800, 200, -1200, 600),
+        "Ramp":     (-500, 600, 600, 1600),
+        "A-Site":   (-400, 700, -1800, -600),
+        "B-Site":   (-500, 600, -1800, -600),
+        "Lobby":    (600, 1500, -400, 600),
+        "CT-Spawn": (-1200, 0, -2600, -1800),
+        "T-Spawn":  (500, 1500, 600, 1500),
+    },
+    "vertigo": {
+        "A-Site":   (-400, 600, -400, 500),
+        "A-Ramp":   (-1000, -300, -200, 600),
+        "Mid":      (-800, 0, -1200, -400),
+        "B-Site":   (-1800, -600, -1000, 0),
+        "CT-Spawn": (-200, 600, -1800, -800),
+        "T-Spawn":  (-400, 600, 600, 1400),
+    },
+    "overpass": {
+        "A-Site":   (-2800, -1600, -1400, -400),
+        "A-Long":   (-2200, -1200, -400, 600),
+        "Toilets":  (-3400, -2600, -600, 200),
+        "Mid":      (-1600, -600, -800, 200),
+        "B-Site":   (-800, 400, -2000, -1000),
+        "B-Short":  (-600, 200, -1000, -200),
+        "CT-Spawn": (-1800, -800, -2200, -1400),
+        "T-Spawn":  (-1600, -600, 600, 1400),
+    },
+}
+
+
+def _classify_zone(x: float, y: float, map_name: str) -> str:
+    """Classify game coordinates into a named zone. Returns 'Other' if no match."""
+    zones = MAP_ZONES.get(map_name.lower(), {})
+    for zone_name, (x_min, x_max, y_min, y_max) in zones.items():
+        if x_min <= x <= x_max and y_min <= y <= y_max:
+            return zone_name
+    return "Other"
+
+
+def _build_zone_analysis(cfg: dict) -> dict:
+    """Aggregate kill/death positions across all exports, grouped by map and zone."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    # Per-map zone aggregates: map -> zone -> {kills, deaths, hs_kills, hs_deaths}
+    map_zones: dict[str, dict[str, dict]] = {}
+    total_matches = 0
+    total_positions = 0
+    maps_seen: set[str] = set()
+
+    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        positions = data.get("kill_positions", [])
+        if not positions:
+            continue
+
+        map_name = data.get("match", {}).get("map", "").lower()
+        if not map_name:
+            continue
+
+        maps_seen.add(map_name)
+        total_matches += 1
+
+        if map_name not in map_zones:
+            map_zones[map_name] = {}
+
+        for pos in positions:
+            total_positions += 1
+            is_kill = pos.get("t") == "k"
+            x = pos.get("x", 0)
+            y = pos.get("y", 0)
+            zone = _classify_zone(x, y, map_name)
+
+            if zone not in map_zones[map_name]:
+                map_zones[map_name][zone] = {
+                    "kills": 0, "deaths": 0,
+                    "hs_kills": 0, "hs_deaths": 0,
+                    "weapons_kill": {}, "weapons_death": {},
+                }
+            z = map_zones[map_name][zone]
+            weapon = pos.get("w", "unknown").replace("weapon_", "")
+
+            if is_kill:
+                z["kills"] += 1
+                if pos.get("hs"):
+                    z["hs_kills"] += 1
+                z["weapons_kill"][weapon] = z["weapons_kill"].get(weapon, 0) + 1
+            else:
+                z["deaths"] += 1
+                if pos.get("hs"):
+                    z["hs_deaths"] += 1
+                z["weapons_death"][weapon] = z["weapons_death"].get(weapon, 0) + 1
+
+    if not map_zones:
+        return {"has_data": False}
+
+    # Build per-map summaries
+    maps_data = {}
+    global_tips = []
+    worst_zone = None  # (map, zone, kd)
+    best_zone = None
+
+    for map_name in sorted(map_zones.keys()):
+        zones = map_zones[map_name]
+        zone_list = []
+        map_kills = 0
+        map_deaths = 0
+
+        for zone_name, z in sorted(zones.items(), key=lambda x: x[1]["kills"] + x[1]["deaths"], reverse=True):
+            total = z["kills"] + z["deaths"]
+            kd = round(z["kills"] / z["deaths"], 2) if z["deaths"] else (z["kills"] if z["kills"] else 0)
+            hs_pct = round(z["hs_kills"] / z["kills"] * 100, 1) if z["kills"] else 0
+            top_kill_wpn = max(z["weapons_kill"], key=z["weapons_kill"].get) if z["weapons_kill"] else "-"
+            top_death_wpn = max(z["weapons_death"], key=z["weapons_death"].get) if z["weapons_death"] else "-"
+            map_kills += z["kills"]
+            map_deaths += z["deaths"]
+
+            zone_entry = {
+                "name": zone_name,
+                "kills": z["kills"],
+                "deaths": z["deaths"],
+                "total": total,
+                "kd": kd,
+                "hs_pct": hs_pct,
+                "top_kill_weapon": top_kill_wpn,
+                "top_death_weapon": top_death_wpn,
+            }
+            zone_list.append(zone_entry)
+
+            # Track global best/worst (minimum 5 events to be relevant)
+            if total >= 5:
+                if worst_zone is None or kd < worst_zone[2]:
+                    worst_zone = (map_name, zone_name, kd, z["kills"], z["deaths"])
+                if best_zone is None or kd > best_zone[2]:
+                    best_zone = (map_name, zone_name, kd, z["kills"], z["deaths"])
+
+        map_kd = round(map_kills / map_deaths, 2) if map_deaths else 0
+        maps_data[map_name] = {
+            "zones": zone_list,
+            "kills": map_kills,
+            "deaths": map_deaths,
+            "kd": map_kd,
+        }
+
+    # Generate tips
+    if worst_zone and worst_zone[2] < 0.8:
+        global_tips.append({
+            "type": "warning",
+            "text": f"Auf {worst_zone[0].capitalize()} {worst_zone[1]} ist dein K/D nur {worst_zone[2]} ({worst_zone[3]}K/{worst_zone[4]}D) — trainiere diese Position.",
+        })
+    if best_zone and best_zone[2] >= 1.5:
+        global_tips.append({
+            "type": "success",
+            "text": f"Auf {best_zone[0].capitalize()} {best_zone[1]} dominierst du mit K/D {best_zone[2]} ({best_zone[3]}K/{best_zone[4]}D) — nutze das aus.",
+        })
+
+    # Check for predictability (single zone > 50% of all events on a map)
+    for map_name, md in maps_data.items():
+        map_total = md["kills"] + md["deaths"]
+        if map_total < 20:
+            continue
+        for z in md["zones"]:
+            if z["total"] / map_total > 0.50 and z["name"] != "Other":
+                global_tips.append({
+                    "type": "info",
+                    "text": f"Auf {map_name.capitalize()} finden {round(z['total']/map_total*100)}% deiner Duelle in {z['name']} statt — du bist vorhersehbar.",
+                })
+                break
+
+    # Death-heavy zones (more deaths than kills, min 8 events)
+    death_zones = []
+    for map_name, md in maps_data.items():
+        for z in md["zones"]:
+            if z["deaths"] > z["kills"] and z["total"] >= 8 and z["name"] != "Other":
+                death_zones.append((map_name, z["name"], z["kd"], z["deaths"]))
+    death_zones.sort(key=lambda x: x[2])
+    for dz in death_zones[:3]:
+        if dz[2] < 0.7:
+            global_tips.append({
+                "type": "warning",
+                "text": f"{dz[0].capitalize()} {dz[1]}: K/D {dz[2]} mit {dz[3]} Deaths — vermeide diese Zone oder aendere dein Approach.",
+            })
+
+    # Map list for template selector
+    map_list = sorted(maps_data.keys())
+    default_map = map_list[0] if map_list else ""
+
+    return {
+        "has_data": True,
+        "total_matches": total_matches,
+        "total_positions": total_positions,
+        "maps": maps_data,
+        "map_list": map_list,
+        "default_map": default_map,
+        "tips": global_tips[:6],
+        "supported_maps": list(MAP_ZONES.keys()),
+    }
+
+
+# ── Muskelgedaechtnis / Motor Skills Tracker ─────────────
+def _build_motor_skills(cfg: dict) -> dict:
+    """Track motor skill metrics over time: counter-strafe, crosshair, spray, accuracy."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    entries = []  # chronological match entries with motor skill values
+
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        match = data.get("match", {})
+        player = data.get("player", {})
+        if not player:
+            continue
+
+        cp = player.get("crosshair_placement", {})
+        sp = player.get("spray_control", {})
+
+        entries.append({
+            "date": match.get("date", ""),
+            "map": match.get("map", "?"),
+            "counter_strafe": player.get("counter_strafe_score", 0) or player.get("counter_strafe_pct", 0),
+            "crosshair": cp.get("avg_degrees", 0),
+            "crosshair_kills": cp.get("kills_analyzed", 0),
+            "recoil_index": sp.get("avg_recoil_index", 0) if sp else 0,
+            "burst_kills": sp.get("burst_kills", 0) if sp else 0,
+            "spray_kills": sp.get("spray_kills", 0) if sp else 0,
+            "accuracy": player.get("accuracy", 0),
+            "avg_inaccuracy": player.get("avg_inaccuracy_move", 0),
+            "hs_pct": player.get("hs_pct", 0),
+        })
+
+    if len(entries) < 3:
+        return {"has_data": False}
+
+    # Define skills with metadata
+    skills = [
+        {
+            "key": "counter_strafe", "label": "Counter-Strafe",
+            "desc": "Anteil stehender Schuesse — misst Bewegungskontrolle",
+            "unit": "%", "higher_better": True, "icon": "footprints",
+            "color": "#4ade80",
+        },
+        {
+            "key": "crosshair", "label": "Crosshair Placement",
+            "desc": "Grad-Abweichung zum Gegnerkopf — niedriger = besser",
+            "unit": "°", "higher_better": False, "icon": "crosshair",
+            "color": "#f87171",
+        },
+        {
+            "key": "recoil_index", "label": "Spray Control",
+            "desc": "Recoil-Index — niedriger = praeziserer Spray",
+            "unit": "", "higher_better": False, "icon": "target",
+            "color": "#fbbf24",
+        },
+        {
+            "key": "hs_pct", "label": "Headshot-Rate",
+            "desc": "Anteil Kopfschuesse an allen Kills",
+            "unit": "%", "higher_better": True, "icon": "zap",
+            "color": "#9184d9",
+        },
+    ]
+
+    # Compute per-skill stats
+    n = len(entries)
+    skill_data = []
+    tips = []
+
+    for sk in skills:
+        key = sk["key"]
+        values = [e[key] for e in entries if e[key] > 0]
+        if len(values) < 3:
+            continue
+
+        current = values[-1]
+        first5 = values[:5]
+        last5 = values[-5:]
+        all_avg = round(sum(values) / len(values), 1)
+        first5_avg = round(sum(first5) / len(first5), 1)
+        last5_avg = round(sum(last5) / len(last5), 1)
+        best = round(max(values), 1) if sk["higher_better"] else round(min(values), 1)
+        worst = round(min(values), 1) if sk["higher_better"] else round(max(values), 1)
+
+        # Trend: compare first 5 vs last 5
+        if sk["higher_better"]:
+            delta = round(last5_avg - first5_avg, 1)
+            improved = delta > 0
+        else:
+            delta = round(first5_avg - last5_avg, 1)
+            improved = delta > 0
+
+        # Rolling 5-match averages for chart
+        rolling = []
+        for i in range(len(values)):
+            window = values[max(0, i - 4):i + 1]
+            rolling.append(round(sum(window) / len(window), 1))
+
+        trend_label = "verbessert" if improved else ("verschlechtert" if abs(delta) > 1 else "stabil")
+
+        skill_data.append({
+            **sk,
+            "current": current,
+            "all_avg": all_avg,
+            "first5_avg": first5_avg,
+            "last5_avg": last5_avg,
+            "best": best,
+            "worst": worst,
+            "delta": delta,
+            "delta_abs": abs(delta),
+            "improved": improved,
+            "trend_label": trend_label,
+            "values": values,
+            "rolling": rolling,
+            "count": len(values),
+        })
+
+        # Tips
+        if improved and abs(delta) >= 2:
+            tips.append({
+                "type": "success",
+                "text": f"{sk['label']} {trend_label}: {first5_avg}{sk['unit']} → {last5_avg}{sk['unit']} (+{abs(delta)}{sk['unit']})",
+            })
+        elif not improved and abs(delta) >= 3:
+            tips.append({
+                "type": "warning",
+                "text": f"{sk['label']} {trend_label}: {first5_avg}{sk['unit']} → {last5_avg}{sk['unit']} (-{abs(delta)}{sk['unit']})",
+            })
+
+    if not skill_data:
+        return {"has_data": False}
+
+    # Chart labels (match dates)
+    chart_labels = [e.get("date", "")[-5:] + " " + e.get("map", "")[:3] for e in entries]
+
+    return {
+        "has_data": True,
+        "total_matches": n,
+        "skills": skill_data,
+        "tips": tips[:6],
+        "chart_labels": chart_labels,
+    }
+
+
+# ── Replay Bookmarks ─────────────────────────────────────
+def _build_bookmarks(cfg: dict) -> dict:
+    """Auto-generate replay review bookmarks from round timeline data."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    all_bookmarks = []
+
+    for f in sorted(export_dir.glob("*_coach.json"), reverse=True)[:30]:
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        match = data.get("match", {})
+        player = data.get("player", {})
+        timeline = data.get("round_timeline", [])
+        if not timeline:
+            continue
+
+        demo_file = match.get("demo_file", "")
+        map_name = match.get("map", "?")
+        match_date = match.get("date", "?")
+        match_label = f"{map_name} {match.get('score_own', '?')}:{match.get('score_enemy', '?')}"
+
+        match_bookmarks = []
+
+        for rd in timeline:
+            rnum = rd.get("round", 0)
+            events = rd.get("events", [])
+            side = rd.get("side", "?")
+            won = rd.get("won", False)
+            kills_in_round = rd.get("player_kills", 0)
+            died = rd.get("player_died", False)
+
+            kill_events = [e for e in events if e.get("type") == "kill"]
+            death_events = [e for e in events if e.get("type") == "death"]
+
+            bookmark = None
+
+            # Clutch situations (1vN)
+            clutch_events = [e for e in events if e.get("type") == "clutch"]
+            for ce in clutch_events:
+                vs = ce.get("vs", 0)
+                clutch_won = ce.get("won", False)
+                if clutch_won:
+                    bookmark = {
+                        "type": "clutch_win", "priority": 1,
+                        "icon": "trophy", "color": "#4ade80",
+                        "label": f"Clutch 1v{vs} gewonnen",
+                        "tip": "Schau dir an was du richtig gemacht hast — Positioning, Timing, Utility.",
+                    }
+                elif vs >= 2:
+                    bookmark = {
+                        "type": "clutch_loss", "priority": 2,
+                        "icon": "x-circle", "color": "#f87171",
+                        "label": f"Clutch 1v{vs} verloren",
+                        "tip": "Was haette anders laufen koennen? Hast du Utility genutzt?",
+                    }
+
+            # Ace / 4K+ rounds
+            if not bookmark and kills_in_round >= 4:
+                bookmark = {
+                    "type": "multi_kill", "priority": 1,
+                    "icon": "flame", "color": "#fbbf24",
+                    "label": f"{kills_in_round}K Runde" + (" — ACE!" if kills_in_round >= 5 else ""),
+                    "tip": "Highlight-Runde — was hat zum Erfolg gefuehrt?",
+                }
+
+            # Opening death without trade (died first, team lost)
+            if not bookmark and died and death_events:
+                de = death_events[0]
+                pct = de.get("pct", 50)
+                if pct < 20 and not won:
+                    bookmark = {
+                        "type": "early_death", "priority": 3,
+                        "icon": "skull", "color": "#f87171",
+                        "label": f"Frueh gestorben ({pct}% der Runde) — Runde verloren",
+                        "tip": f"Zu aggressiv gepeekt? Utility vor dem Push nutzen. Getoetet von {de.get('killer', '?')} mit {de.get('weapon', '?').replace('weapon_', '')}.",
+                    }
+
+            # 0 impact rounds — no kills, no assists, died
+            if not bookmark and kills_in_round == 0 and died and not won:
+                assists_in_round = rd.get("player_assists", 0)
+                if assists_in_round == 0:
+                    bookmark = {
+                        "type": "invisible", "priority": 4,
+                        "icon": "eye-off", "color": "#75798c",
+                        "label": "Invisible Round — kein Impact",
+                        "tip": "Konntest du Utility einsetzen oder Trade-Position einnehmen?",
+                    }
+
+            # Team had advantage but lost (throw)
+            if not bookmark and not won and kills_in_round >= 1:
+                team_kills = sum(1 for e in events if e.get("type") == "kill")
+                team_deaths = sum(1 for e in events if e.get("type") == "death")
+                if team_kills >= team_deaths + 1 and died:
+                    bookmark = {
+                        "type": "throw", "priority": 3,
+                        "icon": "alert-triangle", "color": "#fb923c",
+                        "label": f"Vorteil verspielt ({team_kills}K vs {team_deaths}D) — trotzdem verloren",
+                        "tip": "Post-Plant Positioning? Zu aggressiv nach Vorteil?",
+                    }
+
+            if bookmark:
+                bookmark["round"] = rnum
+                bookmark["side"] = side
+                bookmark["won"] = won
+                match_bookmarks.append(bookmark)
+
+        if match_bookmarks:
+            # Sort by priority
+            match_bookmarks.sort(key=lambda b: b["priority"])
+            all_bookmarks.append({
+                "match_label": match_label,
+                "date": match_date,
+                "map": map_name,
+                "demo_file": demo_file,
+                "result": match.get("result", "?"),
+                "bookmarks": match_bookmarks[:8],
+                "total_bookmarks": len(match_bookmarks),
+            })
+
+    if not all_bookmarks:
+        return {"has_data": False}
+
+    # Summary stats
+    total_bm = sum(m["total_bookmarks"] for m in all_bookmarks)
+    type_counts = {}
+    for m in all_bookmarks:
+        for b in m["bookmarks"]:
+            type_counts[b["type"]] = type_counts.get(b["type"], 0) + 1
+
+    return {
+        "has_data": True,
+        "matches": all_bookmarks,
+        "total_bookmarks": total_bm,
+        "total_matches": len(all_bookmarks),
+        "type_counts": type_counts,
     }

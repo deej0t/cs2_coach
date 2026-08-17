@@ -43,6 +43,40 @@
             <input type="text" name="discord_webhook" value="{{ config.get('discord_webhook', '') }}" placeholder="https://discord.com/api/webhooks/..." class="input">
             <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Optional: Match-Ergebnisse automatisch in Discord posten.</div>
         </div>
+        <div class="field">
+            <label>Steam Web API Key</label>
+            <input type="text" name="steam_api_key" value="{{ config.get('steam_api_key', '') }}" placeholder="Dein Steam API Key" class="input">
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Fuer Auto-Sync und Share-Code Downloads. <a href="https://steamcommunity.com/dev/apikey" target="_blank" style="color:var(--color-accent);">Hier beantragen</a></div>
+        </div>
+        <div class="field">
+            <label>CS2 Auth Token</label>
+            <input type="text" name="cs2_auth_token" value="{{ config.get('cs2_auth_token', '') }}" placeholder="XXXX-XXXXX-XXXX" class="input">
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">CS2 → Einstellungen → Spiel → "Authentifizierungstoken fuer Drittanbieter". Noetig fuer Auto-Sync.</div>
+        </div>
+        <div class="hr" style="margin: var(--space-3) 0;"></div>
+        <span class="card-kicker" style="margin-bottom: var(--space-2);">AI Coach Chat</span>
+        <div class="field">
+            <label>AI-Anbieter</label>
+            <select name="ai_provider" class="input">
+                <option value="ollama" {% if config.get('ai_provider', 'ollama') == 'ollama' %}selected{% endif %}>Ollama (Self-Hosted)</option>
+                <option value="gemini" {% if config.get('ai_provider') == 'gemini' %}selected{% endif %}>Google Gemini</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>Ollama Server URL</label>
+            <input type="text" name="ollama_url" value="{{ config.get('ollama_url', 'http://192.168.188.71:11434') }}" placeholder="http://192.168.188.71:11434" class="input">
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Adresse deines Ollama-Servers (z.B. auf Unraid). Standard-Port: 11434.</div>
+        </div>
+        <div class="field">
+            <label>Gemini API Key</label>
+            <input type="text" name="gemini_api_key" value="{{ config.get('gemini_api_key', '') }}" placeholder="AIza..." class="input">
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Nur noetig wenn Gemini gewaehlt. <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--color-accent);">Kostenlosen Key holen</a></div>
+        </div>
+        <div class="field">
+            <label>AI-Modell (optional)</label>
+            <input type="text" name="ai_model" value="{{ config.get('ai_model', '') }}" placeholder="z.B. llama3.1:8b oder gemini-2.0-flash" class="input">
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Leer lassen fuer Standardmodell. Ollama: llama3.1:8b, gemma2:9b, etc. Gemini: gemini-2.0-flash (kostenlos).</div>
+        </div>
         <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Speichern</button>
     </form>
 </div>
