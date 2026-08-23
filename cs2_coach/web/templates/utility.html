@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Utility-Analyse{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Utility-Analyse</h2>
+<p style="color:var(--color-neutral-500);font-size:13px;margin-bottom:var(--space-5);">
+    Granaten-Nutzung und Flash-Effektivitaet ueber alle {{ util.total_matches }} Matches.
+</p>
+
+<style>
+    .ut-hero { display:grid; grid-template-columns:repeat(4, 1fr); gap:var(--space-4); margin-bottom:var(--space-5); }
+    .ut-hero-card { text-align:center; }
+    .ut-hero-val { font-size:32px; font-weight:600; line-height:1.1; }
+    .ut-hero-sub { font-size:11px; color:var(--color-neutral-500); margin-top:2px; }
+
+    .ut-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--space-5); margin-bottom:var(--space-5); }
+    .ut-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:var(--space-5); margin-bottom:var(--space-5); }
+
+    /* Donut chart */
+    .ut-donut-wrap { display:flex; align-items:center; justify-content:center; gap:var(--space-5); flex-wrap:wrap; }
+    .ut-donut-legend { display:flex; flex-direction:column; gap:6px; }
+    .ut-legend-item { display:flex; align-items:center; gap:8px; font-size:13px; }
+    .ut-legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+    .ut-legend-val { font-weight:600; margin-left:auto; padding-left:12px; }
+
+    /* Flash stats */
+    .ut-flash-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:var(--space-3); }
+    .ut-flash-stat { text-align:center; padding:var(--space-3); }
+    .ut-flash-val { font-size:24px; font-weight:600; line-height:1; }
+    .ut-flash-label { font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--color-neutral-500); margin-top:4px; }
+
+    /* Gauge bar */
+    .ut-gauge { position:relative; height:8px; background:var(--color-neutral-800); border-radius:4px; overflow:hidden; margin:6px 0; }
+    .ut-gauge-fill { position:absolute; top:0; left:0; height:100%; border-radius:4px; transition:width 0.6s; }
+
+    /* Benchmark items */
+    .ut-bm-item { display:flex; flex-direction:column; gap:3px; margin-bottom:var(--space-3); }
+    .ut-bm-head { display:flex; justify-content:space-between; align-items:baseline; }
+    .ut-bm-label { font-size:12px; font-weight:500; }
+    .ut-bm-value { font-size:12px; color:var(--color-neutral-400); }
+    .ut-bm-rank { font-size:10px; color:var(--color-neutral-500); text-align:right; }
+    .ut-bm-marker {
+        position:absolute; top:-3px; width:2px; height:14px; background:var(--color-text);
+        border-radius:1px; transform:translateX(-1px);
+    }
+
+    /* Map table */
+    .ut-map-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .ut-map-table th {
+        font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+        color:var(--color-neutral-500); padding:8px 10px; text-align:left;
+        border-bottom:1px solid var(--color-neutral-800);
+    }
+    .ut-map-table td { padding:10px; border-bottom:1px solid color-mix(in srgb, var(--color-text) 4%, transparent); }
+    .ut-map-table tr:hover td { background:rgba(255,255,255,0.02); }
+
+    /* Trend sparkline */
+    .ut-trend-bars { display:flex; align-items:end; gap:3px; height:50px; }
+    .ut-trend-bar {
+        flex:1; border-radius:2px 2px 0 0; min-height:3px; cursor:default;
+        transition:opacity 0.15s;
+    }
+    .ut-trend-bar:hover { opacity:0.8; }
+
+    /* Correlation */
+    .ut-corr { display:flex; align-items:center; gap:var(--space-4); }
+    .ut-corr-col { flex:1; text-align:center; padding:var(--space-4); border-radius:var(--radius-md); }
+    .ut-corr-vs { font-size:18px; font-weight:700; color:var(--color-neutral-600); flex-shrink:0; }
+    .ut-corr-val { font-size:28px; font-weight:600; line-height:1; }
+    .ut-corr-sub { font-size:11px; color:var(--color-neutral-500); margin-top:4px; }
+
+    /* Alerts */
+    .ut-alert {
+        display:flex; align-items:center; gap:10px; padding:8px 14px;
+        border-radius:var(--radius-md); font-size:13px;
+    }
+    .ut-alert-warning { background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.25); color:var(--color-yellow); }
+    .ut-alert-success { background:rgba(74,222,128,0.08); border:1px solid rgba(74,222,128,0.25); color:var(--color-green); }
+    .ut-alert-info { background:rgba(145,132,217,0.08); border:1px solid rgba(145,132,217,0.25); color:var(--color-accent); }
+
+    @media (max-width:900px) {
+        .ut-hero { grid-template-columns:1fr 1fr; }
+        .ut-grid { grid-template-columns:1fr; }
+        .ut-grid-3 { grid-template-columns:1fr; }
+    }
+    @media (max-width:600px) {
+        .ut-hero { grid-template-columns:1fr 1fr; }
+        .ut-hero-val { font-size:24px; }
+        .ut-flash-grid { grid-template-columns:1fr; }
+    }
+</style>
+
+{% if not util.has_data %}
+<div class="card elev-sm">
+    <p class="card-body" style="text-align:center;color:var(--color-neutral-500);">
+        Keine Daten vorhanden. Analysiere zuerst einige Demos.
+    </p>
+</div>
+{% else %}
+
+<!-- ── Hero Stats ── -->
+<div class="ut-hero">
+    <div class="card elev-sm ut-hero-card">
+        <span class="card-kicker">Utility/Runde</span>
+        <div class="ut-hero-val {% if util.avg_per_round >= 1.5 %}win{% elif util.avg_per_round < 1.0 %}loss{% endif %}">{{ util.avg_per_round }}</div>
+        <div class="ut-hero-sub">{{ util.total_grenades }} Granaten in {{ util.total_rounds }} Runden</div>
+    </div>
+    <div class="card elev-sm ut-hero-card">
+        <span class="card-kicker">Flash-Trefferquote</span>
+        <div class="ut-hero-val {% if util.flash_hit_rate >= 55 %}win{% elif util.flash_hit_rate < 35 %}loss{% endif %}">{{ util.flash_hit_rate }}%</div>
+        <div class="ut-hero-sub">{{ util.total_enemies_blinded }} Gegner geblendet</div>
+    </div>
+    <div class="card elev-sm ut-hero-card">
+        <span class="card-kicker">Team-Flash</span>
+        <div class="ut-hero-val {% if util.friendly_flash_rate <= 25 %}win{% elif util.friendly_flash_rate > 45 %}loss{% endif %}">{{ util.friendly_flash_rate }}%</div>
+        <div class="ut-hero-sub">{{ util.total_teammates_blinded }} Teammates geblendet</div>
+    </div>
+    <div class="card elev-sm ut-hero-card">
+        <span class="card-kicker">Blind-Dauer</span>
+        <div class="ut-hero-val {% if util.avg_blind_duration >= 2.0 %}win{% elif util.avg_blind_duration < 1.2 %}loss{% endif %}">{{ util.avg_blind_duration }}s</div>
+        <div class="ut-hero-sub">Durchschn. Blendzeit</div>
+    </div>
+</div>
+
+<!-- ── Coaching Insights ── -->
+{% if util.insights %}
+<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:var(--space-5);">
+    {% for a in util.insights %}
+    <div class="ut-alert ut-alert-{{ a.type }}">
+        <i data-lucide="{{ a.icon }}" style="width:15px;height:15px;flex-shrink:0;"></i>
+        <span>{{ a.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── Distribution + Flash Effectiveness ── -->
+<div class="ut-grid">
+    <!-- Donut / Distribution -->
+    <div class="card elev-sm">
+        <span class="card-kicker">Granaten-Verteilung</span>
+        <div class="ut-donut-wrap" style="margin-top:var(--space-3);">
+            <canvas id="ut-donut" width="200" height="200"></canvas>
+            <div class="ut-donut-legend">
+                {% for d in util.distribution %}
+                <div class="ut-legend-item">
+                    <span class="ut-legend-dot" style="background:{{ d.color }};"></span>
+                    <span>{{ d.label }}</span>
+                    <span class="ut-legend-val">{{ d.value }} <span style="font-weight:400;color:var(--color-neutral-500);">({{ "%.0f"|format(d.value / util.total_grenades * 100) }}%)</span></span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:var(--space-3);margin-top:var(--space-4);text-align:center;">
+            <div>
+                <div style="font-size:14px;font-weight:600;color:#fbbf24;">{{ util.avg_flashes_pr }}</div>
+                <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--color-neutral-500);">Flash/Rd</div>
+            </div>
+            <div>
+                <div style="font-size:14px;font-weight:600;color:#94a3b8;">{{ util.avg_smokes_pr }}</div>
+                <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--color-neutral-500);">Smoke/Rd</div>
+            </div>
+            <div>
+                <div style="font-size:14px;font-weight:600;color:#f87171;">{{ util.avg_he_pr }}</div>
+                <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--color-neutral-500);">HE/Rd</div>
+            </div>
+            <div>
+                <div style="font-size:14px;font-weight:600;color:#fb923c;">{{ util.avg_molotovs_pr }}</div>
+                <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--color-neutral-500);">Molo/Rd</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flash Effectiveness -->
+    <div class="card elev-sm">
+        <span class="card-kicker">Flash-Effektivitaet</span>
+        <div class="ut-flash-grid" style="margin-top:var(--space-3);">
+            <div class="ut-flash-stat">
+                <div class="ut-flash-val" style="color:#fbbf24;">{{ util.total_flashes }}</div>
+                <div class="ut-flash-label">Flashes gesamt</div>
+            </div>
+            <div class="ut-flash-stat">
+                <div class="ut-flash-val win">{{ util.total_enemies_blinded }}</div>
+                <div class="ut-flash-label">Gegner geblendet</div>
+            </div>
+            <div class="ut-flash-stat">
+                <div class="ut-flash-val loss">{{ util.total_teammates_blinded }}</div>
+                <div class="ut-flash-label">Teammates geblendet</div>
+            </div>
+        </div>
+        <div style="margin-top:var(--space-4);">
+            <div style="font-size:12px;font-weight:500;margin-bottom:4px;">Gegner-Trefferquote</div>
+            <div class="ut-gauge">
+                <div class="ut-gauge-fill" style="width:{{ [util.flash_hit_rate, 100]|min }}%;background:{% if util.flash_hit_rate >= 55 %}var(--color-green){% elif util.flash_hit_rate < 35 %}var(--color-red){% else %}var(--color-accent){% endif %};"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--color-neutral-600);">
+                <span>0%</span><span>{{ util.flash_hit_rate }}%</span><span>100%</span>
+            </div>
+        </div>
+        <div style="margin-top:var(--space-3);">
+            <div style="font-size:12px;font-weight:500;margin-bottom:4px;">Team-Flash-Rate <span style="font-weight:400;color:var(--color-neutral-500);">(niedriger = besser)</span></div>
+            <div class="ut-gauge">
+                <div class="ut-gauge-fill" style="width:{{ [util.friendly_flash_rate, 100]|min }}%;background:{% if util.friendly_flash_rate <= 25 %}var(--color-green){% elif util.friendly_flash_rate > 45 %}var(--color-red){% else %}var(--color-yellow){% endif %};"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--color-neutral-600);">
+                <span>0%</span><span>{{ util.friendly_flash_rate }}%</span><span>100%</span>
+            </div>
+        </div>
+        <div style="margin-top:var(--space-3);padding:var(--space-3);background:rgba(255,255,255,0.02);border-radius:var(--radius-sm);">
+            <div style="font-size:12px;font-weight:500;">Durchschn. Blendzeit</div>
+            <div style="font-size:22px;font-weight:600;{% if util.avg_blind_duration >= 2.0 %}color:var(--color-green);{% elif util.avg_blind_duration < 1.2 %}color:var(--color-red);{% endif %}">{{ util.avg_blind_duration }}s</div>
+            <div style="font-size:11px;color:var(--color-neutral-500);">Benchmark: 2.0s+ fuer effektive Flashes</div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Trend ── -->
+{% if util.trend|length > 3 %}
+<div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <span class="card-kicker" style="margin:0;">Utility-Trend <span style="font-size:11px;font-weight:400;color:var(--color-neutral-500);">(Letzte {{ util.trend|length }} Matches)</span></span>
+        <span style="font-size:12px;font-weight:600;
+            {% if util.util_trend > 0.05 %}color:var(--color-green);{% elif util.util_trend < -0.05 %}color:var(--color-red);{% else %}color:var(--color-neutral-500);{% endif %}">
+            {% if util.util_trend > 0.05 %}&#9650; +{{ util.util_trend }}{% elif util.util_trend < -0.05 %}&#9660; {{ util.util_trend }}{% else %}&#9644; {{ util.util_trend }}{% endif %} /Rd
+        </span>
+    </div>
+    <div class="ut-trend-bars">
+        {% set max_pr = util.trend|map(attribute='per_round')|max %}
+        {% set min_pr = util.trend|map(attribute='per_round')|min %}
+        {% set range_pr = max_pr - min_pr if max_pr != min_pr else 0.1 %}
+        {% for m in util.trend %}
+        <div class="ut-trend-bar"
+             style="height:{{ ((m.per_round - min_pr) / range_pr * 38 + 10)|round }}px;background:{% if m.result == 'Sieg' %}#4ade80{% elif m.result == 'Niederlage' %}#f87171{% else %}#fbbf24{% endif %};"
+             title="{{ m.date }} {{ m.map }} — {{ m.per_round }}/Rd ({{ m.result }})"></div>
+        {% endfor %}
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--color-neutral-600);margin-top:3px;">
+        <span>{{ util.trend[0].date }}</span>
+        <span>{{ util.trend[-1].date }}</span>
+    </div>
+</div>
+{% endif %}
+
+<!-- ── Correlation + Benchmarks ── -->
+<div class="ut-grid">
+    <!-- Utility-Rating Correlation -->
+    <div class="card elev-sm">
+        <span class="card-kicker">Utility-Impact auf Performance</span>
+        <p style="font-size:12px;color:var(--color-neutral-500);margin:2px 0 var(--space-3);">Vergleich: Matches mit viel vs wenig Utility-Nutzung</p>
+        <div class="ut-corr">
+            <div class="ut-corr-col" style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.15);">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--color-neutral-500);margin-bottom:6px;">Wenig Utility</div>
+                <div style="font-size:12px;color:var(--color-neutral-400);margin-bottom:4px;">{{ util.correlation.low_util_pr }}/Rd</div>
+                <div class="ut-corr-val {% if util.correlation.low_rating >= 1.0 %}win{% else %}loss{% endif %}">{{ util.correlation.low_rating }}</div>
+                <div class="ut-corr-sub">Rating</div>
+                <div style="font-size:13px;font-weight:500;margin-top:4px;">{{ util.correlation.low_wr }}% WR</div>
+            </div>
+            <div class="ut-corr-vs">vs</div>
+            <div class="ut-corr-col" style="background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.15);">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--color-neutral-500);margin-bottom:6px;">Viel Utility</div>
+                <div style="font-size:12px;color:var(--color-neutral-400);margin-bottom:4px;">{{ util.correlation.high_util_pr }}/Rd</div>
+                <div class="ut-corr-val {% if util.correlation.high_rating >= 1.0 %}win{% else %}loss{% endif %}">{{ util.correlation.high_rating }}</div>
+                <div class="ut-corr-sub">Rating</div>
+                <div style="font-size:13px;font-weight:500;margin-top:4px;">{{ util.correlation.high_wr }}% WR</div>
+            </div>
+        </div>
+        {% if util.correlation.rating_diff != 0 %}
+        <div style="text-align:center;margin-top:var(--space-3);font-size:13px;font-weight:500;
+            {% if util.correlation.rating_diff > 0 %}color:var(--color-green);{% elif util.correlation.rating_diff < 0 %}color:var(--color-red);{% endif %}">
+            {% if util.correlation.rating_diff > 0 %}&#9650;{% else %}&#9660;{% endif %}
+            {{ util.correlation.rating_diff }} Rating-Unterschied
+            {% if util.correlation.wr_diff != 0 %} / {{ util.correlation.wr_diff }}% Win-Rate{% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Benchmarks -->
+    <div class="card elev-sm">
+        <span class="card-kicker">Benchmarks</span>
+        <p style="font-size:12px;color:var(--color-neutral-500);margin:2px 0 var(--space-3);">Deine Werte vs. typische CS2-Benchmarks</p>
+        {% for b in util.benchmarks %}
+        <div class="ut-bm-item">
+            <div class="ut-bm-head">
+                <span class="ut-bm-label"><abbr title="{{ b.desc }}">{{ b.label }}</abbr></span>
+                <span class="ut-bm-value">{{ b.value }}{{ b.unit }}</span>
+            </div>
+            {% set bm_max = b.benchmark * 2 if not b.get('invert') else b.benchmark * 2.5 %}
+            {% set pct = (b.value / bm_max * 100) if bm_max else 0 %}
+            {% set bm_pct = (b.benchmark / bm_max * 100) if bm_max else 50 %}
+            <div class="ut-gauge" style="position:relative;">
+                <div class="ut-gauge-fill" style="width:{{ [pct, 100]|min }}%;background:
+                    {% if b.get('invert') %}
+                        {% if b.value <= b.benchmark * 0.8 %}var(--color-green){% elif b.value > b.benchmark * 1.5 %}var(--color-red){% else %}var(--color-accent){% endif %}
+                    {% else %}
+                        {% if b.value >= b.benchmark %}var(--color-green){% elif b.value >= b.benchmark * 0.65 %}var(--color-accent){% else %}var(--color-red){% endif %}
+                    {% endif %};"></div>
+                <div class="ut-bm-marker" style="left:{{ [bm_pct, 98]|min }}%;" title="Benchmark: {{ b.benchmark }}{{ b.unit }}"></div>
+            </div>
+            <div class="ut-bm-rank">{{ b.rank }} — Benchmark: {{ b.benchmark }}{{ b.unit }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- ── Map Performance ── -->
+{% if util.map_stats %}
+<div class="card elev-sm" style="margin-bottom:var(--space-5);">
+    <span class="card-kicker">Utility pro Map</span>
+    <div class="table-scroll" style="margin-top:var(--space-3);">
+        <table class="ut-map-table">
+            <thead>
+                <tr>
+                    <th>Map</th>
+                    <th>Matches</th>
+                    <th>Util/Rd</th>
+                    <th style="color:#fbbf24;">Flash</th>
+                    <th style="color:#94a3b8;">Smoke</th>
+                    <th style="color:#f87171;">HE</th>
+                    <th style="color:#fb923c;">Molo</th>
+                    <th>Flash-Hit</th>
+                    <th>Team-Flash</th>
+                    <th>Blind-Dauer</th>
+                    <th>Rating</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in util.map_stats %}
+                <tr>
+                    <td style="font-weight:600;">{{ m.map }}</td>
+                    <td>{{ m.matches }}</td>
+                    <td style="font-weight:600;{% if m.per_round >= 1.5 %}color:var(--color-green);{% elif m.per_round < 1.0 %}color:var(--color-red);{% endif %}">{{ m.per_round }}</td>
+                    <td>{{ m.flashes_pr }}</td>
+                    <td>{{ m.smokes_pr }}</td>
+                    <td>{{ m.he_pr }}</td>
+                    <td>{{ m.molotovs_pr }}</td>
+                    <td style="{% if m.flash_hit_rate >= 55 %}color:var(--color-green);{% elif m.flash_hit_rate < 35 %}color:var(--color-red);{% endif %}">{{ m.flash_hit_rate }}%</td>
+                    <td style="{% if m.friendly_rate > 45 %}color:var(--color-red);{% elif m.friendly_rate <= 25 %}color:var(--color-green);{% endif %}">{{ m.friendly_rate }}%</td>
+                    <td>{{ m.avg_blind_dur }}s</td>
+                    <td class="{% if m.avg_rating >= 1.1 %}win{% elif m.avg_rating >= 0.9 %}draw{% else %}loss{% endif %}" style="font-weight:600;">{{ m.avg_rating }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var donutEl = document.getElementById('ut-donut');
+    if (!donutEl) return;
+
+    var dist = {{ util.distribution | tojson }};
+    new Chart(donutEl, {
+        type: 'doughnut',
+        data: {
+            labels: dist.map(function(d) { return d.label; }),
+            datasets: [{
+                data: dist.map(function(d) { return d.value; }),
+                backgroundColor: dist.map(function(d) { return d.color; }),
+                borderWidth: 0,
+                hoverOffset: 6,
+            }]
+        },
+        options: {
+            responsive: false,
+            cutout: '60%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                            var pct = Math.round(ctx.raw / total * 100);
+                            return ctx.label + ': ' + ctx.raw + ' (' + pct + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}

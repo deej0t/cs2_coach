@@ -113,6 +113,10 @@
         <input type="checkbox" id="fw-auto-poll" onchange="toggleAutoPoll()" style="accent-color:var(--color-accent);">
         Auto-Check alle 60s
     </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-neutral-400);cursor:pointer;">
+        <input type="checkbox" id="fw-auto-analyze" style="accent-color:var(--color-green);">
+        Auto-Analyse
+    </label>
 </div>
 
 <!-- Progress (hidden until analysis starts) -->
@@ -158,6 +162,7 @@
 {% block scripts %}
 <script>
 var pollTimer = null;
+var analyzing = false;
 
 function checkForNew() {
     var btn = document.getElementById('fw-check-btn');
@@ -182,6 +187,10 @@ function checkForNew() {
                 pulse.className = 'fw-pulse fw-pulse-yellow';
                 analyzeBtn.disabled = false;
                 analyzeBtn.innerHTML = '<i data-lucide="play" style="width:14px;height:14px;"></i> Neue Demos analysieren (' + data.new + ')';
+                // Auto-analyze if enabled and not already running
+                if (document.getElementById('fw-auto-analyze').checked && !analyzing) {
+                    startAnalysis();
+                }
             } else {
                 statusText.textContent = 'Alle Demos analysiert';
                 pulse.className = 'fw-pulse fw-pulse-green';
@@ -198,6 +207,7 @@ function checkForNew() {
 }
 
 function startAnalysis() {
+    analyzing = true;
     var btn = document.getElementById('fw-analyze-btn');
     btn.disabled = true;
     btn.innerHTML = '<i data-lucide="loader" style="width:14px;height:14px;"></i> Analysiere...';
@@ -233,6 +243,7 @@ function startAnalysis() {
         }
         else if (data.type === 'done') {
             source.close();
+            analyzing = false;
             document.getElementById('fw-prog-text').textContent = 'Fertig!';
             document.getElementById('fw-prog-fill').style.width = '100%';
             log.innerHTML += '<div class="fw-log-entry fw-log-info">Alle Demos analysiert.</div>';
@@ -243,6 +254,7 @@ function startAnalysis() {
         }
         else if (data.type === 'error') {
             source.close();
+            analyzing = false;
             log.innerHTML += '<div class="fw-log-entry fw-log-err">Fehler: ' + data.message + '</div>';
             btn.disabled = false;
             btn.innerHTML = '<i data-lucide="play" style="width:14px;height:14px;"></i> Erneut versuchen';
@@ -252,6 +264,7 @@ function startAnalysis() {
 
     source.onerror = function() {
         source.close();
+        analyzing = false;
         btn.disabled = false;
         btn.innerHTML = '<i data-lucide="play" style="width:14px;height:14px;"></i> Erneut versuchen';
         lucide.createIcons();

@@ -3,19 +3,19 @@
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Alle Exports <span class="tag tag-neutral" style="vertical-align: middle;">{{ exports|length }}</span></h2>
+<h2>{{ _('Alle Exports') }} <span class="tag tag-neutral" style="vertical-align: middle;">{{ exports|length }}</span></h2>
 
 {% if exports %}
 
 <!-- Filter Bar -->
 <div class="filter-bar">
-    <button class="filter-btn active" data-filter="all">Alle</button>
-    <button class="filter-btn" data-filter="Sieg" style="--fc: var(--color-green);">Siege</button>
-    <button class="filter-btn" data-filter="Niederlage" style="--fc: var(--color-red);">Niederlagen</button>
-    <button class="filter-btn" data-filter="Unentschieden" style="--fc: var(--color-yellow);">Unentschieden</button>
+    <button class="filter-btn active" data-filter="all">{{ _('Alle') }}</button>
+    <button class="filter-btn" data-filter="Sieg" style="--fc: var(--color-green);">{{ _('Siege') }}</button>
+    <button class="filter-btn" data-filter="Niederlage" style="--fc: var(--color-red);">{{ _('Niederlagen') }}</button>
+    <button class="filter-btn" data-filter="Unentschieden" style="--fc: var(--color-yellow);">{{ _('Unentschieden') }}</button>
     <span style="width: 1px; height: 20px; background: var(--color-divider); margin: 0 4px;"></span>
     <select id="map-filter" class="input" style="width: auto; min-height: 30px; padding: 3px 10px; font-size: 12px; background: var(--color-bg);">
-        <option value="">Alle Maps</option>
+        <option value="">{{ _('Alle Maps') }}</option>
         {% set maps_seen = [] %}
         {% for e in exports %}
             {% if e.map not in maps_seen %}
@@ -30,14 +30,14 @@
 <table class="table" id="exports-table">
     <thead>
         <tr>
-            <th data-sort="date" data-type="string">Datum <span class="sort-icon">▼</span></th>
+            <th data-sort="date" data-type="string">{{ _('Datum') }} <span class="sort-icon">▼</span></th>
             <th data-sort="map" data-type="string">Map</th>
             <th data-sort="score" data-type="string">Score</th>
-            <th>Ergebnis</th>
-            <th data-sort="kd" data-type="number"><abbr title="Kill/Death-Verhaeltnis">K/D</abbr></th>
+            <th>{{ _('Ergebnis') }}</th>
+            <th data-sort="kd" data-type="number"><abbr title="{{ _('Kill/Death-Verhaeltnis') }}">K/D</abbr></th>
             <th data-sort="adr" data-type="number"><abbr title="Average Damage per Round">ADR</abbr></th>
-            <th data-sort="kast" data-type="number"><abbr title="Kill, Assist, Survived, Traded — Runden mit positivem Beitrag">KAST%</abbr></th>
-            <th data-sort="rating" data-type="number"><abbr title="Gesamtbewertung basierend auf Impact-Metriken">Rating</abbr></th>
+            <th data-sort="kast" data-type="number"><abbr title="{{ _('Kill, Assist, Survived, Traded — Runden mit positivem Beitrag') }}">KAST%</abbr></th>
+            <th data-sort="rating" data-type="number"><abbr title="{{ _('Gesamtbewertung basierend auf Impact-Metriken') }}">Rating</abbr></th>
             <th></th>
         </tr>
     </thead>
@@ -48,15 +48,18 @@
             <td>{{ e.map }}</td>
             <td>{{ e.score }}</td>
             <td>
-                {% if e.result == 'Sieg' %}<span class="tag tag-win">Sieg</span>
-                {% elif e.result == 'Niederlage' %}<span class="tag tag-loss">Niederlage</span>
+                {% if e.result == 'Sieg' %}<span class="tag tag-win">{{ _('Sieg') }}</span>
+                {% elif e.result == 'Niederlage' %}<span class="tag tag-loss">{{ _('Niederlage') }}</span>
                 {% else %}<span class="tag tag-draw">{{ e.result }}</span>{% endif %}
             </td>
             <td>{{ e.kd }}</td>
             <td>{{ e.adr }}</td>
             <td>{{ e.kast }}%</td>
             <td>{{ e.rating }}</td>
-            <td><a href="{{ url_for('view_export', filename=e.filename) }}" class="btn btn-ghost">Details →</a></td>
+            <td style="white-space:nowrap;">
+                <a href="{{ url_for('view_export', filename=e.filename) }}" class="btn btn-ghost">Details</a>
+                <a href="{{ url_for('share_card', filename=e.filename) }}" class="btn btn-ghost" title="Share Card"><i data-lucide="share-2" style="width:13px;height:13px;"></i></a>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
@@ -68,13 +71,13 @@
 {% set losses = exports|selectattr('result', 'equalto', 'Niederlage')|list|length %}
 {% set draws = exports|length - wins - losses %}
 <div style="margin-top: var(--space-5); display: flex; gap: var(--space-5); font-size: 13px; color: var(--color-neutral-500);">
-    <span>Bilanz: <span class="win">{{ wins }}W</span> / <span class="loss">{{ losses }}L</span>{% if draws > 0 %} / <span class="draw">{{ draws }}D</span>{% endif %}</span>
+    <span>{{ _('Bilanz') }}: <span class="win">{{ wins }}W</span> / <span class="loss">{{ losses }}L</span>{% if draws > 0 %} / <span class="draw">{{ draws }}D</span>{% endif %}</span>
     <span id="filtered-count" style="display:none;"></span>
 </div>
 
 {% else %}
 <div class="card elev-sm">
-    <p class="card-body">Noch keine Exports vorhanden. Analysiere eine Demo, um den ersten Export zu erstellen.</p>
+    <p class="card-body">{{ _('Noch keine Exports vorhanden. Analysiere eine Demo, um den ersten Export zu erstellen.') }}</p>
 </div>
 {% endif %}
 {% endblock %}
@@ -160,7 +163,7 @@
         });
         if (currentResultFilter !== 'all' || currentMapFilter) {
             filteredCount.style.display = '';
-            filteredCount.textContent = visible + ' von ' + rows.length + ' angezeigt';
+            filteredCount.textContent = visible + ' {{ _("von") }} ' + rows.length + ' {{ _("angezeigt") }}';
         } else {
             filteredCount.style.display = 'none';
         }

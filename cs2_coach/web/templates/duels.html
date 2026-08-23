@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Duel-Analyse{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<style>
+    .duel-hero { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-4); margin-bottom: var(--space-5); }
+    .duel-stat { text-align: center; }
+    .duel-stat-val { font-size: 28px; font-weight: 600; line-height: 1.1; }
+    .duel-stat-label { font-size: 11px; color: var(--color-neutral-500); margin-top: 2px; }
+
+    .duel-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 6px 0; }
+    .duel-bar-k { background: var(--color-green); }
+    .duel-bar-d { background: var(--color-red); }
+
+    .dist-chart { display: flex; gap: 8px; align-items: end; height: 90px; margin-top: var(--space-3); }
+    .dist-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .dist-bar { width: 100%; border-radius: 4px 4px 0 0; min-height: 4px; }
+    .dist-label { font-size: 11px; color: var(--color-neutral-500); }
+    .dist-val { font-size: 13px; font-weight: 600; }
+
+    .timing-row { display: flex; gap: var(--space-3); margin-top: 6px; }
+    .timing-segment { flex: 1; text-align: center; padding: 6px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.02); }
+    .timing-pct { font-size: 18px; font-weight: 600; }
+    .timing-label { font-size: 10px; color: var(--color-neutral-500); }
+
+    .weapon-row {
+        display: grid; grid-template-columns: 120px 1fr 60px 60px 50px 55px; gap: 8px; align-items: center;
+        padding: 7px 12px; border-radius: var(--radius-sm); font-size: 12px;
+    }
+    .weapon-row:nth-child(even) { background: rgba(255,255,255,0.02); }
+    .weapon-header {
+        display: grid; grid-template-columns: 120px 1fr 60px 60px 50px 55px; gap: 8px;
+        padding: 4px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-600);
+    }
+    .weapon-name { font-weight: 500; text-transform: capitalize; }
+    .weapon-bar { height: 6px; border-radius: 3px; display: flex; overflow: hidden; }
+
+    .opp-row {
+        display: grid; grid-template-columns: 1fr 60px 60px 50px 55px 80px 80px; gap: 8px; align-items: center;
+        padding: 7px 12px; border-radius: var(--radius-sm); font-size: 12px;
+    }
+    .opp-row:nth-child(even) { background: rgba(255,255,255,0.02); }
+    .opp-header {
+        display: grid; grid-template-columns: 1fr 60px 60px 50px 55px 80px 80px; gap: 8px;
+        padding: 4px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-600);
+    }
+
+    .nv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
+    .nv-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .nv-name { font-size: 13px; font-weight: 500; }
+    .nv-stats { font-size: 12px; color: var(--color-neutral-400); display: flex; gap: 10px; }
+
+    .trend-chart { display: flex; align-items: end; gap: 3px; height: 50px; }
+    .trend-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 3px; cursor: default; }
+    .trend-bar:hover::after {
+        content: attr(data-tip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+        padding: 3px 8px; border-radius: 4px; background: var(--color-surface); border: 1px solid var(--color-neutral-700);
+        font-size: 10px; white-space: nowrap; z-index: 10;
+    }
+    .trend-bar { position: relative; }
+
+    .alert-bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: var(--radius-md); font-size: 13px; }
+    .alert-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.25); color: var(--color-yellow); }
+    .alert-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.25); color: var(--color-green); }
+    .alert-info { background: rgba(145,132,217,0.08); border: 1px solid rgba(145,132,217,0.25); color: var(--color-accent); }
+
+    @media (max-width: 900px) {
+        .duel-hero { grid-template-columns: repeat(3, 1fr); }
+        .nv-grid { grid-template-columns: 1fr; }
+        .weapon-row, .weapon-header { grid-template-columns: 100px 1fr 50px 50px 45px 50px; }
+        .opp-row, .opp-header { grid-template-columns: 1fr 50px 50px 45px 50px; }
+        .opp-row .opp-wpn, .opp-header .opp-wpn-h { display: none; }
+    }
+    @media (max-width: 600px) {
+        .duel-hero { grid-template-columns: 1fr 1fr; }
+        .duel-stat-val { font-size: 22px; }
+    }
+</style>
+
+<h2>Duel-Analyse</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Detaillierte 1v1 Kampf-Analyse — Waffen, Distanzen, Gegner und Timing deiner Duelle.
+</p>
+
+{% if not da.has_data %}
+<div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
+    <p style="color: var(--color-neutral-500);">Keine analysierten Matches vorhanden.</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">Demo analysieren</a>
+</div>
+{% else %}
+
+<!-- ── Hero Stats ── -->
+<div class="duel-hero">
+    <div class="card elev-sm duel-stat">
+        <span class="card-kicker">Gesamt K/D</span>
+        <div class="duel-stat-val {% if da.overall_kd >= 1.0 %}win{% else %}loss{% endif %}">{{ da.overall_kd }}</div>
+        <div class="duel-stat-label">{{ da.total_kills }}K / {{ da.total_deaths }}D</div>
+    </div>
+    <div class="card elev-sm duel-stat">
+        <span class="card-kicker">HS-Quote</span>
+        <div class="duel-stat-val {% if da.hs_kill_pct >= 45 %}win{% elif da.hs_kill_pct < 30 %}loss{% endif %}">{{ da.hs_kill_pct }}%</div>
+        <div class="duel-stat-label">Kills mit Headshot</div>
+    </div>
+    <div class="card elev-sm duel-stat">
+        <span class="card-kicker">HS-Tod Quote</span>
+        <div class="duel-stat-val" style="color:var(--color-red);">{{ da.hs_death_pct }}%</div>
+        <div class="duel-stat-label">Tod durch Headshot</div>
+    </div>
+    <div class="card elev-sm duel-stat">
+        <span class="card-kicker">Opening Duels</span>
+        <div class="duel-stat-val {% if da.opening.wr >= 55 %}win{% elif da.opening.wr < 45 %}loss{% endif %}">{{ da.opening.wr }}%</div>
+        <div class="duel-stat-label">{{ da.opening.wins }}W / {{ da.opening.losses }}L</div>
+    </div>
+    <div class="card elev-sm duel-stat">
+        <span class="card-kicker">Avg Distanz</span>
+        <div class="duel-stat-val" style="color:var(--color-accent);">{{ da.distance.avg }}</div>
+        <div class="duel-stat-label">Units Kampfdistanz</div>
+    </div>
+</div>
+
+<!-- ── Insights ── -->
+{% if da.insights %}
+<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:var(--space-5);">
+    {% for a in da.insights %}
+    <div class="alert-bar alert-{{ a.type }}">
+        <i data-lucide="{{ a.icon }}" style="width:15px;height:15px;flex-shrink:0;"></i>
+        <span>{{ a.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── Distance + Timing ── -->
+<div class="grid-2" style="margin-bottom:var(--space-5);">
+    <!-- Distance Breakdown -->
+    <div class="card elev-sm" style="padding:var(--space-4);">
+        <span class="card-kicker">Kampfdistanz</span>
+        <div class="dist-chart">
+            {% set max_dist = [da.distance.close, da.distance.mid, da.distance.long]|max %}
+            {% for label, key, icon in [("Nah", "close", "< 500u"), ("Mittel", "mid", "500-1500u"), ("Fern", "long", "> 1500u")] %}
+            {% set val = da.distance[key] %}
+            <div class="dist-col">
+                <div class="dist-val">{{ da.distance.pcts[key] }}%</div>
+                <div class="dist-bar" style="height:{{ (val / max_dist * 65 + 4)|round if max_dist else 4 }}px;background:{% if key == 'close' %}var(--color-red){% elif key == 'mid' %}var(--color-accent){% else %}var(--color-green){% endif %};"></div>
+                <div class="dist-label">{{ label }}<br><span style="font-size:9px;color:var(--color-neutral-600);">{{ icon }}</span></div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Kill/Death Timing -->
+    <div class="card elev-sm" style="padding:var(--space-4);">
+        <span class="card-kicker">Kampf-Timing</span>
+        <div style="margin-top:var(--space-3);">
+            <div style="font-size:11px;color:var(--color-neutral-400);margin-bottom:4px;">Kills (wann in der Runde)</div>
+            <div class="timing-row">
+                {% for key, label in [("early", "Frueh"), ("mid", "Mitte"), ("late", "Spaet")] %}
+                <div class="timing-segment">
+                    <div class="timing-pct" style="color:var(--color-green);">{{ da.kill_timing[key].pct }}%</div>
+                    <div class="timing-label">{{ label }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            <div style="font-size:11px;color:var(--color-neutral-400);margin:8px 0 4px;">Deaths (wann in der Runde)</div>
+            <div class="timing-row">
+                {% for key, label in [("early", "Frueh"), ("mid", "Mitte"), ("late", "Spaet")] %}
+                <div class="timing-segment">
+                    <div class="timing-pct" style="color:var(--color-red);">{{ da.death_timing[key].pct }}%</div>
+                    <div class="timing-label">{{ label }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Weapon Duel Stats ── -->
+<div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
+    <span class="card-kicker">Waffen-Duelle</span>
+    <p style="font-size:11px;color:var(--color-neutral-500);margin:2px 0 8px;">Kills und Deaths pro Waffe — wie gut performst du mit jeder Waffe?</p>
+    <div class="weapon-header">
+        <span>Waffe</span><span>K/D Bar</span><span style="text-align:right;">Kills</span><span style="text-align:right;">Deaths</span><span style="text-align:right;">K/D</span><span style="text-align:right;">HS%</span>
+    </div>
+    {% for w in da.weapon_stats %}
+    <div class="weapon-row">
+        <span class="weapon-name">{{ w.weapon }}</span>
+        <div class="weapon-bar">
+            <div class="duel-bar-k" style="width:{{ w.win_rate }}%;"></div>
+            <div class="duel-bar-d" style="width:{{ 100 - w.win_rate }}%;"></div>
+        </div>
+        <span style="text-align:right;color:var(--color-green);font-weight:500;">{{ w.kills }}</span>
+        <span style="text-align:right;color:var(--color-red);">{{ w.deaths }}</span>
+        <span style="text-align:right;font-weight:600;" class="{% if w.kd >= 1.2 %}win{% elif w.kd < 0.8 %}loss{% endif %}">{{ w.kd }}</span>
+        <span style="text-align:right;{% if w.hs_pct >= 45 %}color:var(--color-green);{% endif %}">{{ w.hs_pct }}%</span>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- ── Nemeses & Victims ── -->
+{% if da.nemeses or da.victims %}
+<div class="nv-grid">
+    {% if da.nemeses %}
+    <div class="card elev-sm" style="padding:var(--space-4);border-top:3px solid var(--color-red);">
+        <span class="card-kicker" style="color:var(--color-red);">Nemesis-Spieler</span>
+        <p style="font-size:11px;color:var(--color-neutral-500);margin:2px 0 8px;">Gegner gegen die du am schlechtesten abschneidest</p>
+        {% for n in da.nemeses %}
+        <div class="nv-item">
+            <div>
+                <div class="nv-name">{{ n.name }}</div>
+                <div style="font-size:10px;color:var(--color-neutral-600);">{{ n.matches }} Match{{ 'es' if n.matches != 1 }} — meist {{ n.killed_by }}</div>
+            </div>
+            <div class="nv-stats">
+                <span style="color:var(--color-green);">{{ n.kills }}K</span>
+                <span style="color:var(--color-red);">{{ n.deaths }}D</span>
+                <span class="loss" style="font-weight:600;">{{ n.kd }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if da.victims %}
+    <div class="card elev-sm" style="padding:var(--space-4);border-top:3px solid var(--color-green);">
+        <span class="card-kicker" style="color:var(--color-green);">Dominierte Gegner</span>
+        <p style="font-size:11px;color:var(--color-neutral-500);margin:2px 0 8px;">Gegner gegen die du ueberdurchschnittlich abschneidest</p>
+        {% for v in da.victims %}
+        <div class="nv-item">
+            <div>
+                <div class="nv-name">{{ v.name }}</div>
+                <div style="font-size:10px;color:var(--color-neutral-600);">{{ v.matches }} Match{{ 'es' if v.matches != 1 }} — deine Waffe: {{ v.fav_weapon }}</div>
+            </div>
+            <div class="nv-stats">
+                <span style="color:var(--color-green);">{{ v.kills }}K</span>
+                <span style="color:var(--color-red);">{{ v.deaths }}D</span>
+                <span class="win" style="font-weight:600;">{{ v.kd }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- ── All Opponents ── -->
+{% if da.opponent_list %}
+<div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
+    <span class="card-kicker">Alle Gegner-Duelle</span>
+    <div class="opp-header">
+        <span>Gegner</span><span style="text-align:right;">Kills</span><span style="text-align:right;">Deaths</span><span style="text-align:right;">K/D</span><span style="text-align:right;">HS%</span><span class="opp-wpn-h" style="text-align:right;">Deine Waffe</span><span class="opp-wpn-h" style="text-align:right;">Getoetet durch</span>
+    </div>
+    {% for o in da.opponent_list %}
+    <div class="opp-row">
+        <span style="font-weight:500;">{{ o.name }} <span style="font-size:10px;color:var(--color-neutral-600);">({{ o.matches }}x)</span></span>
+        <span style="text-align:right;color:var(--color-green);">{{ o.kills }}</span>
+        <span style="text-align:right;color:var(--color-red);">{{ o.deaths }}</span>
+        <span style="text-align:right;font-weight:600;" class="{% if o.kd >= 1.2 %}win{% elif o.kd < 0.8 %}loss{% endif %}">{{ o.kd }}</span>
+        <span style="text-align:right;">{{ o.hs_pct }}%</span>
+        <span class="opp-wpn" style="text-align:right;font-size:11px;text-transform:capitalize;">{{ o.fav_weapon }}</span>
+        <span class="opp-wpn" style="text-align:right;font-size:11px;text-transform:capitalize;color:var(--color-neutral-400);">{{ o.killed_by }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── Trend ── -->
+{% if da.trend and da.trend|length > 3 %}
+<div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
+    <span class="card-kicker">K/D Trend (letzte {{ da.trend|length }} Matches)</span>
+    <div class="trend-chart" style="margin-top:var(--space-3);">
+        {% set kds = da.trend|map(attribute='kd')|list %}
+        {% set max_kd = kds|max %}
+        {% set min_kd = kds|min %}
+        {% set range_kd = max_kd - min_kd if max_kd != min_kd else 0.1 %}
+        {% for m in da.trend %}
+        <div class="trend-bar"
+             style="height:{{ ((m.kd - min_kd) / range_kd * 38 + 6)|round }}px;background:{% if m.kd >= 1.0 %}#4ade80{% else %}#f87171{% endif %};"
+             data-tip="{{ m.date }} {{ m.map }} — {{ m.kd }} K/D ({{ m.kills }}K/{{ m.deaths }}D, {{ m.hs_pct }}% HS)"></div>
+        {% endfor %}
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--color-neutral-600);margin-top:3px;">
+        <span>{{ da.trend[0].date }}</span>
+        <span>{{ da.trend[-1].date }}</span>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

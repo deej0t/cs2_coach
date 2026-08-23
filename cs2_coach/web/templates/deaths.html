@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Death-Analyse{% endblock %}
+{% block title %}CS2 Coach — {{ _('Death-Analyse') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
@@ -76,6 +76,19 @@
     .da-wpn-count { text-align: center; font-weight: 600; }
     .da-wpn-bar { height: 6px; background: var(--color-neutral-800); border-radius: 3px; overflow: hidden; }
     .da-wpn-bar-fill { height: 100%; border-radius: 3px; }
+
+    /* Category cards */
+    .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--space-3); margin-top: var(--space-3); }
+    .cat-card {
+        padding: var(--space-3); border-radius: var(--radius-md); text-align: center;
+        background: var(--color-surface); box-shadow: var(--shadow-sm); position: relative; overflow: hidden;
+    }
+    .cat-card-bar { position: absolute; bottom: 0; left: 0; height: 3px; border-radius: 0 0 var(--radius-md) var(--radius-md); }
+    .cat-icon { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 4px; }
+    .cat-val { font-family: var(--font-heading); font-size: 22px; font-weight: 700; line-height: 1; }
+    .cat-pct { font-size: 12px; font-weight: 600; margin-top: 2px; }
+    .cat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 2px; }
+    .cat-desc { font-size: 10px; color: var(--color-neutral-600); margin-top: 4px; line-height: 1.3; }
 
     /* Context cards */
     .da-ctx-card {
@@ -161,6 +174,77 @@
         <div class="da-stat-lbl"><abbr title="Opening Duel Winrate">OD Winrate</abbr></div>
     </div>
 </div>
+
+<!-- ── Death Categories ── -->
+{% if da.categories %}
+{% set cats = [
+    {"key": "timing", "label": "Timing", "icon": "timer", "color": "#f87171",
+     "desc": "Zu frueh gepeekt, beim Rotieren erwischt"},
+    {"key": "aim", "label": "Aim-Duell", "icon": "target", "color": "#fb923c",
+     "desc": "Direktes Duell verloren (Gegner HS)"},
+    {"key": "positioning", "label": "Positioning", "icon": "map-pin", "color": "#fbbf24",
+     "desc": "Schlechte Position, zu exposed, kein Cover"},
+    {"key": "utility", "label": "Ohne Utility", "icon": "flame", "color": "#a78bfa",
+     "desc": "Gepeekt ohne Flash oder Smoke"},
+    {"key": "eco", "label": "Eco-Tod", "icon": "coins", "color": "#9397ab",
+     "desc": "Eco/Force-Runde — akzeptabler Tod"},
+    {"key": "impact", "label": "Impact-Tod", "icon": "check-circle", "color": "#4ade80",
+     "desc": "Hattest Kill(s) vor dem Tod — produktiv"},
+    {"key": "traded", "label": "Getradet", "icon": "users", "color": "#60a5fa",
+     "desc": "Gestorben aber Runde trotzdem gewonnen"},
+] %}
+<div class="da-section">
+    <div class="da-section-title">
+        <i data-lucide="layers" style="width:16px;height:16px;color:var(--color-accent);"></i>
+        <span>Warum stirbst du? — Tod-Kategorien</span>
+    </div>
+    <div style="margin-bottom:6px;font-size:12px;color:var(--color-neutral-500);">
+        {{ da.cat_total }} Tode analysiert und kategorisiert
+    </div>
+
+    <!-- Category Donut + Cards -->
+    <div style="display:grid;grid-template-columns:180px 1fr;gap:var(--space-4);align-items:start;">
+        <div style="display:flex;align-items:center;justify-content:center;padding:var(--space-3);">
+            <canvas id="cat-donut" width="160" height="160"></canvas>
+        </div>
+        <div class="cat-grid">
+            {% for c in cats %}
+            {% set cv = da.categories.get(c.key, {}) %}
+            {% if cv.count is defined and cv.count > 0 %}
+            <div class="cat-card">
+                <div class="cat-icon" style="background:{{ c.color }}22;">
+                    <i data-lucide="{{ c.icon }}" style="width:14px;height:14px;color:{{ c.color }};"></i>
+                </div>
+                <div class="cat-val" style="color:{{ c.color }};">{{ cv.count }}</div>
+                <div class="cat-pct" style="color:{{ c.color }};">{{ cv.pct }}%</div>
+                <div class="cat-label">{{ c.label }}</div>
+                <div class="cat-desc">{{ c.desc }}</div>
+                <div class="cat-card-bar" style="width:{{ cv.pct }}%;background:{{ c.color }};"></div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Worst category coaching -->
+    {% set vermeidbar = (da.categories.get("timing", {}).get("count", 0) or 0) + (da.categories.get("positioning", {}).get("count", 0) or 0) + (da.categories.get("utility", {}).get("count", 0) or 0) %}
+    {% set produktiv = (da.categories.get("impact", {}).get("count", 0) or 0) + (da.categories.get("traded", {}).get("count", 0) or 0) %}
+    {% if da.cat_total > 10 %}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-top:var(--space-4);">
+        <div style="padding:var(--space-3);border-radius:var(--radius-md);background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--color-red);margin-bottom:4px;">Vermeidbare Tode</div>
+            <div style="font-size:22px;font-weight:700;color:var(--color-red);">{{ vermeidbar }}</div>
+            <div style="font-size:11px;color:var(--color-neutral-400);">{{ (vermeidbar / da.cat_total * 100)|round(1) }}% — Timing + Positioning + Utility</div>
+        </div>
+        <div style="padding:var(--space-3);border-radius:var(--radius-md);background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.2);">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--color-green);margin-bottom:4px;">Produktive Tode</div>
+            <div style="font-size:22px;font-weight:700;color:var(--color-green);">{{ produktiv }}</div>
+            <div style="font-size:11px;color:var(--color-neutral-400);">{{ (produktiv / da.cat_total * 100)|round(1) }}% — Impact + Getradet</div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
 
 <!-- ── Timing + Side + Context ── -->
 <div class="da-grid-3">
@@ -343,6 +427,60 @@
 <script>
 (function() {
     if (window.lucide) lucide.createIcons();
+
+    // ── Category Donut ──
+    var catDonutEl = document.getElementById('cat-donut');
+    if (catDonutEl) {
+        var cats = {{ da.categories | tojson }};
+        var catMeta = [
+            {key: 'timing', label: 'Timing', color: '#f87171'},
+            {key: 'aim', label: 'Aim-Duell', color: '#fb923c'},
+            {key: 'positioning', label: 'Positioning', color: '#fbbf24'},
+            {key: 'utility', label: 'Ohne Utility', color: '#a78bfa'},
+            {key: 'eco', label: 'Eco-Tod', color: '#9397ab'},
+            {key: 'impact', label: 'Impact', color: '#4ade80'},
+            {key: 'traded', label: 'Getradet', color: '#60a5fa'},
+        ];
+        var catLabels = [];
+        var catData = [];
+        var catColors = [];
+        catMeta.forEach(function(cm) {
+            var c = cats[cm.key];
+            if (c && c.count > 0) {
+                catLabels.push(cm.label);
+                catData.push(c.count);
+                catColors.push(cm.color);
+            }
+        });
+        new Chart(catDonutEl, {
+            type: 'doughnut',
+            data: {
+                labels: catLabels,
+                datasets: [{
+                    data: catData,
+                    backgroundColor: catColors,
+                    borderWidth: 0,
+                    spacing: 2,
+                }]
+            },
+            options: {
+                responsive: false,
+                cutout: '55%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                                var pct = total ? Math.round(ctx.raw / total * 100) : 0;
+                                return ctx.label + ': ' + ctx.raw + ' (' + pct + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
 
     // ── Timing Donut ──
     var donutEl = document.getElementById('timing-donut');

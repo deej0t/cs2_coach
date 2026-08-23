@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Kalender{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<style>
+    /* ── Calendar Heatmap ── */
+    .cal-heatmap {
+        display: flex; gap: 2px; overflow-x: auto; padding-bottom: var(--space-3);
+    }
+    .cal-week { display: flex; flex-direction: column; gap: 2px; }
+    .cal-cell {
+        width: 14px; height: 14px; border-radius: 3px; cursor: default;
+        transition: outline 0.15s;
+    }
+    .cal-cell:hover { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+    .cal-cell.clickable { cursor: pointer; }
+    .cal-cell.future { opacity: 0.15; }
+
+    /* Empty cells */
+    .cal-cell.lv-0 { background: var(--color-neutral-900); }
+
+    /* Win shades (green) */
+    .cal-cell.win.lv-1 { background: rgba(74,222,128,0.2); }
+    .cal-cell.win.lv-2 { background: rgba(74,222,128,0.4); }
+    .cal-cell.win.lv-3 { background: rgba(74,222,128,0.65); }
+    .cal-cell.win.lv-4 { background: rgba(74,222,128,0.9); }
+
+    /* Loss shades (red) */
+    .cal-cell.loss.lv-1 { background: rgba(248,113,113,0.2); }
+    .cal-cell.loss.lv-2 { background: rgba(248,113,113,0.4); }
+    .cal-cell.loss.lv-3 { background: rgba(248,113,113,0.65); }
+    .cal-cell.loss.lv-4 { background: rgba(248,113,113,0.9); }
+
+    /* Draw shades (yellow) */
+    .cal-cell.draw.lv-1 { background: rgba(251,191,36,0.2); }
+    .cal-cell.draw.lv-2 { background: rgba(251,191,36,0.4); }
+    .cal-cell.draw.lv-3 { background: rgba(251,191,36,0.65); }
+    .cal-cell.draw.lv-4 { background: rgba(251,191,36,0.9); }
+
+    /* Day labels */
+    .cal-labels { display: flex; flex-direction: column; gap: 2px; margin-right: 6px; flex-shrink: 0; }
+    .cal-label { height: 14px; font-size: 9px; line-height: 14px; color: var(--color-neutral-600); text-align: right; }
+
+    /* Month labels */
+    .cal-months { display: flex; gap: 2px; margin-left: 28px; margin-bottom: 4px; }
+    .cal-month-label { font-size: 9px; color: var(--color-neutral-500); white-space: nowrap; }
+
+    /* Legend */
+    .cal-legend { display: flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 10px; color: var(--color-neutral-500); }
+    .cal-legend-cell { width: 12px; height: 12px; border-radius: 2px; }
+
+    /* ── Hero Stats ── */
+    .cal-hero { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); margin-bottom: var(--space-5); }
+    .cal-stat { text-align: center; }
+    .cal-stat-val { font-size: 28px; font-weight: 600; line-height: 1.1; }
+    .cal-stat-label { font-size: 11px; color: var(--color-neutral-500); margin-top: 2px; }
+
+    /* ── Day Detail Panel ── */
+    .day-detail {
+        display: none; padding: var(--space-4); margin-top: var(--space-4);
+        border: 1px solid var(--color-neutral-800); border-radius: var(--radius-md);
+        background: var(--color-surface);
+    }
+    .day-detail.active { display: block; }
+    .day-detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
+    .day-detail-close { cursor: pointer; color: var(--color-neutral-500); font-size: 18px; }
+    .day-detail-close:hover { color: var(--color-text); }
+
+    /* ── Weekday Chart ── */
+    .wd-chart { display: flex; gap: 8px; align-items: end; height: 100px; }
+    .wd-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .wd-bar { width: 100%; border-radius: 4px 4px 0 0; min-height: 4px; transition: height 0.3s; }
+    .wd-label { font-size: 10px; color: var(--color-neutral-500); }
+    .wd-val { font-size: 11px; font-weight: 600; }
+
+    /* ── Hour Chart ── */
+    .hr-chart { display: flex; gap: 1px; align-items: end; height: 80px; }
+    .hr-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; position: relative; cursor: default; }
+    .hr-bar:hover::after {
+        content: attr(data-tip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+        padding: 3px 8px; border-radius: 4px; background: var(--color-surface); border: 1px solid var(--color-neutral-700);
+        font-size: 10px; white-space: nowrap; z-index: 10; pointer-events: none;
+    }
+
+    /* ── Month Table ── */
+    .month-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--space-3); }
+    .month-card { padding: var(--space-3) !important; }
+    .month-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .month-stats { font-size: 11px; color: var(--color-neutral-400); display: flex; flex-direction: column; gap: 1px; }
+    .month-bar { height: 4px; border-radius: 2px; background: var(--color-neutral-800); margin-top: 6px; overflow: hidden; }
+    .month-fill { height: 100%; border-radius: 2px; }
+
+    /* ── Alert Bars ── */
+    .alert-bar {
+        display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+        border-radius: var(--radius-md); font-size: 13px;
+    }
+    .alert-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.25); color: var(--color-yellow); }
+    .alert-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.25); color: var(--color-green); }
+    .alert-info { background: rgba(145,132,217,0.08); border: 1px solid rgba(145,132,217,0.25); color: var(--color-accent); }
+
+    @media (max-width: 900px) {
+        .cal-hero { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 600px) {
+        .cal-hero { grid-template-columns: 1fr 1fr; }
+        .cal-stat-val { font-size: 22px; }
+        .cal-cell { width: 11px; height: 11px; }
+        .month-grid { grid-template-columns: 1fr 1fr; }
+    }
+</style>
+
+<h2>Performance-Kalender</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Deine Spielaktivitaet und Performance im Jahresueberblick — wie die GitHub Contribution Map, aber fuer CS2.
+</p>
+
+{% if not cal.has_data %}
+<div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
+    <p style="color: var(--color-neutral-500);">Keine analysierten Matches vorhanden.</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">Demo analysieren</a>
+</div>
+{% else %}
+
+<!-- ── Hero Stats ── -->
+<div class="cal-hero">
+    <div class="card elev-sm cal-stat">
+        <span class="card-kicker">Spieltage</span>
+        <div class="cal-stat-val">{{ cal.active_days }}</div>
+        <div class="cal-stat-label">aktive Tage</div>
+    </div>
+    <div class="card elev-sm cal-stat">
+        <span class="card-kicker">Matches Gesamt</span>
+        <div class="cal-stat-val">{{ cal.total_matches }}</div>
+        <div class="cal-stat-label">~{{ cal.avg_per_day }} pro Spieltag</div>
+    </div>
+    <div class="card elev-sm cal-stat">
+        <span class="card-kicker">Laengste Serie</span>
+        <div class="cal-stat-val" style="color:var(--color-accent);">{{ cal.longest_streak }}</div>
+        <div class="cal-stat-label">Tage am Stueck</div>
+    </div>
+    <div class="card elev-sm cal-stat">
+        <span class="card-kicker">Bester Tag</span>
+        <div class="cal-stat-val win">{{ cal.best_day.avg_rating }}</div>
+        <div class="cal-stat-label">{{ cal.best_day.date }} ({{ cal.best_day.matches }} Matches)</div>
+    </div>
+</div>
+
+<!-- ── Insights ── -->
+{% if cal.insights %}
+<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:var(--space-5);">
+    {% for a in cal.insights %}
+    <div class="alert-bar alert-{{ a.type }}">
+        <i data-lucide="{{ a.icon }}" style="width:15px;height:15px;flex-shrink:0;"></i>
+        <span>{{ a.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── Calendar Heatmap ── -->
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-3);flex-wrap:wrap;gap:6px;">
+        <span class="card-kicker" style="margin:0;">Jahreskalender</span>
+        <div class="cal-legend">
+            <span>Weniger</span>
+            <div class="cal-legend-cell" style="background:var(--color-neutral-900);"></div>
+            <div class="cal-legend-cell" style="background:rgba(74,222,128,0.2);"></div>
+            <div class="cal-legend-cell" style="background:rgba(74,222,128,0.4);"></div>
+            <div class="cal-legend-cell" style="background:rgba(74,222,128,0.65);"></div>
+            <div class="cal-legend-cell" style="background:rgba(74,222,128,0.9);"></div>
+            <span>Mehr</span>
+            <span style="margin-left:8px;"><span style="color:var(--color-green);">Sieg</span> / <span style="color:var(--color-red);">Niederlage</span> / <span style="color:var(--color-yellow);">Gemischt</span></span>
+        </div>
+    </div>
+
+    <!-- Month labels row -->
+    <div class="cal-months" id="cal-month-labels"></div>
+
+    <div style="display:flex;">
+        <!-- Day-of-week labels -->
+        <div class="cal-labels">
+            <div class="cal-label">&nbsp;</div>
+            <div class="cal-label">Di</div>
+            <div class="cal-label">&nbsp;</div>
+            <div class="cal-label">Do</div>
+            <div class="cal-label">&nbsp;</div>
+            <div class="cal-label">Sa</div>
+            <div class="cal-label">&nbsp;</div>
+        </div>
+        <!-- Heatmap grid -->
+        <div class="cal-heatmap" id="cal-grid">
+            {% for week in cal.weeks %}
+            <div class="cal-week" data-week="{{ loop.index0 }}">
+                {% for day in week %}
+                <div class="cal-cell lv-{{ day.level }} {{ day.color_type }}{% if day.info %} clickable{% endif %}{% if day.is_future %} future{% endif %}"
+                     data-date="{{ day.date }}"
+                     {% if day.info %}
+                     title="{{ day.date }}: {{ day.info.matches }} Match{{ 'es' if day.info.matches != 1 }} — Rating {{ day.info.avg_rating }} — {{ day.info.wins }}W/{{ day.info.losses }}L"
+                     onclick="showDay('{{ day.date }}')"
+                     {% endif %}
+                ></div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- ── Day Detail Panel ── -->
+<div class="day-detail card elev-sm" id="day-detail">
+    <div class="day-detail-header">
+        <div>
+            <h3 id="day-detail-title" style="margin:0;"></h3>
+            <span id="day-detail-subtitle" style="font-size:12px;color:var(--color-neutral-500);"></span>
+        </div>
+        <span class="day-detail-close" onclick="closeDay()">&times;</span>
+    </div>
+    <div id="day-detail-stats" style="display:grid;grid-template-columns:repeat(5,1fr);gap:var(--space-3);margin-bottom:var(--space-4);"></div>
+    <div class="table-scroll">
+        <table class="table" id="day-detail-table">
+            <thead>
+                <tr><th>Map</th><th>Score</th><th>Ergebnis</th><th>Rating</th><th>K/D</th><th>ADR</th><th></th></tr>
+            </thead>
+            <tbody id="day-detail-tbody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ── Weekday + Time Analysis ── -->
+<div class="grid-2" style="margin-bottom:var(--space-5);">
+    <!-- Weekday -->
+    <div class="card elev-sm" style="padding:var(--space-4);">
+        <span class="card-kicker">Wochentag-Analyse</span>
+        <div class="wd-chart" style="margin-top:var(--space-3);">
+            {% set max_wd_matches = cal.weekday_stats|map(attribute='matches')|max %}
+            {% for wd in cal.weekday_stats %}
+            <div class="wd-col">
+                <div class="wd-val {% if wd.avg_rating >= 1.0 %}win{% elif wd.avg_rating < 0.85 and wd.matches > 0 %}loss{% endif %}">
+                    {% if wd.matches > 0 %}{{ wd.avg_rating }}{% else %}-{% endif %}
+                </div>
+                <div class="wd-bar" style="height:{{ (wd.matches / max_wd_matches * 70 + 4)|round if max_wd_matches else 4 }}px;background:{% if wd.win_rate >= 55 %}var(--color-green){% elif wd.win_rate >= 45 %}var(--color-accent){% elif wd.matches > 0 %}var(--color-red){% else %}var(--color-neutral-800){% endif %};"></div>
+                <div class="wd-label">{{ wd.day }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        <div style="margin-top:var(--space-3);font-size:12px;color:var(--color-neutral-400);">
+            {% if cal.best_weekday and cal.best_weekday.matches > 0 %}
+            Bester Tag: <strong style="color:var(--color-green);">{{ cal.best_weekday.day }}</strong> ({{ cal.best_weekday.avg_rating }} Rating, {{ cal.best_weekday.matches }} Matches)
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Hour of Day -->
+    <div class="card elev-sm" style="padding:var(--space-4);">
+        <span class="card-kicker">Tageszeit-Analyse</span>
+        {% set active_hr = cal.hour_stats|selectattr('matches', '>', 0)|list %}
+        {% if active_hr %}
+        {% set max_hr_matches = active_hr|map(attribute='matches')|max %}
+        <div class="hr-chart" style="margin-top:var(--space-3);">
+            {% for h in cal.hour_stats %}
+            {% if h.matches > 0 %}
+            <div class="hr-bar"
+                 style="height:{{ (h.matches / max_hr_matches * 65 + 4)|round }}px;background:{% if h.win_rate >= 55 %}var(--color-green){% elif h.win_rate >= 45 %}var(--color-accent){% else %}var(--color-red){% endif %};"
+                 data-tip="{{ h.label }} — {{ h.matches }} Matches, {{ h.win_rate }}% WR, Rating {{ h.avg_rating }}"></div>
+            {% else %}
+            <div class="hr-bar" style="height:2px;background:var(--color-neutral-800);"></div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--color-neutral-600);margin-top:3px;">
+            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span>
+        </div>
+        <div style="margin-top:var(--space-3);font-size:12px;color:var(--color-neutral-400);">
+            {% if cal.best_hour %}
+            Beste Zeit: <strong style="color:var(--color-green);">{{ cal.best_hour.label }}</strong> ({{ cal.best_hour.avg_rating }} Rating)
+            {% endif %}
+            {% if cal.worst_hour %}
+            &nbsp;|&nbsp; Schlechteste: <strong style="color:var(--color-red);">{{ cal.worst_hour.label }}</strong> ({{ cal.worst_hour.avg_rating }})
+            {% endif %}
+        </div>
+        {% else %}
+        <p style="color:var(--color-neutral-500);font-size:13px;margin-top:var(--space-3);">Keine Uhrzeitdaten vorhanden.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ── Monthly Breakdown ── -->
+{% if cal.month_stats %}
+<div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
+    <span class="card-kicker">Monatliche Entwicklung</span>
+    <div class="month-grid" style="margin-top:var(--space-3);">
+        {% set month_names = {"01":"Jan","02":"Feb","03":"Mär","04":"Apr","05":"Mai","06":"Jun","07":"Jul","08":"Aug","09":"Sep","10":"Okt","11":"Nov","12":"Dez"} %}
+        {% for m in cal.month_stats %}
+        <div class="card elev-sm month-card">
+            <div class="month-name">{{ month_names.get(m.month[5:7], m.month[5:7]) }} {{ m.month[:4] }}</div>
+            <div class="month-stats">
+                <span>{{ m.matches }} Matches</span>
+                <span><span style="color:var(--color-green);">{{ m.wins }}W</span> / <span style="color:var(--color-red);">{{ m.losses }}L</span></span>
+                <span>Rating: <strong class="{% if m.avg_rating >= 1.0 %}win{% elif m.avg_rating < 0.85 %}loss{% endif %}">{{ m.avg_rating }}</strong></span>
+            </div>
+            <div class="month-bar">
+                <div class="month-fill" style="width:{{ m.win_rate }}%;background:{% if m.win_rate >= 55 %}var(--color-green){% elif m.win_rate >= 45 %}var(--color-yellow){% else %}var(--color-red){% endif %};"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ── Best & Worst Day ── -->
+<div class="grid-2" style="margin-bottom:var(--space-5);">
+    <div class="card elev-sm" style="padding:var(--space-4);border-left:3px solid var(--color-green);">
+        <span class="card-kicker" style="color:var(--color-green);">Bester Tag</span>
+        <div style="font-size:20px;font-weight:600;margin:4px 0;">{{ cal.best_day.date }}</div>
+        <div style="font-size:13px;color:var(--color-neutral-400);">
+            {{ cal.best_day.matches }} Matches — Rating <strong class="win">{{ cal.best_day.avg_rating }}</strong>
+            — {{ cal.best_day.wins }}W/{{ cal.best_day.losses }}L
+            — K/D {{ cal.best_day.kd }} — ADR {{ cal.best_day.avg_adr }}
+        </div>
+    </div>
+    <div class="card elev-sm" style="padding:var(--space-4);border-left:3px solid var(--color-red);">
+        <span class="card-kicker" style="color:var(--color-red);">Schlechtester Tag</span>
+        <div style="font-size:20px;font-weight:600;margin:4px 0;">{{ cal.worst_day.date }}</div>
+        <div style="font-size:13px;color:var(--color-neutral-400);">
+            {{ cal.worst_day.matches }} Matches — Rating <strong class="loss">{{ cal.worst_day.avg_rating }}</strong>
+            — {{ cal.worst_day.wins }}W/{{ cal.worst_day.losses }}L
+            — K/D {{ cal.worst_day.kd }} — ADR {{ cal.worst_day.avg_adr }}
+        </div>
+    </div>
+</div>
+
+{% endif %}
+
+<script>
+// ── Month labels ──
+(function() {
+    const grid = document.getElementById('cal-grid');
+    const monthRow = document.getElementById('cal-month-labels');
+    if (!grid || !monthRow) return;
+
+    const weeks = grid.querySelectorAll('.cal-week');
+    let lastMonth = '';
+    weeks.forEach((w, i) => {
+        const firstCell = w.querySelector('.cal-cell');
+        if (!firstCell) return;
+        const d = firstCell.dataset.date;
+        const month = d.substring(0, 7);
+        if (month !== lastMonth) {
+            const names = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+            const m = parseInt(d.substring(5,7), 10) - 1;
+            const label = document.createElement('div');
+            label.className = 'cal-month-label';
+            label.textContent = names[m];
+            label.style.marginLeft = (i * 16) + 'px';
+            label.style.position = 'absolute';
+            monthRow.appendChild(label);
+            lastMonth = month;
+        }
+    });
+    monthRow.style.position = 'relative';
+    monthRow.style.height = '16px';
+})();
+
+// ── Day Detail ──
+const daySummaries = {{ cal.day_summaries | tojson }};
+
+function showDay(date) {
+    const info = daySummaries[date];
+    if (!info) return;
+
+    const panel = document.getElementById('day-detail');
+    panel.classList.add('active');
+
+    // Title
+    const d = new Date(date + 'T00:00:00');
+    const dayNames = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+    document.getElementById('day-detail-title').textContent = dayNames[d.getDay()] + ', ' + date;
+    document.getElementById('day-detail-subtitle').textContent =
+        info.matches + ' Match' + (info.matches !== 1 ? 'es' : '') +
+        ' — ' + info.wins + 'W/' + info.losses + 'L';
+
+    // Stats
+    const statsEl = document.getElementById('day-detail-stats');
+    statsEl.innerHTML = `
+        <div style="text-align:center;">
+            <div style="font-size:20px;font-weight:600;" class="${info.avg_rating >= 1.0 ? 'win' : info.avg_rating < 0.85 ? 'loss' : ''}">${info.avg_rating}</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);">Rating</div>
+        </div>
+        <div style="text-align:center;">
+            <div style="font-size:20px;font-weight:600;">${info.win_rate}%</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);">Win-Rate</div>
+        </div>
+        <div style="text-align:center;">
+            <div style="font-size:20px;font-weight:600;" class="${info.kd >= 1.0 ? 'win' : 'loss'}">${info.kd}</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);">K/D</div>
+        </div>
+        <div style="text-align:center;">
+            <div style="font-size:20px;font-weight:600;">${info.avg_adr}</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);">ADR</div>
+        </div>
+        <div style="text-align:center;">
+            <div style="font-size:20px;font-weight:600;">${info.total_kills}/${info.total_deaths}</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);">K/D Total</div>
+        </div>`;
+
+    // Match table
+    const tbody = document.getElementById('day-detail-tbody');
+    tbody.innerHTML = '';
+    (info.match_list || []).forEach(m => {
+        const resultClass = m.result === 'Sieg' ? 'tag-win' : m.result === 'Niederlage' ? 'tag-loss' : 'tag-draw';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${m.map}</td>
+            <td>${m.score}</td>
+            <td><span class="tag ${resultClass}">${m.result}</span></td>
+            <td class="${m.rating >= 1.0 ? 'win' : m.rating < 0.85 ? 'loss' : ''}" style="font-weight:600;">${m.rating}</td>
+            <td>${m.kd}</td>
+            <td>${m.adr}</td>
+            <td>${m.filename ? '<a href="/export/' + m.filename + '_coach.json" class="btn btn-ghost" style="font-size:11px;">Details</a>' : ''}</td>`;
+        tbody.appendChild(tr);
+    });
+
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeDay() {
+    document.getElementById('day-detail').classList.remove('active');
+}
+</script>
+{% endblock %}

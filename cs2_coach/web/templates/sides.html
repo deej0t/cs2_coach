@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — CT vs T Analyse{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<style>
+    .side-hero { display: grid; grid-template-columns: 1fr auto 1fr; gap: var(--space-4); margin-bottom: var(--space-5); align-items: stretch; }
+    .side-card { padding: var(--space-4) !important; }
+    .side-card-ct { border-top: 3px solid #60a5fa; }
+    .side-card-t { border-top: 3px solid #f59e0b; }
+    .side-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; margin-bottom: 8px; }
+    .side-label-ct { color: #60a5fa; }
+    .side-label-t { color: #f59e0b; }
+
+    .side-val { font-size: 28px; font-weight: 700; line-height: 1.1; }
+    .side-sub { font-size: 11px; color: var(--color-neutral-500); margin-top: 2px; }
+
+    .side-vs {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: var(--space-4); min-width: 80px;
+    }
+    .side-vs-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--color-neutral-500); }
+    .side-vs-val { font-size: 18px; font-weight: 700; color: var(--color-accent); margin-top: 4px; }
+
+    /* Compare bars */
+    .cmp-row { display: grid; grid-template-columns: 70px 1fr 70px; gap: 8px; align-items: center; padding: 5px 0; }
+    .cmp-label { font-size: 12px; text-align: center; color: var(--color-neutral-400); }
+    .cmp-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; }
+    .cmp-ct { background: #60a5fa; }
+    .cmp-t { background: #f59e0b; }
+    .cmp-val { font-size: 12px; font-weight: 600; }
+    .cmp-val-ct { color: #60a5fa; text-align: right; }
+    .cmp-val-t { color: #f59e0b; text-align: left; }
+
+    /* Map table */
+    .map-side-row {
+        display: grid; grid-template-columns: 100px repeat(6, 1fr) 60px; gap: 8px; align-items: center;
+        padding: 7px 12px; border-radius: var(--radius-sm); font-size: 12px;
+    }
+    .map-side-row:nth-child(even) { background: rgba(255,255,255,0.02); }
+    .map-side-header {
+        display: grid; grid-template-columns: 100px repeat(6, 1fr) 60px; gap: 8px;
+        padding: 4px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-600);
+    }
+
+    /* Weapon chips */
+    .wpn-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .wpn-chip {
+        padding: 3px 8px; border-radius: var(--radius-sm); font-size: 11px;
+        background: rgba(255,255,255,0.04); text-transform: capitalize;
+    }
+    .wpn-chip .wpn-count { color: var(--color-neutral-500); margin-left: 4px; }
+
+    /* Trend sparkline */
+    .side-trend { display: flex; gap: 6px; align-items: end; height: 70px; margin-top: var(--space-3); }
+    .side-trend-col { flex: 1; display: flex; flex-direction: column; gap: 1px; align-items: center; }
+    .side-trend-bar { width: 100%; border-radius: 2px; min-height: 2px; }
+    .side-trend-label { font-size: 8px; color: var(--color-neutral-600); }
+
+    .alert-bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: var(--radius-md); font-size: 13px; }
+    .alert-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.25); color: var(--color-yellow); }
+    .alert-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.25); color: var(--color-green); }
+    .alert-info { background: rgba(145,132,217,0.08); border: 1px solid rgba(145,132,217,0.25); color: var(--color-accent); }
+
+    @media (max-width: 900px) {
+        .side-hero { grid-template-columns: 1fr; }
+        .side-vs { flex-direction: row; gap: var(--space-4); min-width: 0; }
+        .map-side-row, .map-side-header { grid-template-columns: 80px repeat(4, 1fr) 50px; }
+        .map-side-row .map-hide, .map-side-header .map-hide { display: none; }
+    }
+    @media (max-width: 600px) {
+        .side-val { font-size: 22px; }
+    }
+</style>
+
+<h2>CT vs T — Seiten-Analyse</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Vergleich deiner Performance auf CT- und T-Side ueber {{ sa.match_count }} Matches.
+</p>
+
+{% if not sa.has_data %}
+<div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
+    <p style="color: var(--color-neutral-500);">Keine analysierten Matches vorhanden.</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">Demo analysieren</a>
+</div>
+{% else %}
+
+<!-- ── Insights ── -->
+{% if sa.insights %}
+<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:var(--space-5);">
+    {% for a in sa.insights %}
+    <div class="alert-bar alert-{{ a.type }}">
+        <i data-lucide="{{ a.icon }}" style="width:15px;height:15px;flex-shrink:0;"></i>
+        <span>{{ a.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── Side Comparison Hero ── -->
+<div class="side-hero">
+    <!-- CT Card -->
+    <div class="card elev-sm side-card side-card-ct">
+        <div class="side-label side-label-ct">CT-Side</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+                <div class="side-val" style="color:#60a5fa;">{{ sa.ct.wr }}%</div>
+                <div class="side-sub">Win-Rate ({{ sa.ct.rounds_won }}/{{ sa.ct.rounds }} Rd)</div>
+            </div>
+            <div>
+                <div class="side-val {% if sa.ct.kd >= 1.0 %}win{% else %}loss{% endif %}">{{ sa.ct.kd }}</div>
+                <div class="side-sub">K/D ({{ sa.ct.kills }}K / {{ sa.ct.deaths }}D)</div>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px;font-size:12px;">
+            <div><span style="color:var(--color-neutral-500);">KPR</span><br><strong>{{ sa.ct.kpr }}</strong></div>
+            <div><span style="color:var(--color-neutral-500);">DPR</span><br><strong>{{ sa.ct.dpr }}</strong></div>
+            <div><span style="color:var(--color-neutral-500);">HS%</span><br><strong>{{ sa.ct.hs_pct }}%</strong></div>
+        </div>
+        {% if sa.ct.defuses > 0 %}
+        <div style="margin-top:8px;font-size:12px;color:var(--color-neutral-400);">
+            {{ sa.ct.defuses }} Defuses
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- VS Divider -->
+    <div class="side-vs card elev-sm">
+        <div class="side-vs-label">Dominant</div>
+        <div class="side-vs-val">{{ sa.dominant }}</div>
+        <div style="font-size:10px;color:var(--color-neutral-500);margin-top:4px;">{{ sa.match_count }} Matches</div>
+    </div>
+
+    <!-- T Card -->
+    <div class="card elev-sm side-card side-card-t">
+        <div class="side-label side-label-t">T-Side</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+                <div class="side-val" style="color:#f59e0b;">{{ sa.t.wr }}%</div>
+                <div class="side-sub">Win-Rate ({{ sa.t.rounds_won }}/{{ sa.t.rounds }} Rd)</div>
+            </div>
+            <div>
+                <div class="side-val {% if sa.t.kd >= 1.0 %}win{% else %}loss{% endif %}">{{ sa.t.kd }}</div>
+                <div class="side-sub">K/D ({{ sa.t.kills }}K / {{ sa.t.deaths }}D)</div>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px;font-size:12px;">
+            <div><span style="color:var(--color-neutral-500);">KPR</span><br><strong>{{ sa.t.kpr }}</strong></div>
+            <div><span style="color:var(--color-neutral-500);">DPR</span><br><strong>{{ sa.t.dpr }}</strong></div>
+            <div><span style="color:var(--color-neutral-500);">HS%</span><br><strong>{{ sa.t.hs_pct }}%</strong></div>
+        </div>
+        {% if sa.t.plants > 0 %}
+        <div style="margin-top:8px;font-size:12px;color:var(--color-neutral-400);">
+            {{ sa.t.plants }} Bomb Plants{% if sa.t.self_plants > 0 %} ({{ sa.t.self_plants }} selbst){% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ── Visual Comparison Bars ── -->
+<div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
+    <span class="card-kicker">Direktvergleich</span>
+    {% set comparisons = [
+        ("Win-Rate", sa.ct.wr, sa.t.wr, "%"),
+        ("K/D", sa.ct.kd, sa.t.kd, ""),
+        ("Kills/Runde", sa.ct.kpr, sa.t.kpr, ""),
+        ("Deaths/Runde", sa.ct.dpr, sa.t.dpr, ""),
+        ("HS-Quote", sa.ct.hs_pct, sa.t.hs_pct, "%"),
+    ] %}
+    {% for label, ct_val, t_val, unit in comparisons %}
+    {% set total = ct_val + t_val if (ct_val + t_val) > 0 else 1 %}
+    {% set ct_pct = (ct_val / total * 100)|round %}
+    <div class="cmp-row">
+        <div class="cmp-val cmp-val-ct">{{ ct_val }}{{ unit }}</div>
+        <div>
+            <div style="text-align:center;margin-bottom:3px;">
+                <span class="cmp-label">{{ label }}</span>
+            </div>
+            <div class="cmp-bar">
+                <div class="cmp-ct" style="width:{{ ct_pct }}%;"></div>
+                <div class="cmp-t" style="width:{{ 100 - ct_pct }}%;"></div>
+            </div>
+        </div>
+        <div class="cmp-val cmp-val-t">{{ t_val }}{{ unit }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- ── Top Weapons per Side ── -->
+<div class="grid-2" style="margin-bottom:var(--space-5);">
+    <div class="card elev-sm" style="padding:var(--space-4);">
+        <span class="card-kicker" style="color:#60a5fa;">CT Waffen</span>
+        <div class="wpn-list">
+            {% for w in sa.ct_top_weapons %}
+            <span class="wpn-chip">{{ w.weapon }}<span class="wpn-count">{{ w.kills }}</span></span>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="card elev-sm" style="padding:var(--space-4);">
+        <span class="card-kicker" style="color:#f59e0b;">T Waffen</span>
+        <div class="wpn-list">
+            {% for w in sa.t_top_weapons %}
+            <span class="wpn-chip">{{ w.weapon }}<span class="wpn-count">{{ w.kills }}</span></span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- ── Map-Specific Side Performance ── -->
+{% if sa.map_stats %}
+<div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
+    <span class="card-kicker">Map-spezifische Seiten-Performance</span>
+    <div class="map-side-header" style="margin-top:8px;">
+        <span>Map</span>
+        <span style="text-align:center;color:#60a5fa;">CT WR</span>
+        <span style="text-align:center;color:#60a5fa;" class="map-hide">CT K/D</span>
+        <span style="text-align:center;color:#f59e0b;">T WR</span>
+        <span style="text-align:center;color:#f59e0b;" class="map-hide">T K/D</span>
+        <span style="text-align:center;">Runden</span>
+        <span style="text-align:center;">Dominant</span>
+    </div>
+    {% for m in sa.map_stats %}
+    <div class="map-side-row">
+        <span style="font-weight:500;">{{ m.map }} <span style="font-size:10px;color:var(--color-neutral-600);">({{ m.matches }}x)</span></span>
+        <span style="text-align:center;font-weight:500;{% if m.ct_wr >= 55 %}color:var(--color-green);{% elif m.ct_wr < 40 %}color:var(--color-red);{% endif %}">{{ m.ct_wr }}%</span>
+        <span style="text-align:center;" class="map-hide {% if m.ct_kd >= 1.2 %}win{% elif m.ct_kd < 0.8 %}loss{% endif %}">{{ m.ct_kd }}</span>
+        <span style="text-align:center;font-weight:500;{% if m.t_wr >= 55 %}color:var(--color-green);{% elif m.t_wr < 40 %}color:var(--color-red);{% endif %}">{{ m.t_wr }}%</span>
+        <span style="text-align:center;" class="map-hide {% if m.t_kd >= 1.2 %}win{% elif m.t_kd < 0.8 %}loss{% endif %}">{{ m.t_kd }}</span>
+        <span style="text-align:center;color:var(--color-neutral-400);">{{ m.ct_rounds + m.t_rounds }}</span>
+        <span style="text-align:center;font-weight:600;{% if m.dominant == 'CT' %}color:#60a5fa;{% elif m.dominant == 'T' %}color:#f59e0b;{% else %}color:var(--color-neutral-500);{% endif %}">{{ m.dominant }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── Side Performance Trend ── -->
+{% if sa.trend and sa.trend|length > 3 %}
+<div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
+    <span class="card-kicker">Seiten-Trend (letzte {{ sa.trend|length }} Matches)</span>
+    <div style="display:flex;gap:8px;margin-top:6px;font-size:11px;">
+        <span style="color:#60a5fa;">&#9632; CT Win-Rate</span>
+        <span style="color:#f59e0b;">&#9632; T Win-Rate</span>
+    </div>
+    <div class="side-trend">
+        {% for m in sa.trend %}
+        <div class="side-trend-col">
+            <div class="side-trend-bar" style="height:{{ (m.ct_wr / 100 * 30 + 2)|round }}px;background:#60a5fa;" title="{{ m.date }} {{ m.map }} CT: {{ m.ct_wr }}% WR"></div>
+            <div class="side-trend-bar" style="height:{{ (m.t_wr / 100 * 30 + 2)|round }}px;background:#f59e0b;" title="{{ m.date }} {{ m.map }} T: {{ m.t_wr }}% WR"></div>
+            <div class="side-trend-label">{{ m.map[:3] }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

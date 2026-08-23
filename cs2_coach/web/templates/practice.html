@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Practice Server{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>Practice Server</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-4);">
+    Privater CS2 Server mit Bot-Setups aus deinen Demos. Trainiere genau die Spots wo du stirbst.
+</p>
+
+<style>
+    .pr-hero { display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap; }
+    .pr-hero-card { flex: 1; min-width: 130px; text-align: center; padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+    .pr-hero-val { font-family: var(--font-heading); font-size: 22px; font-weight: 700; }
+    .pr-hero-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 2px; }
+
+    .pr-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-5); }
+    .pr-step { padding: var(--space-3); background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-divider); }
+    .pr-step-num { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--color-accent); color: #fff; font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+    .pr-step-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .pr-step-desc { font-size: 11px; color: var(--color-neutral-500); line-height: 1.5; }
+    .pr-step code { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+    .pr-generate { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-5); padding: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-divider); }
+    .pr-generate-info { flex: 1; }
+
+    .pr-maps { display: flex; flex-direction: column; gap: var(--space-3); }
+    .pr-map-card { background: var(--color-surface); border: 1px solid var(--color-divider); border-radius: var(--radius-md); overflow: hidden; }
+
+    .pr-map-header { display: flex; align-items: center; gap: var(--space-3); padding: 14px 18px; cursor: pointer; user-select: none; }
+    .pr-map-header:hover { background: rgba(255,255,255,0.02); }
+    .pr-map-name { font-weight: 600; font-size: 15px; flex: 1; }
+    .pr-map-meta { display: flex; gap: var(--space-3); font-size: 12px; color: var(--color-neutral-400); }
+    .pr-map-chevron { color: var(--color-neutral-600); transition: transform 0.2s; }
+    .pr-map-card.open .pr-map-chevron { transform: rotate(180deg); }
+    .pr-map-body { display: none; padding: 0 18px 18px; }
+    .pr-map-card.open .pr-map-body { display: block; }
+
+    .pr-stat-row { display: flex; gap: var(--space-3); margin-bottom: var(--space-3); flex-wrap: wrap; }
+    .pr-stat { text-align: center; min-width: 70px; }
+    .pr-stat-val { font-family: var(--font-heading); font-size: 18px; font-weight: 700; }
+    .pr-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); }
+
+    .pr-cfg-preview { background: var(--color-bg); border: 1px solid var(--color-divider); border-radius: var(--radius-sm); padding: 12px; font-family: var(--font-mono, 'JetBrains Mono', monospace); font-size: 11px; line-height: 1.6; max-height: 300px; overflow-y: auto; white-space: pre; color: var(--color-neutral-400); }
+    .pr-cfg-preview .comment { color: var(--color-neutral-600); }
+
+    .pr-wpn-list { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: var(--space-2); }
+    .pr-wpn-pill { padding: 2px 8px; border-radius: 10px; font-size: 10px; background: rgba(145,132,217,0.1); color: var(--color-accent); border: 1px solid rgba(145,132,217,0.2); }
+
+    .pr-enemy-list { display: flex; gap: 6px; flex-wrap: wrap; }
+    .pr-enemy-pill { padding: 2px 8px; border-radius: 10px; font-size: 10px; background: rgba(248,113,113,0.08); color: #f87171; border: 1px solid rgba(248,113,113,0.2); }
+
+    .pr-connect-box { margin-bottom: var(--space-5); padding: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-divider); }
+    .pr-connect-cmd { font-family: var(--font-mono, monospace); font-size: 14px; padding: 8px 14px; background: var(--color-bg); border-radius: var(--radius-sm); color: var(--color-accent); cursor: pointer; display: inline-block; }
+    .pr-connect-cmd:hover { background: rgba(145,132,217,0.1); }
+
+    .win { color: #4ade80; }
+    .loss { color: #f87171; }
+
+    @media (max-width: 768px) {
+        .pr-steps { grid-template-columns: 1fr; }
+        .pr-map-meta { display: none; }
+    }
+</style>
+
+{% if not pdata.has_data %}
+<div class="card elev-sm" style="padding: var(--space-6); text-align: center;">
+    <p style="color: var(--color-neutral-500);">Keine Positionsdaten vorhanden. Analysiere zuerst einige Demos.</p>
+</div>
+{% else %}
+
+<!-- Hero Stats -->
+<div class="pr-hero">
+    <div class="pr-hero-card">
+        <div class="pr-hero-val">{{ pdata.maps|length }}</div>
+        <div class="pr-hero-lbl">Maps</div>
+    </div>
+    <div class="pr-hero-card">
+        <div class="pr-hero-val">{{ pdata.total_positions }}</div>
+        <div class="pr-hero-lbl">Positionen</div>
+    </div>
+    <div class="pr-hero-card">
+        {% set total_hotspots = pdata.maps|sum(attribute='hotspots') %}
+        <div class="pr-hero-val loss">{{ total_hotspots }}</div>
+        <div class="pr-hero-lbl">Death-Hotspots</div>
+    </div>
+    <div class="pr-hero-card">
+        {% set total_deaths = pdata.maps|sum(attribute='deaths') %}
+        {% set total_kills = pdata.maps|sum(attribute='kills') %}
+        <div class="pr-hero-val {% if total_kills > total_deaths %}win{% else %}loss{% endif %}">{{ (total_kills / [total_deaths, 1]|max)|round(2) }}</div>
+        <div class="pr-hero-lbl">Gesamt K/D</div>
+    </div>
+</div>
+
+<!-- Setup Steps -->
+<div class="card-kicker" style="margin-bottom: 8px;">Setup — Docker auf Unraid</div>
+<div class="pr-steps">
+    <div class="pr-step">
+        <div class="pr-step-num">1</div>
+        <div class="pr-step-title">Docker starten</div>
+        <div class="pr-step-desc">
+            <code>docker-compose up -d</code><br>
+            im <code>docker/</code> Ordner.<br>
+            Erster Start: ~15 Min (35GB Download).
+        </div>
+    </div>
+    <div class="pr-step">
+        <div class="pr-step-num">2</div>
+        <div class="pr-step-title">Configs generieren</div>
+        <div class="pr-step-desc">
+            Klick unten auf "Configs generieren".<br>
+            Erstellt <code>.cfg</code> Dateien aus deinen Demos.
+        </div>
+    </div>
+    <div class="pr-step">
+        <div class="pr-step-num">3</div>
+        <div class="pr-step-title">Verbinden</div>
+        <div class="pr-step-desc">
+            In CS2 Konsole:<br>
+            <code>connect 192.168.188.71:27015</code>
+        </div>
+    </div>
+    <div class="pr-step">
+        <div class="pr-step-num">4</div>
+        <div class="pr-step-title">Practice laden</div>
+        <div class="pr-step-desc">
+            <code>exec coach/practice_mirage</code><br>
+            Dann: <code>bot_add_t</code> + <code>bot_place</code>
+        </div>
+    </div>
+</div>
+
+<!-- Connect Info -->
+<div class="pr-connect-box">
+    <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">
+        <i data-lucide="terminal" style="width:14px;height:14px;vertical-align:middle;"></i> Quick Connect
+    </div>
+    <div class="pr-connect-cmd" onclick="navigator.clipboard.writeText('connect 192.168.188.71:27015')" title="Klick zum Kopieren">
+        connect 192.168.188.71:27015
+    </div>
+    <span style="font-size: 11px; color: var(--color-neutral-500); margin-left: 8px;">Klick zum Kopieren</span>
+</div>
+
+<!-- Generate Configs -->
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
+    <div style="font-size: 14px; font-weight: 600; margin-bottom: var(--space-3);">
+        <i data-lucide="download" style="width:16px;height:16px;vertical-align:middle;"></i> Practice Configs generieren
+    </div>
+    <div style="font-size: 12px; color: var(--color-neutral-500); margin-bottom: var(--space-3);">
+        Erstellt .cfg Dateien fuer jede Map basierend auf deinen {{ pdata.total_positions }} Kill/Death-Positionen.
+    </div>
+    <form action="{{ url_for('practice_generate') }}" method="post" style="display:flex;flex-direction:column;gap:var(--space-3);">
+        <div class="field">
+            <label style="font-size:12px;font-weight:600;">Speicherpfad (CS2 cfg-Ordner)</label>
+            <input type="text" name="cfg_path" class="input" value="{{ pdata.default_cfg_path or '' }}" placeholder="z.B. D:\SteamLibrary\...\csgo\cfg" style="font-size:13px;">
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">
+                Pfad zum CS2 <code>cfg/</code> Ordner. Configs werden dort abgelegt — dann reicht <code>exec practice</code> in CS2.
+            </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--space-3);">
+            <button type="submit" class="btn btn-primary" style="display:flex;align-items:center;gap:6px;">
+                <i data-lucide="save" style="width:16px;height:16px;"></i> Configs speichern
+            </button>
+            <span style="font-size:11px;color:var(--color-neutral-500);">Speichert auch immer nach <code>docker/cfg/</code></span>
+        </div>
+    </form>
+</div>
+
+<!-- Per-Map Cards -->
+<div class="card-kicker" style="margin-bottom: 8px;">Maps — Practice Configs</div>
+<div class="pr-maps">
+    {% for m in pdata.maps %}
+    <div class="pr-map-card">
+        <div class="pr-map-header" onclick="this.closest('.pr-map-card').classList.toggle('open'); if(window.lucide) lucide.createIcons();">
+            <span class="pr-map-name">{{ m.name }}</span>
+            <div class="pr-map-meta">
+                <span><span class="win">{{ m.kills }}</span> Kills</span>
+                <span><span class="loss">{{ m.deaths }}</span> Deaths</span>
+                <span>K/D <span class="{% if m.kd >= 1.2 %}win{% elif m.kd < 0.9 %}loss{% endif %}" style="font-weight:600;">{{ m.kd }}</span></span>
+                <span>{{ m.hotspots }} Hotspots</span>
+            </div>
+            <i data-lucide="chevron-down" class="pr-map-chevron" style="width:18px;height:18px;"></i>
+        </div>
+        <div class="pr-map-body">
+            <!-- Stats -->
+            <div class="pr-stat-row">
+                <div class="pr-stat">
+                    <div class="pr-stat-val win">{{ m.kills }}</div>
+                    <div class="pr-stat-lbl">Kills</div>
+                </div>
+                <div class="pr-stat">
+                    <div class="pr-stat-val loss">{{ m.deaths }}</div>
+                    <div class="pr-stat-lbl">Deaths</div>
+                </div>
+                <div class="pr-stat">
+                    <div class="pr-stat-val {% if m.kd >= 1.2 %}win{% elif m.kd < 0.9 %}loss{% endif %}">{{ m.kd }}</div>
+                    <div class="pr-stat-lbl">K/D</div>
+                </div>
+                <div class="pr-stat">
+                    <div class="pr-stat-val">{{ m.hotspots }}</div>
+                    <div class="pr-stat-lbl">Hotspots</div>
+                </div>
+                <div class="pr-stat">
+                    <div class="pr-stat-val">{{ m.total_clusters }}</div>
+                    <div class="pr-stat-lbl">Positionen</div>
+                </div>
+            </div>
+
+            <!-- Death Weapons -->
+            {% if m.top_death_weapons %}
+            <div style="margin-bottom: var(--space-2);">
+                <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); margin-bottom: 4px;">Womit du stirbst</div>
+                <div class="pr-wpn-list">
+                    {% for w in m.top_death_weapons %}
+                    <span class="pr-wpn-pill">{{ w.name }} ({{ w.count }}x)</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Top Enemies -->
+            {% if m.top_enemies %}
+            <div style="margin-bottom: var(--space-3);">
+                <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); margin-bottom: 4px;">Wer dich hier toetet</div>
+                <div class="pr-enemy-list">
+                    {% for e in m.top_enemies %}
+                    <span class="pr-enemy-pill">{{ e.name }} ({{ e.count }}x)</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Config Preview -->
+            <div style="margin-bottom: 8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500);">
+                        Config: <code>exec coach/practice_{{ m.name|lower }}</code>
+                    </span>
+                    <button class="btn btn-secondary" style="font-size:11px;padding:3px 10px;" onclick="copyConfig(this)" data-cfg="{{ m.cfg|e }}">Kopieren</button>
+                </div>
+            </div>
+            <pre class="pr-cfg-preview">{{ m.cfg }}</pre>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Warmup Config -->
+<div style="margin-top: var(--space-5);">
+    <div class="card-kicker" style="margin-bottom: 8px;">Warmup Config</div>
+    <div class="pr-map-card">
+        <div class="pr-map-header" onclick="this.closest('.pr-map-card').classList.toggle('open');">
+            <span class="pr-map-name">Warmup</span>
+            <div class="pr-map-meta">
+                <span><code>exec coach/warmup</code></span>
+            </div>
+            <i data-lucide="chevron-down" class="pr-map-chevron" style="width:18px;height:18px;"></i>
+        </div>
+        <div class="pr-map-body">
+            <pre class="pr-cfg-preview">{{ pdata.warmup_cfg }}</pre>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyConfig(btn) {
+    var cfg = btn.dataset.cfg;
+    // Decode HTML entities
+    var txt = document.createElement('textarea');
+    txt.innerHTML = cfg;
+    navigator.clipboard.writeText(txt.value).then(function() {
+        btn.textContent = 'Kopiert!';
+        setTimeout(function() { btn.textContent = 'Kopieren'; }, 1500);
+    });
+}
+</script>
+{% endblock %}

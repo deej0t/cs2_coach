@@ -151,10 +151,26 @@
     .training-desc { font-size: 11px; color: var(--color-neutral-500); }
     .training-dur { font-size: 12px; color: var(--color-neutral-400); white-space: nowrap; font-weight: 500; }
 
+    /* ── Aim Rating Card ── */
+    .aim-card { display: grid; grid-template-columns: auto 1fr; gap: var(--space-5); align-items: center; padding: var(--space-4) var(--space-5); }
+    .aim-ring { position: relative; width: 100px; height: 100px; }
+    .aim-ring svg { transform: rotate(-90deg); }
+    .aim-ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .aim-ring-val { font-family: var(--font-heading); font-size: 28px; font-weight: 700; line-height: 1; }
+    .aim-ring-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 2px; }
+    .aim-components { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+    .aim-comp { display: flex; flex-direction: column; gap: 2px; }
+    .aim-comp-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; }
+    .aim-comp-label { color: var(--color-neutral-400); }
+    .aim-comp-value { font-weight: 600; font-size: 12px; }
+    .aim-comp-bar { height: 4px; background: var(--color-neutral-800); border-radius: 2px; overflow: hidden; }
+    .aim-comp-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+
     @media (max-width: 900px) {
         .dash-top { grid-template-columns: 1fr 1fr; }
         .dash-mid { grid-template-columns: 1fr; }
         .bm-grid { grid-template-columns: 1fr; }
+        .aim-card { grid-template-columns: 1fr; justify-items: center; }
     }
     @media (max-width: 600px) {
         .dash-top { grid-template-columns: 1fr 1fr; }
@@ -202,7 +218,7 @@
         <div class="qs-sub">{{ dashboard.wins }}W / {{ dashboard.losses }}L{% if dashboard.draws %} / {{ dashboard.draws }}D{% endif %}</div>
     </div>
     <div class="card elev-sm qs-card">
-        <span class="card-kicker">Aktuelle Form</span>
+        <span class="card-kicker">{{ _('Aktuelle Form') }}</span>
         <div class="form-dots">
             {% for e in dashboard.last5 %}
             <div class="form-dot {% if e.result == 'Sieg' %}w{% elif e.result == 'Niederlage' %}l{% else %}d{% endif %}" title="{{ e.map }} {{ e.result }} ({{ e.rating }})"></div>
@@ -213,7 +229,7 @@
             {% elif dashboard.form_trend < -0.03 %}&#9660; {{ dashboard.last5_rating }}
             {% else %}&#9644; {{ dashboard.last5_rating }}{% endif %}
         </div>
-        <div class="qs-sub">Letzte 5 Spiele</div>
+        <div class="qs-sub">{{ _('Letzte 5 Spiele') }}</div>
     </div>
     <div class="card elev-sm qs-card">
         <span class="card-kicker">K/D Ratio</span>
@@ -225,21 +241,66 @@
         <div class="qs-value {% if dashboard.streak_type == 'Sieg' %}win{% elif dashboard.streak_type == 'Niederlage' %}loss{% else %}draw{% endif %}">
             {{ dashboard.streak }}{% if dashboard.streak_type == 'Sieg' %}W{% elif dashboard.streak_type == 'Niederlage' %}L{% else %}D{% endif %}
         </div>
-        <div class="qs-sub">{% if dashboard.streak_type == 'Sieg' %}Siege{% elif dashboard.streak_type == 'Niederlage' %}Niederlagen{% else %}Unentschieden{% endif %} in Folge</div>
+        <div class="qs-sub">{% if dashboard.streak_type == 'Sieg' %}{{ _('Siege') }}{% elif dashboard.streak_type == 'Niederlage' %}{{ _('Niederlagen') }}{% else %}{{ _('Unentschieden') }}{% endif %} {{ _('in Folge') }}</div>
     </div>
 </div>
+
+<!-- ── Aim Rating ── -->
+{% if dashboard.aim %}
+{% set aim = dashboard.aim %}
+<div class="card elev-sm aim-card" style="margin-bottom:var(--space-4);">
+    <div class="aim-ring">
+        <svg viewBox="0 0 36 36" width="100" height="100">
+            <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--color-neutral-800)" stroke-width="2.5"></circle>
+            <circle cx="18" cy="18" r="15.9" fill="none"
+                    stroke="{% if aim.rating >= 70 %}#4ade80{% elif aim.rating >= 50 %}#fbbf24{% else %}#f87171{% endif %}"
+                    stroke-width="2.5" stroke-dasharray="{{ aim.rating }} {{ 100 - aim.rating }}"
+                    stroke-linecap="round" opacity="0.85"></circle>
+        </svg>
+        <div class="aim-ring-center">
+            <div class="aim-ring-val {% if aim.rating >= 70 %}win{% elif aim.rating < 45 %}loss{% endif %}">{{ aim.rating }}</div>
+            <div class="aim-ring-label">Aim Rating</div>
+        </div>
+    </div>
+    <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <span class="card-kicker" style="margin:0;">Aim Rating</span>
+            <span class="tag {% if aim.rating >= 70 %}tag-win{% elif aim.rating >= 50 %}tag-draw{% else %}tag-loss{% endif %}">{{ aim.rank }}</span>
+            {% if aim.trend > 1 %}
+            <span style="font-size:11px;color:#4ade80;">&#9650; +{{ aim.trend }}</span>
+            {% elif aim.trend < -1 %}
+            <span style="font-size:11px;color:#f87171;">&#9660; {{ aim.trend }}</span>
+            {% endif %}
+        </div>
+        <div class="aim-components">
+            {% for key in ['crosshair', 'counter_strafe', 'hs_pct', 'accuracy', 'spray'] %}
+            {% set c = aim.components[key] %}
+            <div class="aim-comp">
+                <div class="aim-comp-head">
+                    <span class="aim-comp-label">{{ c.label }}</span>
+                    <span class="aim-comp-value">{{ c.value }}</span>
+                </div>
+                <div class="aim-comp-bar">
+                    <div class="aim-comp-fill" style="width:{{ c.score }}%;background:{% if c.score >= 70 %}#4ade80{% elif c.score >= 45 %}#fbbf24{% else %}#f87171{% endif %};"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- ── Formkurve ── -->
 {% if dashboard.form_sparkline and dashboard.form_sparkline|length > 3 %}
 <div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-4);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
-        <span class="card-kicker" style="margin:0;">Formkurve</span>
+        <span class="card-kicker" style="margin:0;">{{ _('Formkurve') }}</span>
         <div style="display:flex;gap:var(--space-3);font-size:12px;flex-wrap:wrap;">
             {% set fc = dashboard.form_curve %}
-            <span>Letztes Spiel: <strong class="{% if fc.last1 >= 1.0 %}win{% elif fc.last1 < 0.85 %}loss{% endif %}">{{ fc.last1 }}</strong></span>
-            <span>Letzte 5: <strong class="{% if fc.last5 >= 1.0 %}win{% elif fc.last5 < 0.85 %}loss{% endif %}">{{ fc.last5 }}</strong></span>
-            <span>Letzte 20: <strong class="{% if fc.last20 >= 1.0 %}win{% elif fc.last20 < 0.85 %}loss{% endif %}">{{ fc.last20 }}</strong></span>
-            <span>Gesamt: <strong>{{ fc.all_time }}</strong></span>
+            <span>{{ _('Letztes Spiel') }}: <strong class="{% if fc.last1 >= 1.0 %}win{% elif fc.last1 < 0.85 %}loss{% endif %}">{{ fc.last1 }}</strong></span>
+            <span>{{ _('Letzte 5') }}: <strong class="{% if fc.last5 >= 1.0 %}win{% elif fc.last5 < 0.85 %}loss{% endif %}">{{ fc.last5 }}</strong></span>
+            <span>{{ _('Letzte 20') }}: <strong class="{% if fc.last20 >= 1.0 %}win{% elif fc.last20 < 0.85 %}loss{% endif %}">{{ fc.last20 }}</strong></span>
+            <span>{{ _('Gesamt') }}: <strong>{{ fc.all_time }}</strong></span>
         </div>
     </div>
     <div style="display:flex;align-items:end;gap:3px;height:40px;">
@@ -274,14 +335,14 @@
 <!-- ── Spider Chart + Strengths/Weaknesses ── -->
 <div class="dash-mid">
     <div class="card elev-sm">
-        <span class="card-kicker">Skill-Profil</span>
+        <span class="card-kicker">{{ _('Skill-Profil') }}</span>
         <div class="spider-wrap">
             <canvas id="spider-chart" width="320" height="320"></canvas>
         </div>
     </div>
     <div class="card elev-sm" style="display:flex;flex-direction:column;justify-content:space-between;">
         <div>
-            <span class="card-kicker" style="color:var(--color-green);">Staerken</span>
+            <span class="card-kicker" style="color:var(--color-green);">{{ _('Staerken') }}</span>
             <div class="sw-list" style="margin-top:6px;">
                 {% for s in dashboard.strengths %}
                 <div class="sw-item">
@@ -292,7 +353,7 @@
             </div>
         </div>
         <div style="margin-top:var(--space-4);">
-            <span class="card-kicker" style="color:var(--color-red);">Schwaechen</span>
+            <span class="card-kicker" style="color:var(--color-red);">{{ _('Schwaechen') }}</span>
             <div class="sw-list" style="margin-top:6px;">
                 {% for w in dashboard.weaknesses %}
                 <div class="sw-item">
@@ -303,7 +364,7 @@
             </div>
         </div>
         <div class="focus-box">
-            <div class="focus-label">Naechster Fokus</div>
+            <div class="focus-label">{{ _('Naechster Fokus') }}</div>
             {{ dashboard.focus }}
         </div>
     </div>
@@ -312,7 +373,7 @@
 <!-- ── Skill-Benchmarks ── -->
 <div class="dash-benchmarks">
     <div class="card elev-sm">
-        <span class="card-kicker">Skill-Benchmarks</span>
+        <span class="card-kicker">{{ _('Skill-Benchmarks') }}</span>
         <div class="bm-grid" style="margin-top:8px;">
             {% for b in dashboard.benchmarks %}
             <div class="bm-item">
@@ -338,7 +399,7 @@
 <div class="grid-2" style="margin-bottom:var(--space-5);">
     <!-- Role Card -->
     <div class="card elev-sm">
-        <span class="card-kicker">Deine Rolle</span>
+        <span class="card-kicker">{{ _('Deine Rolle') }}</span>
         <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
             <div class="role-badge">
                 {% if dashboard.role.primary == 'Entry Fragger' %}<i data-lucide="swords" style="width:22px;height:22px;"></i>
@@ -350,18 +411,18 @@
             </div>
             <div>
                 <div style="font-size:20px;font-weight:600;">{{ dashboard.role.primary }}</div>
-                <div style="font-size:11px;color:var(--color-neutral-500);">Zweitrolle: {{ dashboard.role.secondary }}</div>
+                <div style="font-size:11px;color:var(--color-neutral-500);">{{ _('Zweitrolle') }}: {{ dashboard.role.secondary }}</div>
             </div>
         </div>
         <p style="font-size:13px;color:var(--color-neutral-400);margin-top:8px;">{{ dashboard.role.description }}</p>
         <div style="font-size:12px;margin-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:2px 16px;">
             <span style="color:var(--color-neutral-500);">Opening Rate</span><span style="text-align:right;font-weight:500;">{{ dashboard.role.stats.opening_rate }}%</span>
-            <span style="color:var(--color-neutral-500);">AWP-Anteil</span><span style="text-align:right;font-weight:500;">{{ dashboard.role.stats.awp_pct }}%</span>
+            <span style="color:var(--color-neutral-500);">{{ _('AWP-Anteil') }}</span><span style="text-align:right;font-weight:500;">{{ dashboard.role.stats.awp_pct }}%</span>
             <span style="color:var(--color-neutral-500);">Survival</span><span style="text-align:right;font-weight:500;">{{ dashboard.role.stats.avg_survival }}%</span>
             <span style="color:var(--color-neutral-500);">Utility/Rd</span><span style="text-align:right;font-weight:500;">{{ dashboard.role.stats.avg_util }}</span>
         </div>
         <div class="focus-box" style="margin-top:auto;">
-            <div class="focus-label">Rollen-Tipp</div>
+            <div class="focus-label">{{ _('Rollen-Tipp') }}</div>
             {{ dashboard.role.tip }}
         </div>
     </div>
@@ -369,11 +430,11 @@
     <!-- Training Plan Card -->
     <div class="card elev-sm">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span class="card-kicker">Trainingsplan</span>
+            <span class="card-kicker">{{ _('Trainingsplan') }}</span>
             <span style="font-size:11px;color:var(--color-neutral-500);">~{{ dashboard.training.total_minutes }} Min</span>
         </div>
         <p style="font-size:12px;color:var(--color-neutral-500);margin:2px 0 8px;">
-            Basierend auf deinen Schwaechen: {{ dashboard.training.weak_areas | join(', ') }}
+            {{ _('Basierend auf deinen Schwaechen') }}: {{ dashboard.training.weak_areas | join(', ') }}
         </p>
         <div class="training-list">
             {% for ex in dashboard.training.exercises %}
@@ -395,7 +456,7 @@
 
 <!-- ── Map Performance ── -->
 {% if map_stats %}
-<h3 style="margin-bottom:var(--space-3);">Map-Performance</h3>
+<h3 style="margin-bottom:var(--space-3);">{{ _('Map-Performance') }}</h3>
 <div class="dash-maps">
     {% set map_gradients = {
         "Mirage": "linear-gradient(135deg, #d4a574, #8b6914)",
@@ -423,11 +484,11 @@
         </svg>
         <div class="mc-name">{{ m.map }}</div>
         <dl class="mc-stats">
-            <dt>Spiele</dt><dd>{{ m.matches }}</dd>
-            <dt>Bilanz</dt><dd style="font-weight:600;"><span style="color:var(--color-green);">{{ m.wins }}W</span> <span style="color:var(--color-red);">{{ m.losses }}L</span></dd>
-            <dt><abbr title="Gesamtbewertung">Rating</abbr></dt><dd class="{% if m.avg_rating >= 1.1 %}win{% elif m.avg_rating >= 0.9 %}draw{% else %}loss{% endif %}" style="font-weight:600;">{{ m.avg_rating }}</dd>
+            <dt>{{ _('Spiele') }}</dt><dd>{{ m.matches }}</dd>
+            <dt>{{ _('Bilanz') }}</dt><dd style="font-weight:600;"><span style="color:var(--color-green);">{{ m.wins }}W</span> <span style="color:var(--color-red);">{{ m.losses }}L</span></dd>
+            <dt><abbr title="{{ _('Gesamtbewertung') }}">Rating</abbr></dt><dd class="{% if m.avg_rating >= 1.1 %}win{% elif m.avg_rating >= 0.9 %}draw{% else %}loss{% endif %}" style="font-weight:600;">{{ m.avg_rating }}</dd>
             <dt><abbr title="Average Damage per Round">ADR</abbr></dt><dd>{{ m.avg_adr }}</dd>
-            <dt><abbr title="Kill/Death-Verhaeltnis">K/D</abbr></dt><dd class="{% if m.avg_kd >= 1.2 %}win{% elif m.avg_kd >= 0.9 %}draw{% else %}loss{% endif %}">{{ m.avg_kd }}</dd>
+            <dt><abbr title="{{ _('Kill/Death-Verhaeltnis') }}">K/D</abbr></dt><dd class="{% if m.avg_kd >= 1.2 %}win{% elif m.avg_kd >= 0.9 %}draw{% else %}loss{% endif %}">{{ m.avg_kd }}</dd>
         </dl>
         {% if map_stats|length >= 3 %}
         {% set sorted_maps = map_stats|sort(attribute='avg_rating') %}
@@ -436,7 +497,7 @@
         {% elif m.map == sorted_maps[0].map %}
         <span class="mc-veto ban">&#10005; Ban</span>
         {% else %}
-        <span class="mc-veto neutral">Spielbar</span>
+        <span class="mc-veto neutral">{{ _('Spielbar') }}</span>
         {% endif %}
         {% endif %}
     </div>
@@ -447,16 +508,16 @@
 <!-- ── Letzte Matches ── -->
 {% if exports %}
 <div class="hr"></div>
-<h3>Letzte Analysen</h3>
+<h3>{{ _('Letzte Analysen') }}</h3>
 <div class="table-scroll">
 <table class="table">
     <thead>
         <tr>
-            <th>Datum</th><th>Map</th><th>Score</th><th>Ergebnis</th>
-            <th><abbr title="Kill/Death-Verhaeltnis">K/D</abbr></th>
+            <th>{{ _('Datum') }}</th><th>Map</th><th>Score</th><th>{{ _('Ergebnis') }}</th>
+            <th><abbr title="{{ _('Kill/Death-Verhaeltnis') }}">K/D</abbr></th>
             <th><abbr title="Average Damage per Round">ADR</abbr></th>
             <th><abbr title="Kill, Assist, Survived, Traded">KAST%</abbr></th>
-            <th><abbr title="Gesamtbewertung">Rating</abbr></th>
+            <th><abbr title="{{ _('Gesamtbewertung') }}">Rating</abbr></th>
             <th></th>
         </tr>
     </thead>
@@ -467,22 +528,25 @@
             <td>{{ e.map }}</td>
             <td>{{ e.score }}</td>
             <td>
-                {% if e.result == 'Sieg' %}<span class="tag tag-win">Sieg</span>
-                {% elif e.result == 'Niederlage' %}<span class="tag tag-loss">Niederlage</span>
+                {% if e.result == 'Sieg' %}<span class="tag tag-win">{{ _('Sieg') }}</span>
+                {% elif e.result == 'Niederlage' %}<span class="tag tag-loss">{{ _('Niederlage') }}</span>
                 {% else %}<span class="tag tag-draw">{{ e.result }}</span>{% endif %}
             </td>
             <td>{{ e.kd }}</td>
             <td>{{ e.adr }}</td>
             <td>{{ e.kast }}%</td>
             <td>{{ e.rating }}</td>
-            <td><a href="{{ url_for('view_export', filename=e.filename) }}" class="btn btn-ghost">Details &#8594;</a></td>
+            <td style="white-space:nowrap;">
+                <a href="{{ url_for('view_export', filename=e.filename) }}" class="btn btn-ghost">Details</a>
+                <a href="{{ url_for('share_card', filename=e.filename) }}" class="btn btn-ghost" title="Share Card"><i data-lucide="share-2" style="width:13px;height:13px;"></i></a>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 </div>
 {% if exports|length > 10 %}
-<p style="margin-top: var(--space-4);"><a href="{{ url_for('exports') }}" class="btn btn-ghost">Alle {{ exports|length }} Exports anzeigen &#8594;</a></p>
+<p style="margin-top: var(--space-4);"><a href="{{ url_for('exports') }}" class="btn btn-ghost">{{ _('Alle') }} {{ exports|length }} {{ _('Exports anzeigen') }} &#8594;</a></p>
 {% endif %}
 {% endif %}
 
@@ -490,59 +554,59 @@
 <div class="hr"></div>
 <details class="analyze-section">
     <summary class="analyze-toggle">
-        <span class="chevron">&#9654;</span> Demo analysieren
+        <span class="chevron">&#9654;</span> {{ _('Demo analysieren') }}
     </summary>
     <div style="padding-top:var(--space-4);">
         <div class="grid-2">
             <!-- Upload Card -->
             <div class="card elev-sm">
                 <span class="card-kicker">Upload</span>
-                <h3 class="card-title">Demo hochladen</h3>
+                <h3 class="card-title">{{ _('Demo hochladen') }}</h3>
                 <form id="upload-form" class="form-analyze" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:var(--space-3);">
                     <div class="drop-zone" id="drop-zone">
                         <div class="drop-zone-icon"><i data-lucide="upload-cloud" style="width:32px;height:32px;"></i></div>
-                        <div class="drop-zone-text"><strong>Klicken</strong> oder Demo hierher ziehen</div>
-                        <div class="drop-zone-hint">.dem Dateien bis 500 MB</div>
+                        <div class="drop-zone-text"><strong>{{ _('Klicken') }}</strong> {{ _('oder Demo hierher ziehen') }}</div>
+                        <div class="drop-zone-hint">{{ _('.dem Dateien bis 500 MB') }}</div>
                         <input type="file" name="demo" accept=".dem" required id="upload-demo-file" style="display:none;">
                     </div>
                     <div class="field" id="upload-player-select" style="display:none;">
-                        <label>Spieler auswaehlen</label>
-                        <select name="player_select" class="input" id="upload-player-dropdown"><option value="">Spieler werden geladen...</option></select>
+                        <label>{{ _('Spieler auswaehlen') }}</label>
+                        <select name="player_select" class="input" id="upload-player-dropdown"><option value="">{{ _('Spieler werden geladen...') }}</option></select>
                     </div>
                     <div class="grid-2">
-                        <div class="field"><label>Spieler-Name</label><input type="text" name="player" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input" id="upload-player-name"></div>
+                        <div class="field"><label>{{ _('Spieler-Name') }}</label><input type="text" name="player" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input" id="upload-player-name"></div>
                         <div class="field"><label>SteamID64</label><input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input" id="upload-steamid"></div>
                     </div>
-                    <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="upload-btn"><i data-lucide="play" style="width:14px;height:14px;"></i> Analysieren</button>
+                    <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="upload-btn"><i data-lucide="play" style="width:14px;height:14px;"></i> {{ _('Analysieren') }}</button>
                 </form>
                 <div class="analyze-overlay" id="upload-overlay">
                     <div class="analyze-spinner"></div>
-                    <div class="analyze-status" id="upload-status">Demo wird hochgeladen...</div>
+                    <div class="analyze-status" id="upload-status">{{ _('Demo wird hochgeladen...') }}</div>
                     <div class="analyze-progress"><div class="analyze-progress-fill" id="upload-progress-fill"></div></div>
-                    <div class="analyze-sub">Das kann einige Sekunden dauern</div>
+                    <div class="analyze-sub">{{ _('Das kann einige Sekunden dauern') }}</div>
                 </div>
             </div>
             <!-- Local Path Card -->
             <div class="card elev-sm">
-                <span class="card-kicker">Lokal</span>
-                <h3 class="card-title">Lokaler Pfad</h3>
+                <span class="card-kicker">{{ _('Lokal') }}</span>
+                <h3 class="card-title">{{ _('Lokaler Pfad') }}</h3>
                 <form id="path-form" class="form-analyze" action="{{ url_for('analyze_path') }}" method="post" style="display:flex;flex-direction:column;gap:var(--space-3);">
-                    <div class="field"><label>Pfad zur Demo-Datei</label><input type="text" name="demo_path" placeholder="D:/SteamLibrary/.../replays/match730_xxx.dem" class="input" id="path-demo-input"></div>
+                    <div class="field"><label>{{ _('Pfad zur Demo-Datei') }}</label><input type="text" name="demo_path" placeholder="D:/SteamLibrary/.../replays/match730_xxx.dem" class="input" id="path-demo-input"></div>
                     <div class="field" id="path-player-select" style="display:none;">
-                        <label>Spieler auswaehlen</label>
-                        <select name="player_select" class="input" id="path-player-dropdown"><option value="">Spieler werden geladen...</option></select>
+                        <label>{{ _('Spieler auswaehlen') }}</label>
+                        <select name="player_select" class="input" id="path-player-dropdown"><option value="">{{ _('Spieler werden geladen...') }}</option></select>
                     </div>
                     <div class="grid-2">
-                        <div class="field"><label>Spieler-Name</label><input type="text" name="player" value="{{ config.get('player_name', '') }}" class="input" id="path-player-name"></div>
+                        <div class="field"><label>{{ _('Spieler-Name') }}</label><input type="text" name="player" value="{{ config.get('player_name', '') }}" class="input" id="path-player-name"></div>
                         <div class="field"><label>SteamID64</label><input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" class="input" id="path-steamid"></div>
                     </div>
-                    <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="path-btn"><i data-lucide="play" style="width:14px;height:14px;"></i> Analysieren</button>
+                    <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="path-btn"><i data-lucide="play" style="width:14px;height:14px;"></i> {{ _('Analysieren') }}</button>
                 </form>
                 <div class="analyze-overlay" id="path-overlay">
                     <div class="analyze-spinner"></div>
-                    <div class="analyze-status">Demo wird analysiert...</div>
+                    <div class="analyze-status">{{ _('Demo wird analysiert...') }}</div>
                     <div class="analyze-progress"><div class="analyze-progress-fill"></div></div>
-                    <div class="analyze-sub">Das kann einige Sekunden dauern</div>
+                    <div class="analyze-sub">{{ _('Das kann einige Sekunden dauern') }}</div>
                 </div>
             </div>
         </div>
@@ -551,56 +615,56 @@
 
 {% else %}
 <!-- No data yet — show analyze forms prominently -->
-<h2>Willkommen beim CS2 Coach</h2>
-<p style="color:var(--color-neutral-500);margin-bottom:var(--space-5);">Analysiere deine erste Demo um das Dashboard zu aktivieren.</p>
+<h2>{{ _('Willkommen beim CS2 Coach') }}</h2>
+<p style="color:var(--color-neutral-500);margin-bottom:var(--space-5);">{{ _('Analysiere deine erste Demo um das Dashboard zu aktivieren.') }}</p>
 <div class="grid-2">
     <div class="card elev-sm">
         <span class="card-kicker">Upload</span>
-        <h3 class="card-title">Demo hochladen</h3>
+        <h3 class="card-title">{{ _('Demo hochladen') }}</h3>
         <form id="upload-form" class="form-analyze" action="{{ url_for('analyze') }}" method="post" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:var(--space-3);">
             <div class="drop-zone" id="drop-zone">
                 <div class="drop-zone-icon"><i data-lucide="upload-cloud" style="width:32px;height:32px;"></i></div>
-                <div class="drop-zone-text"><strong>Klicken</strong> oder Demo hierher ziehen</div>
-                <div class="drop-zone-hint">.dem Dateien bis 500 MB</div>
+                <div class="drop-zone-text"><strong>{{ _('Klicken') }}</strong> {{ _('oder Demo hierher ziehen') }}</div>
+                <div class="drop-zone-hint">{{ _('.dem Dateien bis 500 MB') }}</div>
                 <input type="file" name="demo" accept=".dem" required id="upload-demo-file" style="display:none;">
             </div>
             <div class="field" id="upload-player-select" style="display:none;">
-                <label>Spieler auswaehlen</label>
-                <select name="player_select" class="input" id="upload-player-dropdown"><option value="">Spieler werden geladen...</option></select>
+                <label>{{ _('Spieler auswaehlen') }}</label>
+                <select name="player_select" class="input" id="upload-player-dropdown"><option value="">{{ _('Spieler werden geladen...') }}</option></select>
             </div>
             <div class="grid-2">
-                <div class="field"><label>Spieler-Name</label><input type="text" name="player" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input" id="upload-player-name"></div>
+                <div class="field"><label>{{ _('Spieler-Name') }}</label><input type="text" name="player" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input" id="upload-player-name"></div>
                 <div class="field"><label>SteamID64</label><input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input" id="upload-steamid"></div>
             </div>
-            <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="upload-btn"><i data-lucide="play" style="width:14px;height:14px;"></i> Analysieren</button>
+            <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="upload-btn"><i data-lucide="play" style="width:14px;height:14px;"></i> {{ _('Analysieren') }}</button>
         </form>
         <div class="analyze-overlay" id="upload-overlay">
             <div class="analyze-spinner"></div>
-            <div class="analyze-status" id="upload-status">Demo wird hochgeladen...</div>
+            <div class="analyze-status" id="upload-status">{{ _('Demo wird hochgeladen...') }}</div>
             <div class="analyze-progress"><div class="analyze-progress-fill" id="upload-progress-fill"></div></div>
-            <div class="analyze-sub">Das kann einige Sekunden dauern</div>
+            <div class="analyze-sub">{{ _('Das kann einige Sekunden dauern') }}</div>
         </div>
     </div>
     <div class="card elev-sm">
-        <span class="card-kicker">Lokal</span>
-        <h3 class="card-title">Lokaler Pfad</h3>
+        <span class="card-kicker">{{ _('Lokal') }}</span>
+        <h3 class="card-title">{{ _('Lokaler Pfad') }}</h3>
         <form id="path-form" class="form-analyze" action="{{ url_for('analyze_path') }}" method="post" style="display:flex;flex-direction:column;gap:var(--space-3);">
-            <div class="field"><label>Pfad zur Demo-Datei</label><input type="text" name="demo_path" placeholder="D:/SteamLibrary/.../replays/match730_xxx.dem" class="input" id="path-demo-input"></div>
+            <div class="field"><label>{{ _('Pfad zur Demo-Datei') }}</label><input type="text" name="demo_path" placeholder="D:/SteamLibrary/.../replays/match730_xxx.dem" class="input" id="path-demo-input"></div>
             <div class="field" id="path-player-select" style="display:none;">
-                <label>Spieler auswaehlen</label>
-                <select name="player_select" class="input" id="path-player-dropdown"><option value="">Spieler werden geladen...</option></select>
+                <label>{{ _('Spieler auswaehlen') }}</label>
+                <select name="player_select" class="input" id="path-player-dropdown"><option value="">{{ _('Spieler werden geladen...') }}</option></select>
             </div>
             <div class="grid-2">
-                <div class="field"><label>Spieler-Name</label><input type="text" name="player" value="{{ config.get('player_name', '') }}" class="input" id="path-player-name"></div>
+                <div class="field"><label>{{ _('Spieler-Name') }}</label><input type="text" name="player" value="{{ config.get('player_name', '') }}" class="input" id="path-player-name"></div>
                 <div class="field"><label>SteamID64</label><input type="text" name="steamid" value="{{ config.get('steam_id', '') }}" class="input" id="path-steamid"></div>
             </div>
-            <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="path-btn"><i data-lucide="play" style="width:14px;height:14px;"></i> Analysieren</button>
+            <button type="submit" class="btn btn-primary" style="align-self:flex-start;" id="path-btn"><i data-lucide="play" style="width:14px;height:14px;"></i> {{ _('Analysieren') }}</button>
         </form>
         <div class="analyze-overlay" id="path-overlay">
             <div class="analyze-spinner"></div>
-            <div class="analyze-status">Demo wird analysiert...</div>
+            <div class="analyze-status">{{ _('Demo wird analysiert...') }}</div>
             <div class="analyze-progress"><div class="analyze-progress-fill"></div></div>
-            <div class="analyze-sub">Das kann einige Sekunden dauern</div>
+            <div class="analyze-sub">{{ _('Das kann einige Sekunden dauern') }}</div>
         </div>
     </div>
 </div>
@@ -663,13 +727,13 @@
             var files = e.dataTransfer.files;
             if (files.length && files[0].name.toLowerCase().endsWith('.dem')) {
                 fileInput.files = files; fileInput.dispatchEvent(new Event('change'));
-            } else { window._notyf.error('Nur .dem Dateien erlaubt'); }
+            } else { window._notyf.error('{{ _("Nur .dem Dateien erlaubt") }}'); }
         });
 
         fileInput.addEventListener('change', function() {
             var file = this.files[0]; if (!file) return;
-            if (!file.name.toLowerCase().endsWith('.dem')) { window._notyf.error('Nur .dem Dateien erlaubt'); this.value = ''; return; }
-            if (file.size > MAX_SIZE) { window._notyf.error('Datei zu gross (max 500 MB)'); this.value = ''; return; }
+            if (!file.name.toLowerCase().endsWith('.dem')) { window._notyf.error('{{ _("Nur .dem Dateien erlaubt") }}'); this.value = ''; return; }
+            if (file.size > MAX_SIZE) { window._notyf.error('{{ _("Datei zu gross (max 500 MB)") }}'); this.value = ''; return; }
             var sizeMB = (file.size / 1024 / 1024).toFixed(1);
             dropZone.classList.add('has-file');
             dropZone.querySelector('.drop-zone-text').innerHTML = '<strong>' + file.name + '</strong>';
@@ -683,17 +747,17 @@
         var dropdown = document.getElementById('upload-player-dropdown');
         var selectDiv = document.getElementById('upload-player-select');
         if (!dropdown || !selectDiv) return;
-        dropdown.innerHTML = '<option value="">Lade Spieler...</option>';
+        dropdown.innerHTML = '<option value="">{{ _("Lade Spieler...") }}</option>';
         selectDiv.style.display = '';
         fetch('{{ url_for("api_players") }}', {method: 'POST', body: fd})
             .then(function(r) { return r.json(); })
             .then(function(data) { populateDropdown(data, dropdown, 'upload-player-name', 'upload-steamid'); })
-            .catch(function() { dropdown.innerHTML = '<option value="">Fehler</option>'; });
+            .catch(function() { dropdown.innerHTML = '<option value="">{{ _("Fehler") }}</option>'; });
     }
 
     function populateDropdown(data, dropdown, nameId, steamidId) {
         if (!data.players) return;
-        dropdown.innerHTML = '<option value="">-- Spieler --</option>';
+        dropdown.innerHTML = '<option value="">-- {{ _("Spieler") }} --</option>';
         data.players.forEach(function(p) {
             var opt = document.createElement('option');
             opt.value = p.steamid; opt.textContent = p.name + ' (' + p.steamid + ')'; opt.dataset.name = p.name;
@@ -717,7 +781,7 @@
         lastPathFetched = val;
         var fd = new FormData(); fd.append('demo_path', val);
         var selectDiv = document.getElementById('path-player-select');
-        if (pathDD) pathDD.innerHTML = '<option value="">Lade Spieler...</option>';
+        if (pathDD) pathDD.innerHTML = '<option value="">{{ _("Lade Spieler...") }}</option>';
         if (selectDiv) selectDiv.style.display = '';
         fetch('{{ url_for("api_players") }}', {method: 'POST', body: fd})
             .then(function(r) { return r.json(); })
@@ -733,7 +797,7 @@
     var uploadForm = document.getElementById('upload-form');
     if (uploadForm) uploadForm.addEventListener('submit', function(e) {
         e.preventDefault();
-        if (!fileInput.files[0]) { window._notyf.error('Bitte eine .dem Datei waehlen'); return; }
+        if (!fileInput.files[0]) { window._notyf.error('{{ _("Bitte eine .dem Datei waehlen") }}'); return; }
         var overlay = document.getElementById('upload-overlay');
         var fill = document.getElementById('upload-progress-fill');
         var status = document.getElementById('upload-status');
@@ -741,19 +805,19 @@
         var xhr = new XMLHttpRequest();
         var fd = new FormData(this);
         xhr.upload.addEventListener('progress', function(ev) {
-            if (ev.lengthComputable) { var pct = Math.round(ev.loaded / ev.total * 100); fill.style.width = (pct * 0.5) + '%'; status.textContent = 'Hochladen... ' + pct + '%'; NProgress.set(pct / 200); }
+            if (ev.lengthComputable) { var pct = Math.round(ev.loaded / ev.total * 100); fill.style.width = (pct * 0.5) + '%'; status.textContent = '{{ _("Hochladen...") }} ' + pct + '%'; NProgress.set(pct / 200); }
         });
         xhr.upload.addEventListener('load', function() {
-            status.textContent = 'Demo wird analysiert...'; fill.style.width = '50%'; NProgress.set(0.5);
+            status.textContent = '{{ _("Demo wird analysiert...") }}'; fill.style.width = '50%'; NProgress.set(0.5);
             var pct = 50; var iv = setInterval(function() { pct += Math.random() * 5 + 1; if (pct > 92) { clearInterval(iv); pct = 92; } fill.style.width = pct + '%'; NProgress.set(pct / 100); }, 500);
             xhr._trickleIv = iv;
         });
         xhr.addEventListener('load', function() {
             clearInterval(xhr._trickleIv); NProgress.done();
-            if (xhr.status === 200) { fill.style.width = '100%'; status.textContent = 'Fertig!'; setTimeout(function() { document.open(); document.write(xhr.responseText); document.close(); if (xhr.responseURL) history.replaceState(null, '', xhr.responseURL); }, 200); }
-            else { overlay.classList.remove('active'); window._notyf.error('Fehler bei der Analyse'); }
+            if (xhr.status === 200) { fill.style.width = '100%'; status.textContent = '{{ _("Fertig!") }}'; setTimeout(function() { document.open(); document.write(xhr.responseText); document.close(); if (xhr.responseURL) history.replaceState(null, '', xhr.responseURL); }, 200); }
+            else { overlay.classList.remove('active'); window._notyf.error('{{ _("Fehler bei der Analyse") }}'); }
         });
-        xhr.addEventListener('error', function() { clearInterval(xhr._trickleIv); NProgress.done(); overlay.classList.remove('active'); window._notyf.error('Verbindungsfehler'); });
+        xhr.addEventListener('error', function() { clearInterval(xhr._trickleIv); NProgress.done(); overlay.classList.remove('active'); window._notyf.error('{{ _("Verbindungsfehler") }}'); });
         xhr.open('POST', this.action); xhr.send(fd);
     });
 })();

@@ -100,18 +100,18 @@ def download_demo(code: str, output_dir: str | Path | None = None,
                   on_status: callable = None) -> Path | None:
     """Download a CS2 demo using a match share code.
 
-    Tries multiple methods:
-    1. Steam Web API match info (if API key provided)
-    2. All Valve replay clusters in parallel with GET probes
+    Tries Valve replay server clusters (100-251) with parallel HEAD probes.
+    CS2 uses 3-digit cluster IDs, not the old CS:GO single-digit ones.
 
-    The demo URL pattern is:
-        http://replay{N}.valve.net/730/{match_id}_{outcome_id}.dem.bz2
-    where match_id and outcome_id come from the decoded share code.
+    Note: The share code's match_id/outcome_id do NOT directly map to the
+    demo URL parameters (which use reservation_id from the Game Coordinator).
+    This download method has limited success — use Folder Watch for reliable
+    demo analysis.
 
     Args:
         code: CS2 match share code
         output_dir: Directory to save the demo. Uses temp dir if None.
-        steam_api_key: Optional Steam Web API key for authenticated requests.
+        steam_api_key: Optional Steam Web API key (currently unused by Valve).
         on_status: Optional callback(msg: str) for progress updates.
 
     Returns:
@@ -136,85 +136,92 @@ def download_demo(code: str, output_dir: str | Path | None = None,
 
     dem_path = output_dir / f"match_{match_id}.dem"
 
-    # Method 1: Try Steam Web API for demo URL
-    if steam_api_key:
-        _log("Steam API wird abgefragt...")
-        demo_url = _get_demo_url_steam_api(match_id, outcome_id, token,
-                                           steam_api_key)
-        if demo_url:
-            _log(f"Demo-URL via API gefunden, lade herunter...")
-            try:
-                return _download_and_extract(demo_url, dem_path)
-            except Exception:
-                _log("API-URL fehlgeschlagen, versuche Replay-Server...")
+    # Build URL candidates across all known CS2 replay clusters.
+    # CS2 uses 3-digit cluster IDs (100-251); the old 1-8 don't exist.
+    # We try multiple filename formats since the exact mapping from
+    # share code values to URL parameters is undocumented.
+    _CLUSTERS = [
+        100, 101, 102, 111, 112, 113, 114, 115, 117, 118,
+        121, 122, 123, 124, 125, 126, 127, 128, 129,
+        131, 132, 133, 134, 135, 136, 137, 138, 139,
+        141, 142, 144, 145,
+        151, 152, 153, 154, 155, 156,
+        161, 164, 171, 172,
+        181, 182, 183, 184, 185, 186, 187, 188, 189,
+        190, 191, 192, 193, 195, 196,
+        200, 201, 202, 203, 204,
+        211, 212, 213, 214,
+        221, 222, 223, 224, 225, 227, 228,
+        231, 232, 233, 234, 236, 237,
+        241, 242, 251,
+    ]
 
-    # Method 2: Try Valve replay server clusters in parallel
-    # URL pattern: http://replay{N}.valve.net/730/{match_id}_{outcome_id}.dem.bz2
-    clusters = ["", "1", "2", "3", "4", "5", "6", "7", "8"]
+    # Zero-padded format (matching demo filename convention)
+    mid_pad = str(match_id).zfill(19)
+    oid_pad = str(outcome_id).zfill(10)
+
     urls = []
-    for c in clusters:
-        host = f"replay{c}.valve.net" if c else "replay.valve.net"
+    for c in _CLUSTERS:
+        host = f"replay{c}.valve.net"
+        # Try the most common format: {match_id}_{outcome_id}.dem.bz2
         urls.append(f"http://{host}/730/{match_id}_{outcome_id}.dem.bz2")
+        # Zero-padded variant (like local filenames)
+        urls.append(f"http://{host}/730/{mid_pad}_{oid_pad}.dem.bz2")
 
-    _log(f"Pruefe {len(urls)} Valve Replay-Server parallel...")
+    _log(f"Pruefe {len(_CLUSTERS)} Valve Replay-Server...")
 
-    def _probe_get(url: str) -> str | None:
-        """GET probe — check if server responds 200 then close immediately."""
+    errors = {}
+
+    def _probe_head(url: str) -> str | None:
+        """HEAD probe to check if a URL returns 200."""
         try:
-            req = urllib.request.Request(url,
-                                        headers={"User-Agent": "CS2Coach/1.0"})
-            resp = urllib.request.urlopen(req, timeout=8)
+            req = urllib.request.Request(
+                url, method="HEAD",
+                headers={"User-Agent": "CS2Coach/1.0"})
+            resp = urllib.request.urlopen(req, timeout=12)
             status = resp.status
             resp.close()
             if status == 200:
                 return url
-        except Exception:
-            pass
+        except urllib.request.HTTPError as e:
+            errors[url] = f"HTTP {e.code}"
+        except urllib.request.URLError as e:
+            errors[url] = f"URL {e.reason}"
+        except Exception as e:
+            errors[url] = str(e)
         return None
 
     hit_url = None
-    with ThreadPoolExecutor(max_workers=len(urls)) as pool:
-        futures = {pool.submit(_probe_get, u): u for u in urls}
-        for future in as_completed(futures):
-            result = future.result()
-            if result:
-                hit_url = result
-                for f in futures:
-                    f.cancel()
-                break
+    # Probe in batches to avoid flooding
+    batch_size = 40
+    for batch_start in range(0, len(urls), batch_size):
+        batch = urls[batch_start:batch_start + batch_size]
+        with ThreadPoolExecutor(max_workers=batch_size) as pool:
+            futures = {pool.submit(_probe_head, u): u for u in batch}
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    hit_url = result
+                    for f in futures:
+                        f.cancel()
+                    break
+        if hit_url:
+            break
 
     if not hit_url:
-        _log("Kein Replay-Server hat die Demo. Eventuell abgelaufen oder noch nicht bereit.")
+        # Summarize what went wrong
+        http_codes = {}
+        for url, err in errors.items():
+            http_codes[err] = http_codes.get(err, 0) + 1
+        summary = ", ".join(f"{v}x {k}" for k, v in sorted(http_codes.items(),
+                                                            key=lambda x: -x[1])[:3])
+        _log(f"Demo auf keinem Replay-Server gefunden ({summary}). "
+             f"CS2-Demos brauchen Game-Coordinator Zugriff — "
+             f"nutze Folder-Watch fuer zuverlaessige Analyse.")
         return None
 
     _log(f"Server gefunden, lade Demo herunter...")
     return _download_and_extract(hit_url, dem_path)
-
-
-def _get_demo_url_steam_api(match_id: int, outcome_id: int, token: int,
-                            api_key: str) -> str | None:
-    """Try to get demo download URL via Steam Web API.
-
-    Uses GetGameMatchHistory to find the match and extract the demo link.
-    """
-    import json as _json
-
-    # Try the match details endpoint
-    url = (
-        f"https://api.steampowered.com/ICSGOPlayers_730/GetRecentGames/v1"
-        f"?key={api_key}&matchid={match_id}"
-    )
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "CS2Coach/1.0"})
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = _json.loads(resp.read())
-            demo_url = data.get("result", {}).get("demo_url")
-            if demo_url:
-                return demo_url
-    except Exception:
-        pass
-
-    return None
 
 
 def _download_and_extract(url: str, dem_path: Path,

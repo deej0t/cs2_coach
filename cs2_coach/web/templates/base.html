@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="{{ lang|default('de') }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -360,10 +360,10 @@
         </div>
 
         <div class="sidebar-group">
-            <div class="sidebar-group-label">Analyse</div>
+            <div class="sidebar-group-label">{{ _('Analyse') }}</div>
             <a href="{{ url_for('index') }}"      data-page="index"><i data-lucide="layout-dashboard"></i> Dashboard</a>
-            <a href="{{ url_for('batch') }}"       data-page="batch"><i data-lucide="layers"></i> Batch-Analyse</a>
-            <a href="{{ url_for('sharecode') }}"   data-page="sharecode"><i data-lucide="share-2"></i> Share-Code</a>
+            <a href="{{ url_for('batch') }}"       data-page="batch"><i data-lucide="layers"></i> {{ _('Batch-Analyse') }}</a>
+            <a href="{{ url_for('sharecode') }}"   data-page="sharecode"><i data-lucide="share-2"></i> {{ _('Share-Code') }}</a>
             <a href="{{ url_for('watch') }}"       data-page="watch"><i data-lucide="folder-search"></i> Watch</a>
             <a href="{{ url_for('exports') }}"     data-page="exports"><i data-lucide="archive"></i> Exports</a>
         </div>
@@ -372,24 +372,28 @@
             <div class="sidebar-group-label">Performance</div>
             <a href="{{ url_for('trends') }}"      data-page="trends"><i data-lucide="trending-up"></i> Trends</a>
             <a href="{{ url_for('sessions') }}"    data-page="sessions"><i data-lucide="calendar-days"></i> Sessions</a>
-            <a href="{{ url_for('weapons') }}"     data-page="weapons"><i data-lucide="crosshair"></i> Waffen</a>
+            <a href="{{ url_for('calendar') }}"    data-page="calendar"><i data-lucide="calendar-range"></i> {{ _('Kalender') }}</a>
+            <a href="{{ url_for('weapons') }}"     data-page="weapons"><i data-lucide="crosshair"></i> {{ _('Waffen') }}</a>
             <a href="{{ url_for('economy') }}"     data-page="economy"><i data-lucide="coins"></i> Economy</a>
+            <a href="{{ url_for('utility') }}"     data-page="utility"><i data-lucide="flame"></i> Utility</a>
             <a href="{{ url_for('maps') }}"        data-page="maps"><i data-lucide="map"></i> Maps</a>
-            <a href="{{ url_for('opponents') }}"   data-page="opponents"><i data-lucide="swords"></i> Gegner</a>
+            <a href="{{ url_for('opponents') }}"   data-page="opponents"><i data-lucide="swords"></i> {{ _('Gegner') }}</a>
+            <a href="{{ url_for('duels') }}"       data-page="duels"><i data-lucide="zap"></i> {{ _('Duelle') }}</a>
             <a href="{{ url_for('nemesis') }}"     data-page="nemesis"><i data-lucide="skull"></i> Nemesis</a>
-            <a href="{{ url_for('scout') }}"       data-page="scout"><i data-lucide="binoculars"></i> Gegner-Scout</a>
+            <a href="{{ url_for('scout') }}"       data-page="scout"><i data-lucide="binoculars"></i> {{ _('Gegner-Scout') }}</a>
             <a href="{{ url_for('teammates') }}"   data-page="teammates"><i data-lucide="users"></i> Teammates</a>
-            <a href="{{ url_for('team') }}"         data-page="team"><i data-lucide="shield"></i> Team-Analyse</a>
+            <a href="{{ url_for('team') }}"         data-page="team"><i data-lucide="shield"></i> {{ _('Team-Analyse') }}</a>
             <a href="{{ url_for('leaderboard') }}" data-page="leaderboard"><i data-lucide="bar-chart-3"></i> Leaderboard</a>
             <a href="{{ url_for('h2h') }}"         data-page="h2h"><i data-lucide="git-compare"></i> Head-to-Head</a>
-            <a href="{{ url_for('compare') }}"     data-page="compare"><i data-lucide="trophy"></i> Fortschritt</a>
+            <a href="{{ url_for('compare') }}"     data-page="compare"><i data-lucide="trophy"></i> {{ _('Fortschritt') }}</a>
             <a href="{{ url_for('momentum') }}"    data-page="momentum"><i data-lucide="flame"></i> Momentum</a>
-            <a href="{{ url_for('mechanics') }}"   data-page="mechanics"><i data-lucide="focus"></i> Mechanik</a>
-            <a href="{{ url_for('motor') }}"       data-page="motor"><i data-lucide="brain"></i> Muskelgedaechtnis</a>
-            <a href="{{ url_for('deaths') }}"      data-page="deaths"><i data-lucide="heart-crack"></i> Death-Analyse</a>
-            <a href="{{ url_for('zones') }}"       data-page="zones"><i data-lucide="scan"></i> Positions-Zonen</a>
+            <a href="{{ url_for('mechanics') }}"   data-page="mechanics"><i data-lucide="focus"></i> {{ _('Mechanik') }}</a>
+            <a href="{{ url_for('motor') }}"       data-page="motor"><i data-lucide="brain"></i> {{ _('Muskelgedaechtnis') }}</a>
+            <a href="{{ url_for('deaths') }}"      data-page="deaths"><i data-lucide="heart-crack"></i> {{ _('Death-Analyse') }}</a>
+            <a href="{{ url_for('sides') }}"      data-page="sides"><i data-lucide="shield-half"></i> CT vs T</a>
+            <a href="{{ url_for('zones') }}"       data-page="zones"><i data-lucide="scan"></i> {{ _('Positions-Zonen') }}</a>
             <a href="{{ url_for('viewer') }}"      data-page="viewer"><i data-lucide="map-pin"></i> 2D Viewer</a>
-            <a href="{{ url_for('rounds') }}"      data-page="rounds"><i data-lucide="clock"></i> Rundenverlauf</a>
+            <a href="{{ url_for('rounds') }}"      data-page="rounds"><i data-lucide="clock"></i> {{ _('Rundenverlauf') }}</a>
         </div>
 
         <div class="sidebar-group">
@@ -398,19 +402,21 @@
             <a href="{{ url_for('warmup') }}"      data-page="warmup"><i data-lucide="timer"></i> Warm-up</a>
             <a href="{{ url_for('highlights') }}"  data-page="highlights"><i data-lucide="sparkles"></i> Highlights</a>
             <a href="{{ url_for('habits') }}"      data-page="habits"><i data-lucide="activity"></i> Habits</a>
-            <a href="{{ url_for('goals') }}"       data-page="goals"><i data-lucide="target"></i> Ziele</a>
+            <a href="{{ url_for('goals') }}"       data-page="goals"><i data-lucide="target"></i> {{ _('Ziele') }}</a>
             <a href="{{ url_for('digest') }}"      data-page="digest"><i data-lucide="notebook-pen"></i> Digest</a>
             <a href="{{ url_for('clutches') }}"      data-page="clutches"><i data-lucide="shield"></i> Clutches</a>
             <a href="{{ url_for('achievements') }}" data-page="achievements"><i data-lucide="award"></i> Achievements</a>
-            <a href="{{ url_for('bookmarks') }}"   data-page="bookmarks"><i data-lucide="bookmark"></i> Replay-Bookmarks</a>
+            <a href="{{ url_for('bookmarks') }}"   data-page="bookmarks"><i data-lucide="bookmark"></i> {{ _('Replay-Bookmarks') }}</a>
             <a href="{{ url_for('chat') }}"        data-page="chat"><i data-lucide="message-circle"></i> AI Coach</a>
+            <a href="{{ url_for('practice') }}"    data-page="practice"><i data-lucide="server"></i> Practice Server</a>
         </div>
 
         <div class="sidebar-group">
             <div class="sidebar-group-label">System</div>
-            <a href="{{ url_for('graph') }}"       data-page="graph"><i data-lucide="git-fork"></i> Wissensgraph</a>
-            <a href="{{ url_for('export_csv') }}"  data-page="export_csv"><i data-lucide="download"></i> CSV-Export</a>
-            <a href="{{ url_for('settings') }}"    data-page="settings"><i data-lucide="settings"></i> Einstellungen</a>
+            <a href="{{ url_for('inventory') }}"   data-page="inventory"><i data-lucide="backpack"></i> {{ _('Inventar') }}</a>
+            <a href="{{ url_for('graph') }}"       data-page="graph"><i data-lucide="git-fork"></i> {{ _('Wissensgraph') }}</a>
+            <a href="{{ url_for('export_csv') }}"  data-page="export_csv"><i data-lucide="download"></i> {{ _('CSV-Export') }}</a>
+            <a href="{{ url_for('settings') }}"    data-page="settings"><i data-lucide="settings"></i> {{ _('Einstellungen') }}</a>
         </div>
 
         {% if config and config.get('player_name') %}
@@ -481,7 +487,7 @@
                 if (btn) {
                     btn.disabled = true;
                     btn.dataset.originalText = btn.textContent;
-                    btn.innerHTML = '<span class="analyze-spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;"></span> Analysiere...';
+                    btn.innerHTML = '<span class="analyze-spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;"></span> {{ _("Analysiere...") }}';
                 }
                 var overlay = form.closest('.card, .analyze-card');
                 if (overlay) {

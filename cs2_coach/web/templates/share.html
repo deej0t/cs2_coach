@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CS2 Coach — {{ data.match.map }} {{ data.match.score_own }}:{{ data.match.score_enemy }}</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+        --bg: #12131a; --surface: #1a1b26; --border: #2a2b3a;
+        --text: #e0e0ea; --muted: #6b6e82; --accent: #9184d9;
+        --green: #4ade80; --red: #f87171; --yellow: #fbbf24;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; }
+
+    .share-card {
+        width: 680px; margin: 24px auto; padding: 28px 32px;
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: 16px; position: relative; overflow: hidden;
+    }
+    .share-card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg,
+            {% if data.match.result == 'Sieg' %}var(--green), #22c55e{% elif data.match.result == 'Niederlage' %}var(--red), #ef4444{% else %}var(--yellow), #eab308{% endif %});
+    }
+
+    /* Header */
+    .sh-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+    .sh-map { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+    .sh-score {
+        font-size: 32px; font-weight: 700; letter-spacing: -0.02em;
+        color: {% if data.match.result == 'Sieg' %}var(--green){% elif data.match.result == 'Niederlage' %}var(--red){% else %}var(--yellow){% endif %};
+    }
+    .sh-result {
+        font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;
+        padding: 3px 10px; border-radius: 4px;
+        {% if data.match.result == 'Sieg' %}background: rgba(74,222,128,0.12); color: var(--green);
+        {% elif data.match.result == 'Niederlage' %}background: rgba(248,113,113,0.12); color: var(--red);
+        {% else %}background: rgba(251,191,36,0.12); color: var(--yellow);{% endif %}
+    }
+    .sh-meta { margin-left: auto; text-align: right; font-size: 12px; color: var(--muted); }
+    .sh-meta strong { color: var(--text); font-weight: 600; }
+
+    /* Stats Grid */
+    .sh-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px; }
+    .sh-stat { text-align: center; padding: 14px 0; background: rgba(255,255,255,0.02); border-radius: 8px; }
+    .sh-stat-val { font-size: 24px; font-weight: 700; line-height: 1; }
+    .sh-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-top: 6px; }
+
+    /* Bottom row */
+    .sh-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* Spider chart */
+    .sh-spider { display: flex; align-items: center; justify-content: center; }
+    .sh-spider canvas { width: 220px; height: 220px; }
+
+    /* Details list */
+    .sh-details { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+    .sh-detail-row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 5px 10px; font-size: 12px; border-radius: 4px;
+        background: rgba(255,255,255,0.02);
+    }
+    .sh-detail-label { color: var(--muted); }
+    .sh-detail-val { font-weight: 600; }
+
+    /* Scoreboard */
+    .sh-scoreboard { margin-top: 16px; }
+    .sh-sb-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 8px; }
+    .sh-sb-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+    .sh-sb-table th { text-align: left; padding: 6px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); border-bottom: 1px solid var(--border); }
+    .sh-sb-table td { padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .sh-sb-table tr.sh-target td { font-weight: 600; background: rgba(145,132,217,0.06); }
+    .sh-sb-table .sh-sb-name { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Footer */
+    .sh-footer {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border);
+        font-size: 11px; color: var(--muted);
+    }
+    .sh-footer-brand { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--accent); }
+
+    .win { color: var(--green); }
+    .loss { color: var(--red); }
+    .draw { color: var(--yellow); }
+
+    /* Copy button (hidden in screenshot) */
+    .sh-actions {
+        display: flex; gap: 8px; justify-content: center; margin: 16px auto;
+        width: 680px;
+    }
+    .sh-btn {
+        padding: 8px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+        cursor: pointer; border: 1px solid var(--border); background: var(--surface);
+        color: var(--text); transition: all 0.15s;
+    }
+    .sh-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .sh-btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .sh-btn-primary:hover { background: #7e71c9; }
+
+    @media print { .sh-actions { display: none; } }
+    @media (max-width: 720px) {
+        .share-card { width: calc(100% - 32px); padding: 20px; }
+        .sh-actions { width: calc(100% - 32px); }
+        .sh-stats { grid-template-columns: repeat(3, 1fr); }
+        .sh-bottom { grid-template-columns: 1fr; }
+        .sh-header { flex-wrap: wrap; }
+    }
+</style>
+</head>
+<body>
+
+<div class="sh-actions">
+    <button class="sh-btn" onclick="window.history.back()">&#8592; Zurueck</button>
+    <button class="sh-btn sh-btn-primary" onclick="copyLink()">Link kopieren</button>
+</div>
+
+<div class="share-card" id="share-card">
+    <!-- Header -->
+    <div class="sh-header">
+        <span class="sh-map">{{ data.match.map }}</span>
+        <span class="sh-score">{{ data.match.score_own }}:{{ data.match.score_enemy }}</span>
+        <span class="sh-result">{{ data.match.result }}</span>
+        <div class="sh-meta">
+            <strong>{{ data.player.name }}</strong><br>
+            {{ data.match.date }}
+        </div>
+    </div>
+
+    <!-- Main Stats -->
+    <div class="sh-stats">
+        <div class="sh-stat">
+            <div class="sh-stat-val {% if data.player.kd >= 1.2 %}win{% elif data.player.kd < 0.9 %}loss{% endif %}">{{ data.player.kd }}</div>
+            <div class="sh-stat-lbl">K/D</div>
+        </div>
+        <div class="sh-stat">
+            <div class="sh-stat-val">{{ data.player.kills }}/{{ data.player.deaths }}/{{ data.player.assists }}</div>
+            <div class="sh-stat-lbl">K/D/A</div>
+        </div>
+        <div class="sh-stat">
+            <div class="sh-stat-val {% if data.player.adr >= 85 %}win{% elif data.player.adr < 65 %}loss{% endif %}">{{ data.player.adr|round(0)|int }}</div>
+            <div class="sh-stat-lbl">ADR</div>
+        </div>
+        <div class="sh-stat">
+            <div class="sh-stat-val">{{ data.player.hs_pct|round(0)|int }}%</div>
+            <div class="sh-stat-lbl">HS%</div>
+        </div>
+        <div class="sh-stat">
+            <div class="sh-stat-val">{{ data.player.kast_pct|round(0)|int }}%</div>
+            <div class="sh-stat-lbl">KAST</div>
+        </div>
+        <div class="sh-stat">
+            {% if data.player.rating %}
+            <div class="sh-stat-val {% if data.player.rating >= 1.1 %}win{% elif data.player.rating < 0.85 %}loss{% endif %}">{{ data.player.rating }}</div>
+            {% else %}
+            <div class="sh-stat-val">—</div>
+            {% endif %}
+            <div class="sh-stat-lbl">Rating</div>
+        </div>
+    </div>
+
+    <!-- Spider + Details -->
+    <div class="sh-bottom">
+        <div class="sh-spider">
+            <canvas id="share-spider" width="220" height="220"></canvas>
+        </div>
+        <div class="sh-details">
+            <div class="sh-detail-row">
+                <span class="sh-detail-label">Opening Duels</span>
+                <span class="sh-detail-val {% if data.player.opening_kills > data.player.opening_deaths %}win{% elif data.player.opening_kills < data.player.opening_deaths %}loss{% endif %}">{{ data.player.opening_kills }}W / {{ data.player.opening_deaths }}L</span>
+            </div>
+            {% if data.player.crosshair_placement %}
+            <div class="sh-detail-row">
+                <span class="sh-detail-label">Crosshair Placement</span>
+                <span class="sh-detail-val">{{ data.player.crosshair_placement.avg_degrees }}° ({{ data.player.crosshair_placement.rating }})</span>
+            </div>
+            {% endif %}
+            <div class="sh-detail-row">
+                <span class="sh-detail-label">Counter-Strafe</span>
+                <span class="sh-detail-val">{{ data.player.counter_strafe_pct|round(0)|int }}%</span>
+            </div>
+            <div class="sh-detail-row">
+                <span class="sh-detail-label">Utility/Runde</span>
+                <span class="sh-detail-val">{{ data.player.utility_per_round }}</span>
+            </div>
+            <div class="sh-detail-row">
+                <span class="sh-detail-label">Survival-Rate</span>
+                <span class="sh-detail-val">{{ data.player.survival_rate|round(0)|int }}%</span>
+            </div>
+            {% if data.player.clutches %}
+            <div class="sh-detail-row">
+                <span class="sh-detail-label">Clutches</span>
+                <span class="sh-detail-val {% if data.player.clutches.wins > 0 %}win{% endif %}">{{ data.player.clutches.wins }}/{{ data.player.clutches.attempts }}</span>
+            </div>
+            {% endif %}
+            {% if data.player.multikills %}
+            <div class="sh-detail-row">
+                <span class="sh-detail-label">Multi-Kills</span>
+                <span class="sh-detail-val">
+                    {% if data.player.multikills['5k'] %}5K:{{ data.player.multikills['5k'] }} {% endif %}
+                    {% if data.player.multikills['4k'] %}4K:{{ data.player.multikills['4k'] }} {% endif %}
+                    {% if data.player.multikills['3k'] %}3K:{{ data.player.multikills['3k'] }} {% endif %}
+                    {% if data.player.multikills['2k'] %}2K:{{ data.player.multikills['2k'] }}{% endif %}
+                </span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Mini Scoreboard -->
+    {% if data.scoreboard %}
+    <div class="sh-scoreboard">
+        <div class="sh-sb-title">Scoreboard</div>
+        <table class="sh-sb-table">
+            <thead>
+                <tr>
+                    <th>Spieler</th><th>K</th><th>D</th><th>A</th><th>ADR</th><th>K/D</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in data.scoreboard %}
+                <tr class="{% if p.is_target %}sh-target{% endif %}">
+                    <td class="sh-sb-name">{{ p.name }}{% if p.is_target %} ◄{% endif %}</td>
+                    <td>{{ p.kills }}</td>
+                    <td>{{ p.deaths }}</td>
+                    <td>{{ p.assists }}</td>
+                    <td>{{ p.adr|round(0)|int }}</td>
+                    <td class="{% if p.kd >= 1.2 %}win{% elif p.kd < 0.9 %}loss{% endif %}">{{ p.kd }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Footer -->
+    <div class="sh-footer">
+        <div class="sh-footer-brand">CS2 Coach</div>
+        <span>{{ data.match.date }} • {{ data.match.map }} • {{ data.match.total_rounds }} Runden</span>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+function copyLink() {
+    navigator.clipboard.writeText(window.location.href).then(function() {
+        event.target.textContent = 'Kopiert!';
+        setTimeout(function() { event.target.textContent = 'Link kopieren'; }, 1500);
+    });
+}
+
+// Spider chart
+(function() {
+    var p = {{ data.player | tojson }};
+    var canvas = document.getElementById('share-spider');
+    if (!canvas) return;
+
+    // Normalize metrics to 0-100 scale
+    var hs = Math.min(p.hs_pct / 60 * 100, 100);
+    var surv = Math.min(p.survival_rate / 60 * 100, 100);
+    var util = Math.min(p.utility_per_round / 3.0 * 100, 100);
+    var opening = p.opening_kills + p.opening_deaths > 0
+        ? p.opening_kills / (p.opening_kills + p.opening_deaths) * 100 : 50;
+    var kast = p.kast_pct;
+    var adr = Math.min(p.adr / 120 * 100, 100);
+
+    new Chart(canvas, {
+        type: 'radar',
+        data: {
+            labels: ['Aim', 'Positioning', 'Utility', 'Opening', 'KAST', 'Impact'],
+            datasets: [{
+                data: [hs, surv, util, opening, kast, adr],
+                backgroundColor: 'rgba(145, 132, 217, 0.15)',
+                borderColor: 'rgba(145, 132, 217, 0.8)',
+                borderWidth: 2,
+                pointBackgroundColor: '#9184d9',
+                pointRadius: 3,
+            }]
+        },
+        options: {
+            responsive: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                r: {
+                    beginAtZero: true, max: 100,
+                    ticks: { display: false, stepSize: 25 },
+                    grid: { color: 'rgba(255,255,255,0.06)' },
+                    angleLines: { color: 'rgba(255,255,255,0.06)' },
+                    pointLabels: {
+                        color: '#6b6e82', font: { family: 'Inter', size: 11 }
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
+</body>
+</html>

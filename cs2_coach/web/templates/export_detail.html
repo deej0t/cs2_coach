@@ -126,6 +126,30 @@
     .da-detail td { padding: 4px 8px; font-size: 12px; border-top: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent); }
     .da-detail td:first-child { font-weight: 600; color: var(--color-neutral-400); width: 40px; }
 
+    /* Round Narration */
+    .rn-btn { background: none; border: 1px solid var(--color-neutral-700); color: var(--color-neutral-500); cursor: pointer;
+        font-size: 9px; padding: 1px 6px; border-radius: 3px; letter-spacing: 0.04em; text-transform: uppercase;
+        transition: all 0.15s; white-space: nowrap; }
+    .rn-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+    .rn-btn.active { border-color: var(--color-accent); color: var(--color-accent); opacity: 0.6; pointer-events: none; }
+    .rn-panel { display: none; margin: var(--space-3) 0; padding: var(--space-4); border-radius: var(--radius-md);
+        background: var(--color-surface); border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+        animation: rn-fade 0.2s ease; }
+    .rn-panel.visible { display: block; }
+    @keyframes rn-fade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+    .rn-header { display: flex; align-items: center; gap: 10px; margin-bottom: var(--space-3); }
+    .rn-round-tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+        background: rgba(145,132,217,0.15); color: var(--color-accent); }
+    .rn-title { font-size: 14px; font-weight: 600; color: var(--color-text); flex: 1; }
+    .rn-close { background: none; border: none; color: var(--color-neutral-500); cursor: pointer; font-size: 16px; padding: 2px 6px; }
+    .rn-close:hover { color: var(--color-text); }
+    .rn-body { font-size: 13px; line-height: 1.8; color: var(--color-neutral-300); }
+    .rn-body p { margin: 0 0 8px; }
+    .rn-body strong { color: var(--color-text); }
+    .rn-loading { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-neutral-500); }
+    .rn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); animation: rn-pulse 1s infinite; }
+    @keyframes rn-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
     @media (max-width: 768px) {
         .ed-econ { grid-template-columns: repeat(2, 1fr); }
         .da-grid { grid-template-columns: 1fr; }
@@ -147,7 +171,13 @@
 } %}
 <div style="position:relative;overflow:hidden;display:flex;align-items:center;gap:var(--space-5);padding:var(--space-5) var(--space-6);margin-bottom:var(--space-6);border-radius:var(--radius-lg);border:1px solid rgba(255,255,255,0.06);">
     <div style="position:absolute;inset:0;opacity:0.08;background:{{ ed_map_gradients.get(data.match.map, 'linear-gradient(135deg, #555, #333)') }};pointer-events:none;"></div>
-    <a href="{{ url_for('exports') }}" class="btn btn-ghost" style="position:relative;z-index:1;">&#8592; Zurueck</a>
+    <a href="{{ url_for('exports') }}" class="btn btn-ghost" style="position:relative;z-index:1;">&#8592; {{ _('Zurueck') }}</a>
+    <a href="{{ url_for('share_card', filename=filename) }}" class="btn btn-ghost" style="position:relative;z-index:1;" title="Share Card">
+        <i data-lucide="share-2" style="width:14px;height:14px;vertical-align:middle;"></i> {{ _('Teilen') }}
+    </a>
+    <button id="mn-trigger" class="btn btn-ghost" style="position:relative;z-index:1;" onclick="narrateMatch()" title="{{ _('KI-Analyse des gesamten Matches') }}">
+        <i data-lucide="sparkles" style="width:14px;height:14px;vertical-align:middle;"></i> {{ _('KI-Analyse') }}
+    </button>
     <div style="position:relative;z-index:1;flex:1;">
         <h2 style="margin:0;font-size:22px;">
             {{ data.match.map }}
@@ -156,14 +186,14 @@
             </span>
         </h2>
         <div style="display:flex;gap:var(--space-3);align-items:center;margin-top:var(--space-1);">
-            {% if data.match.result == 'Sieg' %}<span class="tag tag-win">Sieg</span>
-            {% elif data.match.result == 'Niederlage' %}<span class="tag tag-loss">Niederlage</span>
+            {% if data.match.result == 'Sieg' %}<span class="tag tag-win">{{ _('Sieg') }}</span>
+            {% elif data.match.result == 'Niederlage' %}<span class="tag tag-loss">{{ _('Niederlage') }}</span>
             {% else %}<span class="tag tag-draw">{{ data.match.result }}</span>{% endif %}
             {% if data.match.get('date', '') %}
             <span style="font-size:13px;color:var(--color-neutral-500);">{{ data.match.get('date', '') }}</span>
             {% endif %}
             {% if data.match.get('total_rounds') %}
-            <span style="font-size:12px;color:var(--color-neutral-600);">{{ data.match.total_rounds }} Runden</span>
+            <span style="font-size:12px;color:var(--color-neutral-600);">{{ data.match.total_rounds }} {{ _('Runden') }}</span>
             {% endif %}
         </div>
     </div>
@@ -175,33 +205,47 @@
     {% endif %}
 </div>
 
+<!-- Match Narration Panel -->
+<div id="mn-panel" class="rn-panel" style="margin-bottom:var(--space-5);">
+    <div class="rn-header">
+        <span class="rn-round-tag" style="background:rgba(145,132,217,0.2);">
+            <i data-lucide="sparkles" style="width:12px;height:12px;vertical-align:middle;"></i> Match
+        </span>
+        <span class="rn-title">{{ _('KI Match-Analyse') }} — {{ data.match.map }} {{ data.match.score_own }}:{{ data.match.score_enemy }}</span>
+        <button class="rn-close" onclick="closeMatchNarration()">&times;</button>
+    </div>
+    <div id="mn-body" class="rn-body" style="max-height:600px;overflow-y:auto;">
+        <div class="rn-loading"><span class="rn-dot"></span> {{ _('Match-Analyse wird generiert...') }}</div>
+    </div>
+</div>
+
 <!-- Stats overview -->
 <div class="grid-3" style="margin-bottom:var(--space-4);">
     <div class="card elev-sm" style="align-items:center;text-align:center;">
-        <span class="card-kicker"><abbr title="Kill/Death-Verhaeltnis — ueber 1.0 = mehr Kills als Deaths">K/D</abbr></span>
+        <span class="card-kicker"><abbr title="{{ _('Kill/Death-Verhaeltnis — ueber 1.0 = mehr Kills als Deaths') }}">K/D</abbr></span>
         <span class="ed-stat {% if p.kd >= 1.2 %}sc-green{% elif p.kd >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.kd }}</span>
         <span style="font-size:12px;color:var(--color-neutral-500);">{{ p.kills }} / {{ p.deaths }} / {{ p.assists }}</span>
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
-        <span class="card-kicker"><abbr title="Average Damage per Round — durchschnittlicher Schaden pro Runde">ADR</abbr></span>
+        <span class="card-kicker"><abbr title="{{ _('Average Damage per Round — durchschnittlicher Schaden pro Runde') }}">ADR</abbr></span>
         <span class="ed-stat {% if p.adr >= 80 %}sc-green{% elif p.adr >= 65 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.adr }}</span>
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
-        <span class="card-kicker"><abbr title="Gesamtbewertung basierend auf Kills, Deaths, Assists, ADR und Impact">Rating</abbr></span>
+        <span class="card-kicker"><abbr title="{{ _('Gesamtbewertung basierend auf Kills, Deaths, Assists, ADR und Impact') }}">Rating</abbr></span>
         <span class="ed-stat {% if p.get('rating', 0) >= 1.1 %}sc-green{% elif p.get('rating', 0) >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.get('rating', '-') }}</span>
     </div>
 </div>
 <div class="grid-3" style="margin-bottom:var(--space-6);">
     <div class="card elev-sm" style="align-items:center;text-align:center;">
-        <span class="card-kicker"><abbr title="Kill, Assist, Survived, Traded — Prozent der Runden mit positivem Beitrag">KAST%</abbr></span>
+        <span class="card-kicker"><abbr title="{{ _('Kill, Assist, Survived, Traded — Prozent der Runden mit positivem Beitrag') }}">KAST%</abbr></span>
         <span class="ed-stat">{{ p.kast_pct }}%</span>
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
-        <span class="card-kicker"><abbr title="Headshot-Prozent — Anteil der Kills durch Kopftreffer">HS%</abbr></span>
+        <span class="card-kicker"><abbr title="{{ _('Headshot-Prozent — Anteil der Kills durch Kopftreffer') }}">HS%</abbr></span>
         <span class="ed-stat">{{ p.hs_pct }}%</span>
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
-        <span class="card-kicker"><abbr title="Anteil der Schuesse im Stillstand — gutes Counter-Strafing bedeutet vor dem Schuss stehen bleiben">Counter-Strafe</abbr></span>
+        <span class="card-kicker"><abbr title="{{ _('Anteil der Schuesse im Stillstand — gutes Counter-Strafing bedeutet vor dem Schuss stehen bleiben') }}">Counter-Strafe</abbr></span>
         <span class="ed-stat">{{ p.counter_strafe_pct }}%</span>
     </div>
 </div>
@@ -209,47 +253,47 @@
 <!-- Detail sections -->
 <div class="grid-2" style="margin-bottom:var(--space-5);">
     <div class="card elev-sm">
-        <span class="card-kicker">Kampf</span>
+        <span class="card-kicker">{{ _('Kampf') }}</span>
         <table class="table"><tbody>
-            <tr><td><abbr title="Erstes Duell der Runde — gewonnen (W) oder verloren (L)">Opening Duels</abbr></td><td>{{ p.opening_kills }}W / {{ p.opening_deaths }}L</td></tr>
-            <tr><td><abbr title="Kill eines Gegners innerhalb von 3s nachdem er einen Teammate getoetet hat">Trade Kills</abbr></td><td>{{ p.trade_kills }}</td></tr>
-            <tr><td><abbr title="Treffergenauigkeit — Prozent der Schuesse die getroffen haben">Accuracy</abbr></td><td>{{ p.accuracy }}%</td></tr>
-            <tr><td><abbr title="Ueberlebensrate — Prozent der Runden ueberlebt">Survival</abbr></td><td>{{ p.survival_rate }}%</td></tr>
+            <tr><td><abbr title="{{ _('Erstes Duell der Runde — gewonnen (W) oder verloren (L)') }}">Opening Duels</abbr></td><td>{{ p.opening_kills }}W / {{ p.opening_deaths }}L</td></tr>
+            <tr><td><abbr title="{{ _('Kill eines Gegners innerhalb von 3s nachdem er einen Teammate getoetet hat') }}">Trade Kills</abbr></td><td>{{ p.trade_kills }}</td></tr>
+            <tr><td><abbr title="{{ _('Treffergenauigkeit — Prozent der Schuesse die getroffen haben') }}">Accuracy</abbr></td><td>{{ p.accuracy }}%</td></tr>
+            <tr><td><abbr title="{{ _('Ueberlebensrate — Prozent der Runden ueberlebt') }}">Survival</abbr></td><td>{{ p.survival_rate }}%</td></tr>
             {% if p.multikills %}<tr><td>Multi-Kills</td><td>2k:{{ p.multikills['2k'] }} 3k:{{ p.multikills['3k'] }} 4k:{{ p.multikills['4k'] }} 5k:{{ p.multikills['5k'] }}</td></tr>{% endif %}
         </tbody></table>
     </div>
     <div class="card elev-sm">
-        <span class="card-kicker">Mechanik</span>
+        <span class="card-kicker">{{ _('Mechanik') }}</span>
         <table class="table"><tbody>
-            <tr><td><abbr title="Anteil der Schuesse im Stillstand (inacc = Movement Inaccuracy)">Counter-Strafe</abbr></td><td>{{ p.counter_strafe_pct }}% (inacc: {{ p.avg_inaccuracy_move }})</td></tr>
-            {% if p.spray_control %}<tr><td><abbr title="Burst (1-3 Schuesse) vs. Spray (4+) Kills">Spray-Control</abbr></td><td>Burst {{ p.spray_control.burst_kills }} / Spray {{ p.spray_control.spray_kills }}</td></tr>
-            <tr><td><abbr title="Durchschnittliche Schussnummer im Magazin beim Kill — niedrig = Burst, hoch = Spray">Avg Recoil-Index</abbr></td><td>{{ p.spray_control.avg_recoil_index }}</td></tr>{% endif %}
+            <tr><td><abbr title="{{ _('Anteil der Schuesse im Stillstand (inacc = Movement Inaccuracy)') }}">Counter-Strafe</abbr></td><td>{{ p.counter_strafe_pct }}% (inacc: {{ p.avg_inaccuracy_move }})</td></tr>
+            {% if p.spray_control %}<tr><td><abbr title="{{ _('Burst (1-3 Schuesse) vs. Spray (4+) Kills') }}">Spray-Control</abbr></td><td>Burst {{ p.spray_control.burst_kills }} / Spray {{ p.spray_control.spray_kills }}</td></tr>
+            <tr><td><abbr title="{{ _('Durchschnittliche Schussnummer im Magazin beim Kill — niedrig = Burst, hoch = Spray') }}">Avg Recoil-Index</abbr></td><td>{{ p.spray_control.avg_recoil_index }}</td></tr>{% endif %}
             {% if p.weapons %}<tr><td>AWP Kills</td><td>{{ p.weapons.awp_kills }}</td></tr>
             <tr><td>Rifle Kills</td><td>{{ p.weapons.rifle_kills }}</td></tr>
             <tr><td>Pistol Kills</td><td>{{ p.weapons.pistol_kills }}</td></tr>{% endif %}
-            {% if p.engagement_distance %}<tr><td><abbr title="N=Nah (<500u), M=Mittel (500-1500u), W=Weit (>1500u)">Kampfdistanz</abbr></td><td>avg {{ p.engagement_distance.avg }}u (N:{{ p.engagement_distance.close }}/M:{{ p.engagement_distance.mid }}/W:{{ p.engagement_distance.long }})</td></tr>{% endif %}
+            {% if p.engagement_distance %}<tr><td><abbr title="{{ _('N=Nah (<500u), M=Mittel (500-1500u), W=Weit (>1500u)') }}">{{ _('Kampfdistanz') }}</abbr></td><td>avg {{ p.engagement_distance.avg }}u (N:{{ p.engagement_distance.close }}/M:{{ p.engagement_distance.mid }}/W:{{ p.engagement_distance.long }})</td></tr>{% endif %}
         </tbody></table>
     </div>
     <div class="card elev-sm">
         <span class="card-kicker">Utility</span>
         <table class="table"><tbody>
-            {% if p.utility %}<tr><td>Gesamt</td><td>{{ p.utility.total }} ({{ p.utility.per_round }}/Runde)</td></tr>
+            {% if p.utility %}<tr><td>{{ _('Gesamt') }}</td><td>{{ p.utility.total }} ({{ p.utility.per_round }}/{{ _('Runde') }})</td></tr>
             <tr><td>Flashes</td><td>{{ p.utility.flashes }}</td></tr>
             <tr><td>Smokes</td><td>{{ p.utility.smokes }}</td></tr>
             <tr><td>HE</td><td>{{ p.utility.he }}</td></tr>
             <tr><td>Molotovs</td><td>{{ p.utility.molotovs }}</td></tr>{% endif %}
-            {% if p.flash_effectiveness %}<tr><td>Gegner geblindet</td><td>{{ p.flash_effectiveness.enemies_blinded }}</td></tr>
-            <tr><td>Team geblindet</td><td>{{ p.flash_effectiveness.teammates_blinded }}</td></tr>
+            {% if p.flash_effectiveness %}<tr><td>{{ _('Gegner geblindet') }}</td><td>{{ p.flash_effectiveness.enemies_blinded }}</td></tr>
+            <tr><td>{{ _('Team geblindet') }}</td><td>{{ p.flash_effectiveness.teammates_blinded }}</td></tr>
             <tr><td>Avg Duration</td><td>{{ p.flash_effectiveness.avg_enemy_duration }}s</td></tr>{% endif %}
         </tbody></table>
     </div>
     <div class="card elev-sm">
-        <span class="card-kicker">Situationen</span>
+        <span class="card-kicker">{{ _('Situationen') }}</span>
         <table class="table"><tbody>
-            {% if p.clutches %}<tr><td><abbr title="1vX Situationen — gewonnen/versucht">Clutches</abbr></td><td>{{ p.clutches.wins }}/{{ p.clutches.attempts }}</td></tr>{% endif %}
+            {% if p.clutches %}<tr><td><abbr title="{{ _('1vX Situationen — gewonnen/versucht') }}">Clutches</abbr></td><td>{{ p.clutches.wins }}/{{ p.clutches.attempts }}</td></tr>{% endif %}
             {% if p.side_split %}<tr><td>CT</td><td>{{ p.side_split.ct_kills }}K / {{ p.side_split.ct_deaths }}D</td></tr>
             <tr><td>T</td><td>{{ p.side_split.t_kills }}K / {{ p.side_split.t_deaths }}D</td></tr>{% endif %}
-            {% if p.death_timing %}<tr><td><abbr title="Wann in der Runde du stirbst — Early (erstes Drittel), Mid, Late">Death-Timing</abbr></td><td>Early {{ p.death_timing.early }} | Mid {{ p.death_timing.mid }} | Late {{ p.death_timing.late }}</td></tr>{% endif %}
+            {% if p.death_timing %}<tr><td><abbr title="{{ _('Wann in der Runde du stirbst — Early (erstes Drittel), Mid, Late') }}">Death-Timing</abbr></td><td>Early {{ p.death_timing.early }} | Mid {{ p.death_timing.mid }} | Late {{ p.death_timing.late }}</td></tr>{% endif %}
             {% if p.kill_context %}{% if p.kill_context.get('thru_smoke', 0) > 0 %}<tr><td>Smoke Kills</td><td>{{ p.kill_context.thru_smoke }}</td></tr>{% endif %}
             {% if p.kill_context.get('wallbang', 0) > 0 %}<tr><td>Wallbangs</td><td>{{ p.kill_context.wallbang }}</td></tr>{% endif %}
             {% if p.kill_context.get('noscope', 0) > 0 %}<tr><td>Noscopes</td><td>{{ p.kill_context.noscope }}</td></tr>{% endif %}{% endif %}
@@ -261,9 +305,9 @@
 <!-- ══════ Duel Matrix ══════ -->
 {% if data.duel_matrix %}
 <div class="card elev-sm" style="margin-bottom:var(--space-5);padding:var(--space-3);">
-    <div class="card-kicker" style="margin-bottom:10px;">Gegner-Duelle</div>
+    <div class="card-kicker" style="margin-bottom:10px;">{{ _('Gegner-Duelle') }}</div>
     <table class="table ed-duel" style="font-size:13px;">
-        <thead><tr><th>Gegner</th><th style="text-align:center;">Kills</th><th style="text-align:center;">Deaths</th><th style="text-align:center;">Bilanz</th><th>K/D</th><th style="text-align:center;">HS</th><th>Waffen</th></tr></thead>
+        <thead><tr><th>{{ _('Gegner') }}</th><th style="text-align:center;">Kills</th><th style="text-align:center;">Deaths</th><th style="text-align:center;">{{ _('Bilanz') }}</th><th>K/D</th><th style="text-align:center;">HS</th><th>{{ _('Waffen') }}</th></tr></thead>
         <tbody>
         {% for d in data.duel_matrix %}
         <tr>
@@ -295,7 +339,7 @@
 <div class="grid-2" style="margin-bottom:var(--space-5);">
     <div class="card elev-sm" style="padding:var(--space-4);">
         <div class="card-kicker" style="margin-bottom:12px;">
-            <abbr title="Kategorisierung deiner Deaths — zeigt wo die meisten vermeidbaren Tode passieren">Death-Analyse</abbr>
+            <abbr title="{{ _('Kategorisierung deiner Deaths — zeigt wo die meisten vermeidbaren Tode passieren') }}">{{ _('Death-Analyse') }}</abbr>
         </div>
         <div class="da-grid">
             <div class="da-donut">
@@ -332,12 +376,12 @@
         </div>
         {% if ds.worst %}
         <div style="margin-top:12px;padding:8px 12px;background:rgba(248,113,113,0.06);border-left:3px solid {{ cat_colors.get(ds.worst, '#f87171') }};border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;color:var(--color-neutral-300);">
-            <strong style="color:var(--color-text);">Hauptproblem: {{ ds.worst }}</strong> —
-            {% if ds.worst == "Positioning" %}Du stirbst zu oft ohne Impact. Arbeite an deinen Positionen und Trade-Moeglichkeiten.
-            {% elif ds.worst == "Timing" %}Du peekst zu frueh oder zu aggressiv. Warte auf Utility-Support.
-            {% elif ds.worst == "Aim" %}Du verlierst zu viele direkte Duelle. Trainiere Aim und Crosshair Placement.
-            {% elif ds.worst == "Utility" %}Du stirbst durch Utility — achte auf Molotov/HE Damage.
-            {% elif ds.worst == "Numbers" %}Du stirbst in Ueberzahl-Situationen. Kommuniziere besser mit dem Team.
+            <strong style="color:var(--color-text);">{{ _('Hauptproblem') }}: {{ ds.worst }}</strong> —
+            {% if ds.worst == "Positioning" %}{{ _('Du stirbst zu oft ohne Impact. Arbeite an deinen Positionen und Trade-Moeglichkeiten.') }}
+            {% elif ds.worst == "Timing" %}{{ _('Du peekst zu frueh oder zu aggressiv. Warte auf Utility-Support.') }}
+            {% elif ds.worst == "Aim" %}{{ _('Du verlierst zu viele direkte Duelle. Trainiere Aim und Crosshair Placement.') }}
+            {% elif ds.worst == "Utility" %}{{ _('Du stirbst durch Utility — achte auf Molotov/HE Damage.') }}
+            {% elif ds.worst == "Numbers" %}{{ _('Du stirbst in Ueberzahl-Situationen. Kommuniziere besser mit dem Team.') }}
             {% endif %}
         </div>
         {% endif %}
@@ -347,7 +391,7 @@
     {% set hs = analysis.highlight_summary %}
     <div class="card elev-sm" style="padding:var(--space-4);">
         <div class="card-kicker" style="margin-bottom:12px;">
-            <abbr title="Klassifizierung jeder Runde nach deinem Impact">Runden-Highlights</abbr>
+            <abbr title="{{ _('Klassifizierung jeder Runde nach deinem Impact') }}">{{ _('Runden-Highlights') }}</abbr>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:var(--space-3);">
             <div style="text-align:center;padding:12px;background:rgba(74,222,128,0.06);border-radius:var(--radius-sm);">
@@ -370,15 +414,15 @@
         {% set impact_pct = ((hs.hero + hs.impact + hs.clutch) / hs.total_rounds * 100)|round(1) if hs.total_rounds > 0 else 0 %}
         {% set negative_pct = ((hs.throw + hs.invisible) / hs.total_rounds * 100)|round(1) if hs.total_rounds > 0 else 0 %}
         <div style="font-size:12px;color:var(--color-neutral-400);margin-bottom:8px;">
-            <strong style="color:#4ade80;">{{ impact_pct }}%</strong> Impact-Runden · <strong style="color:#f87171;">{{ negative_pct }}%</strong> Negativ-Runden · {{ hs.total_rounds }} Runden gesamt
+            <strong style="color:#4ade80;">{{ impact_pct }}%</strong> {{ _('Impact-Runden') }} · <strong style="color:#f87171;">{{ negative_pct }}%</strong> {{ _('Negativ-Runden') }} · {{ hs.total_rounds }} {{ _('Runden gesamt') }}
         </div>
         {% if negative_pct > 30 %}
         <div style="padding:8px 12px;background:rgba(248,113,113,0.06);border-left:3px solid #f87171;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;color:var(--color-neutral-300);">
-            <strong style="color:var(--color-text);">Zu viele Negativ-Runden.</strong> Fokus auf Trade-Positionen und weniger Solo-Peeks.
+            <strong style="color:var(--color-text);">{{ _('Zu viele Negativ-Runden.') }}</strong> {{ _('Fokus auf Trade-Positionen und weniger Solo-Peeks.') }}
         </div>
         {% elif impact_pct > 35 %}
         <div style="padding:8px 12px;background:rgba(74,222,128,0.06);border-left:3px solid #4ade80;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;color:var(--color-neutral-300);">
-            <strong style="color:var(--color-text);">Starke Impact-Rate!</strong> Du hattest in vielen Runden entscheidenden Einfluss.
+            <strong style="color:var(--color-text);">{{ _('Starke Impact-Rate!') }}</strong> {{ _('Du hattest in vielen Runden entscheidenden Einfluss.') }}
         </div>
         {% endif %}
     </div>
@@ -387,7 +431,7 @@
 <!-- Death detail table -->
 {% if analysis.deaths %}
 <details style="margin-bottom:var(--space-5);">
-    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--color-neutral-400);">Death-Details anzeigen ({{ analysis.deaths|length }})</summary>
+    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--color-neutral-400);">{{ _('Death-Details anzeigen') }} ({{ analysis.deaths|length }})</summary>
     <div class="card elev-sm" style="margin-top:var(--space-2);padding:var(--space-3);">
         <table class="da-detail">
             <tbody>
@@ -417,10 +461,10 @@
 {% for h in analysis.highlights %}{% if highlight_map.update({h.round: h}) %}{% endif %}{% endfor %}
 {% endif %}
 <div class="card elev-sm" style="margin-bottom:var(--space-5);padding:var(--space-3);">
-    <div class="card-kicker" style="margin-bottom:8px;">Runden-Timeline</div>
+    <div class="card-kicker" style="margin-bottom:8px;">{{ _('Runden-Timeline') }}</div>
     <div class="ed-tl">
         {% for r in data.round_timeline %}
-        {% if r.round == 13 %}<div class="ed-tl-ht">— Seitenwechsel —</div>{% endif %}
+        {% if r.round == 13 %}<div class="ed-tl-ht">— {{ _('Seitenwechsel') }} —</div>{% endif %}
         {% set hl = highlight_map.get(r.round) %}
         <div class="ed-tl-row {% if r.won %}ed-tl-won{% else %}ed-tl-lost{% endif %} {% if r.died_early %}ed-tl-early{% endif %}">
             <div class="ed-tl-round">R{{ r.round }}</div>
@@ -437,9 +481,23 @@
                 <span class="ed-tl-badge rh-{{ hl.tag }}">{{ hl.label }}</span>
                 {% endif %}
             </div>
-            <div class="ed-tl-info">{% if r.player_kills >= 3 %}<span class="ed-tl-mk">{{ r.player_kills }}K</span>{% elif r.player_kills > 0 %}{{ r.player_kills }}K{% elif r.player_died %}0K{% endif %}</div>
+            <div class="ed-tl-info" style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">
+                {% if r.player_kills >= 3 %}<span class="ed-tl-mk">{{ r.player_kills }}K</span>{% elif r.player_kills > 0 %}{{ r.player_kills }}K{% elif r.player_died %}0K{% endif %}
+                <button class="rn-btn" onclick="narrateRound({{ r.round }}, this)" title="{{ _('KI-Analyse dieser Runde') }}">KI</button>
+            </div>
         </div>
         {% endfor %}
+    </div>
+    <!-- Narration panel -->
+    <div id="rn-panel" class="rn-panel">
+        <div class="rn-header">
+            <span id="rn-round-tag" class="rn-round-tag"></span>
+            <span class="rn-title">{{ _('KI-Runden-Analyse') }}</span>
+            <button class="rn-close" onclick="closeNarration()">&times;</button>
+        </div>
+        <div id="rn-body" class="rn-body">
+            <div class="rn-loading"><span class="rn-dot"></span> {{ _('Analyse wird generiert...') }}</div>
+        </div>
     </div>
 </div>
 {% endif %}
@@ -447,16 +505,16 @@
 <!-- ══════ Economy ══════ -->
 {% if data.economy %}
 <div style="margin-bottom:var(--space-5);">
-    <div class="card-kicker" style="margin-bottom:8px;">Wirtschafts-Performance</div>
+    <div class="card-kicker" style="margin-bottom:8px;">{{ _('Wirtschafts-Performance') }}</div>
     <div class="ed-econ">
-        {% set econ_order = [('pistol', 'Pistole', '#a78bfa'), ('eco', 'Eco', '#f87171'), ('force', 'Force', '#fbbf24'), ('fullbuy', 'Fullbuy', '#4ade80')] %}
+        {% set econ_order = [('pistol', _('Pistole'), '#a78bfa'), ('eco', 'Eco', '#f87171'), ('force', 'Force', '#fbbf24'), ('fullbuy', 'Fullbuy', '#4ade80')] %}
         {% for key, label, color in econ_order %}
         {% set e = data.economy.get(key, {}) %}
         {% if e %}
         <div class="card elev-sm ed-econ-card" style="border-top-color:{{ color }};">
             <div class="ed-econ-label">{{ label }}</div>
             <div class="ed-econ-big {% if e.kd >= 1.2 %}sc-green{% elif e.kd >= 0.8 %}sc-yellow{% else %}sc-red{% endif %}">{{ e.kd }}</div>
-            <div class="ed-econ-sub">K/D in {{ e.rounds }} Runden</div>
+            <div class="ed-econ-sub">K/D {{ _('in') }} {{ e.rounds }} {{ _('Runden') }}</div>
             <div style="margin-top:10px;">
                 <div class="ed-econ-row"><span style="color:var(--color-neutral-500);">ADR</span><span>{{ e.adr }}</span></div>
                 <div class="ed-econ-row"><span style="color:var(--color-neutral-500);">K / D</span><span>{{ e.kills }} / {{ e.deaths }}</span></div>
@@ -464,7 +522,7 @@
             </div>
         </div>
         {% else %}
-        <div class="card elev-sm ed-econ-card" style="opacity:0.4;"><div class="ed-econ-label">{{ label }}</div><div class="ed-econ-big" style="color:var(--color-neutral-600);">—</div><div class="ed-econ-sub">Keine Runden</div></div>
+        <div class="card elev-sm ed-econ-card" style="opacity:0.4;"><div class="ed-econ-label">{{ label }}</div><div class="ed-econ-big" style="color:var(--color-neutral-600);">—</div><div class="ed-econ-sub">{{ _('Keine Runden') }}</div></div>
         {% endif %}
         {% endfor %}
     </div>
@@ -473,20 +531,20 @@
 
 <!-- ══════ Coach Report (rendered) ══════ -->
 {% if data.report %}
-<div class="card-kicker" style="margin-bottom:8px;">Coach-Report</div>
+<div class="card-kicker" style="margin-bottom:8px;">{{ _('Coach-Report') }}</div>
 <div id="ed-report-rendered"></div>
 <div id="ed-report-raw" style="display:none;">{{ data.report }}</div>
 {% endif %}
 
 <!-- Scoreboard -->
 <details style="margin-top:var(--space-5);">
-    <summary>Scoreboard anzeigen</summary>
+    <summary>{{ _('Scoreboard anzeigen') }}</summary>
     <table class="table" style="margin-top:var(--space-3);">
-        <thead><tr><th>Spieler</th><th>K</th><th>D</th><th>A</th><th>ADR</th><th>K/D</th></tr></thead>
+        <thead><tr><th>{{ _('Spieler') }}</th><th>K</th><th>D</th><th>A</th><th>ADR</th><th>K/D</th></tr></thead>
         <tbody>
             {% for s in data.scoreboard %}
             <tr{% if s.is_target %} style="background:color-mix(in srgb, var(--color-accent) 10%, transparent);"{% endif %}>
-                <td>{{ s.name }}{% if s.is_target %} <span class="tag tag-accent" style="margin-left:4px;">Du</span>{% endif %}</td>
+                <td>{{ s.name }}{% if s.is_target %} <span class="tag tag-accent" style="margin-left:4px;">{{ _('Du') }}</span>{% endif %}</td>
                 <td>{{ s.kills }}</td><td>{{ s.deaths }}</td><td>{{ s.assists }}</td><td>{{ s.adr }}</td><td>{{ s.kd }}</td>
             </tr>
             {% endfor %}
@@ -494,7 +552,7 @@
     </table>
 </details>
 
-<p style="margin-top:var(--space-6);color:var(--color-neutral-600);font-size:12px;">Datei: {{ filename }}</p>
+<p style="margin-top:var(--space-6);color:var(--color-neutral-600);font-size:12px;">{{ _('Datei') }}: {{ filename }}</p>
 {% endblock %}
 
 {% block scripts %}
@@ -522,11 +580,11 @@
 
     function getBadge(t, b) {
         if (/Exzellent|Stark(?:e[sr]?)?\b|Gute[sr]?\b|Starke/.test(b.substring(0, 150)))
-            return '<span class="ed-rp-badge ed-b-strong">Staerke</span>';
+            return '<span class="ed-rp-badge ed-b-strong">{{ _("Staerke") }}</span>';
         if (/Solide|Ordentlich|Ausgeglichen|Sauber/.test(b.substring(0, 150)))
-            return '<span class="ed-rp-badge ed-b-ok">Solide</span>';
+            return '<span class="ed-rp-badge ed-b-ok">{{ _("Solide") }}</span>';
         if (/ALARM|Unter |schwach|schlecht|Nemesis|verlierst|zu oft|zu wenig|zu isoliert|ohne Impact|Tilt/i.test(b.substring(0, 250)))
-            return '<span class="ed-rp-badge ed-b-weak">Baustelle</span>';
+            return '<span class="ed-rp-badge ed-b-weak">{{ _("Baustelle") }}</span>';
         return '<span class="ed-rp-badge ed-b-info">Info</span>';
     }
 
@@ -555,7 +613,7 @@
     var html = '';
     for (var j = 0; j < regular.length; j++) {
         var sec = regular[j], lines = sec.split('\n'), title = lines[0].trim(), body = lines.slice(1).join('\n').trim();
-        if (!body) body = '<em style="color:var(--color-neutral-600);">Keine Auffaelligkeiten.</em>';
+        if (!body) body = '<em style="color:var(--color-neutral-600);">{{ _("Keine Auffaelligkeiten.") }}</em>';
         html += '<div class="ed-rp-section"><div class="ed-rp-hdr" onclick="this.classList.toggle(\'open\')"><span class="ed-rp-chev">▶</span><span class="ed-rp-title">' + getIcon(title) + ' ' + title + '</span>' + getBadge(title, body) + '</div><div class="ed-rp-body">' + fmt(body) + '</div></div>';
     }
     for (var v = 0; v < verdict.length; v++) {
@@ -575,4 +633,229 @@
 })();
 </script>
 {% endif %}
+<script>
+var rnActiveBtn = null;
+var rnActiveRound = null;
+var rnFilename = {{ filename|tojson }};
+var savedMatchNarration = {{ data.get('match_narration', '')|tojson }};
+var savedRoundNarrations = {{ data.get('round_narrations', {})|tojson }};
+
+function saveNarration(type, text, roundNum) {
+    var payload = { filename: rnFilename, type: type, text: text };
+    if (roundNum !== undefined) payload.round = roundNum;
+    fetch('/api/save-narration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+}
+
+function streamAI(url, payload, bodyEl, onDone) {
+    bodyEl.innerHTML = '<div class="rn-loading"><span class="rn-dot"></span> {{ _("Analyse wird generiert...") }}</div>';
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(function(resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var reader = resp.body.getReader();
+        var decoder = new TextDecoder();
+        var fullText = '';
+        var started = false;
+        function read() {
+            reader.read().then(function(result) {
+                if (result.done) { bodyEl.innerHTML = formatNarration(fullText); if (onDone) onDone(fullText); return; }
+                var chunk = decoder.decode(result.value, { stream: true });
+                var lines = chunk.split('\n');
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim();
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        var d = JSON.parse(line.substring(6));
+                        if (d.done) { bodyEl.innerHTML = formatNarration(fullText); if (onDone) onDone(fullText); return; }
+                        if (d.text) {
+                            if (!started) { bodyEl.innerHTML = ''; started = true; }
+                            fullText += d.text;
+                            bodyEl.innerHTML = formatNarration(fullText);
+                            bodyEl.scrollTop = bodyEl.scrollHeight;
+                        }
+                    } catch(e) {}
+                }
+                read();
+            }).catch(function(err) {
+                bodyEl.innerHTML = '<p style="color:#f87171;">{{ _("Fehler") }}: ' + err.message + '</p>';
+                if (onDone) onDone(null);
+            });
+        }
+        read();
+    }).catch(function(err) {
+        bodyEl.innerHTML = '<p style="color:#f87171;">{{ _("Verbindungsfehler") }}: ' + err.message + '</p>';
+        if (onDone) onDone(null);
+    });
+}
+
+function narrateRound(roundNum, btn) {
+    var panel = document.getElementById('rn-panel');
+    var body = document.getElementById('rn-body');
+    var tag = document.getElementById('rn-round-tag');
+
+    // Toggle off if same round
+    if (rnActiveRound === roundNum) { closeNarration(); return; }
+    if (rnActiveBtn) rnActiveBtn.classList.remove('active');
+    btn.classList.add('active');
+    rnActiveBtn = btn;
+    rnActiveRound = roundNum;
+
+    tag.textContent = '{{ _("Runde") }} ' + roundNum;
+    panel.classList.add('visible');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    // Check if already saved
+    var saved = savedRoundNarrations[String(roundNum)];
+    if (saved) {
+        body.innerHTML = formatNarration(saved);
+        addRegenBtn(body, 'round', roundNum);
+        return;
+    }
+
+    streamAI('/api/narrate-round', { filename: rnFilename, round: roundNum }, body, function(text) {
+        if (text) {
+            saveNarration('round', text, roundNum);
+            savedRoundNarrations[String(roundNum)] = text;
+            markRoundSaved(roundNum);
+            addRegenBtn(body, 'round', roundNum);
+        }
+    });
+}
+
+function closeNarration() {
+    if (rnActiveBtn) { rnActiveBtn.classList.remove('active'); rnActiveBtn = null; }
+    rnActiveRound = null;
+    document.getElementById('rn-panel').classList.remove('visible');
+}
+
+function formatNarration(text) {
+    return text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br>')
+        .replace(/^/, '<p>')
+        .replace(/$/, '</p>')
+        .replace(/<p><\/p>/g, '');
+}
+
+function addRegenBtn(bodyEl, type, roundNum) {
+    var btn = document.createElement('button');
+    btn.className = 'rn-btn';
+    btn.style.cssText = 'margin-top:12px;padding:3px 10px;font-size:10px;';
+    btn.textContent = '{{ _("Neu generieren") }}';
+    btn.onclick = function() {
+        if (type === 'round') {
+            delete savedRoundNarrations[String(roundNum)];
+            streamAI('/api/narrate-round', { filename: rnFilename, round: roundNum }, bodyEl, function(text) {
+                if (text) {
+                    saveNarration('round', text, roundNum);
+                    savedRoundNarrations[String(roundNum)] = text;
+                    addRegenBtn(bodyEl, 'round', roundNum);
+                }
+            });
+        } else {
+            savedMatchNarration = '';
+            streamAI('/api/narrate-match', { filename: rnFilename }, bodyEl, function(text) {
+                if (text) {
+                    saveNarration('match', text);
+                    savedMatchNarration = text;
+                    addRegenBtn(bodyEl, 'match');
+                }
+                mnDone();
+            });
+        }
+    };
+    bodyEl.appendChild(btn);
+}
+
+// Mark round buttons that have saved narrations
+function markRoundSaved(roundNum) {
+    var btns = document.querySelectorAll('.rn-btn');
+    btns.forEach(function(b) {
+        if (b.onclick && b.onclick.toString().indexOf('(' + roundNum + ',') !== -1) {
+            b.style.borderColor = 'var(--color-accent)';
+            b.style.color = 'var(--color-accent)';
+        }
+    });
+}
+
+var mnActive = false;
+function narrateMatch() {
+    var panel = document.getElementById('mn-panel');
+    var body = document.getElementById('mn-body');
+    var trigger = document.getElementById('mn-trigger');
+
+    // Toggle visibility if already showing saved
+    if (panel.classList.contains('visible') && !mnActive) {
+        panel.classList.remove('visible');
+        return;
+    }
+    if (mnActive) return;
+
+    panel.classList.add('visible');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    // Check if already saved
+    if (savedMatchNarration) {
+        body.innerHTML = formatNarration(savedMatchNarration);
+        addRegenBtn(body, 'match');
+        return;
+    }
+
+    mnActive = true;
+    trigger.style.opacity = '0.6';
+    trigger.style.pointerEvents = 'none';
+
+    streamAI('/api/narrate-match', { filename: rnFilename }, body, function(text) {
+        if (text) {
+            saveNarration('match', text);
+            savedMatchNarration = text;
+            addRegenBtn(body, 'match');
+        }
+        mnDone();
+    });
+}
+
+function mnDone() {
+    var trigger = document.getElementById('mn-trigger');
+    trigger.style.opacity = '1';
+    trigger.style.pointerEvents = 'auto';
+    mnActive = false;
+}
+
+function closeMatchNarration() {
+    document.getElementById('mn-panel').classList.remove('visible');
+    mnDone();
+}
+
+// On page load: highlight round buttons that have saved narrations
+(function() {
+    var rounds = Object.keys(savedRoundNarrations);
+    if (rounds.length > 0) {
+        document.querySelectorAll('.rn-btn').forEach(function(btn) {
+            var m = btn.getAttribute('onclick');
+            if (!m) return;
+            var match = m.match(/narrateRound\((\d+)/);
+            if (match && savedRoundNarrations[match[1]]) {
+                btn.style.borderColor = 'var(--color-accent)';
+                btn.style.color = 'var(--color-accent)';
+            }
+        });
+    }
+    // Show indicator on KI-Analyse button if match narration exists
+    if (savedMatchNarration) {
+        var trigger = document.getElementById('mn-trigger');
+        if (trigger) {
+            trigger.style.borderColor = 'var(--color-accent)';
+            trigger.style.color = 'var(--color-accent)';
+        }
+    }
+})();
+</script>
 {% endblock %}

@@ -1,0 +1,430 @@
+CS2 Inventar - 76561198019262528
+Insgesamt: 322 Items
+============================================================
+
+
+--- Agent (Ausgezeichnet) ---
+  Operator | FBI SWAT  [Handelbar]
+
+--- Agent (Außergewöhnlich) ---
+  Maximus | Sabre  [Handelbar]
+
+--- Agent (Meister) ---
+  Lt. Commander Ricksaw | NSWC SEAL  [Handelbar]
+
+--- Agent (Überlegen) ---
+  Michael Syfers  | FBI Sniper  [Handelbar]
+
+--- Aufkleber (Bemerkenswert) ---
+  Sticker | Astralis (Holo) | Katowice 2019  [Handelbar]
+  Sticker | HellRaisers (Holo) | Katowice 2019  [Handelbar]
+  Sticker | HellRaisers (Holo) | Katowice 2019  [Handelbar]
+  Sticker | Mastermind (Holo)  [Handelbar]
+  Sticker | Web Stuck (Holo)  [Handelbar]
+  Sticker | coldzera (Foil) | Katowice 2019  [Handelbar]
+  Sticker | compLexity Gaming (Holo) | Katowice 2019  [Handelbar]
+
+--- Aufkleber (Hohe Qualität) ---
+  Sticker | Counter-Tech  [Handelbar]
+  Sticker | Gold Web  [Handelbar]
+  Sticker | Mastermind  [Handelbar]
+  Sticker | Shattered Web  [Handelbar]
+  Sticker | Shattered Web  [Handelbar]
+  Sticker | TACO | Katowice 2019  [Handelbar]
+  Sticker | Terrorist-Tech  [Handelbar]
+  Sticker | Twistzz | Katowice 2019  [Handelbar]
+  Sticker | coldzera | Katowice 2019  [Handelbar]
+  Sticker | coldzera | Katowice 2019  [Handelbar]
+  Sticker | electronic | Katowice 2019  [Handelbar]
+  Sticker | felps | Katowice 2019  [Handelbar]
+  Sticker | flamie | Katowice 2019  [Handelbar]
+  Sticker | smooya | Katowice 2019  [Handelbar]
+  Sticker | woxic | Katowice 2019  [Handelbar]
+
+--- Ausrüstung (Industriequalität) ---
+  Zeus x27 | Electric Blue (Field-Tested)  [Handelbar]
+
+--- Behälter (Standardqualität) ---
+  Clutch Case  [Handelbar]
+  Clutch Case  [Handelbar]
+  Clutch Case  [Handelbar]
+  Clutch Case  [Handelbar]
+  Clutch Case  [Handelbar]
+  Dreams & Nightmares Case  [Handelbar]
+  Dreams & Nightmares Case  [Handelbar]
+  Dreams & Nightmares Case  [Handelbar]
+  Dreams & Nightmares Case  [Handelbar]
+  Dreams & Nightmares Case  [Handelbar]
+  Fracture Case  [Handelbar]
+  Fracture Case  [Handelbar]
+  Fracture Case  [Handelbar]
+  Fracture Case  [Handelbar]
+  Fracture Case  [Handelbar]
+  Fracture Case  [Handelbar]
+  Fracture Case  [Handelbar]
+  Prisma 2 Case  [Handelbar]
+  Prisma Case  [Handelbar]
+  Prisma Case  [Handelbar]
+  Prisma Case  [Handelbar]
+  Prisma Case  [Handelbar]
+  Prisma Case  [Handelbar]
+  Prisma Case  [Handelbar]
+  Prisma Case  [Handelbar]
+  Recoil Case  [Handelbar]
+  Recoil Case  [Handelbar]
+  Recoil Case  [Handelbar]
+  Recoil Case  [Handelbar]
+  Revolution Case  [Handelbar]
+  Revolution Case  [Handelbar]
+  Sealed Dead Hand Terminal  [Handelbar]
+  Sealed Dead Hand Terminal  [Handelbar]
+  Sealed Dead Hand Terminal  [Handelbar]
+  Sealed Dead Hand Terminal  [Handelbar]
+  Sealed Dead Hand Terminal  [Handelbar]
+  Sealed Dead Hand Terminal  [Handelbar]
+  Sealed Genesis Terminal  [Handelbar]
+  Sealed Genesis Terminal  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+  Snakebite Case  [Handelbar]
+
+--- Beschriftungsschild (Standardqualität) ---
+  Name Tag  [Nicht handelbar]
+  Name Tag  [Nicht handelbar]
+  Name Tag  [Nicht handelbar]
+  Name Tag  [Nicht handelbar]
+
+--- Gewehr (Industriequalität) ---
+  M4A4 | Naval Shred Camo (Field-Tested)  [Handelbar]
+  M4A4 | Steel Work (Minimal Wear)  [Handelbar]
+
+--- Gewehr (Militärstandard) ---
+  AK-47 | Uncharted (Battle-Scarred)  [Handelbar]
+  AK-47 | Uncharted (Factory New)  [Handelbar]
+  AK-47 | Uncharted (Field-Tested)  [Handelbar]
+  AK-47 | Uncharted (Minimal Wear)  [Handelbar]
+  AUG | Tom Cat (Field-Tested)  [Handelbar]
+  AUG | Triqua (Minimal Wear)  [Handelbar]
+  AUG | Triqua (Well-Worn)  [Handelbar]
+  FAMAS | Crypsis (Field-Tested)  [Handelbar]
+  FAMAS | Crypsis (Field-Tested)  [Handelbar]
+  FAMAS | Crypsis (Field-Tested)  [Handelbar]
+  FAMAS | Crypsis (Minimal Wear)  [Handelbar]
+  FAMAS | Crypsis (Minimal Wear)  [Handelbar]
+  FAMAS | Decommissioned (Minimal Wear)  [Handelbar]
+  FAMAS | Meow 36 (Well-Worn)  [Handelbar]
+  Galil AR | Akoben (Factory New)  [Handelbar]
+  Galil AR | Akoben (Factory New)  [Handelbar]
+  Galil AR | Akoben (Field-Tested)  [Handelbar]
+  Galil AR | Akoben (Field-Tested)  [Handelbar]
+  Galil AR | Akoben (Field-Tested)  [Handelbar]
+  SG 553 | Aloha (Minimal Wear)  [Handelbar]
+  SG 553 | Cyberforce (Minimal Wear)  [Handelbar]
+  SG 553 | Ol' Rusty (Field-Tested)  [Handelbar]
+  SG 553 | Ol' Rusty (Field-Tested)  [Handelbar]
+
+--- Gewehr (StatTrak™, Militärstandard) ---
+  StatTrak™ Galil AR | Akoben (Minimal Wear)  [Handelbar]
+
+--- Gewehr (Verbraucherklasse) ---
+  AUG | Navy Murano (Battle-Scarred)  [Handelbar]
+  AUG | Storm (Field-Tested)  [Handelbar]
+  AUG | Storm (Field-Tested)  [Handelbar]
+  AUG | Sweeper (Field-Tested)  [Handelbar]
+  FAMAS | Night Borre (Minimal Wear)  [Handelbar]
+  SG 553 | Barricade (Field-Tested)  [Handelbar]
+  SG 553 | Night Camo (Field-Tested)  [Handelbar]
+  SG 553 | Safari Print (Field-Tested)  [Handelbar]
+
+--- Gewehr (Verdeckt) ---
+  AK-47 | The Empress (Well-Worn)  [Handelbar]
+  M4A4 | The Emperor (Field-Tested)  [Handelbar]
+
+--- Gewehr (Vertraulich) ---
+  AUG | Stymphalian (Field-Tested)  [Handelbar]
+  M4A1-S | Leaded Glass (Field-Tested)  [Handelbar]
+
+--- Graffiti (Standardqualität) ---
+  Graffiti | 8-Ball (Shark White)  [Nicht handelbar]
+  Graffiti | Cocky (Monster Purple)  [Nicht handelbar]
+  Graffiti | GLHF (Battle Green)  [Nicht handelbar]
+  Graffiti | Karambit (Cash Green)  [Nicht handelbar]
+  Graffiti | Mr. Teeth (Frog Green)  [Nicht handelbar]
+  Graffiti | Sorry (Tracer Yellow)  [Nicht handelbar]
+  Graffiti | Toasted (Tiger Orange)  [Nicht handelbar]
+  Graffiti | X-Knives (Desert Amber)  [Nicht handelbar]
+  Sealed Graffiti | 200 IQ (Blood Red)  [Handelbar]
+  Sealed Graffiti | Applause (Desert Amber)  [Handelbar]
+  Sealed Graffiti | Applause (Princess Pink)  [Handelbar]
+  Sealed Graffiti | Backstab (Monster Purple)  [Handelbar]
+  Sealed Graffiti | Bling (Tiger Orange)  [Handelbar]
+  Sealed Graffiti | Chess King (Tiger Orange)  [Handelbar]
+  Sealed Graffiti | Cocky (Violent Violet)  [Handelbar]
+  Sealed Graffiti | Death Sentence (Blood Red)  [Handelbar]
+  Sealed Graffiti | Dizzy (Wire Blue)  [Handelbar]
+  Sealed Graffiti | GTG (Violent Violet)  [Handelbar]
+  Sealed Graffiti | Jump Shot (Tiger Orange)  [Handelbar]
+  Sealed Graffiti | Keep the Change (Cash Green)  [Handelbar]
+  Sealed Graffiti | Keep the Change (Frog Green)  [Handelbar]
+  Sealed Graffiti | King Me (Tiger Orange)  [Handelbar]
+  Sealed Graffiti | Lightbulb (Shark White)  [Handelbar]
+  Sealed Graffiti | Lightbulb (Tracer Yellow)  [Handelbar]
+  Sealed Graffiti | Mr. Teeth (Battle Green)  [Handelbar]
+  Sealed Graffiti | Mr. Teeth (Dust Brown)  [Handelbar]
+  Sealed Graffiti | Ninja (Tiger Orange)  [Handelbar]
+  Sealed Graffiti | Ninja (Violent Violet)  [Handelbar]
+  Sealed Graffiti | Okay (Bazooka Pink)  [Handelbar]
+  Sealed Graffiti | Piggles (Blood Red)  [Handelbar]
+  Sealed Graffiti | Rage Mode (Frog Green)  [Handelbar]
+  Sealed Graffiti | Rage Mode (Monarch Blue)  [Handelbar]
+  Sealed Graffiti | Rage Mode (SWAT Blue)  [Handelbar]
+  Sealed Graffiti | Rly (Desert Amber)  [Handelbar]
+  Sealed Graffiti | Silver Bullet (Wire Blue)  [Handelbar]
+  Sealed Graffiti | Smooch (Jungle Green)  [Handelbar]
+  Sealed Graffiti | Speechless (Blood Red)  [Handelbar]
+  Sealed Graffiti | Speechless (Tracer Yellow)  [Handelbar]
+  Sealed Graffiti | Take Flight (Blood Red)  [Handelbar]
+  Sealed Graffiti | Take Flight (War Pig Pink)  [Handelbar]
+  Sealed Graffiti | Thoughtfull (Princess Pink)  [Handelbar]
+  Sealed Graffiti | Toasted (Dust Brown)  [Handelbar]
+  Sealed Graffiti | Tombstone (Brick Red)  [Handelbar]
+  Sealed Graffiti | Uh Oh (Cash Green)  [Handelbar]
+  Sealed Graffiti | X-Axes (Wire Blue)  [Handelbar]
+
+--- MP (Industriequalität) ---
+  MAC-10 | Snow Splash (Field-Tested)  [Handelbar]
+  MP9 | Orange Peel (Field-Tested)  [Handelbar]
+  PP-Bizon | Candy Apple (Minimal Wear)  [Handelbar]
+  UMP-45 | Gunsmoke (Battle-Scarred)  [Handelbar]
+
+--- MP (Militärstandard) ---
+  MAC-10 | Ensnared (Well-Worn)  [Handelbar]
+  MAC-10 | Whitefish (Field-Tested)  [Handelbar]
+  MAC-10 | Whitefish (Field-Tested)  [Handelbar]
+  MAC-10 | Whitefish (Field-Tested)  [Handelbar]
+  MAC-10 | Whitefish (Field-Tested)  [Handelbar]
+  MAC-10 | Whitefish (Minimal Wear)  [Handelbar]
+  MAC-10 | Whitefish (Minimal Wear)  [Handelbar]
+  MAC-10 | Whitefish (Minimal Wear)  [Handelbar]
+  MAC-10 | Whitefish (Minimal Wear)  [Handelbar]
+  MAC-10 | Whitefish (Minimal Wear)  [Handelbar]
+  MP7 | Mischief (Battle-Scarred)  [Handelbar]
+  MP7 | Mischief (Battle-Scarred)  [Handelbar]
+  MP7 | Mischief (Battle-Scarred)  [Handelbar]
+  MP7 | Mischief (Field-Tested)  [Handelbar]
+  MP7 | Mischief (Field-Tested)  [Handelbar]
+  MP7 | Mischief (Field-Tested)  [Handelbar]
+  MP7 | Mischief (Field-Tested)  [Handelbar]
+  MP7 | Mischief (Field-Tested)  [Handelbar]
+  MP9 | Featherweight (Well-Worn)  [Handelbar]
+  MP9 | Modest Threat (Minimal Wear)  [Handelbar]
+  MP9 | Modest Threat (Minimal Wear)  [Handelbar]
+  P90 | Off World (Factory New)  [Handelbar]
+  P90 | Off World (Minimal Wear)  [Handelbar]
+  PP-Bizon | Night Riot (Minimal Wear)  [Handelbar]
+  PP-Bizon | Runic (Field-Tested)  [Handelbar]
+
+--- MP (Souvenir, Limitiert) ---
+  Souvenir MP5-SD | Lab Rats (Minimal Wear)  [Handelbar]
+
+--- MP (Souvenir, Verbraucherklasse) ---
+  Souvenir UMP-45 | Scorched (Field-Tested)  [Handelbar]
+  Souvenir UMP-45 | Scorched (Well-Worn)  [Handelbar]
+
+--- MP (StatTrak™, Militärstandard) ---
+  StatTrak™ MAC-10 | Whitefish (Field-Tested)  [Handelbar]
+  StatTrak™ MAC-10 | Whitefish (Minimal Wear)  [Handelbar]
+
+--- MP (Verbraucherklasse) ---
+  MP9 | Buff Blue (Battle-Scarred)  [Handelbar]
+  MP9 | Multi-Terrain (Minimal Wear)  [Handelbar]
+  PP-Bizon | Seabird (Field-Tested)  [Handelbar]
+
+--- MP (Vertraulich) ---
+  MP9 | Hydra (Field-Tested)  [Handelbar]
+
+--- Maschinengewehr (Industriequalität) ---
+  M249 | Gator Mesh (Field-Tested)  [Handelbar]
+
+--- Maschinengewehr (Militärstandard) ---
+  M249 | Warbird (Field-Tested)  [Handelbar]
+  Negev | Drop Me (Field-Tested)  [Handelbar]
+  Negev | Drop Me (Minimal Wear)  [Handelbar]
+
+--- Maschinengewehr (Souvenir, Verbraucherklasse) ---
+  Souvenir M249 | Contrast Spray (Field-Tested)  [Handelbar]
+
+--- Maschinengewehr (StatTrak™, Militärstandard) ---
+  StatTrak™ M249 | Warbird (Field-Tested)  [Handelbar]
+
+--- Maschinengewehr (Verbraucherklasse) ---
+  M249 | Jungle (Minimal Wear)  [Handelbar]
+  Negev | Raw Ceramic (Field-Tested)  [Handelbar]
+
+--- Musikkit (Hohe Qualität) ---
+  Music Kit | The Verkkars, EZ4ENCE  [Handelbar]
+  Music Kit | Valve, CS:GO  [Nicht handelbar]
+
+--- Pistole (Echt, Limitiert) ---
+  Genuine P250 | X-Ray (Factory New)  [Nicht handelbar]
+
+--- Pistole (Industriequalität) ---
+  Five-SeveN | Orange Peel (Minimal Wear)  [Handelbar]
+  Tec-9 | VariCamo (Field-Tested)  [Handelbar]
+  USP-S | Pathfinder (Minimal Wear)  [Handelbar]
+
+--- Pistole (Limitiert) ---
+  Desert Eagle | Trigger Discipline (Minimal Wear)  [Handelbar]
+  Glock-18 | Moonrise (Factory New)  [Handelbar]
+  USP-S | Cyrex (Field-Tested)  [Handelbar]
+
+--- Pistole (Militärstandard) ---
+  CZ75-Auto | Tuxedo (Factory New)  [Handelbar]
+  Desert Eagle | Blue Ply (Battle-Scarred)  [Handelbar]
+  Dual Berettas | Elite 1.6 (Field-Tested)  [Handelbar]
+  Five-SeveN | Flame Test (Factory New)  [Handelbar]
+  Five-SeveN | Flame Test (Field-Tested)  [Handelbar]
+  Five-SeveN | Scrawl (Well-Worn)  [Handelbar]
+  Glock-18 | Off World (Field-Tested)  [Handelbar]
+  Glock-18 | Off World (Well-Worn)  [Handelbar]
+  Glock-18 | Oxide Blaze (Field-Tested)  [Handelbar]
+  P2000 | Gnarled (Factory New)  [Handelbar]
+  P2000 | Gnarled (Field-Tested)  [Handelbar]
+  P2000 | Gnarled (Minimal Wear)  [Handelbar]
+  P2000 | Lifted Spirits (Battle-Scarred)  [Handelbar]
+  P250 | Cassette (Factory New)  [Handelbar]
+  P250 | Cassette (Factory New)  [Handelbar]
+  P250 | Cassette (Field-Tested)  [Handelbar]
+  P250 | Cassette (Field-Tested)  [Handelbar]
+  P250 | Cassette (Minimal Wear)  [Handelbar]
+  P250 | Verdigris (Battle-Scarred)  [Handelbar]
+  P250 | Verdigris (Factory New)  [Handelbar]
+  P250 | Verdigris (Factory New)  [Handelbar]
+  P250 | Verdigris (Field-Tested)  [Handelbar]
+  P250 | Verdigris (Field-Tested)  [Handelbar]
+  P250 | Verdigris (Field-Tested)  [Handelbar]
+  P250 | Verdigris (Field-Tested)  [Handelbar]
+  P250 | Verdigris (Minimal Wear)  [Handelbar]
+  P250 | Verdigris (Minimal Wear)  [Handelbar]
+  P250 | Verdigris (Minimal Wear)  [Handelbar]
+  P250 | Verdigris (Minimal Wear)  [Handelbar]
+  P250 | Verdigris (Minimal Wear)  [Handelbar]
+  R8 Revolver | Grip (Field-Tested)  [Handelbar]
+  R8 Revolver | Junk Yard (Minimal Wear)  [Handelbar]
+  Tec-9 | Flash Out (Factory New)  [Handelbar]
+
+--- Pistole (StatTrak™, Limitiert) ---
+  StatTrak™ Desert Eagle | Light Rail (Field-Tested)  [Handelbar]
+
+--- Pistole (StatTrak™, Militärstandard) ---
+  StatTrak™ Glock-18 | Oxide Blaze (Field-Tested)  [Handelbar]
+  StatTrak™ Glock-18 | Sacrifice (Field-Tested)  [Handelbar]
+  StatTrak™ P2000 | Urban Hazard (Factory New)  [Handelbar]
+  StatTrak™ P250 | Verdigris (Field-Tested)  [Handelbar]
+  StatTrak™ P250 | Verdigris (Minimal Wear)  [Handelbar]
+  StatTrak™ P250 | Verdigris (Minimal Wear)  [Handelbar]
+
+--- Pistole (StatTrak™, Vertraulich) ---
+  StatTrak™ P2000 | Wicked Sick (Minimal Wear)  [Handelbar]
+
+--- Pistole (Verbraucherklasse) ---
+  CZ75-Auto | Honey Paisley (Factory New)  [Handelbar]
+  Dual Berettas | Silver Pour (Field-Tested)  [Handelbar]
+  Five-SeveN | Forest Night (Well-Worn)  [Handelbar]
+  P250 | Facility Draft (Factory New)  [Handelbar]
+  P250 | Plum Netting (Minimal Wear)  [Handelbar]
+  Tec-9 | Groundwater (Field-Tested)  [Handelbar]
+
+--- Pistole (Vertraulich) ---
+  Desert Eagle | Mecha Industries (Field-Tested)  [Handelbar]
+  Glock-18 | Vogue (Field-Tested)  [Handelbar]
+  R8 Revolver | Skull Crusher (Battle-Scarred)  [Handelbar]
+
+--- Sammlerstück (Außerordentlich) ---
+  10 Year Veteran Coin  [Nicht handelbar]
+  2018 Service Medal  [Nicht handelbar]
+  2020 Service Medal  [Nicht handelbar]
+  2021 Service Medal  [Nicht handelbar]
+  5 Year Veteran Coin  [Nicht handelbar]
+  Global Offensive Badge  [Nicht handelbar]
+  Katowice 2019 Diamond Coin  [Nicht handelbar]
+  Loyalty Badge  [Nicht handelbar]
+  Silver Operation Shattered Web Coin  [Nicht handelbar]
+
+--- Scharfschützengewehr (Industriequalität) ---
+  G3SG1 | Green Apple (Minimal Wear)  [Handelbar]
+
+--- Scharfschützengewehr (Militärstandard) ---
+  G3SG1 | Hunter (Battle-Scarred)  [Handelbar]
+  G3SG1 | Hunter (Field-Tested)  [Handelbar]
+  G3SG1 | Hunter (Well-Worn)  [Handelbar]
+  G3SG1 | Ventilator (Field-Tested)  [Handelbar]
+  SCAR-20 | Fragments (Field-Tested)  [Handelbar]
+  SSG 08 | Mainframe 001 (Field-Tested)  [Handelbar]
+
+--- Scharfschützengewehr (StatTrak™, Limitiert) ---
+  StatTrak™ AWP | Atheris (Minimal Wear)  [Handelbar]
+
+--- Scharfschützengewehr (StatTrak™, Militärstandard) ---
+  StatTrak™ G3SG1 | Black Sand (Field-Tested)  [Handelbar]
+  StatTrak™ SCAR-20 | Fragments (Battle-Scarred)  [Handelbar]
+  StatTrak™ SCAR-20 | Torn (Factory New)  [Handelbar]
+
+--- Scharfschützengewehr (Verbraucherklasse) ---
+  G3SG1 | Desert Storm (Minimal Wear)  [Handelbar]
+  G3SG1 | Jungle Dashed (Minimal Wear)  [Handelbar]
+  SCAR-20 | Contractor (Field-Tested)  [Handelbar]
+  SCAR-20 | Short Ochre (Field-Tested)  [Handelbar]
+  SCAR-20 | Zinc (Field-Tested)  [Handelbar]
+  SCAR-20 | Zinc (Minimal Wear)  [Handelbar]
+
+--- Schrotflinte (Industriequalität) ---
+  MAG-7 | Metallic DDPAT (Factory New)  [Handelbar]
+  Sawed-Off | Snake Camo (Field-Tested)  [Handelbar]
+
+--- Schrotflinte (Limitiert) ---
+  MAG-7 | Monster Call (Minimal Wear)  [Handelbar]
+
+--- Schrotflinte (Militärstandard) ---
+  MAG-7 | Resupply (Minimal Wear)  [Handelbar]
+  Nova | Wood Fired (Field-Tested)  [Handelbar]
+  Sawed-Off | Black Sand (Field-Tested)  [Handelbar]
+  Sawed-Off | Black Sand (Field-Tested)  [Handelbar]
+  Sawed-Off | Spirit Board (Field-Tested)  [Handelbar]
+  Sawed-Off | Spirit Board (Well-Worn)  [Handelbar]
+  XM1014 | Oxide Blaze (Field-Tested)  [Handelbar]
+  XM1014 | Oxide Blaze (Minimal Wear)  [Handelbar]
+
+--- Schrotflinte (Souvenir, Verbraucherklasse) ---
+  Souvenir Nova | Mandrel (Field-Tested)  [Handelbar]
+
+--- Schrotflinte (StatTrak™, Limitiert) ---
+  StatTrak™ MAG-7 | SWAG-7 (Field-Tested)  [Handelbar]
+
+--- Schrotflinte (Verbraucherklasse) ---
+  Nova | Polar Mesh (Well-Worn)  [Handelbar]
+  XM1014 | Canvas Cloud (Field-Tested)  [Handelbar]
+
+--- Schrotflinte (Vertraulich) ---
+  XM1014 | Incinegator (Field-Tested)  [Handelbar]
+  XM1014 | Incinegator (Field-Tested)  [Handelbar]
+
+--- Werkzeug (Standardqualität) ---
+  Charm Detachment Pack  [Nicht handelbar]
+  Charm Detachment Pack  [Nicht handelbar]
+  Charm Detachment Pack  [Nicht handelbar]

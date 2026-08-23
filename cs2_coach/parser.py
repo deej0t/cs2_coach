@@ -256,7 +256,7 @@ class MatchResult:
     round_timeline: list[dict] = field(default_factory=list)  # per-round event log
     economy_performance: dict = field(default_factory=dict)  # eco/force/fullbuy stats
     demo_path: str = ""
-    match_date: str = ""  # YYYY-MM-DD from demo file mtime
+    match_date: str = ""  # YYYY-MM-DD from .dem.info timestamp
     match_datetime: str = ""  # YYYY-MM-DD HH:MM
 
     @property
@@ -328,14 +328,49 @@ def _get_enriched_event_df(parser: DemoParser, event_name: str, player_props: li
     return None
 
 
+def _decode_varint(data: bytes, pos: int) -> tuple[int, int]:
+    result = 0
+    shift = 0
+    while pos < len(data):
+        b = data[pos]
+        result |= (b & 0x7F) << shift
+        pos += 1
+        if not (b & 0x80):
+            break
+        shift += 7
+    return result, pos
+
+
+def _read_demo_timestamp(demo_path: Path) -> datetime:
+    """Read match timestamp from .dem.info sidecar (protobuf field 2).
+
+    Falls back to file modification time if the .info file is missing.
+    """
+    info_path = demo_path.with_suffix(demo_path.suffix + ".info")
+    if info_path.exists():
+        try:
+            data = info_path.read_bytes()
+            pos = 0
+            # Skip field 1 (match ID)
+            _tag, pos = _decode_varint(data, pos)
+            _val, pos = _decode_varint(data, pos)
+            # Field 2 = Unix timestamp
+            _tag2, pos = _decode_varint(data, pos)
+            timestamp, _pos = _decode_varint(data, pos)
+            if 1_500_000_000 < timestamp < 2_000_000_000:
+                return datetime.fromtimestamp(timestamp)
+        except Exception:
+            pass
+    return datetime.fromtimestamp(os.path.getmtime(demo_path))
+
+
 def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> MatchResult:
     path = Path(demo_path)
     if not path.exists():
         raise FileNotFoundError(f"Demo-Datei nicht gefunden: {demo_path}")
 
-    # Match-Datum aus Datei-Modifikationszeit
-    mtime = os.path.getmtime(path)
-    match_dt = datetime.fromtimestamp(mtime)
+    # Match-Datum aus .dem.info (protobuf field 2 = Unix timestamp)
+    match_dt = _read_demo_timestamp(path)
     match_date = match_dt.strftime("%Y-%m-%d")
     match_datetime = match_dt.strftime("%Y-%m-%d %H:%M")
 
@@ -1194,8 +1229,10 @@ def _extract_kill_positions(
         try:
             att_x = float(row.get("attacker_X", 0))
             att_y = float(row.get("attacker_Y", 0))
+            att_z = float(row.get("attacker_Z", 0))
             vic_x = float(row.get("user_X", 0))
             vic_y = float(row.get("user_Y", 0))
+            vic_z = float(row.get("user_Z", 0))
         except (ValueError, TypeError):
             continue
 
@@ -1211,8 +1248,10 @@ def _extract_kill_positions(
             "victim_name": vic_name,
             "attacker_x": att_x,
             "attacker_y": att_y,
+            "attacker_z": att_z,
             "victim_x": vic_x,
             "victim_y": vic_y,
+            "victim_z": vic_z,
             "weapon": str(row.get("weapon", "")),
             "headshot": bool(row.get("headshot", False)),
             "round": round_num,

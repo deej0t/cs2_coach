@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Einstellungen{% endblock %}
+{% block title %}CS2 Coach — {{ _('Einstellungen') }}{% endblock %}
 
 {% block content %}
-<h2>Einstellungen</h2>
+<h2>{{ _('Einstellungen') }}</h2>
 
 <!-- Config Form -->
 <div class="card elev-sm" style="max-width: 640px; margin-bottom: var(--space-5);">
-    <span class="card-kicker">Konfiguration</span>
+    <span class="card-kicker">{{ _('Konfiguration') }}</span>
     <h3 class="card-title">config.yaml</h3>
     <p style="font-size: 11px; color: var(--color-neutral-600); margin-bottom: var(--space-3);">{{ config_path }}</p>
     <form action="{{ url_for('settings_save') }}" method="post" style="display:flex;flex-direction:column;gap:var(--space-3);">
         <div class="field">
-            <label>Spieler-Name</label>
+            <label>{{ _('Spieler-Name') }}</label>
             <input type="text" name="player_name" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input">
         </div>
         <div class="field">
@@ -19,44 +19,44 @@
             <input type="text" name="steam_id" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input">
         </div>
         <div class="field">
-            <label>Obsidian Vault Pfad</label>
+            <label>{{ _('Obsidian Vault Pfad') }}</label>
             <input type="text" name="obsidian_vault_path" value="{{ config.get('obsidian_vault_path', '') }}" placeholder="C:/Users/.../ObsidianVault" class="input">
         </div>
         <div class="field">
-            <label>Coach-Unterordner im Vault</label>
+            <label>{{ _('Coach-Unterordner im Vault') }}</label>
             <input type="text" name="coach_subfolder" value="{{ config.get('coach_subfolder', 'CS2-Coach') }}" class="input">
         </div>
         <div class="field">
-            <label>Demo-Ordner (fuer Folder-Watch)</label>
+            <label>{{ _('Demo-Ordner (fuer Folder-Watch)') }}</label>
             <input type="text" name="demo_folder" value="{{ config.get('demo_folder', '') }}" placeholder="C:/Users/.../csgo/replays" class="input">
-            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Ordner mit .dem-Dateien. Wird fuer Auto-Analyse ueberwacht.</div>
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Ordner mit .dem-Dateien. Wird fuer Auto-Analyse ueberwacht.') }}</div>
         </div>
         <div class="field">
-            <label>Sprache</label>
+            <label>{{ _('Sprache') }}</label>
             <select name="language" class="input">
-                <option value="de" {% if config.get('language', 'de') == 'de' %}selected{% endif %}>Deutsch</option>
+                <option value="de" {% if config.get('language', 'de') == 'de' %}selected{% endif %}>{{ _('Deutsch') }}</option>
                 <option value="en" {% if config.get('language') == 'en' %}selected{% endif %}>English</option>
             </select>
         </div>
         <div class="field">
             <label>Discord Webhook URL</label>
             <input type="text" name="discord_webhook" value="{{ config.get('discord_webhook', '') }}" placeholder="https://discord.com/api/webhooks/..." class="input">
-            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Optional: Match-Ergebnisse automatisch in Discord posten.</div>
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Optional: Match-Ergebnisse automatisch in Discord posten.') }}</div>
         </div>
         <div class="field">
             <label>Steam Web API Key</label>
-            <input type="text" name="steam_api_key" value="{{ config.get('steam_api_key', '') }}" placeholder="Dein Steam API Key" class="input">
-            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Fuer Auto-Sync und Share-Code Downloads. <a href="https://steamcommunity.com/dev/apikey" target="_blank" style="color:var(--color-accent);">Hier beantragen</a></div>
+            <input type="text" name="steam_api_key" value="{{ config.get('steam_api_key', '') }}" placeholder="{{ _('Dein Steam API Key') }}" class="input">
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Fuer Auto-Sync und Share-Code Downloads.') }} <a href="https://steamcommunity.com/dev/apikey" target="_blank" style="color:var(--color-accent);">{{ _('Hier beantragen') }}</a></div>
         </div>
         <div class="field">
             <label>CS2 Auth Token</label>
             <input type="text" name="cs2_auth_token" value="{{ config.get('cs2_auth_token', '') }}" placeholder="XXXX-XXXXX-XXXX" class="input">
-            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">CS2 → Einstellungen → Spiel → "Authentifizierungstoken fuer Drittanbieter". Noetig fuer Auto-Sync.</div>
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('CS2 → Einstellungen → Spiel → "Authentifizierungstoken fuer Drittanbieter". Noetig fuer Auto-Sync.') }}</div>
         </div>
         <div class="hr" style="margin: var(--space-3) 0;"></div>
         <span class="card-kicker" style="margin-bottom: var(--space-2);">AI Coach Chat</span>
         <div class="field">
-            <label>AI-Anbieter</label>
+            <label>{{ _('AI-Anbieter') }}</label>
             <select name="ai_provider" class="input">
                 <option value="ollama" {% if config.get('ai_provider', 'ollama') == 'ollama' %}selected{% endif %}>Ollama (Self-Hosted)</option>
                 <option value="gemini" {% if config.get('ai_provider') == 'gemini' %}selected{% endif %}>Google Gemini</option>
@@ -65,37 +65,37 @@
         <div class="field">
             <label>Ollama Server URL</label>
             <input type="text" name="ollama_url" value="{{ config.get('ollama_url', 'http://192.168.188.71:11434') }}" placeholder="http://192.168.188.71:11434" class="input">
-            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Adresse deines Ollama-Servers (z.B. auf Unraid). Standard-Port: 11434.</div>
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Adresse deines Ollama-Servers (z.B. auf Unraid). Standard-Port: 11434.') }}</div>
         </div>
         <div class="field">
             <label>Gemini API Key</label>
             <input type="text" name="gemini_api_key" value="{{ config.get('gemini_api_key', '') }}" placeholder="AIza..." class="input">
-            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Nur noetig wenn Gemini gewaehlt. <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--color-accent);">Kostenlosen Key holen</a></div>
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Nur noetig wenn Gemini gewaehlt.') }} <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--color-accent);">{{ _('Kostenlosen Key holen') }}</a></div>
         </div>
         <div class="field">
-            <label>AI-Modell (optional)</label>
+            <label>{{ _('AI-Modell (optional)') }}</label>
             <input type="text" name="ai_model" value="{{ config.get('ai_model', '') }}" placeholder="z.B. llama3.1:8b oder gemini-2.0-flash" class="input">
-            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">Leer lassen fuer Standardmodell. Ollama: llama3.1:8b, gemma2:9b, etc. Gemini: gemini-2.0-flash (kostenlos).</div>
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Leer lassen fuer Standardmodell. Ollama: llama3.1:8b, gemma2:9b, etc. Gemini: gemini-2.0-flash (kostenlos).') }}</div>
         </div>
-        <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Speichern</button>
+        <button type="submit" class="btn btn-primary" style="align-self:flex-start;">{{ _('Speichern') }}</button>
     </form>
 </div>
 
 <!-- Danger Zone -->
 <div class="card elev-sm" style="max-width: 640px; border: 1px solid rgba(248,113,113,0.25);">
-    <span class="card-kicker" style="color: var(--color-red);">Wartung</span>
-    <h3 class="card-title">Cache & Daten</h3>
+    <span class="card-kicker" style="color: var(--color-red);">{{ _('Wartung') }}</span>
+    <h3 class="card-title">{{ _('Cache & Daten') }}</h3>
 
     <div style="display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-2);">
 
         <!-- pycache -->
         <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);">
             <div>
-                <div style="font-size: 14px;">Python-Cache loeschen</div>
-                <div style="font-size: 12px; color: var(--color-neutral-500);">{{ pycache_count }} __pycache__-Ordner, {{ pyc_count }} .pyc-Dateien. Behebt Probleme mit altem Code nach Updates.</div>
+                <div style="font-size: 14px;">{{ _('Python-Cache loeschen') }}</div>
+                <div style="font-size: 12px; color: var(--color-neutral-500);">{{ pycache_count }} {{ _('__pycache__-Ordner') }}, {{ pyc_count }} {{ _('.pyc-Dateien. Behebt Probleme mit altem Code nach Updates.') }}</div>
             </div>
             <form action="{{ url_for('settings_clear_cache') }}" method="post" style="flex:none;">
-                <button type="submit" class="btn btn-secondary">Cache leeren</button>
+                <button type="submit" class="btn btn-secondary">{{ _('Cache leeren') }}</button>
             </form>
         </div>
 
@@ -104,11 +104,11 @@
         <!-- Exports reset -->
         <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);">
             <div>
-                <div style="font-size: 14px;">Export-JSONs loeschen</div>
-                <div style="font-size: 12px; color: var(--color-neutral-500);">{{ export_count }} Export-Dateien. Loescht alle JSON-Exports (Trends werden zurueckgesetzt).</div>
+                <div style="font-size: 14px;">{{ _('Export-JSONs loeschen') }}</div>
+                <div style="font-size: 12px; color: var(--color-neutral-500);">{{ export_count }} {{ _('Export-Dateien. Loescht alle JSON-Exports (Trends werden zurueckgesetzt).') }}</div>
             </div>
-            <form action="{{ url_for('settings_reset_exports') }}" method="post" style="flex:none;" onsubmit="return confirm('Alle {{ export_count }} Export-JSONs loeschen?');">
-                <button type="submit" class="btn btn-secondary" style="color: var(--color-red);">Exports loeschen</button>
+            <form action="{{ url_for('settings_reset_exports') }}" method="post" style="flex:none;" onsubmit="return confirm('{{ _("Alle") }} {{ export_count }} {{ _("Export-JSONs loeschen?") }}');">
+                <button type="submit" class="btn btn-secondary" style="color: var(--color-red);">{{ _('Exports loeschen') }}</button>
             </form>
         </div>
 
@@ -117,11 +117,11 @@
         <!-- Notes reset -->
         <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);">
             <div>
-                <div style="font-size: 14px;">Obsidian-Notizen loeschen</div>
-                <div style="font-size: 12px; color: var(--color-neutral-500);">{{ notes_count }} Match-Notizen im Vault.</div>
+                <div style="font-size: 14px;">{{ _('Obsidian-Notizen loeschen') }}</div>
+                <div style="font-size: 12px; color: var(--color-neutral-500);">{{ notes_count }} {{ _('Match-Notizen im Vault.') }}</div>
             </div>
-            <form action="{{ url_for('settings_reset_notes') }}" method="post" style="flex:none;" onsubmit="return confirm('Alle {{ notes_count }} Obsidian-Notizen loeschen?');">
-                <button type="submit" class="btn btn-secondary" style="color: var(--color-red);">Notizen loeschen</button>
+            <form action="{{ url_for('settings_reset_notes') }}" method="post" style="flex:none;" onsubmit="return confirm('{{ _("Alle") }} {{ notes_count }} {{ _("Obsidian-Notizen loeschen?") }}');">
+                <button type="submit" class="btn btn-secondary" style="color: var(--color-red);">{{ _('Notizen loeschen') }}</button>
             </form>
         </div>
 
@@ -130,11 +130,11 @@
         <!-- Full reset -->
         <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);">
             <div>
-                <div style="font-size: 14px; color: var(--color-red);">Komplett-Reset</div>
-                <div style="font-size: 12px; color: var(--color-neutral-500);">Loescht ALLE Exports, Notizen, Concept-Notes und __pycache__.</div>
+                <div style="font-size: 14px; color: var(--color-red);">{{ _('Komplett-Reset') }}</div>
+                <div style="font-size: 12px; color: var(--color-neutral-500);">{{ _('Loescht ALLE Exports, Notizen, Concept-Notes und __pycache__.') }}</div>
             </div>
-            <form action="{{ url_for('settings_reset_all') }}" method="post" style="flex:none;" onsubmit="return confirm('ALLES loeschen? Exports, Notizen, Concepts und Cache werden unwiderruflich entfernt.');">
-                <button type="submit" class="btn btn-primary" style="border-color: var(--color-red); color: var(--color-red);">Alles loeschen</button>
+            <form action="{{ url_for('settings_reset_all') }}" method="post" style="flex:none;" onsubmit="return confirm('{{ _("ALLES loeschen? Exports, Notizen, Concepts und Cache werden unwiderruflich entfernt.") }}');">
+                <button type="submit" class="btn btn-primary" style="border-color: var(--color-red); color: var(--color-red);">{{ _('Alles loeschen') }}</button>
             </form>
         </div>
 
