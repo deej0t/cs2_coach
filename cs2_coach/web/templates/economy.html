@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Economy-IQ{% endblock %}
+{% block title %}CS2 Coach — {{ _('Economy-IQ') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Economy-IQ</h2>
+<h2>{{ _('Economy-IQ') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Wie gut nutzt du dein Geld? Performance nach Kauftyp, Effizienz und Tipps.
+    {{ _('Wie gut nutzt du dein Geld? Performance nach Kauftyp, Effizienz und Tipps.') }}
 </p>
 
 <style>
@@ -73,7 +73,7 @@
 
 {% if not eco.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Economy-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Economy-Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 
@@ -91,22 +91,22 @@
     </div>
     <div class="eiq-info">
         <h3>Economy-IQ Score</h3>
-        <p>Gewichtete Win-Rate ueber alle Kauftypen — je hoeher, desto effizienter nutzt du dein Geld.</p>
+        <p>{{ _('Gewichtete Win-Rate ueber alle Kauftypen — je hoeher, desto effizienter nutzt du dein Geld.') }}</p>
         <div class="eiq-meta">
             <span>{{ eco.total_matches }} Matches</span>
             <span>{{ eco.total_rounds }} Runden</span>
             {% if eco.best_cat and eco.summary[eco.best_cat] %}
-            <span>Staerke: <span style="color:{{ eco.summary[eco.best_cat].color }};font-weight:600;">{{ eco.summary[eco.best_cat].label }}</span></span>
+            <span>{{ _('Staerke') }}: <span style="color:{{ eco.summary[eco.best_cat].color }};font-weight:600;">{{ eco.summary[eco.best_cat].label }}</span></span>
             {% endif %}
             {% if eco.worst_cat and eco.summary[eco.worst_cat] %}
-            <span>Schwaeche: <span style="color:{{ eco.summary[eco.worst_cat].color }};font-weight:600;">{{ eco.summary[eco.worst_cat].label }}</span></span>
+            <span>{{ _('Schwaeche') }}: <span style="color:{{ eco.summary[eco.worst_cat].color }};font-weight:600;">{{ eco.summary[eco.worst_cat].label }}</span></span>
             {% endif %}
         </div>
     </div>
 </div>
 
 <!-- ── Category Cards ── -->
-<div class="card-kicker" style="margin-bottom: 8px;">Performance nach Kauftyp</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Performance nach Kauftyp') }}</div>
 <div class="eiq-grid">
     {% for key in ['pistol', 'eco', 'force', 'fullbuy'] %}
     {% if eco.summary.get(key) %}
@@ -120,9 +120,9 @@
                 <div class="eiq-card-label">
                     {{ s.label }}
                     {% if key == eco.best_cat %}
-                    <span class="eiq-badge" style="background:rgba(74,222,128,0.15);color:#4ade80;margin-left:6px;">Staerke</span>
+                    <span class="eiq-badge" style="background:rgba(74,222,128,0.15);color:#4ade80;margin-left:6px;">{{ _('Staerke') }}</span>
                     {% elif key == eco.worst_cat %}
-                    <span class="eiq-badge" style="background:rgba(248,113,113,0.15);color:#f87171;margin-left:6px;">Schwaeche</span>
+                    <span class="eiq-badge" style="background:rgba(248,113,113,0.15);color:#f87171;margin-left:6px;">{{ _('Schwaeche') }}</span>
                     {% endif %}
                 </div>
                 <div class="eiq-card-desc">{{ s.desc }}</div>
@@ -144,7 +144,7 @@
             </div>
             <div class="eiq-stat">
                 <div class="eiq-stat-val">{{ s.total_rounds }}</div>
-                <div class="eiq-stat-label">Runden</div>
+                <div class="eiq-stat-label">{{ _('Runden') }}</div>
             </div>
         </div>
 
@@ -162,7 +162,7 @@
 
 <!-- ── Tips ── -->
 {% if eco.tips %}
-<div class="card-kicker" style="margin-bottom: 8px;">Empfehlungen</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Empfehlungen') }}</div>
 <div class="eiq-tips">
     {% for tip in eco.tips %}
     <div class="eiq-tip eiq-tip-{{ tip.type }}">
@@ -175,7 +175,7 @@
 
 <!-- ── Win-Rate Trend Chart ── -->
 {% if eco.trend|length >= 3 %}
-<div class="card-kicker" style="margin-bottom: 8px;">Win-Rate Trend nach Kauftyp <span style="color:var(--color-neutral-600);font-size:10px;">(letzte {{ eco.trend|length }} Matches)</span></div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Win-Rate Trend nach Kauftyp') }} <span style="color:var(--color-neutral-600);font-size:10px;">({{ _('letzte') }} {{ eco.trend|length }} Matches)</span></div>
 <div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
     <div class="eiq-chart-wrap">
         <canvas id="eiq-trend"></canvas>
@@ -184,7 +184,7 @@
 {% endif %}
 
 <!-- ── Round Distribution ── -->
-<div class="card-kicker" style="margin-bottom: 8px;">Rundenverteilung</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Rundenverteilung') }}</div>
 <div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
     <div style="display:flex;gap:4px;height:28px;border-radius:4px;overflow:hidden;">
         {% set total = eco.total_rounds %}

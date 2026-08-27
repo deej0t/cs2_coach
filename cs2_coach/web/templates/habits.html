@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Habit-Tracker{% endblock %}
+{% block title %}CS2 Coach — {{ _('Habit-Tracker') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Habit-Tracker</h2>
+<h2>{{ _('Habit-Tracker') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Deine Gewohnheiten ueber Zeit — werden sie besser oder schlechter?
+    {{ _('Deine Gewohnheiten ueber Zeit — werden sie besser oder schlechter?') }}
 </p>
 
 <style>
@@ -77,7 +77,7 @@
 
 {% if not habits.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Mindestens 2 Matches noetig. Analysiere mehr Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Mindestens 2 Matches noetig. Analysiere mehr Demos.') }}</p>
 </div>
 {% else %}
 
@@ -85,15 +85,15 @@
 <div class="ht-summary">
     <div class="ht-summary-card">
         <div class="ht-summary-val win">{{ habits.habits|selectattr('improving')|list|length }}</div>
-        <div class="ht-summary-lbl">Verbessert</div>
+        <div class="ht-summary-lbl">{{ _('Verbessert') }}</div>
     </div>
     <div class="ht-summary-card">
         <div class="ht-summary-val loss">{{ habits.habits|selectattr('worsening')|list|length }}</div>
-        <div class="ht-summary-lbl">Verschlechtert</div>
+        <div class="ht-summary-lbl">{{ _('Verschlechtert') }}</div>
     </div>
     <div class="ht-summary-card">
         <div class="ht-summary-val" style="color:var(--color-accent);">{{ habits.habits|selectattr('at_target')|list|length }}</div>
-        <div class="ht-summary-lbl">Ziel erreicht</div>
+        <div class="ht-summary-lbl">{{ _('Ziel erreicht') }}</div>
     </div>
     <div class="ht-summary-card">
         <div class="ht-summary-val">{{ habits.match_count }}</div>
@@ -117,26 +117,26 @@
             {{ h.trend|abs }}{{ h.unit }}
         </div>
         {% else %}
-        <div class="ht-trend flat">&#8212; stabil</div>
+        <div class="ht-trend flat">&#8212; {{ _('stabil') }}</div>
         {% endif %}
     </div>
 
     <div class="ht-values">
         <div class="ht-val-item">
             <div class="ht-val {% if h.at_target %}win{% elif h.worsening %}loss{% endif %}">{{ h.current }}{{ h.unit }}</div>
-            <div class="ht-val-label">Aktuell</div>
+            <div class="ht-val-label">{{ _('Aktuell') }}</div>
         </div>
         <div class="ht-val-item">
             <div class="ht-val">{{ h.avg }}{{ h.unit }}</div>
-            <div class="ht-val-label">Durchschnitt</div>
+            <div class="ht-val-label">{{ _('Durchschnitt') }}</div>
         </div>
         <div class="ht-val-item">
             <div class="ht-val">{{ h.avg_last5 }}{{ h.unit }}</div>
-            <div class="ht-val-label">Letzte 5</div>
+            <div class="ht-val-label">{{ _('Letzte 5') }}</div>
         </div>
         <div class="ht-val-item">
             <div class="ht-val" style="color:var(--color-neutral-400);">{{ h.target }}{{ h.unit }}</div>
-            <div class="ht-val-label">Ziel</div>
+            <div class="ht-val-label">{{ _('Ziel') }}</div>
         </div>
     </div>
 
@@ -151,12 +151,12 @@
     <div class="ht-target-bar">
         <div class="ht-target-fill" style="width: {{ [pct, 100]|min }}%; background: {% if h.at_target %}linear-gradient(90deg, var(--color-accent), #4ade80){% elif h.worsening %}linear-gradient(90deg, #f87171, #fb923c){% else %}linear-gradient(90deg, var(--color-accent), var(--color-accent-2)){% endif %};"></div>
         {% if h.good_direction == 'up' %}
-        <div class="ht-target-marker" style="left: {{ target_pct }}%;" title="Ziel: {{ h.target }}{{ h.unit }}"></div>
+        <div class="ht-target-marker" style="left: {{ target_pct }}%;" title="{{ _('Ziel:') }} {{ h.target }}{{ h.unit }}"></div>
         {% endif %}
     </div>
     <div class="ht-target-info">
-        <span>{% if h.at_target %}Ziel erreicht{% else %}{{ h.current }}{{ h.unit }} von {{ h.target }}{{ h.unit }}{% endif %}</span>
-        <span>Ziel: {{ h.target }}{{ h.unit }}</span>
+        <span>{% if h.at_target %}{{ _('Ziel erreicht') }}{% else %}{{ h.current }}{{ h.unit }} {{ _('von') }} {{ h.target }}{{ h.unit }}{% endif %}</span>
+        <span>{{ _('Ziel:') }} {{ h.target }}{{ h.unit }}</span>
     </div>
 
     <!-- Sparkline chart -->
@@ -164,7 +164,7 @@
         <canvas id="chart-{{ h.id }}"></canvas>
     </div>
 
-    <div class="ht-tip"><strong>Tipp:</strong> {{ h.tip }}</div>
+    <div class="ht-tip"><strong>{{ _('Tipp:') }}</strong> {{ h.tip }}</div>
 </div>
 {% endfor %}
 </div>
@@ -232,7 +232,7 @@
                     displayColors: false,
                     callbacks: {
                         label: function(ctx) {
-                            if (ctx.datasetIndex === 1) return 'Ziel: ' + target;
+                            if (ctx.datasetIndex === 1) return '{{ _("Ziel:") }} ' + target;
                             return ctx.parsed.y + '{{ h.unit }}';
                         }
                     }

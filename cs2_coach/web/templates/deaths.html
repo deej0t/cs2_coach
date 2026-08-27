@@ -3,9 +3,9 @@
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Death-Analyse</h2>
+<h2>{{ _('Death-Analyse') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Warum stirbst du? Tod-Muster, Timing, Kontext und was du verbessern kannst.
+    {{ _('Warum stirbst du? Tod-Muster, Timing, Kontext und was du verbessern kannst.') }}
 </p>
 
 <style>
@@ -131,7 +131,7 @@
 
 {% if not da.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 
@@ -151,55 +151,55 @@
 <div class="da-hero">
     <div class="da-stat-card">
         <div class="da-stat-val">{{ da.total_deaths }}</div>
-        <div class="da-stat-lbl">Tode gesamt</div>
+        <div class="da-stat-lbl">{{ _('Tode gesamt') }}</div>
     </div>
     <div class="da-stat-card">
         <div class="da-stat-val">{{ da.avg_deaths }}</div>
-        <div class="da-stat-lbl">&#216; Tode / Match</div>
+        <div class="da-stat-lbl">{{ _('Ø Tode / Match') }}</div>
     </div>
     <div class="da-stat-card">
         <div class="da-stat-val {% if da.death_rate > 55 %}loss{% elif da.death_rate < 45 %}win{% endif %}">{{ da.death_rate }}%</div>
-        <div class="da-stat-lbl">Death Rate / Runde</div>
+        <div class="da-stat-lbl">{{ _('Death Rate / Runde') }}</div>
     </div>
     <div class="da-stat-card">
         <div class="da-stat-val {% if da.survival_rate >= 55 %}win{% elif da.survival_rate < 45 %}loss{% endif %}">{{ da.survival_rate }}%</div>
-        <div class="da-stat-lbl">Survival Rate</div>
+        <div class="da-stat-lbl">{{ _('Survival Rate') }}</div>
     </div>
     <div class="da-stat-card">
         <div class="da-stat-val {% if da.opening_death_rate > 15 %}loss{% elif da.opening_death_rate < 8 %}win{% endif %}">{{ da.opening_death_rate }}%</div>
-        <div class="da-stat-lbl">Opening Death Rate</div>
+        <div class="da-stat-lbl">{{ _('Opening Death Rate') }}</div>
     </div>
     <div class="da-stat-card">
         <div class="da-stat-val {% if da.opening_duel_wr >= 55 %}win{% elif da.opening_duel_wr < 45 %}loss{% endif %}">{{ da.opening_duel_wr }}%</div>
-        <div class="da-stat-lbl"><abbr title="Opening Duel Winrate">OD Winrate</abbr></div>
+        <div class="da-stat-lbl"><abbr title="{{ _('Opening Duel Winrate') }}">OD Winrate</abbr></div>
     </div>
 </div>
 
 <!-- ── Death Categories ── -->
 {% if da.categories %}
 {% set cats = [
-    {"key": "timing", "label": "Timing", "icon": "timer", "color": "#f87171",
-     "desc": "Zu frueh gepeekt, beim Rotieren erwischt"},
-    {"key": "aim", "label": "Aim-Duell", "icon": "target", "color": "#fb923c",
-     "desc": "Direktes Duell verloren (Gegner HS)"},
-    {"key": "positioning", "label": "Positioning", "icon": "map-pin", "color": "#fbbf24",
-     "desc": "Schlechte Position, zu exposed, kein Cover"},
-    {"key": "utility", "label": "Ohne Utility", "icon": "flame", "color": "#a78bfa",
-     "desc": "Gepeekt ohne Flash oder Smoke"},
-    {"key": "eco", "label": "Eco-Tod", "icon": "coins", "color": "#9397ab",
-     "desc": "Eco/Force-Runde — akzeptabler Tod"},
-    {"key": "impact", "label": "Impact-Tod", "icon": "check-circle", "color": "#4ade80",
-     "desc": "Hattest Kill(s) vor dem Tod — produktiv"},
-    {"key": "traded", "label": "Getradet", "icon": "users", "color": "#60a5fa",
-     "desc": "Gestorben aber Runde trotzdem gewonnen"},
+    {"key": "timing", "label": _('Timing'), "icon": "timer", "color": "#f87171",
+     "desc": _('Zu frueh gepeekt, beim Rotieren erwischt')},
+    {"key": "aim", "label": _('Aim-Duell'), "icon": "target", "color": "#fb923c",
+     "desc": _('Direktes Duell verloren (Gegner HS)')},
+    {"key": "positioning", "label": _('Positioning'), "icon": "map-pin", "color": "#fbbf24",
+     "desc": _('Schlechte Position, zu exposed, kein Cover')},
+    {"key": "utility", "label": _('Ohne Utility'), "icon": "flame", "color": "#a78bfa",
+     "desc": _('Gepeekt ohne Flash oder Smoke')},
+    {"key": "eco", "label": _('Eco-Tod'), "icon": "coins", "color": "#9397ab",
+     "desc": _('Eco/Force-Runde — akzeptabler Tod')},
+    {"key": "impact", "label": _('Impact-Tod'), "icon": "check-circle", "color": "#4ade80",
+     "desc": _('Hattest Kill(s) vor dem Tod — produktiv')},
+    {"key": "traded", "label": _('Getradet'), "icon": "users", "color": "#60a5fa",
+     "desc": _('Gestorben aber Runde trotzdem gewonnen')},
 ] %}
 <div class="da-section">
     <div class="da-section-title">
         <i data-lucide="layers" style="width:16px;height:16px;color:var(--color-accent);"></i>
-        <span>Warum stirbst du? — Tod-Kategorien</span>
+        <span>{{ _('Warum stirbst du? — Tod-Kategorien') }}</span>
     </div>
     <div style="margin-bottom:6px;font-size:12px;color:var(--color-neutral-500);">
-        {{ da.cat_total }} Tode analysiert und kategorisiert
+        {{ da.cat_total }} {{ _('Tode analysiert und kategorisiert') }}
     </div>
 
     <!-- Category Donut + Cards -->
@@ -232,14 +232,14 @@
     {% if da.cat_total > 10 %}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-top:var(--space-4);">
         <div style="padding:var(--space-3);border-radius:var(--radius-md);background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);">
-            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--color-red);margin-bottom:4px;">Vermeidbare Tode</div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--color-red);margin-bottom:4px;">{{ _('Vermeidbare Tode') }}</div>
             <div style="font-size:22px;font-weight:700;color:var(--color-red);">{{ vermeidbar }}</div>
-            <div style="font-size:11px;color:var(--color-neutral-400);">{{ (vermeidbar / da.cat_total * 100)|round(1) }}% — Timing + Positioning + Utility</div>
+            <div style="font-size:11px;color:var(--color-neutral-400);">{{ (vermeidbar / da.cat_total * 100)|round(1) }}% — {{ _('Timing + Positioning + Utility') }}</div>
         </div>
         <div style="padding:var(--space-3);border-radius:var(--radius-md);background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.2);">
-            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--color-green);margin-bottom:4px;">Produktive Tode</div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--color-green);margin-bottom:4px;">{{ _('Produktive Tode') }}</div>
             <div style="font-size:22px;font-weight:700;color:var(--color-green);">{{ produktiv }}</div>
-            <div style="font-size:11px;color:var(--color-neutral-400);">{{ (produktiv / da.cat_total * 100)|round(1) }}% — Impact + Getradet</div>
+            <div style="font-size:11px;color:var(--color-neutral-400);">{{ (produktiv / da.cat_total * 100)|round(1) }}% — {{ _('Impact + Getradet') }}</div>
         </div>
     </div>
     {% endif %}
@@ -250,35 +250,35 @@
 <div class="da-grid-3">
     <!-- Timing Donut -->
     <div class="card elev-sm">
-        <span class="card-kicker">Wann stirbst du?</span>
+        <span class="card-kicker">{{ _('Wann stirbst du?') }}</span>
         <div class="da-donut-wrap">
             <canvas id="timing-donut" width="140" height="140"></canvas>
             <div class="da-donut-legend">
                 <div class="da-legend-item">
                     <span class="da-legend-dot" style="background:#f87171;"></span>
-                    <span>Frueh</span>
+                    <span>{{ _('Frueh') }}</span>
                     <span class="da-legend-pct">{{ da.timing_pcts.early }}%</span>
                 </div>
                 <div class="da-legend-item">
                     <span class="da-legend-dot" style="background:#fbbf24;"></span>
-                    <span>Mitte</span>
+                    <span>{{ _('Mitte') }}</span>
                     <span class="da-legend-pct">{{ da.timing_pcts.mid }}%</span>
                 </div>
                 <div class="da-legend-item">
                     <span class="da-legend-dot" style="background:#4ade80;"></span>
-                    <span>Spaet</span>
+                    <span>{{ _('Spaet') }}</span>
                     <span class="da-legend-pct">{{ da.timing_pcts.late }}%</span>
                 </div>
             </div>
         </div>
         <div style="font-size:12px;color:var(--color-neutral-500);text-align:center;">
-            {{ da.timing.early }} frueh / {{ da.timing.mid }} mitte / {{ da.timing.late }} spaet
+            {{ da.timing.early }} {{ _('frueh') }} / {{ da.timing.mid }} {{ _('mitte') }} / {{ da.timing.late }} {{ _('spaet') }}
         </div>
     </div>
 
     <!-- Side Split -->
     <div class="card elev-sm">
-        <span class="card-kicker">Auf welcher Seite?</span>
+        <span class="card-kicker">{{ _('Auf welcher Seite?') }}</span>
         <div style="padding:var(--space-4) var(--space-3);">
             <div class="da-side-bar">
                 <div class="da-side-ct" style="width:{{ da.side.ct_pct }}%;"></div>
@@ -290,14 +290,14 @@
             </div>
             <div style="margin-top:var(--space-4);">
                 <div class="da-bar-row">
-                    <span class="da-bar-label" style="color:#7eaadb;">CT Death Rate</span>
+                    <span class="da-bar-label" style="color:#7eaadb;">{{ _('CT Death Rate') }}</span>
                     <div class="da-bar-track">
                         <div class="da-bar-fill" style="width:{{ da.side.ct_death_rate }}%;background:#7eaadb;"></div>
                     </div>
                     <span class="da-bar-val" style="color:#7eaadb;">{{ da.side.ct_death_rate }}%</span>
                 </div>
                 <div class="da-bar-row">
-                    <span class="da-bar-label" style="color:#deb23e;">T Death Rate</span>
+                    <span class="da-bar-label" style="color:#deb23e;">{{ _('T Death Rate') }}</span>
                     <div class="da-bar-track">
                         <div class="da-bar-fill" style="width:{{ da.side.t_death_rate }}%;background:#deb23e;"></div>
                     </div>
@@ -305,29 +305,29 @@
                 </div>
             </div>
             <div style="font-size:12px;color:var(--color-neutral-500);text-align:center;margin-top:8px;">
-                {{ da.side.ct_deaths }} CT-Tode / {{ da.side.t_deaths }} T-Tode
+                {{ da.side.ct_deaths }} {{ _('CT-Tode') }} / {{ da.side.t_deaths }} {{ _('T-Tode') }}
             </div>
         </div>
     </div>
 
     <!-- Death Context -->
     <div class="card elev-sm">
-        <span class="card-kicker">Tod-Kontext</span>
+        <span class="card-kicker">{{ _('Tod-Kontext') }}</span>
         <div style="padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-3);">
             <div class="da-ctx-card" style="background:rgba(255,255,255,0.02);">
                 <div class="da-ctx-val">{{ da.trade.trade_kills }}</div>
-                <div class="da-ctx-sub"><abbr title="Kills innerhalb 3s nach einem Teammate-Tod">Trade-Kills</abbr></div>
-                <div class="da-ctx-detail">{{ da.trade.trade_rate }}% <abbr title="Trade-Kills pro Runde">Trade Rate</abbr></div>
+                <div class="da-ctx-sub"><abbr title="{{ _('Kills innerhalb 3s nach einem Teammate-Tod') }}">{{ _('Trade-Kills') }}</abbr></div>
+                <div class="da-ctx-detail">{{ da.trade.trade_rate }}% <abbr title="{{ _('Trade-Kills pro Runde') }}">{{ _('Trade Rate') }}</abbr></div>
             </div>
             <div class="da-ctx-card" style="background:rgba(255,255,255,0.02);">
                 <div class="da-ctx-val {% if da.impact.impact_pct >= 50 %}win{% elif da.impact.impact_pct < 30 %}loss{% endif %}">{{ da.impact.impact_pct }}%</div>
-                <div class="da-ctx-sub">Produktive Tode</div>
-                <div class="da-ctx-detail">{{ da.impact.with_kill }}x mit Kill / {{ da.impact.no_impact }}x ohne Impact</div>
+                <div class="da-ctx-sub">{{ _('Produktive Tode') }}</div>
+                <div class="da-ctx-detail">{{ da.impact.with_kill }}x {{ _('mit Kill') }} / {{ da.impact.no_impact }}x {{ _('ohne Impact') }}</div>
             </div>
             <div class="da-ctx-card" style="background:rgba(255,255,255,0.02);">
                 <div class="da-ctx-val">{{ da.hs_death_pct }}%</div>
-                <div class="da-ctx-sub">Headshot-Tode</div>
-                <div class="da-ctx-detail">{{ da.hs_deaths }} von {{ da.total_deaths }} Toden durch HS</div>
+                <div class="da-ctx-sub">{{ _('Headshot-Tode') }}</div>
+                <div class="da-ctx-detail">{{ da.hs_deaths }} {{ _('von') }} {{ da.total_deaths }} {{ _('Toden durch HS') }}</div>
             </div>
         </div>
     </div>
@@ -337,7 +337,7 @@
 <div class="da-grid-2">
     <!-- Top Death Weapons -->
     <div class="card elev-sm">
-        <span class="card-kicker">Womit wirst du getoetet?</span>
+        <span class="card-kicker">{{ _('Womit wirst du getoetet?') }}</span>
         <div style="padding:var(--space-3) 0;">
             {% for w in da.top_weapons %}
             <div class="da-wpn-row">
@@ -356,7 +356,7 @@
 
     <!-- Top Killers -->
     <div class="card elev-sm">
-        <span class="card-kicker">Wer toetet dich am meisten?</span>
+        <span class="card-kicker">{{ _('Wer toetet dich am meisten?') }}</span>
         <div style="display:flex;flex-direction:column;gap:3px;padding:var(--space-3) 0;">
             {% for k in da.top_killers %}
             <div class="da-row">
@@ -368,7 +368,7 @@
             </div>
             {% endfor %}
             {% if not da.top_killers %}
-            <div style="text-align:center;color:var(--color-neutral-600);font-size:13px;padding:var(--space-4);">Keine Daten</div>
+            <div style="text-align:center;color:var(--color-neutral-600);font-size:13px;padding:var(--space-4);">{{ _('Keine Daten') }}</div>
             {% endif %}
         </div>
     </div>
@@ -377,7 +377,7 @@
 <!-- ── Death Trend Chart ── -->
 <div class="da-section">
     <div class="card elev-sm">
-        <span class="card-kicker">Trend — Tode pro Match</span>
+        <span class="card-kicker">{{ _('Trend — Tode pro Match') }}</span>
         <div style="padding:var(--space-3);">
             <canvas id="death-trend-chart" height="80"></canvas>
         </div>
@@ -388,17 +388,17 @@
 <div class="da-section">
     <div class="da-section-title">
         <i data-lucide="list" style="width:16px;height:16px;color:var(--color-accent);"></i>
-        <span>Tode pro Match</span>
+        <span>{{ _('Tode pro Match') }}</span>
     </div>
     <div class="da-match-header">
-        <span>Datum</span>
-        <span>Map</span>
-        <span>Score</span>
-        <span>Ergebnis</span>
-        <span>Tode</span>
-        <span>Death Rate</span>
-        <span>Opening</span>
-        <span>Top Waffen</span>
+        <span>{{ _('Datum') }}</span>
+        <span>{{ _('Map') }}</span>
+        <span>{{ _('Score') }}</span>
+        <span>{{ _('Ergebnis') }}</span>
+        <span>{{ _('Tode') }}</span>
+        <span>{{ _('Death Rate') }}</span>
+        <span>{{ _('Opening') }}</span>
+        <span>{{ _('Top Waffen') }}</span>
     </div>
     {% for m in da.matches %}
     <div class="da-match-row">
@@ -406,8 +406,8 @@
         <span>{{ m.map }}</span>
         <span>{{ m.score }}</span>
         <span>
-            {% if m.result == 'Sieg' %}<span class="tag tag-win">Sieg</span>
-            {% elif m.result == 'Niederlage' %}<span class="tag tag-loss">Niederlage</span>
+            {% if m.result == 'Sieg' %}<span class="tag tag-win">{{ _('Sieg') }}</span>
+            {% elif m.result == 'Niederlage' %}<span class="tag tag-loss">{{ _('Niederlage') }}</span>
             {% else %}<span class="tag tag-draw">{{ m.result }}</span>{% endif %}
         </span>
         <span style="font-weight:600;">{{ m.deaths }}</span>
@@ -433,13 +433,13 @@
     if (catDonutEl) {
         var cats = {{ da.categories | tojson }};
         var catMeta = [
-            {key: 'timing', label: 'Timing', color: '#f87171'},
-            {key: 'aim', label: 'Aim-Duell', color: '#fb923c'},
-            {key: 'positioning', label: 'Positioning', color: '#fbbf24'},
-            {key: 'utility', label: 'Ohne Utility', color: '#a78bfa'},
-            {key: 'eco', label: 'Eco-Tod', color: '#9397ab'},
-            {key: 'impact', label: 'Impact', color: '#4ade80'},
-            {key: 'traded', label: 'Getradet', color: '#60a5fa'},
+            {key: 'timing', label: '{{ _("Timing") }}', color: '#f87171'},
+            {key: 'aim', label: '{{ _("Aim-Duell") }}', color: '#fb923c'},
+            {key: 'positioning', label: '{{ _("Positioning") }}', color: '#fbbf24'},
+            {key: 'utility', label: '{{ _("Ohne Utility") }}', color: '#a78bfa'},
+            {key: 'eco', label: '{{ _("Eco-Tod") }}', color: '#9397ab'},
+            {key: 'impact', label: '{{ _("Impact") }}', color: '#4ade80'},
+            {key: 'traded', label: '{{ _("Getradet") }}', color: '#60a5fa'},
         ];
         var catLabels = [];
         var catData = [];
@@ -488,7 +488,7 @@
         new Chart(donutEl, {
             type: 'doughnut',
             data: {
-                labels: ['Frueh', 'Mitte', 'Spaet'],
+                labels: ['{{ _("Frueh") }}', '{{ _("Mitte") }}', '{{ _("Spaet") }}'],
                 datasets: [{
                     data: [{{ da.timing.early }}, {{ da.timing.mid }}, {{ da.timing.late }}],
                     backgroundColor: ['#f87171', '#fbbf24', '#4ade80'],
@@ -524,7 +524,7 @@
             data: {
                 labels: trend.map(function(t) { return t.date; }),
                 datasets: [{
-                    label: 'Tode',
+                    label: '{{ _("Tode") }}',
                     data: trend.map(function(t) { return t.deaths; }),
                     borderColor: '#f87171',
                     backgroundColor: 'rgba(248,113,113,0.1)',
@@ -537,7 +537,7 @@
                     }),
                     pointHoverRadius: 6,
                 }, {
-                    label: 'Death Rate %',
+                    label: '{{ _("Death Rate %") }}',
                     data: trend.map(function(t) { return t.death_rate; }),
                     borderColor: 'rgba(145,132,217,0.6)',
                     borderWidth: 1.5,

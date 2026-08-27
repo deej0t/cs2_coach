@@ -1,5 +1,6 @@
 # CS2-Coach Konfiguration
 # Kopiere diese Datei nach config.yaml und trage deine Werte ein.
+# Docker: demo_folder auf /data/demos setzen, obsidian_vault_path auf /data/vault
 ai_model: ''
 ai_provider: ollama
 coach_subfolder: CS2-Coach
@@ -13,3 +14,7 @@ ollama_url: http://192.168.188.71:11434
 player_name: ''
 steam_api_key: ''
 steam_id: ''
+# Steam-Login fuer automatischen Demo-Download (optional)
+# Wird benoetigt um Demos direkt von Valve-Servern herunterzuladen.
+# Session-Cookies werden lokal gespeichert, Passwort wird NICHT dauerhaft gespeichert.
+steam_username: ''

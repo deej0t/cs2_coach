@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Replay-Bookmarks{% endblock %}
+{% block title %}CS2 Coach — {{ _('Replay-Bookmarks') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Replay-Bookmarks</h2>
+<h2>{{ _('Replay-Bookmarks') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Automatisch erkannte Schluesselrunden — schau dir diese Momente im Demo-Viewer an.
+    {{ _('Automatisch erkannte Schluesselrunden — schau dir diese Momente im Demo-Viewer an.') }}
 </p>
 
 <style>
@@ -77,7 +77,7 @@
 
 {% if not bm.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Bookmarks gefunden — analysiere Demos mit Rundenverlauf-Daten.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Bookmarks gefunden — analysiere Demos mit Rundenverlauf-Daten.') }}</p>
 </div>
 {% else %}
 
@@ -106,17 +106,17 @@
     {% if bm.type_counts.get('early_death') %}
     <div class="card elev-sm bm-stat-card">
         <div class="bm-stat-val" style="color: #f87171;">{{ bm.type_counts.early_death }}</div>
-        <div class="bm-stat-lbl">Fruehe Tode</div>
+        <div class="bm-stat-lbl">{{ _('Fruehe Tode') }}</div>
     </div>
     {% endif %}
 </div>
 
 <!-- Type Legend -->
 <div class="bm-type-legend">
-    <span><span class="bm-legend-dot" style="background: #4ade80;"></span> Clutch gewonnen</span>
-    <span><span class="bm-legend-dot" style="background: #f87171;"></span> Clutch verloren / Frueher Tod</span>
+    <span><span class="bm-legend-dot" style="background: #4ade80;"></span> {{ _('Clutch gewonnen') }}</span>
+    <span><span class="bm-legend-dot" style="background: #f87171;"></span> {{ _('Clutch verloren / Frueher Tod') }}</span>
     <span><span class="bm-legend-dot" style="background: #fbbf24;"></span> Multi-Kill</span>
-    <span><span class="bm-legend-dot" style="background: #fb923c;"></span> Vorteil verspielt</span>
+    <span><span class="bm-legend-dot" style="background: #fb923c;"></span> {{ _('Vorteil verspielt') }}</span>
     <span><span class="bm-legend-dot" style="background: #75798c;"></span> Invisible Round</span>
 </div>
 
@@ -133,7 +133,7 @@
         <span class="bm-match-demo">{{ m.demo_file }}</span>
         {% endif %}
         {% if m.total_bookmarks > m.bookmarks|length %}
-        <span class="bm-match-meta">+{{ m.total_bookmarks - m.bookmarks|length }} weitere</span>
+        <span class="bm-match-meta">+{{ m.total_bookmarks - m.bookmarks|length }} {{ _('weitere') }}</span>
         {% endif %}
     </div>
 

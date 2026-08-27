@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Momentum{% endblock %}
+{% block title %}CS2 Coach — {{ _('Momentum') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Momentum & Tilt</h2>
+<h2>{{ _('Momentum & Tilt') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Dein Performance-Flow — Streaks, Tilts und wie du nach Niederlagen performst.
+    {{ _('Dein Performance-Flow — Streaks, Tilts und wie du nach Niederlagen performst.') }}
 </p>
 
 <style>
@@ -113,7 +113,7 @@
 
 {% if not mom.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Mindestens 3 Matches noetig fuer Momentum-Analyse.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Mindestens 3 Matches noetig fuer Momentum-Analyse.') }}</p>
 </div>
 {% else %}
 
@@ -121,25 +121,25 @@
 <div class="mo-hero">
     <div class="mo-stat-card" style="border-top: 3px solid #4ade80;">
         <div class="mo-stat-val win">{{ mom.best_win_streak }}</div>
-        <div class="mo-stat-lbl">Beste Win-Streak</div>
+        <div class="mo-stat-lbl">{{ _('Beste Win-Streak') }}</div>
     </div>
     <div class="mo-stat-card" style="border-top: 3px solid #f87171;">
         <div class="mo-stat-val loss">{{ mom.worst_loss_streak }}</div>
-        <div class="mo-stat-lbl">Laengste Loss-Streak</div>
+        <div class="mo-stat-lbl">{{ _('Laengste Loss-Streak') }}</div>
     </div>
     <div class="mo-stat-card" style="border-top: 3px solid {% if mom.current_streak.type == 'win' %}#4ade80{% else %}#f87171{% endif %};">
         <div class="mo-stat-val {% if mom.current_streak.type == 'win' %}win{% else %}loss{% endif %}">
             {{ mom.current_streak.count }}{% if mom.current_streak.type == 'win' %}W{% else %}L{% endif %}
         </div>
-        <div class="mo-stat-lbl">Aktuelle Streak</div>
+        <div class="mo-stat-lbl">{{ _('Aktuelle Streak') }}</div>
     </div>
     <div class="mo-stat-card">
         <div class="mo-stat-val {% if mom.after_loss_avg >= 1.0 %}win{% elif mom.after_loss_avg < 0.85 %}loss{% endif %}">{{ mom.after_loss_avg }}</div>
-        <div class="mo-stat-lbl">Rating nach Niederlage</div>
+        <div class="mo-stat-lbl">{{ _('Rating nach Niederlage') }}</div>
     </div>
     <div class="mo-stat-card">
         <div class="mo-stat-val {% if mom.after_win_avg >= 1.0 %}win{% elif mom.after_win_avg < 0.85 %}loss{% endif %}">{{ mom.after_win_avg }}</div>
-        <div class="mo-stat-lbl">Rating nach Sieg</div>
+        <div class="mo-stat-lbl">{{ _('Rating nach Sieg') }}</div>
     </div>
 </div>
 
@@ -147,11 +147,11 @@
 {% if mom.after_loss_avg > 0 and mom.after_win_avg > 0 %}
 <div class="mo-insight">
     {% if mom.after_loss_avg >= mom.after_win_avg %}
-        <strong>Stark mental!</strong> Dein Rating nach Niederlagen ({{ mom.after_loss_avg }}) ist gleich oder besser als nach Siegen ({{ mom.after_win_avg }}). Du laesst dich nicht von Niederlagen runterziehen.
+        <strong>{{ _('Stark mental!') }}</strong> {{ _('Dein Rating nach Niederlagen') }} ({{ mom.after_loss_avg }}) {{ _('ist gleich oder besser als nach Siegen') }} ({{ mom.after_win_avg }}). {{ _('Du laesst dich nicht von Niederlagen runterziehen.') }}
     {% elif mom.after_loss_avg < 0.85 %}
-        <strong>Tilt-Tendenz erkannt.</strong> Dein Rating nach Niederlagen ({{ mom.after_loss_avg }}) ist deutlich niedriger als nach Siegen ({{ mom.after_win_avg }}). Nimm dir nach einer Niederlage eine kurze Pause.
+        <strong>{{ _('Tilt-Tendenz erkannt.') }}</strong> {{ _('Dein Rating nach Niederlagen') }} ({{ mom.after_loss_avg }}) {{ _('ist deutlich niedriger als nach Siegen') }} ({{ mom.after_win_avg }}). {{ _('Nimm dir nach einer Niederlage eine kurze Pause.') }}
     {% else %}
-        <strong>Solide Mentalitaet.</strong> Dein Rating nach Niederlagen ({{ mom.after_loss_avg }}) ist leicht unter dem nach Siegen ({{ mom.after_win_avg }}). Normal und gesund.
+        <strong>{{ _('Solide Mentalitaet.') }}</strong> {{ _('Dein Rating nach Niederlagen') }} ({{ mom.after_loss_avg }}) {{ _('ist leicht unter dem nach Siegen') }} ({{ mom.after_win_avg }}). {{ _('Normal und gesund.') }}
     {% endif %}
 </div>
 {% endif %}
@@ -160,7 +160,7 @@
 <div class="mo-section">
     <div class="mo-section-title">
         <i data-lucide="activity" style="width:16px;height:16px;color:var(--color-accent);"></i>
-        Performance-Flow (chronologisch)
+        {{ _('Performance-Flow (chronologisch)') }}
     </div>
     <div class="mo-flow">
         {% for f in mom.flow %}
@@ -183,13 +183,13 @@
 <div class="mo-section">
     <div class="mo-section-title">
         <i data-lucide="alert-triangle" style="width:16px;height:16px;color:#f87171;"></i>
-        <span style="color:#f87171;">Tilt-Phasen</span>
-        <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">— 2+ Niederlagen mit Rating &lt; 0.85</span>
+        <span style="color:#f87171;">{{ _('Tilt-Phasen') }}</span>
+        <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">— {{ _('2+ Niederlagen mit Rating &lt; 0.85') }}</span>
     </div>
     {% for t in mom.tilt_sessions %}
     <div class="mo-tilt-card">
         <div class="mo-tilt-info">
-            <strong>{{ t.start_date }}</strong> — {{ t.length }} Matches, Avg Rating {{ t.avg_rating }}
+            <strong>{{ t.start_date }}</strong> — {{ t.length }} {{ _('Matches') }}, Avg Rating {{ t.avg_rating }}
             <div style="font-size:11px;color:var(--color-neutral-500);margin-top:2px;">{{ t.maps|join(' → ') }}</div>
         </div>
         <div class="mo-tilt-badge">{{ t.length }}x Loss</div>
@@ -203,14 +203,14 @@
 <div class="mo-section">
     <div class="mo-section-title">
         <i data-lucide="trophy" style="width:16px;height:16px;color:#fbbf24;"></i>
-        <span style="color:#fbbf24;">Comebacks</span>
-        <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">— Siege trotz Halbzeit-Rueckstand</span>
+        <span style="color:#fbbf24;">{{ _('Comebacks') }}</span>
+        <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">— {{ _('Siege trotz Halbzeit-Rueckstand') }}</span>
     </div>
     {% for c in mom.comebacks %}
     <div class="mo-comeback-card">
         <div>
             <strong>{{ c.map }}</strong> — {{ c.score }}
-            <div style="font-size:11px;color:var(--color-neutral-500);margin-top:2px;">{{ c.date }} | Halbzeit {{ c.deficit }}</div>
+            <div style="font-size:11px;color:var(--color-neutral-500);margin-top:2px;">{{ c.date }} | {{ _('Halbzeit') }} {{ c.deficit }}</div>
         </div>
         <span class="tag tag-win">Comeback!</span>
     </div>
@@ -223,10 +223,10 @@
 <div class="mo-section">
     <div class="mo-section-title">
         <i data-lucide="calendar-days" style="width:16px;height:16px;color:var(--color-accent);"></i>
-        Session-Analyse (Tage mit 2+ Matches)
+        {{ _('Session-Analyse (Tage mit 2+ Matches)') }}
     </div>
     <div class="mo-session-header">
-        <span>Datum</span><span>Matches</span><span>Bilanz</span><span>Avg Rating</span><span>Trend</span><span>Rating-Verlauf</span>
+        <span>{{ _('Datum') }}</span><span>{{ _('Matches') }}</span><span>{{ _('Bilanz') }}</span><span>{{ _('Avg Rating') }}</span><span>{{ _('Trend') }}</span><span>{{ _('Rating-Verlauf') }}</span>
     </div>
     <div class="mo-session-grid">
         {% for s in mom.sessions|reverse %}
@@ -237,7 +237,7 @@
             <div class="{% if s.avg_rating >= 1.0 %}win{% elif s.avg_rating < 0.85 %}loss{% endif %}" style="font-weight:600;">{{ s.avg_rating }}</div>
             <div>
                 <span class="mo-trend-badge mo-trend-{{ s.trend }}">
-                    {% if s.trend == 'improving' %}Aufwaerts{% elif s.trend == 'declining' %}Abwaerts{% else %}Stabil{% endif %}
+                    {% if s.trend == 'improving' %}{{ _('Aufwaerts') }}{% elif s.trend == 'declining' %}{{ _('Abwaerts') }}{% else %}{{ _('Stabil') }}{% endif %}
                 </span>
             </div>
             <div style="font-size:12px;color:var(--color-neutral-500);">
@@ -257,13 +257,13 @@
 <div class="mo-section">
     <div class="mo-section-title">
         <i data-lucide="zap" style="width:16px;height:16px;color:#fbbf24;"></i>
-        Laengste Streaks
+        {{ _('Laengste Streaks') }}
     </div>
     <div class="mo-streak-grid">
         {% for s in mom.streaks[:6] %}
         <div class="mo-streak-card" style="border-top: 3px solid {% if s.type == 'win' %}#4ade80{% else %}#f87171{% endif %};">
             <div class="mo-streak-count {% if s.type == 'win' %}win{% else %}loss{% endif %}">{{ s.count }}</div>
-            <div class="mo-streak-label">{% if s.type == 'win' %}Siege{% else %}Niederlagen{% endif %} in Folge</div>
+            <div class="mo-streak-label">{% if s.type == 'win' %}{{ _('Siege') }}{% else %}{{ _('Niederlagen') }}{% endif %} {{ _('in Folge') }}</div>
         </div>
         {% endfor %}
     </div>

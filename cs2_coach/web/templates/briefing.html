@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Pre-Match Briefing{% endblock %}
+{% block title %}CS2 Coach — {{ _('Pre-Match Briefing') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Pre-Match Briefing</h2>
+<h2>{{ _('Pre-Match Briefing') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Deine persoenlichen Erinnerungen vor einem Match — waehle die Map.
+    {{ _('Deine persoenlichen Erinnerungen vor einem Match — waehle die Map.') }}
 </p>
 
 <style>
@@ -81,7 +81,7 @@
 
 {% if not brief.has_data and not brief.maps %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 
@@ -137,7 +137,7 @@
 
 <!-- Reminders -->
 {% if brief.reminders %}
-<div class="card-kicker" style="margin-bottom: 8px;">Erinnerungen fuer {{ brief.map }}</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Erinnerungen fuer') }} {{ brief.map }}</div>
 <div class="br-reminders">
     {% for r in brief.reminders %}
     <div class="br-reminder br-reminder-{{ r.type }}">
@@ -156,16 +156,16 @@
 <!-- Recent matches on this map -->
 {% if brief.recent %}
 <div class="br-recent">
-    <div class="card-kicker" style="margin-bottom: 8px;">Letzte Matches auf {{ brief.map }}</div>
+    <div class="card-kicker" style="margin-bottom: 8px;">{{ _('Letzte Matches auf') }} {{ brief.map }}</div>
     <div class="card elev-sm" style="padding: var(--space-3);">
         <table class="br-recent-table">
             <thead>
                 <tr>
-                    <th>Ergebnis</th>
+                    <th>{{ _('Ergebnis') }}</th>
                     <th>Score</th>
                     <th>Rating</th>
                     <th>K/D</th>
-                    <th>Datum</th>
+                    <th>{{ _('Datum') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -186,7 +186,7 @@
 
 {% else %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Daten fuer {{ brief.map }}. Spiel zuerst ein paar Matches auf dieser Map.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Daten fuer') }} {{ brief.map }}{{ _('.') }} {{ _('Spiel zuerst ein paar Matches auf dieser Map.') }}</p>
 </div>
 {% endif %}
 

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Wissensgraph{% endblock %}
+{% block title %}CS2 Coach — {{ _('Wissensgraph') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Wissensgraph</h2>
+<h2>{{ _('Wissensgraph') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Dein CS2-Coach-Vault als Wissensgraph — gebaut mit graphify.
+    {{ _('Dein CS2-Coach-Vault als Wissensgraph — gebaut mit graphify.') }}
 </p>
 
 <style>
@@ -33,15 +33,15 @@
     <form method="post" action="{{ url_for('graph_rebuild') }}">
         <button type="submit" class="btn btn-primary" style="display:flex;align-items:center;gap:6px;">
             <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i>
-            Graph neu bauen
+            {{ _('Graph neu bauen') }}
         </button>
     </form>
-    <span style="font-size:12px;color:var(--color-neutral-500);">Indexiert alle Notizen und Exports im Vault mit graphify.</span>
+    <span style="font-size:12px;color:var(--color-neutral-500);">{{ _('Indexiert alle Notizen und Exports im Vault mit graphify.') }}</span>
 </div>
 
 {% if not graph.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Noch kein Graph vorhanden. Klicke "Graph neu bauen" um den Wissensgraphen zu erstellen.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Noch kein Graph vorhanden. Klicke "Graph neu bauen" um den Wissensgraphen zu erstellen.') }}</p>
 </div>
 {% else %}
 
@@ -49,11 +49,11 @@
 <div class="gr-stat-row">
     <div class="gr-stat">
         <div class="gr-stat-val">{{ graph.nodes }}</div>
-        <div class="gr-stat-lbl">Knoten</div>
+        <div class="gr-stat-lbl">{{ _('Knoten') }}</div>
     </div>
     <div class="gr-stat">
         <div class="gr-stat-val">{{ graph.edges }}</div>
-        <div class="gr-stat-lbl">Kanten</div>
+        <div class="gr-stat-lbl">{{ _('Kanten') }}</div>
     </div>
 </div>
 {% endif %}
@@ -61,7 +61,7 @@
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);">
     {% if graph.top_nodes %}
     <div class="card elev-sm" style="padding:var(--space-4);">
-        <span class="card-kicker">Top-Knoten (nach Verbindungen)</span>
+        <span class="card-kicker">{{ _('Top-Knoten (nach Verbindungen)') }}</span>
         <div class="gr-node-list" style="margin-top:var(--space-3);">
             {% set max_deg = graph.top_nodes[0].get('degree', graph.top_nodes[0].get('size', 1)) %}
             {% for nd in graph.top_nodes %}
@@ -81,7 +81,7 @@
 
     {% if graph.analysis_md %}
     <div class="card elev-sm" style="padding:var(--space-4);">
-        <span class="card-kicker">Graph-Analyse</span>
+        <span class="card-kicker">{{ _('Graph-Analyse') }}</span>
         <div class="gr-analysis" style="margin-top:var(--space-3);">{{ graph.analysis_md }}</div>
     </div>
     {% endif %}

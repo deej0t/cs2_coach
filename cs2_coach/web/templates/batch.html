@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Batch-Analyse{% endblock %}
+{% block title %}CS2 Coach — {{ _('Batch-Analyse') }}{% endblock %}
 
 {% block content %}
 <style>
@@ -35,36 +35,36 @@
     .scan-pill.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
 </style>
 
-<h2>Batch-Analyse</h2>
+<h2>{{ _('Batch-Analyse') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Scanne einen Demo-Ordner, sieh welche Matches neu sind, und analysiere alle auf einmal.
+    {{ _('Scanne einen Demo-Ordner, sieh welche Matches neu sind, und analysiere alle auf einmal.') }}
 </p>
 
 <!-- Form -->
 <div id="batch-form-card" class="card elev-sm" style="max-width: 600px; margin-bottom: var(--space-5);">
-    <span class="card-kicker">Ordner</span>
+    <span class="card-kicker">{{ _('Ordner') }}</span>
     <form id="batch-form" style="display:flex;flex-direction:column;gap:var(--space-3);">
         <div class="field">
-            <label>Ordner-Pfad</label>
+            <label>{{ _('Ordner-Pfad') }}</label>
             <div style="display:flex;gap:var(--space-2);">
                 <input type="text" name="folder_path" id="batch-folder" placeholder="D:/SteamLibrary/.../replays/" required class="input" style="flex:1;">
-                <button type="button" id="scan-btn" class="btn btn-secondary">Scannen</button>
+                <button type="button" id="scan-btn" class="btn btn-secondary">{{ _('Scannen') }}</button>
             </div>
         </div>
         <div class="grid-2">
             <div class="field">
-                <label>Spieler-Name</label>
+                <label>{{ _('Spieler-Name') }}</label>
                 <input type="text" name="player" id="batch-player" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input">
             </div>
             <div class="field">
-                <label>SteamID64 (optional)</label>
+                <label>{{ _('SteamID64 (optional)') }}</label>
                 <input type="text" name="steamid" id="batch-steamid" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input">
             </div>
         </div>
         <div style="display: flex; gap: var(--space-3); align-items: center;">
-            <button type="submit" id="batch-submit" class="btn btn-primary" disabled>Alle analysieren</button>
-            <button type="button" id="batch-new-only" class="btn btn-secondary" style="display:none;">Nur Neue analysieren</button>
-            <button type="button" id="batch-reset" class="btn btn-secondary" style="display:none;">Reset</button>
+            <button type="submit" id="batch-submit" class="btn btn-primary" disabled>{{ _('Alle analysieren') }}</button>
+            <button type="button" id="batch-new-only" class="btn btn-secondary" style="display:none;">{{ _('Nur Neue analysieren') }}</button>
+            <button type="button" id="batch-reset" class="btn btn-secondary" style="display:none;">{{ _('Reset') }}</button>
         </div>
     </form>
 </div>
@@ -72,16 +72,16 @@
 <!-- Scan Results (hidden initially) -->
 <div id="scan-results" style="display:none; margin-bottom: var(--space-5);">
     <div class="card elev-sm" style="padding: var(--space-3);">
-        <div class="card-kicker" style="margin-bottom: 8px;">Demo-Dateien</div>
+        <div class="card-kicker" style="margin-bottom: 8px;">{{ _('Demo-Dateien') }}</div>
         <div class="scan-summary">
-            <span>Gesamt: <span class="scan-count" id="scan-total">0</span></span>
-            <span>Neu: <span class="scan-count scan-new" id="scan-new">0</span></span>
-            <span>Analysiert: <span class="scan-count scan-done" id="scan-analyzed">0</span></span>
+            <span>{{ _('Gesamt:') }} <span class="scan-count" id="scan-total">0</span></span>
+            <span>{{ _('Neu:') }} <span class="scan-count scan-new" id="scan-new">0</span></span>
+            <span>{{ _('Analysiert:') }} <span class="scan-count scan-done" id="scan-analyzed">0</span></span>
         </div>
         <div class="scan-filter-bar">
-            <button class="scan-pill active" data-filter="all">Alle</button>
-            <button class="scan-pill" data-filter="new">Nur Neue</button>
-            <button class="scan-pill" data-filter="done">Bereits analysiert</button>
+            <button class="scan-pill active" data-filter="all">{{ _('Alle') }}</button>
+            <button class="scan-pill" data-filter="new">{{ _('Nur Neue') }}</button>
+            <button class="scan-pill" data-filter="done">{{ _('Bereits analysiert') }}</button>
         </div>
         <div class="demo-list" id="demo-list"></div>
     </div>
@@ -91,7 +91,7 @@
 <div id="batch-progress" style="display:none; margin-bottom: var(--space-5);">
     <div class="card elev-sm" style="padding: var(--space-4);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <span class="card-kicker" id="progress-label">Analysiere...</span>
+            <span class="card-kicker" id="progress-label">{{ _('Analysiere...') }}</span>
             <span style="font-size: 13px; color: var(--color-neutral-300);" id="progress-count">0 / 0</span>
         </div>
         <div style="position: relative; height: 8px; background: var(--color-neutral-800); border-radius: 4px; overflow: hidden;">
@@ -108,15 +108,15 @@
 <div id="batch-summary" style="display:none; margin-bottom: var(--space-5);">
     <div class="grid-3">
         <div class="card elev-sm">
-            <div class="card-kicker">Bilanz</div>
+            <div class="card-kicker">{{ _('Bilanz') }}</div>
             <div id="summary-record" style="font-size: 28px; font-weight: 500;"></div>
         </div>
         <div class="card elev-sm">
-            <div class="card-kicker"><abbr title="Gesamtbewertung basierend auf Impact-Metriken">Avg Rating</abbr></div>
+            <div class="card-kicker"><abbr title="{{ _('Gesamtbewertung basierend auf Impact-Metriken') }}">Avg Rating</abbr></div>
             <div id="summary-rating" style="font-size: 28px; font-weight: 500;"></div>
         </div>
         <div class="card elev-sm">
-            <div class="card-kicker"><abbr title="Kill/Death-Verhaeltnis">Gesamt K/D</abbr></div>
+            <div class="card-kicker"><abbr title="{{ _('Kill/Death-Verhaeltnis') }}">Gesamt K/D</abbr></div>
             <div id="summary-kd" style="font-size: 28px; font-weight: 500;"></div>
             <div id="summary-kd-ratio" style="font-size: 12px; color: var(--color-neutral-500);"></div>
         </div>
@@ -128,15 +128,15 @@
     <table class="table" id="results-table">
         <thead>
             <tr>
-                <th class="sort-header" data-sort="date">Datum</th>
-                <th class="sort-header" data-sort="map">Map</th>
-                <th>Score</th>
-                <th class="sort-header" data-sort="result">Ergebnis</th>
-                <th class="sort-header" data-sort="kills"><abbr title="Kills / Deaths / Assists">K/D/A</abbr></th>
-                <th class="sort-header" data-sort="adr"><abbr title="Average Damage per Round">ADR</abbr></th>
-                <th class="sort-header" data-sort="hs_pct"><abbr title="Headshot-Prozent">HS%</abbr></th>
-                <th class="sort-header" data-sort="kast_pct"><abbr title="Kill, Assist, Survived, Traded">KAST%</abbr></th>
-                <th class="sort-header" data-sort="rating"><abbr title="Gesamtbewertung basierend auf Impact-Metriken">Rating</abbr></th>
+                <th class="sort-header" data-sort="date">{{ _('Datum') }}</th>
+                <th class="sort-header" data-sort="map">{{ _('Map') }}</th>
+                <th>{{ _('Score') }}</th>
+                <th class="sort-header" data-sort="result">{{ _('Ergebnis') }}</th>
+                <th class="sort-header" data-sort="kills"><abbr title="{{ _('Kills / Deaths / Assists') }}">K/D/A</abbr></th>
+                <th class="sort-header" data-sort="adr"><abbr title="{{ _('Average Damage per Round') }}">ADR</abbr></th>
+                <th class="sort-header" data-sort="hs_pct"><abbr title="{{ _('Headshot-Prozent') }}">HS%</abbr></th>
+                <th class="sort-header" data-sort="kast_pct"><abbr title="{{ _('Kill, Assist, Survived, Traded') }}">KAST%</abbr></th>
+                <th class="sort-header" data-sort="rating"><abbr title="{{ _('Gesamtbewertung basierend auf Impact-Metriken') }}">Rating</abbr></th>
                 <th></th>
             </tr>
         </thead>
@@ -176,13 +176,13 @@
         var folder = document.getElementById('batch-folder').value.trim();
         if (!folder) return;
         scanBtn.disabled = true;
-        scanBtn.textContent = 'Scanne...';
+        scanBtn.textContent = '{{ _("Scanne...") }}';
 
         fetch('{{ url_for("scan_folder") }}?folder=' + encodeURIComponent(folder))
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 scanBtn.disabled = false;
-                scanBtn.textContent = 'Scannen';
+                scanBtn.textContent = '{{ _("Scannen") }}';
                 if (data.error) {
                     if (window._notyf) window._notyf.error(data.error);
                     return;
@@ -196,14 +196,14 @@
                 submitBtn.disabled = false;
                 if (data.new > 0) {
                     newOnlyBtn.style.display = '';
-                    newOnlyBtn.textContent = 'Nur Neue (' + data.new + ')';
+                    newOnlyBtn.textContent = '{{ _("Nur Neue") }} (' + data.new + ')';
                 } else {
                     newOnlyBtn.style.display = 'none';
                 }
             })
             .catch(function() {
                 scanBtn.disabled = false;
-                scanBtn.textContent = 'Scannen';
+                scanBtn.textContent = '{{ _("Scannen") }}';
             });
     });
 
@@ -225,7 +225,7 @@
             return true;
         });
         if (filtered.length === 0) {
-            demoList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-neutral-500);font-size:13px;">Keine Demos in dieser Kategorie.</div>';
+            demoList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-neutral-500);font-size:13px;">{{ _("Keine Demos in dieser Kategorie.") }}</div>';
             return;
         }
         for (var i = 0; i < filtered.length; i++) {
@@ -233,14 +233,14 @@
             var row = document.createElement('div');
             row.className = 'demo-row' + (d.analyzed ? ' analyzed' : '');
             row.innerHTML =
-                '<div><span class="demo-status ' + (d.analyzed ? 'done' : 'new') + '" title="' + (d.analyzed ? 'Bereits analysiert' : 'Neu — noch nicht analysiert') + '"></span></div>' +
+                '<div><span class="demo-status ' + (d.analyzed ? 'done' : 'new') + '" title="' + (d.analyzed ? '{{ _("Bereits analysiert") }}' : '{{ _("Neu — noch nicht analysiert") }}') + '"></span></div>' +
                 '<div class="demo-name" title="' + esc(d.filename) + '">' + esc(d.filename) + '</div>' +
                 '<div class="demo-date">' + esc(d.date) + '</div>' +
                 '<div class="demo-size">' + d.size_mb + ' MB</div>' +
                 '<div class="demo-action">' +
                     (d.analyzed
                         ? '<span style="font-size:10px;color:var(--color-green);">&#10003;</span>'
-                        : '<span style="font-size:10px;color:var(--color-accent);">NEU</span>') +
+                        : '<span style="font-size:10px;color:var(--color-accent);">{{ _("NEU") }}</span>') +
                 '</div>';
             demoList.appendChild(row);
         }
@@ -256,7 +256,7 @@
         progressDiv.style.display = 'none';
         progressBar.style.width = '0%'; progressBar.style.background = 'var(--color-accent)';
         resetBtn.style.display = 'none';
-        submitBtn.disabled = false; submitBtn.textContent = 'Alle analysieren';
+        submitBtn.disabled = false; submitBtn.textContent = '{{ _("Alle analysieren") }}';
         document.querySelectorAll('.sort-header').forEach(function(th) { th.classList.remove('sort-asc', 'sort-desc'); });
     });
 
@@ -274,9 +274,9 @@
         progressDiv.style.display = ''; resultsDiv.style.display = '';
         progressBar.style.width = '0%'; progressBar.style.background = 'var(--color-accent)';
         progressCount.textContent = '0 / ?';
-        progressLabel.textContent = 'Analysiere...';
+        progressLabel.textContent = '{{ _("Analysiere...") }}';
         progressFile.textContent = '';
-        submitBtn.disabled = true; submitBtn.textContent = 'Laeuft...';
+        submitBtn.disabled = true; submitBtn.textContent = '{{ _("Laeuft...") }}';
         newOnlyBtn.style.display = 'none';
         resetBtn.style.display = '';
 
@@ -289,9 +289,9 @@
             var d = JSON.parse(event.data);
             if (d.type === 'error') {
                 es.close(); currentES = null;
-                progressLabel.textContent = 'Fehler'; progressFile.textContent = d.message;
+                progressLabel.textContent = '{{ _("Fehler") }}'; progressFile.textContent = d.message;
                 progressBar.style.background = 'var(--color-red)'; progressBar.style.width = '100%';
-                submitBtn.disabled = false; submitBtn.textContent = 'Alle analysieren';
+                submitBtn.disabled = false; submitBtn.textContent = '{{ _("Alle analysieren") }}';
                 return;
             }
             if (d.type === 'init') { progressCount.textContent = '0 / ' + d.total; return; }
@@ -301,7 +301,6 @@
                 progressCount.textContent = d.current + ' / ' + d.total;
                 progressFile.textContent = d.filename;
                 addResultRow(d);
-                // Update scan list status
                 markAnalyzed(d.filename);
                 return;
             }
@@ -309,7 +308,7 @@
                 allErrors.push(d);
                 progressBar.style.width = (d.current / d.total * 100).toFixed(1) + '%';
                 progressCount.textContent = d.current + ' / ' + d.total;
-                progressFile.textContent = d.filename + ' (Fehler)';
+                progressFile.textContent = d.filename + ' ({{ _("Fehler") }})';
                 errorsDiv.style.display = '';
                 var div = document.createElement('div');
                 div.className = 'flash error'; div.style.marginBottom = '4px';
@@ -319,20 +318,19 @@
             }
             if (d.type === 'done') {
                 es.close(); currentES = null;
-                progressLabel.textContent = 'Fertig';
+                progressLabel.textContent = '{{ _("Fertig") }}';
                 progressBar.style.width = '100%'; progressBar.style.background = 'var(--color-green)';
-                submitBtn.disabled = false; submitBtn.textContent = 'Alle analysieren';
+                submitBtn.disabled = false; submitBtn.textContent = '{{ _("Alle analysieren") }}';
                 updateSummary();
-                // Re-scan to update counts
                 scanBtn.click();
                 return;
             }
         };
         es.onerror = function() {
             es.close(); currentES = null;
-            progressLabel.textContent = 'Verbindung verloren';
+            progressLabel.textContent = '{{ _("Verbindung verloren") }}';
             progressBar.style.background = 'var(--color-red)';
-            submitBtn.disabled = false; submitBtn.textContent = 'Alle analysieren';
+            submitBtn.disabled = false; submitBtn.textContent = '{{ _("Alle analysieren") }}';
         };
     }
 
@@ -346,7 +344,6 @@
                 break;
             }
         }
-        // Update counts
         var newCount = scannedDemos.filter(function(d) { return !d.analyzed; }).length;
         var doneCount = scannedDemos.filter(function(d) { return d.analyzed; }).length;
         document.getElementById('scan-new').textContent = newCount;
@@ -376,7 +373,7 @@
             '<td>' + d.hs_pct + '%</td>' +
             '<td>' + d.kast_pct + '%</td>' +
             '<td>' + d.rating + '</td>' +
-            '<td><form action="{{ url_for("analyze_path") }}" method="post" style="display:inline;"><input type="hidden" name="demo_path" value="' + escAttr(d.demo_path) + '"><input type="hidden" name="player" value="' + escAttr(document.getElementById('batch-player').value) + '"><input type="hidden" name="steamid" value="' + escAttr(document.getElementById('batch-steamid').value) + '"><button type="submit" class="btn btn-ghost" style="font-size:12px;padding:2px 8px;">Details &rarr;</button></form></td>';
+            '<td><form action="{{ url_for("analyze_path") }}" method="post" style="display:inline;"><input type="hidden" name="demo_path" value="' + escAttr(d.demo_path) + '"><input type="hidden" name="player" value="' + escAttr(document.getElementById('batch-player').value) + '"><input type="hidden" name="steamid" value="' + escAttr(document.getElementById('batch-steamid').value) + '"><button type="submit" class="btn btn-ghost" style="font-size:12px;padding:2px 8px;">{{ _("Details") }} &rarr;</button></form></td>';
         resultsBody.appendChild(tr);
     }
 
@@ -415,7 +412,7 @@
         document.getElementById('summary-record').innerHTML = record;
         document.getElementById('summary-rating').textContent = (ratingSum / allResults.length).toFixed(2);
         document.getElementById('summary-kd').textContent = totalK + '/' + totalD;
-        document.getElementById('summary-kd-ratio').textContent = 'Ratio: ' + (totalK / Math.max(totalD,1)).toFixed(2);
+        document.getElementById('summary-kd-ratio').textContent = '{{ _("Ratio:") }} ' + (totalK / Math.max(totalD,1)).toFixed(2);
     }
 
     function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }

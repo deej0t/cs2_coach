@@ -3,15 +3,15 @@
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Session-Uebersicht</h2>
+<h2>{{ _('Session-Uebersicht') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Deine Spiel-Sessions gruppiert nach Tag — erkennt Tilt, Ermuedung und Warmup-Effekte.
+    {{ _('Deine Spiel-Sessions gruppiert nach Tag — erkennt Tilt, Ermuedung und Warmup-Effekte.') }}
 </p>
 
 {% if not sessions %}
 <div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
-    <p style="color: var(--color-neutral-500);">Keine analysierten Matches vorhanden.</p>
-    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">Demo analysieren</a>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine analysierten Matches vorhanden.') }}</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">{{ _('Demo analysieren') }}</a>
 </div>
 {% else %}
 
@@ -64,18 +64,18 @@
     <div class="card elev-sm si-card">
         <div class="si-title">
             <i data-lucide="clock" style="width:16px;height:16px;color:var(--color-accent);"></i>
-            Optimale Spielzeit
+            {{ _('Optimale Spielzeit') }}
         </div>
         {% if insights.best_time %}
         <div class="si-insight">
-            <strong>Beste Zeit: {{ insights.best_time.bracket }}</strong> — Rating {{ insights.best_time.avg_rating }}, Win-Rate {{ insights.best_time.win_rate }}%
+            <strong>{{ _('Beste Zeit:') }} {{ insights.best_time.bracket }}</strong> — Rating {{ insights.best_time.avg_rating }}, Win-Rate {{ insights.best_time.win_rate }}%
             {% if insights.worst_time and insights.worst_time.bracket != insights.best_time.bracket %}
-            <br><span style="font-size:12px;">Schlechteste: {{ insights.worst_time.bracket }} (Rating {{ insights.worst_time.avg_rating }})</span>
+            <br><span style="font-size:12px;">{{ _('Schlechteste:') }} {{ insights.worst_time.bracket }} (Rating {{ insights.worst_time.avg_rating }})</span>
             {% endif %}
         </div>
         {% endif %}
         <div class="si-bracket-header">
-            <span>Zeitraum</span><span>Games</span><span>Rating</span><span>K/D</span><span>Win%</span>
+            <span>{{ _('Zeitraum') }}</span><span>{{ _('Games') }}</span><span>Rating</span><span>K/D</span><span>Win%</span>
         </div>
         <div class="si-bracket-grid">
             {% for b in insights.playtime %}
@@ -90,7 +90,7 @@
         </div>
         {% if insights.hourly %}
         <div style="margin-top:var(--space-3);">
-            <div style="font-size:10px;color:var(--color-neutral-500);margin-bottom:4px;">Matches pro Stunde</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);margin-bottom:4px;">{{ _('Matches pro Stunde') }}</div>
             <div class="si-hour-chart">
                 {% set max_matches = insights.hourly|map(attribute='matches')|max %}
                 {% for h in insights.hourly %}
@@ -114,20 +114,20 @@
     <div class="card elev-sm si-card">
         <div class="si-title">
             <i data-lucide="battery-low" style="width:16px;height:16px;color:#fbbf24;"></i>
-            Ermuedung & Session-Laenge
+            {{ _('Ermuedung & Session-Laenge') }}
         </div>
         {% if insights.fatigue_drop %}
         <div class="si-insight" style="border-left-color:#f87171;">
-            <strong>Ermuedung erkannt!</strong> {{ insights.fatigue_drop.recommendation }}
+            <strong>{{ _('Ermuedung erkannt!') }}</strong> {{ insights.fatigue_drop.recommendation }}
             <br><span style="font-size:12px;">Spiel 1–2: Rating {{ insights.fatigue_drop.early_avg }} → Spiel 4+: Rating {{ insights.fatigue_drop.late_avg }} (−{{ insights.fatigue_drop.drop }})</span>
         </div>
         {% elif insights.fatigue_curve|length > 2 %}
         <div class="si-insight" style="border-left-color:#4ade80;">
-            <strong>Keine Ermuedung erkannt.</strong> Dein Rating bleibt ueber die Session stabil.
+            <strong>{{ _('Keine Ermuedung erkannt.') }}</strong> {{ _('Dein Rating bleibt ueber die Session stabil.') }}
         </div>
         {% endif %}
         {% if insights.fatigue_curve %}
-        <div style="font-size:11px;color:var(--color-neutral-500);margin-bottom:6px;">Rating nach Spielnummer in der Session</div>
+        <div style="font-size:11px;color:var(--color-neutral-500);margin-bottom:6px;">{{ _('Rating nach Spielnummer in der Session') }}</div>
         <div class="si-fatigue-bar">
             {% set max_fat = insights.fatigue_curve|map(attribute='avg_rating')|max %}
             {% set min_fat = insights.fatigue_curve|map(attribute='avg_rating')|min %}
@@ -144,7 +144,7 @@
         {% endif %}
         {% if insights.optimal_length %}
         <div style="margin-top:var(--space-3);padding:8px 12px;border-radius:var(--radius-sm);background:rgba(255,255,255,0.02);font-size:12px;">
-            <span style="color:var(--color-neutral-500);">Optimale Session-Laenge:</span>
+            <span style="color:var(--color-neutral-500);">{{ _('Optimale Session-Laenge:') }}</span>
             <span style="font-weight:600;color:var(--color-text);">{{ insights.optimal_length.label }}</span>
             <span style="color:var(--color-neutral-500);">(Rating {{ insights.optimal_length.avg_rating }}, {{ insights.optimal_length.sessions }} Sessions)</span>
         </div>
@@ -222,7 +222,7 @@
             {% endif %}
         </div>
         <div class="sess-meta">
-            <span>{{ s.matches }} Match{{ 'es' if s.matches != 1 }}</span>
+            <span>{{ s.matches }} {{ _('Match') }}{{ 'es' if s.matches != 1 }}</span>
             <span>Win-Rate: <span class="sess-meta-val {% if s.win_rate >= 60 %}sc-green{% elif s.win_rate >= 40 %}sc-yellow{% else %}sc-red{% endif %}">{{ s.win_rate }}%</span></span>
         </div>
     </div>
@@ -246,7 +246,7 @@
                 <span style="color:#f87171;">{{ s.losses }}L</span>
                 {% if s.draws %}<span style="color:#fbbf24;">{{ s.draws }}D</span>{% endif %}
             </div>
-            <div class="sess-stat-label">Bilanz</div>
+            <div class="sess-stat-label">{{ _('Bilanz') }}</div>
         </div>
         {% if s.ratings|length > 1 %}
         <div class="sess-stat" style="min-width:auto;">
@@ -258,19 +258,19 @@
                 <div class="sess-spark-bar" style="height:{{ ((r - min_r) / range_r * 24 + 6)|round }}px;background:{% if r >= 1.1 %}#4ade80{% elif r >= 0.9 %}#9184d9{% else %}#f87171{% endif %};"></div>
                 {% endfor %}
             </div>
-            <div class="sess-stat-label">Verlauf</div>
+            <div class="sess-stat-label">{{ _('Verlauf') }}</div>
         </div>
         {% endif %}
     </div>
 
     {% if s.tilt %}
     <div style="padding:6px 12px;margin-bottom:var(--space-3);border-radius:var(--radius-sm);font-size:12px;color:var(--color-neutral-300);background:{% if s.tilt.type == 'tilt' %}rgba(248,113,113,0.06){% elif s.tilt.type == 'fatigue' %}rgba(251,191,36,0.06){% else %}rgba(74,222,128,0.06){% endif %};border-left:3px solid {% if s.tilt.type == 'tilt' %}#f87171{% elif s.tilt.type == 'fatigue' %}#fbbf24{% else %}#4ade80{% endif %};">
-        {{ s.tilt.desc }}{% if s.tilt.type == 'tilt' %} — Nach 2-3 Niederlagen in Folge solltest du eine Pause machen.{% endif %}
+        {{ s.tilt.desc }}{% if s.tilt.type == 'tilt' %} — {{ _('Nach 2-3 Niederlagen in Folge solltest du eine Pause machen.') }}{% endif %}
     </div>
     {% endif %}
 
     <details>
-        <summary style="cursor:pointer;font-size:12px;color:var(--color-neutral-500);">Matches anzeigen</summary>
+        <summary style="cursor:pointer;font-size:12px;color:var(--color-neutral-500);">{{ _('Matches anzeigen') }}</summary>
         <div class="sess-matches">
             <div class="sess-match-row" style="font-weight:600;font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;letter-spacing:0.08em;">
                 <span>Map</span><span>Score</span><span>Rating</span><span>K/D</span><span>ADR</span><span></span>

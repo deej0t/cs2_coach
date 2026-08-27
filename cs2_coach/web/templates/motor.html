@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Muskelgedaechtnis{% endblock %}
+{% block title %}CS2 Coach — {{ _('Muskelgedaechtnis') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Muskelgedaechtnis</h2>
+<h2>{{ _('Muskelgedaechtnis') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Motorische Faehigkeiten ueber Zeit — Spray, Counter-Strafe, Crosshair Placement, Headshot-Rate.
+    {{ _('Motorische Faehigkeiten ueber Zeit — Spray, Counter-Strafe, Crosshair Placement, Headshot-Rate.') }}
 </p>
 
 <style>
@@ -70,7 +70,7 @@
 
 {% if not ms.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Nicht genug Daten — mindestens 3 Matches mit Mechanik-Daten noetig.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Nicht genug Daten — mindestens 3 Matches mit Mechanik-Daten noetig.') }}</p>
 </div>
 {% else %}
 
@@ -78,16 +78,16 @@
 <div class="ms-hero">
     <div class="card elev-sm ms-stat-card">
         <div class="ms-stat-val" style="color: var(--color-accent);">{{ ms.total_matches }}</div>
-        <div class="ms-stat-lbl">Matches analysiert</div>
+        <div class="ms-stat-lbl">{{ _('Matches analysiert') }}</div>
     </div>
     <div class="card elev-sm ms-stat-card">
         <div class="ms-stat-val">{{ ms.skills|length }}</div>
-        <div class="ms-stat-lbl">Skills getrackt</div>
+        <div class="ms-stat-lbl">{{ _('Skills getrackt') }}</div>
     </div>
     {% set improved_count = ms.skills|selectattr("improved")|list|length %}
     <div class="card elev-sm ms-stat-card">
         <div class="ms-stat-val {% if improved_count >= ms.skills|length // 2 + 1 %}win{% else %}loss{% endif %}">{{ improved_count }}/{{ ms.skills|length }}</div>
-        <div class="ms-stat-lbl">Verbessert</div>
+        <div class="ms-stat-lbl">{{ _('Verbessert') }}</div>
     </div>
 </div>
 
@@ -104,7 +104,7 @@
 {% endif %}
 
 <!-- Skill Cards -->
-<div class="card-kicker" style="margin-bottom: 8px;">Motor-Skills im Detail</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Motor-Skills im Detail') }}</div>
 <div class="ms-grid">
     {% for sk in ms.skills %}
     <div class="card elev-sm ms-skill-card" style="border-top-color: {{ sk.color }};">

@@ -3,9 +3,9 @@
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Nemesis-Analyse</h2>
+<h2>{{ _('Nemesis-Analyse') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Gegner ueber alle Matches — wer dominiert dich, und wen dominierst du?
+    {{ _('Gegner ueber alle Matches — wer dominiert dich, und wen dominierst du?') }}
 </p>
 
 <style>
@@ -70,7 +70,7 @@
 
 {% if not nem.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Duel-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Duel-Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 
@@ -78,11 +78,11 @@
 <div class="nm-hero">
     <div class="nm-stat-card">
         <div class="nm-stat-val">{{ nem.match_count }}</div>
-        <div class="nm-stat-lbl">Matches</div>
+        <div class="nm-stat-lbl">{{ _('Matches') }}</div>
     </div>
     <div class="nm-stat-card">
         <div class="nm-stat-val">{{ nem.total_enemies }}</div>
-        <div class="nm-stat-lbl">Gegner</div>
+        <div class="nm-stat-lbl">{{ _('Gegner') }}</div>
     </div>
     <div class="nm-stat-card">
         <div class="nm-stat-val {% if nem.avg_kd >= 1.2 %}win{% elif nem.avg_kd < 0.9 %}loss{% endif %}">{{ nem.avg_kd }}</div>
@@ -90,20 +90,20 @@
     </div>
     <div class="nm-stat-card">
         <div class="nm-stat-val win">{{ nem.total_kills }}</div>
-        <div class="nm-stat-lbl">Kills</div>
+        <div class="nm-stat-lbl">{{ _('Kills') }}</div>
     </div>
     <div class="nm-stat-card">
         <div class="nm-stat-val loss">{{ nem.total_deaths }}</div>
-        <div class="nm-stat-lbl">Deaths</div>
+        <div class="nm-stat-lbl">{{ _('Deaths') }}</div>
     </div>
 </div>
 
 <!-- Tabs -->
 <div class="nm-tabs">
-    <button class="nm-tab active" data-tab="nemeses">Nemeses</button>
-    <button class="nm-tab" data-tab="victims">Victims</button>
-    <button class="nm-tab" data-tab="frequent">Haeufigste</button>
-    <button class="nm-tab" data-tab="all">Alle</button>
+    <button class="nm-tab active" data-tab="nemeses">{{ _('Nemeses') }}</button>
+    <button class="nm-tab" data-tab="victims">{{ _('Victims') }}</button>
+    <button class="nm-tab" data-tab="frequent">{{ _('Haeufigste') }}</button>
+    <button class="nm-tab" data-tab="all">{{ _('Alle') }}</button>
 </div>
 
 <!-- Nemeses -->

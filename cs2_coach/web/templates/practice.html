@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Practice Server{% endblock %}
+{% block title %}CS2 Coach — {{ _('Practice Server') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Practice Server</h2>
+<h2>{{ _('Practice Server') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-4);">
-    Privater CS2 Server mit Bot-Setups aus deinen Demos. Trainiere genau die Spots wo du stirbst.
+    {{ _('Privater CS2 Server mit Bot-Setups aus deinen Demos. Trainiere genau die Spots wo du stirbst.') }}
 </p>
 
 <style>
@@ -65,7 +65,7 @@
 
 {% if not pdata.has_data %}
 <div class="card elev-sm" style="padding: var(--space-6); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Positionsdaten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Positionsdaten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 
@@ -77,18 +77,18 @@
     </div>
     <div class="pr-hero-card">
         <div class="pr-hero-val">{{ pdata.total_positions }}</div>
-        <div class="pr-hero-lbl">Positionen</div>
+        <div class="pr-hero-lbl">{{ _('Positionen') }}</div>
     </div>
     <div class="pr-hero-card">
         {% set total_hotspots = pdata.maps|sum(attribute='hotspots') %}
         <div class="pr-hero-val loss">{{ total_hotspots }}</div>
-        <div class="pr-hero-lbl">Death-Hotspots</div>
+        <div class="pr-hero-lbl">{{ _('Death-Hotspots') }}</div>
     </div>
     <div class="pr-hero-card">
         {% set total_deaths = pdata.maps|sum(attribute='deaths') %}
         {% set total_kills = pdata.maps|sum(attribute='kills') %}
         <div class="pr-hero-val {% if total_kills > total_deaths %}win{% else %}loss{% endif %}">{{ (total_kills / [total_deaths, 1]|max)|round(2) }}</div>
-        <div class="pr-hero-lbl">Gesamt K/D</div>
+        <div class="pr-hero-lbl">{{ _('Gesamt K/D') }}</div>
     </div>
 </div>
 

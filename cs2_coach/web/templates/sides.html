@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — CT vs T Analyse{% endblock %}
+{% block title %}CS2 Coach — {{ _('CT vs T Analyse') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
@@ -73,15 +73,15 @@
     }
 </style>
 
-<h2>CT vs T — Seiten-Analyse</h2>
+<h2>{{ _('CT vs T — Seiten-Analyse') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Vergleich deiner Performance auf CT- und T-Side ueber {{ sa.match_count }} Matches.
+    {{ _('Vergleich deiner Performance auf CT- und T-Side ueber') }} {{ sa.match_count }} {{ _('Matches.') }}
 </p>
 
 {% if not sa.has_data %}
 <div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
-    <p style="color: var(--color-neutral-500);">Keine analysierten Matches vorhanden.</p>
-    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">Demo analysieren</a>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine analysierten Matches vorhanden.') }}</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">{{ _('Demo analysieren') }}</a>
 </div>
 {% else %}
 
@@ -151,7 +151,7 @@
         </div>
         {% if sa.t.plants > 0 %}
         <div style="margin-top:8px;font-size:12px;color:var(--color-neutral-400);">
-            {{ sa.t.plants }} Bomb Plants{% if sa.t.self_plants > 0 %} ({{ sa.t.self_plants }} selbst){% endif %}
+            {{ sa.t.plants }} Bomb Plants{% if sa.t.self_plants > 0 %} ({{ sa.t.self_plants }} {{ _('selbst') }}){% endif %}
         </div>
         {% endif %}
     </div>
@@ -159,13 +159,13 @@
 
 <!-- ── Visual Comparison Bars ── -->
 <div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
-    <span class="card-kicker">Direktvergleich</span>
+    <span class="card-kicker">{{ _('Direktvergleich') }}</span>
     {% set comparisons = [
         ("Win-Rate", sa.ct.wr, sa.t.wr, "%"),
         ("K/D", sa.ct.kd, sa.t.kd, ""),
-        ("Kills/Runde", sa.ct.kpr, sa.t.kpr, ""),
-        ("Deaths/Runde", sa.ct.dpr, sa.t.dpr, ""),
-        ("HS-Quote", sa.ct.hs_pct, sa.t.hs_pct, "%"),
+        (_("Kills/Runde"), sa.ct.kpr, sa.t.kpr, ""),
+        (_("Deaths/Runde"), sa.ct.dpr, sa.t.dpr, ""),
+        (_("HS-Quote"), sa.ct.hs_pct, sa.t.hs_pct, "%"),
     ] %}
     {% for label, ct_val, t_val, unit in comparisons %}
     {% set total = ct_val + t_val if (ct_val + t_val) > 0 else 1 %}
@@ -189,7 +189,7 @@
 <!-- ── Top Weapons per Side ── -->
 <div class="grid-2" style="margin-bottom:var(--space-5);">
     <div class="card elev-sm" style="padding:var(--space-4);">
-        <span class="card-kicker" style="color:#60a5fa;">CT Waffen</span>
+        <span class="card-kicker" style="color:#60a5fa;">{{ _('CT Waffen') }}</span>
         <div class="wpn-list">
             {% for w in sa.ct_top_weapons %}
             <span class="wpn-chip">{{ w.weapon }}<span class="wpn-count">{{ w.kills }}</span></span>
@@ -197,7 +197,7 @@
         </div>
     </div>
     <div class="card elev-sm" style="padding:var(--space-4);">
-        <span class="card-kicker" style="color:#f59e0b;">T Waffen</span>
+        <span class="card-kicker" style="color:#f59e0b;">{{ _('T Waffen') }}</span>
         <div class="wpn-list">
             {% for w in sa.t_top_weapons %}
             <span class="wpn-chip">{{ w.weapon }}<span class="wpn-count">{{ w.kills }}</span></span>
@@ -209,15 +209,15 @@
 <!-- ── Map-Specific Side Performance ── -->
 {% if sa.map_stats %}
 <div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
-    <span class="card-kicker">Map-spezifische Seiten-Performance</span>
+    <span class="card-kicker">{{ _('Map-spezifische Seiten-Performance') }}</span>
     <div class="map-side-header" style="margin-top:8px;">
         <span>Map</span>
         <span style="text-align:center;color:#60a5fa;">CT WR</span>
         <span style="text-align:center;color:#60a5fa;" class="map-hide">CT K/D</span>
         <span style="text-align:center;color:#f59e0b;">T WR</span>
         <span style="text-align:center;color:#f59e0b;" class="map-hide">T K/D</span>
-        <span style="text-align:center;">Runden</span>
-        <span style="text-align:center;">Dominant</span>
+        <span style="text-align:center;">{{ _('Runden') }}</span>
+        <span style="text-align:center;">{{ _('Dominant') }}</span>
     </div>
     {% for m in sa.map_stats %}
     <div class="map-side-row">
@@ -236,7 +236,7 @@
 <!-- ── Side Performance Trend ── -->
 {% if sa.trend and sa.trend|length > 3 %}
 <div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
-    <span class="card-kicker">Seiten-Trend (letzte {{ sa.trend|length }} Matches)</span>
+    <span class="card-kicker">{{ _('Seiten-Trend') }} ({{ _('letzte') }} {{ sa.trend|length }} Matches)</span>
     <div style="display:flex;gap:8px;margin-top:6px;font-size:11px;">
         <span style="color:#60a5fa;">&#9632; CT Win-Rate</span>
         <span style="color:#f59e0b;">&#9632; T Win-Rate</span>

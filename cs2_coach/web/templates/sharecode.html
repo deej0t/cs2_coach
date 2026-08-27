@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Share-Code Analyse{% endblock %}
+{% block title %}CS2 Coach — {{ _('Share-Code Analyse') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Share-Code Analyse</h2>
+<h2>{{ _('Share-Code Analyse') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Fuege einen CS2 Match Share-Code ein — die Demo wird heruntergeladen und analysiert.
+    {{ _('Fuege einen CS2 Match Share-Code ein — die Demo wird heruntergeladen und analysiert.') }}
 </p>
 
 <style>
@@ -108,22 +108,22 @@
     </div>
 </div>
 
-<!-- Recommended: CS2 Auto-Download -->
+<!-- Tipp: Demos herunterladen -->
 <div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-4); border-left: 3px solid var(--color-accent);">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
         <i data-lucide="lightbulb" style="width:16px;height:16px;color:var(--color-accent);"></i>
-        <span style="font-size:14px;font-weight:600;">Empfohlen: CS2 Auto-Download + Folder-Watch</span>
+        <span style="font-size:14px;font-weight:600;">Empfohlen: Demo-Ordner + Folder-Watch</span>
     </div>
     <p style="font-size:12px;color:var(--color-neutral-400);margin:0 0 6px;">
-        Der zuverlaessigste Weg fuer eigene Demos: CS2 laedt sie automatisch herunter.
+        CS2 speichert heruntergeladene Demos im <code style="background:var(--color-neutral-800);padding:1px 6px;border-radius:3px;font-size:11px;">replays</code>-Ordner.
     </p>
     <ol style="font-size:12px;color:var(--color-neutral-300);margin:0;padding-left:18px;line-height:1.8;">
-        <li>CS2 → <strong>Einstellungen</strong> → <strong>Spiel</strong> → <strong>"Match-Demos herunterladen"</strong> auf <strong>"Immer"</strong></li>
-        <li>Demo-Ordner in <a href="{{ url_for('settings') }}" style="color:var(--color-accent);">Einstellungen</a> eintragen (z.B. <code style="background:var(--color-neutral-800);padding:1px 6px;border-radius:3px;font-size:11px;">C:/Program Files/Steam/steamapps/common/Counter-Strike Global Offensive/game/csgo/replays</code>)</li>
-        <li><a href="{{ url_for('watch') }}" style="color:var(--color-accent);">Folder-Watch</a> nutzen — analysiert neue Demos automatisch</li>
+        <li>In CS2: <strong>Persoenliches Spiellog</strong> oeffnen → Match auswaehlen → <strong>Download</strong> klicken</li>
+        <li>Demo-Ordner in <a href="{{ url_for('settings') }}" style="color:var(--color-accent);">Einstellungen</a> eintragen (wird automatisch erkannt, oder z.B. <code style="background:var(--color-neutral-800);padding:1px 6px;border-radius:3px;font-size:11px;">.../Counter-Strike Global Offensive/game/csgo/replays</code>)</li>
+        <li><a href="{{ url_for('watch') }}" style="color:var(--color-accent);">Folder-Watch</a> oder <strong>Auto-Sync</strong> nutzen — findet und analysiert Demos automatisch per Match-ID</li>
     </ol>
     <p style="font-size:11px;color:var(--color-neutral-500);margin:6px 0 0;">
-        Share-Code Download funktioniert nur fuer Demos die noch auf Valve-Servern liegen (~14 Tage). CS2 Auto-Download ist sofort und zuverlaessig.
+        Auto-Sync erkennt neue Matches per Steam API und sucht die passenden Demos lokal per Match-ID.
     </p>
 </div>
 
@@ -178,6 +178,71 @@
         {% if not config.get('steam_id') %}<span style="color:#f87171;">Steam ID</span>{% endif %}
     </div>
     {% endif %}
+</div>
+
+<!-- Steam Login Status Bar -->
+<div class="card elev-sm" style="padding: 12px var(--space-4); margin-bottom: var(--space-5); border-left: 3px solid var(--color-neutral-700);" id="steam-login-section">
+    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <i data-lucide="download" style="width:16px;height:16px;color:var(--color-accent);flex-shrink:0;"></i>
+        <span style="font-size: 13px; font-weight: 600;">Demo-Download</span>
+        <span id="steam-login-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(248,113,113,0.15);color:#f87171;">Nicht eingeloggt</span>
+        <span id="steam-login-info" style="font-size:11px;color:var(--color-neutral-500);"></span>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+            <button id="steam-login-open-btn" class="sc-btn" style="padding:5px 14px;font-size:12px;" onclick="openSteamModal()">
+                <i data-lucide="log-in" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;"></i>
+                Steam Login
+            </button>
+            <button id="steam-logout-btn" class="sc-btn" style="padding:5px 14px;font-size:12px;background:var(--color-neutral-700);display:none;" onclick="steamLogout()">
+                Abmelden
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Steam Login Modal -->
+<div id="steam-modal-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);justify-content:center;align-items:center;">
+    <div style="background:var(--color-surface);border:1px solid var(--color-neutral-700);border-radius:var(--radius-lg);padding:var(--space-5);width:90%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4);">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <i data-lucide="download" style="width:20px;height:20px;color:var(--color-accent);"></i>
+                <span style="font-size:16px;font-weight:700;">Steam Login</span>
+            </div>
+            <button onclick="closeSteamModal()" style="background:none;border:none;color:var(--color-neutral-400);cursor:pointer;padding:4px;">
+                <i data-lucide="x" style="width:18px;height:18px;"></i>
+            </button>
+        </div>
+
+        <!-- Info -->
+        <p style="font-size:12px;color:var(--color-neutral-400);margin:0 0 6px;">
+            Einloggen um Demos automatisch von Valve-Servern herunterzuladen.
+        </p>
+        <p style="font-size:11px;color:var(--color-neutral-500);margin:0 0 var(--space-4);display:flex;align-items:center;gap:6px;">
+            <i data-lucide="shield" style="width:12px;height:12px;flex-shrink:0;"></i>
+            Passwort wird <strong>nicht</strong> gespeichert — nur temporaere Session-Cookies.
+        </p>
+
+        <!-- Form -->
+        <div style="display:flex;flex-direction:column;gap:var(--space-3);">
+            <input type="text" id="steam-username" class="sc-input" placeholder="Steam-Benutzername" value="{{ config.get('steam_username', '') }}" style="font-size:14px;padding:10px 14px;width:100%;box-sizing:border-box;">
+            <input type="password" id="steam-password" class="sc-input" placeholder="Passwort" style="font-size:14px;padding:10px 14px;width:100%;box-sizing:border-box;">
+            <input type="text" id="steam-2fa" class="sc-input" placeholder="Steam Guard Code (falls aktiv)" style="font-size:14px;padding:10px 14px;width:100%;box-sizing:border-box;">
+        </div>
+
+        <!-- Message -->
+        <div id="steam-login-msg" style="font-size:12px;margin-top:var(--space-3);min-height:18px;"></div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);">
+            <button id="steam-login-btn" class="sc-btn" style="flex:1;padding:10px;font-size:14px;" onclick="steamLogin()">
+                <i data-lucide="log-in" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;"></i>
+                Einloggen
+            </button>
+            <button class="sc-btn" style="padding:10px 20px;font-size:14px;background:var(--color-neutral-700);" onclick="closeSteamModal()">
+                Abbrechen
+            </button>
+        </div>
+    </div>
 </div>
 
 <!-- Log Output -->
@@ -338,5 +403,117 @@ function startSync() {
         btn.disabled = false;
     };
 }
+
+// Steam Login Modal
+function openSteamModal() {
+    var overlay = document.getElementById('steam-modal-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('steam-login-msg').textContent = '';
+    document.getElementById('steam-password').value = '';
+    document.getElementById('steam-2fa').value = '';
+    document.getElementById('steam-2fa').style.borderColor = '';
+    document.getElementById('steam-2fa').placeholder = 'Steam Guard Code (falls aktiv)';
+    setTimeout(function() { document.getElementById('steam-username').focus(); }, 100);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function closeSteamModal() {
+    document.getElementById('steam-modal-overlay').style.display = 'none';
+}
+
+// Close modal on overlay click or Escape
+document.getElementById('steam-modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeSteamModal();
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeSteamModal();
+});
+
+function checkSteamStatus() {
+    fetch('/api/steam-status')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        var badge = document.getElementById('steam-login-badge');
+        var openBtn = document.getElementById('steam-login-open-btn');
+        var logoutBtn = document.getElementById('steam-logout-btn');
+        var info = document.getElementById('steam-login-info');
+        var section = document.getElementById('steam-login-section');
+        if (d.logged_in) {
+            badge.textContent = 'Eingeloggt' + (d.username ? ' (' + d.username + ')' : '');
+            badge.style.background = 'rgba(74,222,128,0.15)';
+            badge.style.color = '#4ade80';
+            openBtn.style.display = 'none';
+            logoutBtn.style.display = '';
+            info.textContent = 'Demos werden automatisch heruntergeladen';
+            section.style.borderLeftColor = '#4ade80';
+        } else {
+            badge.textContent = 'Nicht eingeloggt';
+            badge.style.background = 'rgba(248,113,113,0.15)';
+            badge.style.color = '#f87171';
+            openBtn.style.display = '';
+            logoutBtn.style.display = 'none';
+            info.textContent = 'Nur lokale Demos';
+            section.style.borderLeftColor = 'var(--color-neutral-700)';
+        }
+    })
+    .catch(function() {});
+}
+
+function steamLogin() {
+    var username = document.getElementById('steam-username').value.trim();
+    var password = document.getElementById('steam-password').value;
+    var twofa = document.getElementById('steam-2fa').value.trim();
+    var btn = document.getElementById('steam-login-btn');
+    var msg = document.getElementById('steam-login-msg');
+
+    if (!username || !password) {
+        msg.textContent = 'Benutzername und Passwort erforderlich.';
+        msg.style.color = '#f87171';
+        return;
+    }
+
+    btn.disabled = true;
+    msg.textContent = 'Verbinde mit Steam...';
+    msg.style.color = 'var(--color-accent)';
+
+    var body = 'username=' + encodeURIComponent(username) + '&password=' + encodeURIComponent(password);
+    if (twofa) body += '&twofactor=' + encodeURIComponent(twofa);
+
+    fetch('/api/steam-login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: body,
+    })
+    .then(function(r) { return r.json().then(function(d) { return {status: r.status, data: d}; }); })
+    .then(function(r) {
+        btn.disabled = false;
+        if (r.data.ok) {
+            msg.innerHTML = '<span style="color:#4ade80;">' + r.data.message + '</span>';
+            document.getElementById('steam-password').value = '';
+            document.getElementById('steam-2fa').value = '';
+            checkSteamStatus();
+            setTimeout(closeSteamModal, 1200);
+        } else {
+            msg.innerHTML = '<span style="color:#f87171;">' + r.data.error + '</span>';
+            if (r.data.need_2fa) {
+                document.getElementById('steam-2fa').focus();
+                document.getElementById('steam-2fa').placeholder = '2FA-Code eingeben!';
+                document.getElementById('steam-2fa').style.borderColor = 'var(--color-accent)';
+            }
+        }
+    })
+    .catch(function(e) {
+        btn.disabled = false;
+        msg.innerHTML = '<span style="color:#f87171;">Fehler: ' + e + '</span>';
+    });
+}
+
+function steamLogout() {
+    fetch('/api/steam-logout', {method: 'POST'})
+    .then(function() { checkSteamStatus(); });
+}
+
+// Check status on page load
+document.addEventListener('DOMContentLoaded', checkSteamStatus);
 </script>
 {% endblock %}

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Utility-Analyse{% endblock %}
+{% block title %}CS2 Coach — {{ _('Utility-Analyse') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Utility-Analyse</h2>
+<h2>{{ _('Utility-Analyse') }}</h2>
 <p style="color:var(--color-neutral-500);font-size:13px;margin-bottom:var(--space-5);">
-    Granaten-Nutzung und Flash-Effektivitaet ueber alle {{ util.total_matches }} Matches.
+    {{ _('Granaten-Nutzung und Flash-Effektivitaet ueber alle') }} {{ util.total_matches }} {{ _('Matches') }}.
 </p>
 
 <style>

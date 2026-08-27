@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — 2D Viewer{% endblock %}
+{% block title %}CS2 Coach — {{ _('2D Viewer') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
 {% if not vd.has_data %}
-<h2>2D Viewer</h2>
+<h2>{{ _('2D Viewer') }}</h2>
 <div class="card elev-sm">
-    <p class="card-body">Noch keine Positionsdaten vorhanden. Analysiere Demos, um Kill/Death-Positionen auf der Map zu sehen.</p>
+    <p class="card-body">{{ _('Noch keine Positionsdaten vorhanden. Analysiere Demos, um Kill/Death-Positionen auf der Map zu sehen.') }}</p>
 </div>
 {% else %}
 

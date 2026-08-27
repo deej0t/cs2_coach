@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Ziele & Fortschritt{% endblock %}
+{% block title %}CS2 Coach — {{ _('Ziele & Fortschritt') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Ziele & Fortschritt</h2>
+<h2>{{ _('Ziele & Fortschritt') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Setze dir Ziele, tracke Gewohnheiten und brich persoenliche Rekorde.
+    {{ _('Setze dir Ziele, tracke Gewohnheiten und brich persoenliche Rekorde.') }}
 </p>
 
 <style>
@@ -55,52 +55,52 @@
 
 <!-- ══════ Personal Records ══════ -->
 {% if records %}
-<div class="card-kicker" style="margin-bottom: 8px;">Persoenliche Rekorde</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Persoenliche Rekorde') }}</div>
 <div class="rec-grid">
     <div class="card elev-sm rec-card" style="border-top-color: #fbbf24;">
         <div class="rec-val">{{ records.rating.value }}</div>
-        <div class="rec-label">Bestes Rating</div>
+        <div class="rec-label">{{ _('Bestes Rating') }}</div>
         <div class="rec-where">{{ records.rating.map }} · {{ records.rating.date }}</div>
     </div>
     <div class="card elev-sm rec-card" style="border-top-color: #4ade80;">
         <div class="rec-val">{{ records.kills.value }}</div>
-        <div class="rec-label">Meiste Kills</div>
+        <div class="rec-label">{{ _('Meiste Kills') }}</div>
         <div class="rec-where">{{ records.kills.map }} · {{ records.kills.date }}</div>
     </div>
     <div class="card elev-sm rec-card" style="border-top-color: #9184d9;">
         <div class="rec-val">{{ records.adr.value }}</div>
-        <div class="rec-label">Hoechster ADR</div>
+        <div class="rec-label">{{ _('Hoechster ADR') }}</div>
         <div class="rec-where">{{ records.adr.map }} · {{ records.adr.date }}</div>
     </div>
     <div class="card elev-sm rec-card" style="border-top-color: #7eaadb;">
         <div class="rec-val">{{ records.kd.value }}</div>
-        <div class="rec-label">Bestes K/D</div>
+        <div class="rec-label">{{ _('Bestes K/D') }}</div>
         <div class="rec-where">{{ records.kd.map }} · {{ records.kd.date }}</div>
     </div>
     <div class="card elev-sm rec-card" style="border-top-color: #f87171;">
         <div class="rec-val">{{ records.hs_pct.value }}%</div>
-        <div class="rec-label">Hoechste HS%</div>
+        <div class="rec-label">{{ _('Hoechste HS%') }}</div>
         <div class="rec-where">{{ records.hs_pct.map }} · {{ records.hs_pct.date }}</div>
     </div>
     <div class="card elev-sm rec-card" style="border-top-color: #4ade80;">
         <div class="rec-val">{{ records.total_kills }}</div>
-        <div class="rec-label">Gesamt-Kills</div>
-        <div class="rec-where">{{ records.total_matches }} Matches</div>
+        <div class="rec-label">{{ _('Gesamt-Kills') }}</div>
+        <div class="rec-where">{{ records.total_matches }} {{ _('Matches') }}</div>
     </div>
     <div class="card elev-sm rec-card" style="border-top-color: #fbbf24;">
         <div class="rec-val">{{ records.win_streak }}</div>
-        <div class="rec-label">Laengste Siegesserie</div>
-        <div class="rec-where">in Folge</div>
+        <div class="rec-label">{{ _('Laengste Siegesserie') }}</div>
+        <div class="rec-where">{{ _('in Folge') }}</div>
     </div>
 </div>
 {% endif %}
 
 <!-- ══════ Active Goals ══════ -->
-<div class="card-kicker" style="margin-bottom: 8px;">Aktive Ziele <span style="color:var(--color-neutral-600);font-size:10px;">(basierend auf letzten 10 Matches)</span></div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Aktive Ziele') }} <span style="color:var(--color-neutral-600);font-size:10px;">({{ _('basierend auf letzten 10 Matches') }})</span></div>
 
 {% if not goals %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center; margin-bottom: var(--space-4);">
-    <p style="color: var(--color-neutral-500); margin-bottom: var(--space-3);">Noch keine Ziele gesetzt. Fuege dein erstes Ziel hinzu!</p>
+    <p style="color: var(--color-neutral-500); margin-bottom: var(--space-3);">{{ _('Noch keine Ziele gesetzt. Fuege dein erstes Ziel hinzu!') }}</p>
 </div>
 {% else %}
 {% for g in goals %}
@@ -109,11 +109,11 @@
         <span class="goal-label">{{ g.label or g.meta.label + " " + g.meta.desc }}</span>
         <div style="display:flex;gap:8px;align-items:center;">
             {% if g.achieved %}
-            <span class="goal-achieved" style="background:rgba(74,222,128,0.15);color:#4ade80;">Erreicht!</span>
+            <span class="goal-achieved" style="background:rgba(74,222,128,0.15);color:#4ade80;">{{ _('Erreicht!') }}</span>
             {% endif %}
             <form method="post" action="{{ url_for('goals_delete') }}" style="margin:0;">
                 <input type="hidden" name="index" value="{{ loop.index0 }}">
-                <button type="submit" class="btn btn-ghost" style="padding:2px 6px;font-size:11px;color:var(--color-neutral-500);" title="Ziel entfernen">✕</button>
+                <button type="submit" class="btn btn-ghost" style="padding:2px 6px;font-size:11px;color:var(--color-neutral-500);" title="{{ _('Ziel entfernen') }}">✕</button>
             </form>
         </div>
     </div>
@@ -121,8 +121,8 @@
         <div class="goal-bar-fill" style="width: {{ g.pct }}%; background: {% if g.achieved %}#4ade80{% elif g.pct >= 80 %}#fbbf24{% else %}#9184d9{% endif %};"></div>
     </div>
     <div class="goal-meta">
-        <span>Aktuell: <span class="goal-current {% if g.achieved %}sc-green{% elif g.pct >= 80 %}sc-yellow{% else %}{% endif %}">{{ g.current }}</span></span>
-        <span>Ziel: {{ g.target }}</span>
+        <span>{{ _('Aktuell:') }} <span class="goal-current {% if g.achieved %}sc-green{% elif g.pct >= 80 %}sc-yellow{% else %}{% endif %}">{{ g.current }}</span></span>
+        <span>{{ _('Ziel:') }} {{ g.target }}</span>
         <span>{{ g.pct }}%</span>
     </div>
 </div>
@@ -131,12 +131,12 @@
 
 <!-- Add Goal Form -->
 <div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-6);">
-    <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Neues Ziel hinzufuegen</div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;">{{ _('Neues Ziel hinzufuegen') }}</div>
     <form method="post" action="{{ url_for('goals_add') }}" class="add-goal-form">
         <div>
-            <label>Metrik</label>
+            <label>{{ _('Metrik') }}</label>
             <select name="metric" required>
-                <option value="">Waehlen...</option>
+                <option value="">{{ _('Waehlen...') }}</option>
                 <option value="adr">ADR</option>
                 <option value="hs_pct">HS%</option>
                 <option value="kast">KAST%</option>
@@ -148,14 +148,14 @@
             </select>
         </div>
         <div>
-            <label>Zielwert</label>
-            <input type="number" name="target" step="0.01" required placeholder="z.B. 80" style="width:100px;">
+            <label>{{ _('Zielwert') }}</label>
+            <input type="number" name="target" step="0.01" required placeholder="{{ _('z.B. 80') }}" style="width:100px;">
         </div>
         <div>
-            <label>Beschreibung (optional)</label>
-            <input type="text" name="label" placeholder="z.B. ADR ueber 80 bringen" style="width:200px;">
+            <label>{{ _('Beschreibung (optional)') }}</label>
+            <input type="text" name="label" placeholder="{{ _('z.B. ADR ueber 80 bringen') }}" style="width:200px;">
         </div>
-        <button type="submit" class="btn btn-primary" style="height:34px;">Hinzufuegen</button>
+        <button type="submit" class="btn btn-primary" style="height:34px;">{{ _('Hinzufuegen') }}</button>
     </form>
 </div>
 
@@ -163,7 +163,7 @@
 
 <!-- ══════ Habit Tracker ══════ -->
 {% if habits %}
-<div class="card-kicker" style="margin-bottom: 8px;">Habit-Tracker <span style="color:var(--color-neutral-600);font-size:10px;">(letzte {{ habits[0].data_points|length }} Matches)</span></div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Habit-Tracker') }} <span style="color:var(--color-neutral-600);font-size:10px;">({{ _('letzte') }} {{ habits[0].data_points|length }} {{ _('Matches') }})</span></div>
 
 <div class="grid-2" style="margin-bottom: var(--space-5);">
     {% for h in habits %}
@@ -178,9 +178,9 @@
         <div class="habit-desc">{{ h.desc }}</div>
         <div class="habit-chart-wrap"><canvas id="habit-{{ h.key }}"></canvas></div>
         <div class="habit-avg">
-            <span>Erste Haelfte: {{ h.avg_first }}{{ h.unit }}</span>
-            <span>Zweite Haelfte: {{ h.avg_second }}{{ h.unit }}</span>
-            <span>Gesamt: {{ h.avg }}{{ h.unit }}</span>
+            <span>{{ _('Erste Haelfte:') }} {{ h.avg_first }}{{ h.unit }}</span>
+            <span>{{ _('Zweite Haelfte:') }} {{ h.avg_second }}{{ h.unit }}</span>
+            <span>{{ _('Gesamt:') }} {{ h.avg }}{{ h.unit }}</span>
         </div>
     </div>
     {% endfor %}

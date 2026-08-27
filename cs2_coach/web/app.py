@@ -859,12 +859,12 @@ def create_app() -> Flask:
 
     @app.route("/api/sharecode-analyze")
     def sharecode_analyze():
-        """SSE endpoint: download demo via share code and analyze it."""
-        from ..sharecode import decode_sharecode, validate_sharecode, download_demo
+        """SSE endpoint: find demo locally via share code match_id and analyze it."""
+        from ..sharecode import decode_sharecode, validate_sharecode, find_demo_by_match_id, find_cs2_replays_folders
         code = request.args.get("code", "").strip()
         player_name = request.args.get("player", "") or cfg.get("player_name", "")
         steam_id = request.args.get("steamid", "") or _resolve_steam_id()
-        api_key = cfg.get("steam_api_key", "")
+        demo_folder = cfg.get("demo_folder", "")
 
         if not validate_sharecode(code):
             def err():
@@ -875,32 +875,30 @@ def create_app() -> Flask:
             yield f"data: {json.dumps({'type': 'status', 'message': 'Share-Code wird dekodiert...'})}\n\n"
             try:
                 info = decode_sharecode(code)
-                yield f"data: {json.dumps({'type': 'decoded', 'match_id': info['match_id'], 'outcome_id': info['outcome_id'], 'token': info['token']})}\n\n"
+                match_id = info["match_id"]
+                yield f"data: {json.dumps({'type': 'decoded', 'match_id': match_id, 'outcome_id': info['outcome_id'], 'token': info['token']})}\n\n"
             except Exception as e:
                 yield f"data: {json.dumps({'type': 'error', 'message': f'Dekodierung fehlgeschlagen: {e}'})}\n\n"
                 return
 
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Suche Demo auf Valve-Servern...'})}\n\n"
-            import time as _time
-            t0 = _time.monotonic()
-            # status_msgs collects sub-status from download_demo
-            status_msgs = []
-            def _on_dl_status(msg):
-                status_msgs.append(msg)
-            try:
-                dem_path = download_demo(code, steam_api_key=api_key,
-                                         on_status=_on_dl_status)
-                elapsed = round(_time.monotonic() - t0, 1)
-                if not dem_path:
-                    detail = status_msgs[-1] if status_msgs else "Nicht verfuegbar"
-                    yield f"data: {json.dumps({'type': 'error', 'message': f'Demo nicht gefunden ({elapsed}s). {detail} — Tipp: CS2 > Einstellungen > Spiel > \"Match-Demos herunterladen\" aktivieren und Folder-Watch nutzen.'})}\n\n"
-                    return
-                yield f"data: {json.dumps({'type': 'status', 'message': f'Demo heruntergeladen ({elapsed}s): {dem_path.name}'})}\n\n"
-            except Exception as e:
-                elapsed = round(_time.monotonic() - t0, 1)
-                yield f"data: {json.dumps({'type': 'error', 'message': f'Download fehlgeschlagen ({elapsed}s): {e}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'status', 'message': f'Suche Demo lokal (Match-ID: {match_id})...'})}\n\n"
+
+            # Build search directories
+            search_dirs = []
+            if demo_folder and Path(demo_folder).is_dir():
+                search_dirs.append(Path(demo_folder))
+            for rdir in find_cs2_replays_folders():
+                if rdir not in search_dirs:
+                    search_dirs.append(rdir)
+
+            dem_path = find_demo_by_match_id(match_id, search_dirs)
+
+            if not dem_path:
+                dirs_str = ", ".join(str(d) for d in search_dirs) if search_dirs else "(kein Ordner konfiguriert)"
+                yield f"data: {json.dumps({'type': 'error', 'message': f'Demo nicht lokal gefunden (Match-ID: {match_id}). Durchsuchte Ordner: {dirs_str}. Lade die Demo zuerst in CS2 herunter: Persoenliches Spiellog > Match auswaehlen > Download.'})}\n\n"
                 return
 
+            yield f"data: {json.dumps({'type': 'status', 'message': f'Demo gefunden: {dem_path.name}'})}\n\n"
             yield f"data: {json.dumps({'type': 'status', 'message': 'Demo wird analysiert...'})}\n\n"
             try:
                 result = parse_demo(str(dem_path), player_name, steam_id)
@@ -922,16 +920,17 @@ def create_app() -> Flask:
 
     @app.route("/api/auto-sync")
     def auto_sync():
-        """SSE endpoint: fetch new matches via Steam API, then analyze local demos.
+        """SSE endpoint: fetch new matches via Steam API, find local demos, analyze.
 
         Workflow:
         1. Fetch new share codes via GetNextMatchSharingCode
-        2. Try downloading demos from Valve replay servers (usually fails for CS2
-           because demo URLs require Game Coordinator data not available via Web API)
-        3. Fall back to scanning the local demo folder for unanalyzed demos
-        4. Analyze all found demos
+        2. Match share code match_ids to local demo files (CS2 replays folder)
+        3. If Steam logged in: download missing demos from GCPD
+        4. Also scan demo_folder for any unanalyzed demos
+        5. Analyze all found demos
         """
-        from ..sharecode import fetch_all_new_codes, download_demo, decode_sharecode
+        from ..sharecode import (fetch_all_new_codes, find_cs2_replays_folders,
+            load_steam_session, fetch_gcpd_demo_urls, download_demo_bz2)
         api_key = cfg.get("steam_api_key", "")
         auth_token = cfg.get("cs2_auth_token", "")
         steam_id = _resolve_steam_id()
@@ -979,72 +978,101 @@ def create_app() -> Flask:
         def generate():
             import time as _time
 
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Pruefe auf neue Matches...'})}\n\n"
+            analyzed = _get_analyzed_demos()
+            success_count = 0
+            demos_to_analyze = []  # (label, path)
+            latest_code = last_code
 
+            # Phase 1: Check Steam API for new matches (signal only — share code
+            # match_ids use a different ID space than demo filenames/GCPD)
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Pruefe auf neue Matches via Steam API...'})}\n\n"
+
+            new_codes = []
             try:
                 new_codes = fetch_all_new_codes(api_key, steam_id, auth_token, last_code)
             except Exception as e:
-                yield f"data: {json.dumps({'type': 'error', 'message': f'API-Fehler: {e}'})}\n\n"
-                return
+                yield f"data: {json.dumps({'type': 'status', 'message': f'Steam API: {e}'})}\n\n"
 
-            if not new_codes:
-                yield f"data: {json.dumps({'type': 'done', 'message': 'Keine neuen Matches gefunden.', 'count': 0})}\n\n"
-                return
+            if new_codes:
+                yield f"data: {json.dumps({'type': 'status', 'message': f'{len(new_codes)} neue Matches erkannt!'})}\n\n"
+                latest_code = new_codes[-1]
+            else:
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Keine neuen Codes via API.'})}\n\n"
 
-            yield f"data: {json.dumps({'type': 'status', 'message': f'{len(new_codes)} neue Matches gefunden! Suche Demos...'})}\n\n"
+            # Phase 2: Download all unanalyzed demos from GCPD (if Steam logged in)
+            steam_session = load_steam_session()
+            if steam_session:
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Steam-Session aktiv — pruefe GCPD fuer herunterladbare Demos...'})}\n\n"
 
-            success_count = 0
-            skip_count = 0
-            latest_code = last_code
-
-            # Phase 1: Try downloading demos from Valve servers (quick attempt)
-            downloaded_paths = []
-            for i, code in enumerate(new_codes):
-                yield f"data: {json.dumps({'type': 'progress', 'current': i+1, 'total': len(new_codes), 'code': code})}\n\n"
-
-                t0 = _time.monotonic()
-                try:
-                    dem_path = download_demo(code, steam_api_key=api_key,
-                                             on_status=lambda msg: None)
-                    elapsed = round(_time.monotonic() - t0, 1)
-                    if dem_path:
-                        yield f"data: {json.dumps({'type': 'status', 'message': f'Match {i+1}/{len(new_codes)}: Demo von Valve geladen ({elapsed}s)'})}\n\n"
-                        downloaded_paths.append((i, code, dem_path))
-                    else:
-                        skip_count += 1
-                except Exception:
-                    skip_count += 1
-
-                latest_code = code
-
-            # Phase 2: If no server downloads worked, scan local demo folder
-            local_demos = []
-            if skip_count > 0 and demo_folder and Path(demo_folder).exists():
-                yield f"data: {json.dumps({'type': 'status', 'message': f'{skip_count} Demos nicht auf Valve-Servern gefunden — pruefe lokalen Demo-Ordner...'})}\n\n"
-
-                analyzed = _get_analyzed_demos()
-                folder = Path(demo_folder)
-                all_local = sorted(
-                    [p for p in folder.glob("*.dem") if p.stat().st_size > 1_000_000],
-                    key=lambda p: p.name
+                gcpd_msgs = []
+                gcpd_demos = fetch_gcpd_demo_urls(
+                    steam_session, steam_id,
+                    on_status=lambda msg: gcpd_msgs.append(msg),
                 )
-                new_local = [p for p in all_local if p.name not in analyzed]
+                for msg in gcpd_msgs:
+                    yield f"data: {json.dumps({'type': 'status', 'message': msg})}\n\n"
 
-                if new_local:
-                    yield f"data: {json.dumps({'type': 'status', 'message': f'{len(new_local)} unanalysierte Demos im lokalen Ordner gefunden!'})}\n\n"
-                    local_demos = new_local
-                else:
-                    yield f"data: {json.dumps({'type': 'status', 'message': 'Keine neuen lokalen Demos gefunden. Aktiviere Auto-Download in CS2: Einstellungen > Spiel > \"Automatisch herunterladen\".'})}\n\n"
+                # Determine download destination
+                dl_folder = demo_folder if demo_folder and Path(demo_folder).is_dir() else None
+                if not dl_folder:
+                    replay_dirs = find_cs2_replays_folders()
+                    if replay_dirs:
+                        dl_folder = str(replay_dirs[0])
+                    else:
+                        dl_folder = str(Path(__file__).resolve().parent.parent.parent / "demos")
+                        Path(dl_folder).mkdir(exist_ok=True)
 
-            # Phase 3: Analyze all found demos (downloaded + local)
-            demos_to_analyze = []
-            for i, code, path in downloaded_paths:
-                demos_to_analyze.append(("server", path))
-            for path in local_demos:
-                demos_to_analyze.append(("lokal", path))
+                downloaded_count = 0
+                for demo_info in gcpd_demos:
+                    # Check if already analyzed (match by reservation ID in filename)
+                    dem_prefix = f"match730_{str(demo_info['match_id']).zfill(21)}"
+                    if any(dem_prefix in a for a in analyzed):
+                        continue
 
+                    dl_msgs = []
+                    dem_path = download_demo_bz2(
+                        demo_info["url"], dl_folder,
+                        match_date=demo_info.get("date", ""),
+                        on_status=lambda msg: dl_msgs.append(msg),
+                    )
+                    for msg in dl_msgs:
+                        yield f"data: {json.dumps({'type': 'status', 'message': msg})}\n\n"
+
+                    if dem_path and dem_path.name not in analyzed:
+                        demos_to_analyze.append(("GCPD", dem_path))
+                        downloaded_count += 1
+
+                if downloaded_count:
+                    yield f"data: {json.dumps({'type': 'status', 'message': f'{downloaded_count} Demos von Valve heruntergeladen!'})}\n\n"
+                elif gcpd_demos:
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Alle GCPD-Demos bereits vorhanden oder analysiert.'})}\n\n"
+
+            # Phase 3: Scan local demo folders for unanalyzed demos
+            search_dirs = []
+            if demo_folder and Path(demo_folder).is_dir():
+                search_dirs.append(Path(demo_folder))
+            for rdir in find_cs2_replays_folders():
+                if rdir not in search_dirs:
+                    search_dirs.append(rdir)
+
+            already_queued = {p.name for _, p in demos_to_analyze}
+            for d in search_dirs:
+                for f in sorted(d.glob("*.dem"), key=lambda p: p.stat().st_mtime, reverse=True):
+                    if f.stat().st_size > 1_000_000 and f.name not in analyzed and f.name not in already_queued:
+                        demos_to_analyze.append(("lokal", f))
+                        already_queued.add(f.name)
+
+            local_count = sum(1 for src, _ in demos_to_analyze if src == "lokal")
+            if local_count:
+                yield f"data: {json.dumps({'type': 'status', 'message': f'{local_count} unanalysierte Demos im lokalen Ordner gefunden!'})}\n\n"
+
+            # Phase 4: Analyze all found demos
+            # Phase 4: Analyze all found demos
             total_to_analyze = len(demos_to_analyze)
-            if total_to_analyze > 0:
+
+            if total_to_analyze == 0:
+                yield f"data: {json.dumps({'type': 'done', 'message': 'Keine neuen Demos zum Analysieren gefunden.', 'count': 0})}\n\n"
+            else:
                 yield f"data: {json.dumps({'type': 'init', 'total': total_to_analyze, 'message': f'{total_to_analyze} Demos werden analysiert...'})}\n\n"
 
             for idx, (source, dem_path) in enumerate(demos_to_analyze):
@@ -1066,21 +1094,20 @@ def create_app() -> Flask:
                 except Exception as e:
                     yield f"data: {json.dumps({'type': 'error_item', 'current': current, 'total': total_to_analyze, 'filename': dem_path.name, 'message': str(e)})}\n\n"
 
-            # Save the latest code for next sync
-            cfg["last_sharecode"] = latest_code
-            try:
-                import yaml as _yaml
-                config_data = dict(cfg)
-                with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                    f.write("# CS2-Coach Konfiguration\n")
-                    _yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
-            except Exception:
-                pass
+            # Save the latest share code for next sync
+            if latest_code != last_code:
+                cfg["last_sharecode"] = latest_code
+                try:
+                    import yaml as _yaml
+                    config_data = dict(cfg)
+                    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                        f.write("# CS2-Coach Konfiguration\n")
+                        _yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+                except Exception:
+                    pass
 
-            msg = f'{success_count} Matches analysiert'
-            if skip_count > 0 and not local_demos:
-                msg += f' (Server-Download nicht moeglich — nutze Folder-Watch fuer zuverlaessige Auto-Analyse)'
-            yield f"data: {json.dumps({'type': 'done', 'message': msg, 'count': success_count})}\n\n"
+            if total_to_analyze > 0:
+                yield f"data: {json.dumps({'type': 'done', 'message': f'{success_count} Matches analysiert', 'count': success_count})}\n\n"
 
         return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
@@ -1101,6 +1128,153 @@ def create_app() -> Flask:
         except Exception:
             pass
         return jsonify({"ok": True, "code": code})
+
+    @app.route("/api/steam-login", methods=["POST"])
+    def steam_login_api():
+        """Authenticate to Steam for automatic demo downloads."""
+        from ..sharecode import steam_login, Steam2FARequired, SteamEmailCodeRequired, SteamLoginError
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+        twofactor = request.form.get("twofactor", "").strip()
+        email_code = request.form.get("email_code", "").strip()
+
+        if not username or not password:
+            return jsonify({"error": "Benutzername und Passwort erforderlich."}), 400
+
+        try:
+            steam_login(username, password, twofactor_code=twofactor, email_code=email_code)
+            # Save username in config (password is NOT saved)
+            cfg["steam_username"] = username
+            try:
+                import yaml as _yaml
+                config_data = dict(cfg)
+                with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                    f.write("# CS2-Coach Konfiguration\n")
+                    _yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+            except Exception:
+                pass
+            return jsonify({"ok": True, "message": "Steam-Login erfolgreich!"})
+        except Steam2FARequired:
+            return jsonify({"error": "Steam Guard 2FA-Code erforderlich.", "need_2fa": True}), 401
+        except SteamEmailCodeRequired:
+            return jsonify({"error": "Steam Guard E-Mail-Code erforderlich. Pruefe deine E-Mails.", "need_email": True}), 401
+        except SteamLoginError as e:
+            return jsonify({"error": str(e)}), 401
+        except Exception as e:
+            return jsonify({"error": f"Login fehlgeschlagen: {e}"}), 401
+
+    @app.route("/api/steam-logout", methods=["POST"])
+    def steam_logout_api():
+        """Clear stored Steam session."""
+        from ..sharecode import clear_steam_session
+        clear_steam_session()
+        return jsonify({"ok": True})
+
+    @app.route("/api/steam-status")
+    def steam_status_api():
+        """Check if Steam session is active."""
+        from ..sharecode import is_steam_logged_in
+        return jsonify({"logged_in": is_steam_logged_in(), "username": cfg.get("steam_username", "")})
+
+    @app.route("/api/steam-gcpd-debug")
+    def steam_gcpd_debug():
+        """Debug endpoint: show raw GCPD AJAX response for diagnosing demo download."""
+        from ..sharecode import load_steam_session
+        import re as _re
+
+        session = load_steam_session()
+        if not session:
+            return jsonify({"error": "Nicht eingeloggt"}), 401
+
+        steam_id = _resolve_steam_id()
+        tab = request.args.get("tab", "matchhistorypremier")
+
+        base_url = "https://steamcommunity.com"
+        profile_url = f"{base_url}/profiles/{steam_id}/gcpd/730" if steam_id else f"{base_url}/my/gcpd/730"
+        page_url = f"{profile_url}?tab={tab}"
+
+        try:
+            resp = session.get(page_url, timeout=20, allow_redirects=True)
+            html = resp.text
+            gcpd_base = resp.url.split("?")[0]
+
+            result = {
+                "initial_url": page_url,
+                "final_url": resp.url,
+                "status": resp.status_code,
+                "page_size": len(html),
+                "found_personal_data": None,
+                "continue_token": None,
+                "session_id": None,
+                "initial_demo_urls": [],
+                "ajax_response_preview": None,
+                "ajax_demo_urls": [],
+                "ajax_status": None,
+            }
+
+            # Extract key variables from initial page
+            fpd = _re.search(r"g_bFoundPersonalData\s*=\s*(\d+)", html)
+            if fpd:
+                result["found_personal_data"] = int(fpd.group(1))
+
+            cont_m = _re.search(r"g_sGcContinueToken\s*=\s*['\"]([^'\"]*)['\"]", html)
+            sess_m = _re.search(r"g_sessionID\s*=\s*['\"]([^'\"]*)['\"]", html)
+
+            # Fallback: get sessionid from cookies if not in page JS
+            result["cookie_sessionid"] = session.cookies.get("sessionid", domain="steamcommunity.com")
+
+            if cont_m:
+                result["continue_token"] = cont_m.group(1)
+            if sess_m:
+                result["session_id"] = sess_m.group(1)
+
+            # Check for demo URLs in initial page
+            from ..sharecode import _GCPD_DEMO_URL_RE
+            for m in _GCPD_DEMO_URL_RE.finditer(html):
+                result["initial_demo_urls"].append(m.group(1))
+
+            # Try AJAX call
+            if result["continue_token"] and result["session_id"]:
+                ajax_url = (
+                    f"{gcpd_base}?tab={tab}"
+                    f"&continue_token={result['continue_token']}"
+                    f"&sessionid={result['session_id']}"
+                    f"&ajax=1"
+                )
+                aresp = session.get(
+                    ajax_url, timeout=20,
+                    headers={
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Referer": f"{gcpd_base}?tab={tab}",
+                        "Accept": "text/html, */*; q=0.01",
+                    },
+                )
+                result["ajax_status"] = aresp.status_code
+                ajax_text = aresp.text
+                result["ajax_response_length"] = len(ajax_text)
+
+                # Parse JSON response and extract HTML
+                search_text = ajax_text
+                try:
+                    jdata = aresp.json()
+                    result["ajax_is_json"] = True
+                    result["ajax_json_keys"] = list(jdata.keys()) if isinstance(jdata, dict) else "not_dict"
+                    if isinstance(jdata, dict):
+                        html_part = jdata.get("html", jdata.get("results_html", ""))
+                        if html_part:
+                            search_text = html_part
+                        result["ajax_continue_token"] = jdata.get("continue_token", "")
+                except ValueError:
+                    result["ajax_is_json"] = False
+
+                result["ajax_response_preview"] = search_text[:2000]
+
+                for m in _GCPD_DEMO_URL_RE.finditer(search_text):
+                    result["ajax_demo_urls"].append(m.group(1))
+
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/achievements")
     def achievements():

@@ -15,7 +15,7 @@
             <input type="text" name="player_name" value="{{ config.get('player_name', '') }}" placeholder="deej0t" class="input">
         </div>
         <div class="field">
-            <label>SteamID64</label>
+            <label>{{ _('SteamID64') }}</label>
             <input type="text" name="steam_id" value="{{ config.get('steam_id', '') }}" placeholder="76561198..." class="input">
         </div>
         <div class="field">
@@ -39,36 +39,36 @@
             </select>
         </div>
         <div class="field">
-            <label>Discord Webhook URL</label>
+            <label>{{ _('Discord Webhook URL') }}</label>
             <input type="text" name="discord_webhook" value="{{ config.get('discord_webhook', '') }}" placeholder="https://discord.com/api/webhooks/..." class="input">
             <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Optional: Match-Ergebnisse automatisch in Discord posten.') }}</div>
         </div>
         <div class="field">
-            <label>Steam Web API Key</label>
+            <label>{{ _('Steam Web API Key') }}</label>
             <input type="text" name="steam_api_key" value="{{ config.get('steam_api_key', '') }}" placeholder="{{ _('Dein Steam API Key') }}" class="input">
             <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Fuer Auto-Sync und Share-Code Downloads.') }} <a href="https://steamcommunity.com/dev/apikey" target="_blank" style="color:var(--color-accent);">{{ _('Hier beantragen') }}</a></div>
         </div>
         <div class="field">
-            <label>CS2 Auth Token</label>
+            <label>{{ _('CS2 Auth Token') }}</label>
             <input type="text" name="cs2_auth_token" value="{{ config.get('cs2_auth_token', '') }}" placeholder="XXXX-XXXXX-XXXX" class="input">
             <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('CS2 → Einstellungen → Spiel → "Authentifizierungstoken fuer Drittanbieter". Noetig fuer Auto-Sync.') }}</div>
         </div>
         <div class="hr" style="margin: var(--space-3) 0;"></div>
-        <span class="card-kicker" style="margin-bottom: var(--space-2);">AI Coach Chat</span>
+        <span class="card-kicker" style="margin-bottom: var(--space-2);">{{ _('AI Coach Chat') }}</span>
         <div class="field">
             <label>{{ _('AI-Anbieter') }}</label>
             <select name="ai_provider" class="input">
-                <option value="ollama" {% if config.get('ai_provider', 'ollama') == 'ollama' %}selected{% endif %}>Ollama (Self-Hosted)</option>
-                <option value="gemini" {% if config.get('ai_provider') == 'gemini' %}selected{% endif %}>Google Gemini</option>
+                <option value="ollama" {% if config.get('ai_provider', 'ollama') == 'ollama' %}selected{% endif %}>{{ _('Ollama (Self-Hosted)') }}</option>
+                <option value="gemini" {% if config.get('ai_provider') == 'gemini' %}selected{% endif %}>{{ _('Google Gemini') }}</option>
             </select>
         </div>
         <div class="field">
-            <label>Ollama Server URL</label>
+            <label>{{ _('Ollama Server URL') }}</label>
             <input type="text" name="ollama_url" value="{{ config.get('ollama_url', 'http://192.168.188.71:11434') }}" placeholder="http://192.168.188.71:11434" class="input">
             <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Adresse deines Ollama-Servers (z.B. auf Unraid). Standard-Port: 11434.') }}</div>
         </div>
         <div class="field">
-            <label>Gemini API Key</label>
+            <label>{{ _('Gemini API Key') }}</label>
             <input type="text" name="gemini_api_key" value="{{ config.get('gemini_api_key', '') }}" placeholder="AIza..." class="input">
             <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Nur noetig wenn Gemini gewaehlt.') }} <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--color-accent);">{{ _('Kostenlosen Key holen') }}</a></div>
         </div>

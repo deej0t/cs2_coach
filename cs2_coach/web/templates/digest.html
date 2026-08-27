@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Digest{% endblock %}
+{% block title %}CS2 Coach — {{ _('Digest') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Wochen- & Monats-Digest</h2>
+<h2>{{ _('Wochen- & Monats-Digest') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Automatische Zusammenfassungen deiner Performance — exportierbar als Obsidian-Notiz.
+    {{ _('Automatische Zusammenfassungen deiner Performance — exportierbar als Obsidian-Notiz.') }}
 </p>
 
 <style>
@@ -75,7 +75,7 @@
 {% macro delta_row(p) %}
 {% if p.delta is defined and p.delta %}
 <div class="dg-deltas">
-    <span style="font-size:10px;color:var(--color-neutral-600);margin-right:4px;">vs. Vorperiode:</span>
+    <span style="font-size:10px;color:var(--color-neutral-600);margin-right:4px;">{{ _('vs. Vorperiode:') }}</span>
     {% for key, label, invert in [('win_rate','WR%',false),('rating','Rating',false),('kd','K/D',false),('adr','ADR',false),('hs','HS%',false),('kast','KAST%',false)] %}
     {% set v = p.delta[key] %}
     {% set cls = 'dg-delta-up' if (v > 0 and not invert) or (v < 0 and invert) else 'dg-delta-down' if (v < 0 and not invert) or (v > 0 and invert) else 'dg-delta-flat' %}
@@ -87,14 +87,14 @@
 
 {% if not digest.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 
 <!-- ── Tabs ── -->
 <div class="dg-tabs">
-    <button class="dg-tab active" onclick="showTab('monthly')">Monatlich</button>
-    <button class="dg-tab" onclick="showTab('weekly')">Woechentlich</button>
+    <button class="dg-tab active" onclick="showTab('monthly')">{{ _('Monatlich') }}</button>
+    <button class="dg-tab" onclick="showTab('weekly')">{{ _('Woechentlich') }}</button>
 </div>
 
 <!-- ── Monthly Digests ── -->
@@ -113,14 +113,14 @@
             </div>
             <form method="post" action="{{ url_for('digest_export') }}" style="margin:0;">
                 <input type="hidden" name="period" value="{{ p.key }}">
-                <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" title="Als Obsidian-Notiz exportieren">
+                <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" title="{{ _('Als Obsidian-Notiz exportieren') }}">
                     <i data-lucide="file-down" style="width:14px;height:14px;"></i> Export
                 </button>
             </form>
             {% if config.get('discord_webhook') %}
             <form method="post" action="{{ url_for('digest_discord') }}" style="margin:0;">
                 <input type="hidden" name="period" value="{{ p.key }}">
-                <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;color:#5865F2;" title="An Discord senden">
+                <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;color:#5865F2;" title="{{ _('An Discord senden') }}">
                     <i data-lucide="message-circle" style="width:14px;height:14px;"></i> Discord
                 </button>
             </form>
@@ -168,7 +168,7 @@
         </div>
         <div class="dg-stat">
             <div class="dg-stat-val">{{ p.wins }}W/{{ p.losses }}L</div>
-            <div class="dg-stat-label">Bilanz</div>
+            <div class="dg-stat-label">{{ _('Bilanz') }}</div>
         </div>
     </div>
 
@@ -185,11 +185,11 @@
     <!-- Highlights -->
     <div class="dg-highlights">
         <div class="dg-hl dg-hl-best">
-            <div class="dg-hl-label">Bestes Match</div>
+            <div class="dg-hl-label">{{ _('Bestes Match') }}</div>
             <div class="dg-hl-val" style="color:#4ade80;">{{ p.best.map }} ({{ p.best.score }}) — {{ p.best.rating }}</div>
         </div>
         <div class="dg-hl dg-hl-worst">
-            <div class="dg-hl-label">Schlechtestes Match</div>
+            <div class="dg-hl-label">{{ _('Schlechtestes Match') }}</div>
             <div class="dg-hl-val" style="color:#f87171;">{{ p.worst.map }} ({{ p.worst.score }}) — {{ p.worst.rating }}</div>
         </div>
     </div>
@@ -213,14 +213,14 @@
             </div>
             <form method="post" action="{{ url_for('digest_export') }}" style="margin:0;">
                 <input type="hidden" name="period" value="{{ p.key }}">
-                <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" title="Als Obsidian-Notiz exportieren">
+                <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" title="{{ _('Als Obsidian-Notiz exportieren') }}">
                     <i data-lucide="file-down" style="width:14px;height:14px;"></i> Export
                 </button>
             </form>
             {% if config.get('discord_webhook') %}
             <form method="post" action="{{ url_for('digest_discord') }}" style="margin:0;">
                 <input type="hidden" name="period" value="{{ p.key }}">
-                <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;color:#5865F2;" title="An Discord senden">
+                <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:4px 10px;color:#5865F2;" title="{{ _('An Discord senden') }}">
                     <i data-lucide="message-circle" style="width:14px;height:14px;"></i> Discord
                 </button>
             </form>
@@ -258,7 +258,7 @@
         </div>
         <div class="dg-stat">
             <div class="dg-stat-val">{{ p.wins }}W/{{ p.losses }}L</div>
-            <div class="dg-stat-label">Bilanz</div>
+            <div class="dg-stat-label">{{ _('Bilanz') }}</div>
         </div>
     </div>
 
@@ -273,11 +273,11 @@
 
     <div class="dg-highlights">
         <div class="dg-hl dg-hl-best">
-            <div class="dg-hl-label">Bestes Match</div>
+            <div class="dg-hl-label">{{ _('Bestes Match') }}</div>
             <div class="dg-hl-val" style="color:#4ade80;">{{ p.best.map }} ({{ p.best.score }}) — {{ p.best.rating }}</div>
         </div>
         <div class="dg-hl dg-hl-worst">
-            <div class="dg-hl-label">Schlechtestes Match</div>
+            <div class="dg-hl-label">{{ _('Schlechtestes Match') }}</div>
             <div class="dg-hl-val" style="color:#f87171;">{{ p.worst.map }} ({{ p.worst.score }}) — {{ p.worst.rating }}</div>
         </div>
     </div>

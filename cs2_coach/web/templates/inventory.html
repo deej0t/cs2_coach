@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Inventar{% endblock %}
+{% block title %}CS2 Coach — {{ _('Inventar') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:var(--space-5);">
     <div>
-        <h2 style="margin:0;">Inventar <span class="tag tag-neutral" style="vertical-align:middle;">{{ inv.total }}</span></h2>
-        <p style="color:var(--color-neutral-500);font-size:13px;margin:2px 0 0;">Dein CS2-Inventar via Steam Community.</p>
+        <h2 style="margin:0;">{{ _('Inventar') }} <span class="tag tag-neutral" style="vertical-align:middle;">{{ inv.total }}</span></h2>
+        <p style="color:var(--color-neutral-500);font-size:13px;margin:2px 0 0;">{{ _('Dein CS2-Inventar via Steam Community.') }}</p>
     </div>
     <div style="display:flex;gap:var(--space-3);align-items:center;">
-        <input type="text" id="inv-search" placeholder="Item suchen..." class="input" style="width:200px;min-height:30px;padding:3px 10px;font-size:12px;background:var(--color-bg);">
+        <input type="text" id="inv-search" placeholder="{{ _('Item suchen...') }}" class="input" style="width:200px;min-height:30px;padding:3px 10px;font-size:12px;background:var(--color-bg);">
         <a href="{{ url_for('inventory_export') }}" class="btn btn-ghost" title="Als TXT exportieren"><i data-lucide="download" style="width:14px;height:14px;"></i> TXT</a>
     </div>
 </div>
@@ -78,9 +78,9 @@
 <div class="card elev-sm">
     <p class="card-body" style="text-align:center;color:var(--color-neutral-500);">
         {% if not config.get('steam_id') %}
-            Keine Steam-ID konfiguriert. Trage sie in den <a href="{{ url_for('settings') }}">Einstellungen</a> ein.
+            {{ _('Keine Steam-ID konfiguriert. Trage sie in den') }} <a href="{{ url_for('settings') }}">{{ _('Einstellungen') }}</a> {{ _('ein.') }}
         {% else %}
-            Kein Inventar gefunden. Ist dein Steam-Inventar auf <strong>oeffentlich</strong> gestellt?
+            {{ _('Kein Inventar gefunden. Ist dein Steam-Inventar auf') }} <strong>{{ _('oeffentlich') }}</strong> {{ _('gestellt?') }}
         {% endif %}
     </p>
 </div>
@@ -90,19 +90,19 @@
 <div class="inv-summary">
     <div class="card elev-sm inv-sum-card">
         <div class="inv-sum-val">{{ inv.total }}</div>
-        <div class="inv-sum-lbl">Items gesamt</div>
+        <div class="inv-sum-lbl">{{ _('Items gesamt') }}</div>
     </div>
     <div class="card elev-sm inv-sum-card">
         <div class="inv-sum-val">{{ inv.groups|length }}</div>
-        <div class="inv-sum-lbl">Kategorien</div>
+        <div class="inv-sum-lbl">{{ _('Kategorien') }}</div>
     </div>
     <div class="card elev-sm inv-sum-card">
         <div class="inv-sum-val">{{ inv.all_items|selectattr('tradable')|list|length }}</div>
-        <div class="inv-sum-lbl">Handelbar</div>
+        <div class="inv-sum-lbl">{{ _('Handelbar') }}</div>
     </div>
     <div class="card elev-sm inv-sum-card">
         <div class="inv-sum-val">{{ inv.all_items|selectattr('marketable')|list|length }}</div>
-        <div class="inv-sum-lbl">Marktfaehig</div>
+        <div class="inv-sum-lbl">{{ _('Marktfaehig') }}</div>
     </div>
 </div>
 
@@ -123,12 +123,12 @@
             {% if item.icon %}
             <img src="{{ item.icon }}" alt="{{ item.name }}" loading="lazy">
             {% else %}
-            <div style="width:100px;height:75px;display:flex;align-items:center;justify-content:center;color:var(--color-neutral-600);font-size:11px;">Kein Bild</div>
+            <div style="width:100px;height:75px;display:flex;align-items:center;justify-content:center;color:var(--color-neutral-600);font-size:11px;">{{ _('Kein Bild') }}</div>
             {% endif %}
             <div class="inv-item-name" title="{{ item.name }}">{{ item.name }}</div>
             <div class="inv-item-type" title="{{ item.type }}">{{ item.type }}</div>
             {% if not item.tradable %}
-            <div class="inv-item-badges"><span class="inv-badge inv-badge-notrade">Nicht handelbar</span></div>
+            <div class="inv-item-badges"><span class="inv-badge inv-badge-notrade">{{ _('Nicht handelbar') }}</span></div>
             {% endif %}
         </div>
         {% endfor %}

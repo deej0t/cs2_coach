@@ -3,9 +3,9 @@
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Map-Analyse & Veto-Helper</h2>
+<h2>{{ _('Map-Analyse & Veto-Helper') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Deine Performance pro Map — mit Pick/Ban-Empfehlungen fuer den Veto-Prozess.
+    {{ _('Deine Performance pro Map — mit Pick/Ban-Empfehlungen fuer den Veto-Prozess.') }}
 </p>
 
 <style>
@@ -79,7 +79,7 @@
 
 {% if not veto.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Map-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Map-Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 
@@ -91,7 +91,7 @@
             {% if veto.picks %}
                 {% for p in veto.picks %}{{ p.map }}{% if not loop.last %}, {% endif %}{% endfor %}
             {% else %}
-                Keine klaren Picks
+                {{ _('Keine klaren Picks') }}
             {% endif %}
         </div>
     </div>
@@ -101,7 +101,7 @@
             {% if veto.bans %}
                 {% for b in veto.bans %}{{ b.map }}{% if not loop.last %}, {% endif %}{% endfor %}
             {% else %}
-                Keine klaren Bans
+                {{ _('Keine klaren Bans') }}
             {% endif %}
         </div>
     </div>
@@ -157,7 +157,7 @@
 
     <!-- Recent form -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
-        <div style="font-size:11px;color:var(--color-neutral-500);">Letzte {{ m.recent_total }} (Rating {{ m.recent_rating }})</div>
+        <div style="font-size:11px;color:var(--color-neutral-500);">{{ _('Letzte') }} {{ m.recent_total }} (Rating {{ m.recent_rating }})</div>
         <div style="font-size:12px;font-weight:600;">{{ m.matches }} Matches</div>
     </div>
 

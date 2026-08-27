@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Positions-Zonen{% endblock %}
+{% block title %}CS2 Coach — {{ _('Positions-Zonen') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Positions-Zonen</h2>
+<h2>{{ _('Positions-Zonen') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Wo auf der Map bist du stark, wo stirbst du zu oft? Zonen-Effizienz pro Map.
+    {{ _('Wo auf der Map bist du stark, wo stirbst du zu oft? Zonen-Effizienz pro Map.') }}
 </p>
 
 <style>
@@ -89,7 +89,7 @@
 
 {% if not zd.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Positions-Daten vorhanden. Analysiere Demos erneut — aeltere Exporte enthalten keine Positionsdaten.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Positions-Daten vorhanden. Analysiere Demos erneut — aeltere Exporte enthalten keine Positionsdaten.') }}</p>
 </div>
 {% else %}
 

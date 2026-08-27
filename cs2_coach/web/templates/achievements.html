@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Achievements{% endblock %}
+{% block title %}CS2 Coach — {{ _('Achievements') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Achievements</h2>
+<h2>{{ _('Achievements') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
     {{ _('Deine Meilensteine und Auszeichnungen — spiel, analysiere, und schalte sie frei.') }}
 </p>
@@ -113,7 +113,7 @@
 
 {% if not ach.unlocked and not ach.locked %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 
@@ -129,22 +129,22 @@
         </svg>
         <div class="ach-ring-text">
             <div class="ach-ring-val">{{ ach.earned }}</div>
-            <div class="ach-ring-label">von {{ ach.total }}</div>
+            <div class="ach-ring-label">{{ _('von') }} {{ ach.total }}</div>
         </div>
     </div>
     <div class="ach-hero-info">
         <h3>
-            {% if ach.earned == ach.total %}Alle freigeschaltet!
-            {% elif ach.earned >= ach.total * 0.75 %}Fast komplett!
-            {% elif ach.earned >= ach.total * 0.5 %}Auf gutem Weg
-            {% elif ach.earned >= ach.total * 0.25 %}Guter Start
-            {% else %}Am Anfang
+            {% if ach.earned == ach.total %}{{ _('Alle freigeschaltet!') }}
+            {% elif ach.earned >= ach.total * 0.75 %}{{ _('Fast komplett!') }}
+            {% elif ach.earned >= ach.total * 0.5 %}{{ _('Auf gutem Weg') }}
+            {% elif ach.earned >= ach.total * 0.25 %}{{ _('Guter Start') }}
+            {% else %}{{ _('Am Anfang') }}
             {% endif %}
         </h3>
-        <p>{{ ach.earned }} von {{ ach.total }} Achievements freigeschaltet</p>
+        <p>{{ ach.earned }} {{ _('von') }} {{ ach.total }} {{ _('Achievements freigeschaltet') }}</p>
         <div style="margin-top: 8px;">
             <span class="ach-pts">{{ ach.points }}</span>
-            <span class="ach-pts-label"> / {{ ach.max_points }} Punkte</span>
+            <span class="ach-pts-label"> / {{ ach.max_points }} {{ _('Punkte') }}</span>
         </div>
     </div>
 </div>
@@ -165,7 +165,7 @@
     </div>
     <div class="ach-stat-card">
         <div class="ach-stat-val">{{ ach.stats.best_streak }}</div>
-        <div class="ach-stat-lbl">Beste Serie</div>
+        <div class="ach-stat-lbl">{{ _('Beste Serie') }}</div>
     </div>
     <div class="ach-stat-card">
         <div class="ach-stat-val">{{ ach.stats.maps }}</div>
@@ -173,15 +173,15 @@
     </div>
     <div class="ach-stat-card">
         <div class="ach-stat-val">{{ ach.stats.multikills_3k + ach.stats.multikills_4k + ach.stats.multikills_5k }}</div>
-        <div class="ach-stat-lbl">3K+ Runden</div>
+        <div class="ach-stat-lbl">{{ _('3K+ Runden') }}</div>
     </div>
 </div>
 
 <!-- Filter buttons -->
 <div class="ach-filter">
-    <button class="ach-filter-btn active" onclick="filterAch('all')">Alle</button>
-    <button class="ach-filter-btn" onclick="filterAch('unlocked')"><i data-lucide="trophy" style="width:12px;height:12px;"></i> Freigeschaltet ({{ ach.earned }})</button>
-    <button class="ach-filter-btn" onclick="filterAch('locked')"><i data-lucide="lock" style="width:12px;height:12px;"></i> Gesperrt ({{ ach.total - ach.earned }})</button>
+    <button class="ach-filter-btn active" onclick="filterAch('all')">{{ _('Alle') }}</button>
+    <button class="ach-filter-btn" onclick="filterAch('unlocked')"><i data-lucide="trophy" style="width:12px;height:12px;"></i> {{ _('Freigeschaltet') }} ({{ ach.earned }})</button>
+    <button class="ach-filter-btn" onclick="filterAch('locked')"><i data-lucide="lock" style="width:12px;height:12px;"></i> {{ _('Gesperrt') }} ({{ ach.total - ach.earned }})</button>
     {% for cat_name, cat_icon in ach.categories.items() %}
     <button class="ach-filter-btn" onclick="filterAch('cat', '{{ cat_name }}')"><i data-lucide="{{ cat_icon }}" style="width:12px;height:12px;"></i> {{ cat_name }}</button>
     {% endfor %}
@@ -189,7 +189,7 @@
 
 <!-- Unlocked achievements -->
 <div id="ach-unlocked-section">
-    <div class="ach-section-title"><i data-lucide="trophy" style="width:16px;height:16px;color:var(--color-accent);"></i> Freigeschaltet</div>
+    <div class="ach-section-title"><i data-lucide="trophy" style="width:16px;height:16px;color:var(--color-accent);"></i> {{ _('Freigeschaltet') }}</div>
     <div class="ach-grid" id="ach-unlocked">
         {% for a in ach.unlocked %}
         <div class="ach-card" data-cat="{{ a.cat }}" data-status="unlocked">
@@ -210,7 +210,7 @@
 
 <!-- Locked achievements -->
 <div id="ach-locked-section">
-    <div class="ach-section-title"><i data-lucide="lock" style="width:16px;height:16px;color:var(--color-neutral-600);"></i> Noch nicht freigeschaltet</div>
+    <div class="ach-section-title"><i data-lucide="lock" style="width:16px;height:16px;color:var(--color-neutral-600);"></i> {{ _('Noch nicht freigeschaltet') }}</div>
     <div class="ach-grid" id="ach-locked">
         {% for a in ach.locked %}
         <div class="ach-card locked" data-cat="{{ a.cat }}" data-status="locked">
@@ -230,7 +230,7 @@
 
 <!-- Next milestones progress -->
 <div class="card elev-sm" style="padding: var(--space-4); margin-top: var(--space-5);">
-    <div class="card-kicker" style="margin-bottom: var(--space-3);">Naechste Meilensteine</div>
+    <div class="card-kicker" style="margin-bottom: var(--space-3);">{{ _('Naechste Meilensteine') }}</div>
     <div class="ach-progress-wrap">
         {% set progress_items = [
             ("Matches", ach.stats.matches, [5, 10, 25, 50, 100]),

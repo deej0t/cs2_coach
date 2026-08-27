@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Rundenverlauf{% endblock %}
+{% block title %}CS2 Coach — {{ _('Rundenverlauf') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Rundenverlauf</h2>
+<h2>{{ _('Rundenverlauf') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Runde fuer Runde — dein Match-Verlauf visuell aufbereitet ueber {{ rd.matches_count if rd.has_data else 0 }} Matches.
+    {{ _('Runde fuer Runde — dein Match-Verlauf visuell aufbereitet ueber') }} {{ rd.matches_count if rd.has_data else 0 }} {{ _('Matches') }}.
 </p>
 
 <style>
@@ -93,7 +93,7 @@
 
 {% if not rd.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Rundenverlauf-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Rundenverlauf-Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — AI Chat{% endblock %}
+{% block title %}CS2 Coach — {{ _('AI Chat') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
@@ -59,7 +59,7 @@
                 <span class="ch-status online"><span class="ch-status-dot"></span> Ollama Online</span>
                 {% if ollama_status.models %}
                 {% set active_model = config.get('ai_model', '') or ollama_status.models[0] %}
-                <span class="ch-provider" title="Verfuegbar: {{ ollama_status.models|join(', ') }}">{{ active_model }}</span>
+                <span class="ch-provider" title="{{ _('Verfuegbar:') }} {{ ollama_status.models|join(', ') }}">{{ active_model }}</span>
                 {% endif %}
             {% else %}
                 <span class="ch-status offline"><span class="ch-status-dot"></span> Ollama Offline</span>
@@ -74,23 +74,23 @@
     <!-- Messages -->
     <div class="ch-messages" id="ch-messages">
         <div class="ch-msg ch-msg-system">
-            Frag mich etwas ueber deine CS2-Performance. Ich kenne alle deine analysierten Demos.
+            {{ _('Frag mich etwas ueber deine CS2-Performance. Ich kenne alle deine analysierten Demos.') }}
         </div>
     </div>
 
     <!-- Suggestions -->
     <div class="ch-suggestions" id="ch-suggestions">
-        <button class="ch-suggestion" data-q="Wie ist meine aktuelle Form?">Aktuelle Form?</button>
-        <button class="ch-suggestion" data-q="Was sind meine groessten Schwaechen?">Schwaechen?</button>
-        <button class="ch-suggestion" data-q="Was soll ich heute trainieren?">Training?</button>
-        <button class="ch-suggestion" data-q="Warum sterbe ich so oft?">Warum sterbe ich?</button>
-        <button class="ch-suggestion" data-q="Auf welcher Map bin ich am besten?">Beste Map?</button>
-        <button class="ch-suggestion" data-q="Gib mir einen kompletten Analyse-Report">Voller Report</button>
+        <button class="ch-suggestion" data-q="{{ _('Wie ist meine aktuelle Form?') }}">{{ _('Aktuelle Form?') }}</button>
+        <button class="ch-suggestion" data-q="{{ _('Was sind meine groessten Schwaechen?') }}">{{ _('Schwaechen?') }}</button>
+        <button class="ch-suggestion" data-q="{{ _('Was soll ich heute trainieren?') }}">{{ _('Training?') }}</button>
+        <button class="ch-suggestion" data-q="{{ _('Warum sterbe ich so oft?') }}">{{ _('Warum sterbe ich?') }}</button>
+        <button class="ch-suggestion" data-q="{{ _('Auf welcher Map bin ich am besten?') }}">{{ _('Beste Map?') }}</button>
+        <button class="ch-suggestion" data-q="{{ _('Gib mir einen kompletten Analyse-Report') }}">{{ _('Voller Report') }}</button>
     </div>
 
     <!-- Input -->
     <div class="ch-input-bar">
-        <textarea class="ch-input" id="ch-input" rows="1" placeholder="Frag deinen AI Coach..." autofocus></textarea>
+        <textarea class="ch-input" id="ch-input" rows="1" placeholder="{{ _('Frag deinen AI Coach...') }}" autofocus></textarea>
         <button class="ch-send" id="ch-send" onclick="sendMessage()">
             <i data-lucide="send" style="width:18px;height:18px;"></i>
         </button>

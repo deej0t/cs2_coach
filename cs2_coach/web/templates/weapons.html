@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Waffen-Analyse{% endblock %}
+{% block title %}CS2 Coach — {{ _('Waffen-Analyse') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Waffen-Analyse</h2>
+<h2>{{ _('Waffen-Analyse') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Detaillierte Statistiken pro Waffe ueber {{ exports|length }} analysierte Matches.
+    {{ _('Detaillierte Statistiken pro Waffe ueber') }} {{ exports|length }} {{ _('analysierte Matches') }}.
 </p>
 
 {% if not weapons %}
 <div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
-    <p style="color: var(--color-neutral-500);">Keine Waffen-Daten vorhanden.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Waffen-Daten vorhanden.') }}</p>
 </div>
 {% else %}
 
@@ -51,7 +51,7 @@
 {% for cat in categories %}
 {% set cat_weapons = weapons|selectattr("category", "equalto", cat)|list %}
 {% if cat_weapons %}
-<div class="wp-cat-header">{{ cat }}{% if cat == "Rifle" %} — Hauptwaffen{% elif cat == "Sniper" %} — Scharfschuetzen{% elif cat == "Pistol" %} — Pistolen{% elif cat == "SMG" %} — Maschinenpistolen{% elif cat == "Utility" %} — Granaten{% endif %}</div>
+<div class="wp-cat-header">{{ cat }}{% if cat == "Rifle" %} — {{ _('Hauptwaffen') }}{% elif cat == "Sniper" %} — {{ _('Scharfschuetzen') }}{% elif cat == "Pistol" %} — {{ _('Pistolen') }}{% elif cat == "SMG" %} — {{ _('Maschinenpistolen') }}{% elif cat == "Utility" %} — {{ _('Granaten') }}{% endif %}</div>
 <div class="wp-grid">
     {% for w in cat_weapons %}
     <div class="card elev-sm wp-card" style="border-left-color: {% if w.kd >= 1.5 %}#4ade80{% elif w.kd >= 1.0 %}#fbbf24{% else %}#f87171{% endif %};">

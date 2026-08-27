@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Teammates{% endblock %}
+{% block title %}CS2 Coach — {{ _('Teammates') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Teammate-Analyse</h2>
+<h2>{{ _('Teammate-Analyse') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Mit wem spielst du am meisten — und wie performst du mit ihnen?
+    {{ _('Mit wem spielst du am meisten — und wie performst du mit ihnen?') }}
 </p>
 
 <style>
@@ -70,7 +70,7 @@
 
 {% if not tm.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Teammate-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Teammate-Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 

@@ -1,0 +1,33 @@
+# CS2 Coach — Web-Interface (Docker)
+#
+# Fuer Unraid oder andere Docker-Hosts.
+#
+# Setup:
+#   1. config.yaml erstellen (siehe config.yaml.example)
+#   2. Pfade unten anpassen (Demos, Vault)
+#   3. docker-compose up -d
+#   4. Browser: http://<SERVER-IP>:5000
+#
+# Volumes:
+#   - ./config.yaml: Konfigurationsdatei (API Keys, Einstellungen)
+#   - demos: Ordner mit .dem-Dateien (z.B. CS2 Replays-Ordner)
+#   - vault: Obsidian-Vault fuer Exports (optional)
+
+services:
+  cs2-coach:
+    build: .
+    container_name: cs2-coach
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      # Konfiguration (MUSS vorhanden sein)
+      - ./config.yaml:/app/config.yaml:ro
+      # Demo-Ordner — Pfad zum CS2 Replays-Ordner oder eigenem Demo-Ordner
+      # Beispiel Windows: //c/Program Files (x86)/Steam/steamapps/common/Counter-Strike Global Offensive/game/csgo/replays
+      # Beispiel Linux:   /home/user/.steam/steam/steamapps/common/Counter-Strike Global Offensive/game/csgo/replays
+      - ${DEMO_PATH:-./demos}:/data/demos
+      # Obsidian Vault fuer Coach-Exports (optional)
+      - ${VAULT_PATH:-./vault}:/data/vault
+    environment:
+      - TZ=Europe/Berlin

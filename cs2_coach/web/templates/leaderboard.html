@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Leaderboard{% endblock %}
+{% block title %}CS2 Coach — {{ _('Leaderboard') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Leaderboard</h2>
+<h2>{{ _('Leaderboard') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Alle Spieler aus deinen Matches im Vergleich — wo stehst du?
+    {{ _('Alle Spieler aus deinen Matches im Vergleich — wo stehst du?') }}
 </p>
 
 <style>
@@ -73,7 +73,7 @@
 
 {% if not lb.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 
@@ -81,19 +81,19 @@
 <div class="lb-hero">
     <div class="lb-stat-card">
         <div class="lb-stat-val">{{ lb.total_players }}</div>
-        <div class="lb-stat-lbl">Spieler gesehen</div>
+        <div class="lb-stat-lbl">{{ _('Spieler gesehen') }}</div>
     </div>
     <div class="lb-stat-card" style="border-top: 3px solid var(--color-accent);">
         <div class="lb-stat-val" style="color:var(--color-accent);">#{{ lb.self_rank_kd }}</div>
-        <div class="lb-stat-lbl">Dein K/D Rang</div>
+        <div class="lb-stat-lbl">{{ _('Dein K/D Rang') }}</div>
     </div>
     <div class="lb-stat-card" style="border-top: 3px solid #fbbf24;">
         <div class="lb-stat-val" style="color:#fbbf24;">#{{ lb.self_rank_kills }}</div>
-        <div class="lb-stat-lbl">Dein Kills Rang</div>
+        <div class="lb-stat-lbl">{{ _('Dein Kills Rang') }}</div>
     </div>
     <div class="lb-stat-card">
         <div class="lb-stat-val">Top {{ ((lb.self_rank_kd / lb.total_players) * 100)|round(0)|int }}%</div>
-        <div class="lb-stat-lbl">K/D Perzentil</div>
+        <div class="lb-stat-lbl">{{ _('K/D Perzentil') }}</div>
     </div>
 </div>
 
@@ -106,13 +106,13 @@
 
 <!-- Search -->
 <div class="lb-search">
-    <input class="input" type="text" id="lb-search" placeholder="Spieler suchen..." style="font-size:13px;">
+    <input class="input" type="text" id="lb-search" placeholder="{{ _('Spieler suchen...') }}" style="font-size:13px;">
 </div>
 
 <!-- By K/D -->
 <div class="lb-section" id="tab-kd">
     <div class="lb-header">
-        <span>#</span><span>Spieler</span><span style="text-align:center;">K/D</span><span style="text-align:center;">Kills</span><span style="text-align:center;">Matches</span><span style="text-align:center;">ADR</span><span style="text-align:center;">HS%</span>
+        <span>#</span><span>{{ _('Spieler') }}</span><span style="text-align:center;">K/D</span><span style="text-align:center;">Kills</span><span style="text-align:center;">Matches</span><span style="text-align:center;">ADR</span><span style="text-align:center;">HS%</span>
     </div>
     <div class="lb-grid" id="grid-kd">
         {% for p in lb.by_kd %}
@@ -132,7 +132,7 @@
 <!-- By Kills -->
 <div class="lb-section" id="tab-kills" style="display:none;">
     <div class="lb-header">
-        <span>#</span><span>Spieler</span><span style="text-align:center;">Kills</span><span style="text-align:center;">Deaths</span><span style="text-align:center;">Matches</span><span style="text-align:center;">K/D</span><span style="text-align:center;">KPM</span>
+        <span>#</span><span>{{ _('Spieler') }}</span><span style="text-align:center;">Kills</span><span style="text-align:center;">Deaths</span><span style="text-align:center;">Matches</span><span style="text-align:center;">K/D</span><span style="text-align:center;">KPM</span>
     </div>
     <div class="lb-grid" id="grid-kills">
         {% for p in lb.by_kills %}
@@ -152,7 +152,7 @@
 <!-- By ADR -->
 <div class="lb-section" id="tab-adr" style="display:none;">
     <div class="lb-header">
-        <span>#</span><span>Spieler</span><span style="text-align:center;">ADR</span><span style="text-align:center;">Kills</span><span style="text-align:center;">Matches</span><span style="text-align:center;">K/D</span><span style="text-align:center;">HS%</span>
+        <span>#</span><span>{{ _('Spieler') }}</span><span style="text-align:center;">ADR</span><span style="text-align:center;">Kills</span><span style="text-align:center;">Matches</span><span style="text-align:center;">K/D</span><span style="text-align:center;">HS%</span>
     </div>
     <div class="lb-grid" id="grid-adr">
         {% for p in lb.by_adr %}

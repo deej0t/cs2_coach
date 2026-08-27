@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Gegner-Vorhersage{% endblock %}
+{% block title %}CS2 Coach — {{ _('Gegner-Vorhersage') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Gegner-Vorhersage</h2>
+<h2>{{ _('Gegner-Vorhersage') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-4);">
-    Gib Gegnernamen ein um taktische Briefings zu erhalten. Daten aus {{ scout.match_count or 0 }} analysierten Demos.
+    {{ _('Gib Gegnernamen ein um taktische Briefings zu erhalten. Daten aus') }} {{ scout.match_count or 0 }} {{ _('analysierten Demos.') }}
 </p>
 
 <style>
@@ -114,13 +114,13 @@
 
 {% if not scout.has_data %}
 <div class="card elev-sm" style="padding: var(--space-6); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Gegner-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Gegner-Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 
 <!-- Search -->
 <div class="sc-search">
-    <input type="text" class="sc-search-input" id="sc-search" placeholder="Gegnernamen eingeben (kommagetrennt fuer Team-Scout, z.B. Player1, Player2, Player3)" autofocus>
+    <input type="text" class="sc-search-input" id="sc-search" placeholder="{{ _('Gegnernamen eingeben (kommagetrennt fuer Team-Scout, z.B. Player1, Player2, Player3)') }}" autofocus>
     <button class="sc-search-btn" id="sc-search-btn" onclick="doSearch()">
         <i data-lucide="search" style="width:16px;height:16px;"></i> Scouten
     </button>

@@ -272,7 +272,7 @@
 </style>
 
 <div style="margin-bottom: var(--space-3);">
-    <a href="{{ url_for('index') }}" class="btn btn-ghost" style="padding: 4px 10px; font-size: 12px;">← Zurueck</a>
+    <a href="{{ url_for('index') }}" class="btn btn-ghost" style="padding: 4px 10px; font-size: 12px;">{{ _('← Zurueck') }}</a>
 </div>
 
 <!-- ══════ Match Banner ══════ -->
@@ -280,7 +280,7 @@
 {% set t_pct = 100 - ct_pct %}
 <div class="match-banner">
     <div class="banner-team banner-ct">
-        <div class="banner-team-label">Dein Team</div>
+        <div class="banner-team-label">{{ _('Dein Team') }}</div>
         <div class="banner-score">{{ result.score_team1 }}</div>
     </div>
     <div class="banner-meta">
@@ -288,14 +288,14 @@
         <div class="banner-result {% if result.result_str == 'Sieg' %}win{% elif result.result_str == 'Niederlage' %}loss{% else %}draw{% endif %}">
             {{ result.result_str }}
         </div>
-        <div class="banner-date">{% if result.match_date %}{{ result.match_date }}{% endif %} · {{ result.total_rounds }} Runden</div>
+        <div class="banner-date">{% if result.match_date %}{{ result.match_date }}{% endif %} · {{ result.total_rounds }} {{ _('Runden') }}</div>
         <div class="banner-rounds-bar">
             <div class="rounds-ct" style="width: {{ ct_pct }}%;"></div>
             <div class="rounds-t" style="width: {{ t_pct }}%;"></div>
         </div>
     </div>
     <div class="banner-team banner-t">
-        <div class="banner-team-label">Gegner</div>
+        <div class="banner-team-label">{{ _('Gegner') }}</div>
         <div class="banner-score">{{ result.score_team2 }}</div>
     </div>
 </div>
@@ -318,32 +318,32 @@
 <div class="stat-grid">
     <div class="stat-cell">
         <div class="stat-cell-value {{ rating_color }}">{{ result.rating }}</div>
-        <div class="stat-cell-label"><abbr title="Gesamtbewertung basierend auf Kills, Deaths, Assists, ADR und Impact">Rating</abbr></div>
+        <div class="stat-cell-label"><abbr title="{{ _('Gesamtbewertung basierend auf Kills, Deaths, Assists, ADR und Impact') }}">Rating</abbr></div>
         <div class="stat-bar-wrap"><div class="stat-bar-fill {{ rating_bar }}" style="--bar-w: {{ [result.rating / 1.6 * 100, 100]|min }}%;"></div></div>
     </div>
     <div class="stat-cell">
         <div class="stat-cell-value {{ kd_color }}">{{ "%.2f"|format(stats.kd_ratio) }}</div>
-        <div class="stat-cell-label"><abbr title="Kill/Death-Verhaeltnis — ueber 1.0 = mehr Kills als Deaths">K/D</abbr></div>
+        <div class="stat-cell-label"><abbr title="{{ _('Kill/Death-Verhaeltnis — ueber 1.0 = mehr Kills als Deaths') }}">K/D</abbr></div>
         <div class="stat-bar-wrap"><div class="stat-bar-fill {{ kd_bar }}" style="--bar-w: {{ [stats.kd_ratio / 2.0 * 100, 100]|min }}%;"></div></div>
     </div>
     <div class="stat-cell">
         <div class="stat-cell-value {{ adr_color }}">{{ "%.0f"|format(stats.adr) }}</div>
-        <div class="stat-cell-label"><abbr title="Average Damage per Round — durchschnittlicher Schaden pro Runde">ADR</abbr></div>
+        <div class="stat-cell-label"><abbr title="{{ _('Average Damage per Round — durchschnittlicher Schaden pro Runde') }}">ADR</abbr></div>
         <div class="stat-bar-wrap"><div class="stat-bar-fill {{ adr_bar }}" style="--bar-w: {{ [stats.adr / 120 * 100, 100]|min }}%;"></div></div>
     </div>
     <div class="stat-cell">
         <div class="stat-cell-value {{ hs_color }}">{{ "%.0f"|format(stats.headshot_pct) }}%</div>
-        <div class="stat-cell-label"><abbr title="Headshot-Prozent — Anteil der Kills durch Kopftreffer">HS%</abbr></div>
+        <div class="stat-cell-label"><abbr title="{{ _('Headshot-Prozent — Anteil der Kills durch Kopftreffer') }}">HS%</abbr></div>
         <div class="stat-bar-wrap"><div class="stat-bar-fill {{ hs_bar }}" style="--bar-w: {{ stats.headshot_pct }}%;"></div></div>
     </div>
     <div class="stat-cell">
         <div class="stat-cell-value {{ kast_color }}">{{ "%.0f"|format(stats.kast_pct) }}%</div>
-        <div class="stat-cell-label"><abbr title="Kill, Assist, Survived, Traded — Prozent der Runden mit positivem Beitrag">KAST</abbr></div>
+        <div class="stat-cell-label"><abbr title="{{ _('Kill, Assist, Survived, Traded — Prozent der Runden mit positivem Beitrag') }}">KAST</abbr></div>
         <div class="stat-bar-wrap"><div class="stat-bar-fill {{ kast_bar }}" style="--bar-w: {{ stats.kast_pct }}%;"></div></div>
     </div>
     <div class="stat-cell">
         <div class="stat-cell-value {{ surv_color }}">{{ "%.0f"|format(stats.survival_rate) }}%</div>
-        <div class="stat-cell-label"><abbr title="Ueberlebensrate — Prozent der Runden in denen du ueberlebt hast">Survival</abbr></div>
+        <div class="stat-cell-label"><abbr title="{{ _('Ueberlebensrate — Prozent der Runden in denen du ueberlebt hast') }}">Survival</abbr></div>
         <div class="stat-bar-wrap"><div class="stat-bar-fill {{ surv_bar }}" style="--bar-w: {{ stats.survival_rate }}%;"></div></div>
     </div>
 </div>
@@ -351,13 +351,13 @@
 <!-- ══════ Score Bars (detailed stats) ══════ -->
 <div class="result-cols">
     <div class="card elev-sm" style="padding: var(--space-4);">
-        <div class="card-kicker" style="margin-bottom: 10px;">Performance</div>
+        <div class="card-kicker" style="margin-bottom: 10px;">{{ _('Performance') }}</div>
         <div class="score-bar">
             <span class="score-bar-label">K / D / A</span>
             <span class="score-bar-value" style="min-width: auto;">{{ stats.kills }} / {{ stats.deaths }} / {{ stats.assists }}</span>
         </div>
         <div class="score-bar">
-            <span class="score-bar-label"><abbr title="Erstes Duell der Runde — gewonnen oder verloren">Opening Duels</abbr></span>
+            <span class="score-bar-label"><abbr title="{{ _('Erstes Duell der Runde — gewonnen oder verloren') }}">Opening Duels</abbr></span>
             <div class="score-bar-track">
                 {% set od_total = stats.opening_kills + stats.opening_deaths %}
                 {% if od_total > 0 %}
@@ -367,7 +367,7 @@
             <span class="score-bar-value">{{ stats.opening_kills }}W / {{ stats.opening_deaths }}L</span>
         </div>
         <div class="score-bar">
-            <span class="score-bar-label"><abbr title="Anteil der Schuesse im Stillstand — gutes Counter-Strafing bedeutet vor dem Schuss stehen bleiben">Counter-Strafe</abbr></span>
+            <span class="score-bar-label"><abbr title="{{ _('Anteil der Schuesse im Stillstand — gutes Counter-Strafing bedeutet vor dem Schuss stehen bleiben') }}">Counter-Strafe</abbr></span>
             <div class="score-bar-track">
                 <div class="score-bar-fill" style="width: {{ stats.counter_strafe_score }}%; background: {% if stats.counter_strafe_score >= 90 %}#4ade80{% elif stats.counter_strafe_score >= 80 %}#fbbf24{% else %}#f87171{% endif %};"></div>
             </div>
@@ -375,7 +375,7 @@
         </div>
         {% if stats.crosshair_placement_kills > 0 %}
         <div class="score-bar">
-            <span class="score-bar-label"><abbr title="Crosshair Placement — Grad-Abweichung des Fadenkreuzes zur Gegnerposition 0.5s vor dem Kill. Niedriger = besser">CP</abbr></span>
+            <span class="score-bar-label"><abbr title="{{ _('Crosshair Placement — Grad-Abweichung des Fadenkreuzes zur Gegnerposition 0.5s vor dem Kill. Niedriger = besser') }}">CP</abbr></span>
             <div class="score-bar-track">
                 {% set cp_pct = [100 - (stats.crosshair_placement_avg / 40 * 100), 0]|max %}
                 <div class="score-bar-fill" style="width: {{ cp_pct }}%; background: {% if stats.crosshair_placement_avg < 5 %}#4ade80{% elif stats.crosshair_placement_avg < 15 %}#fbbf24{% else %}#f87171{% endif %};"></div>
@@ -384,23 +384,23 @@
         </div>
         {% endif %}
         <div class="score-bar">
-            <span class="score-bar-label"><abbr title="Treffergenauigkeit — Prozent der abgefeuerten Schuesse die getroffen haben">Accuracy</abbr></span>
+            <span class="score-bar-label"><abbr title="{{ _('Treffergenauigkeit — Prozent der abgefeuerten Schuesse die getroffen haben') }}">Accuracy</abbr></span>
             <div class="score-bar-track">
                 <div class="score-bar-fill sb-accent" style="width: {{ [stats.accuracy, 100]|min }}%;"></div>
             </div>
             <span class="score-bar-value">{{ "%.1f"|format(stats.accuracy) }}%</span>
         </div>
         <div class="score-bar">
-            <span class="score-bar-label"><abbr title="Trade Kills — Kill eines Gegners innerhalb von 3 Sekunden nachdem er einen Teammate getoetet hat">Trade Kills</abbr></span>
+            <span class="score-bar-label"><abbr title="{{ _('Trade Kills — Kill eines Gegners innerhalb von 3 Sekunden nachdem er einen Teammate getoetet hat') }}">Trade Kills</abbr></span>
             <span class="score-bar-value" style="min-width: auto;">{{ stats.trade_kills }}</span>
         </div>
     </div>
 
     <div class="card elev-sm" style="padding: var(--space-4);">
-        <div class="card-kicker" style="margin-bottom: 10px;">Utility & Waffen</div>
+        <div class="card-kicker" style="margin-bottom: 10px;">{{ _('Utility & Waffen') }}</div>
         {% set util_total = stats.flashes_thrown + stats.smokes_thrown + stats.he_thrown + stats.molotovs_thrown %}
         <div class="score-bar">
-            <span class="score-bar-label">Utility/Runde</span>
+            <span class="score-bar-label">{{ _('Utility/Runde') }}</span>
             <div class="score-bar-track">
                 <div class="score-bar-fill sb-accent" style="width: {{ [stats.utility_per_round / 3.5 * 100, 100]|min }}%;"></div>
             </div>
@@ -421,15 +421,15 @@
             <span class="score-bar-value" style="min-width: auto;">{{ stats.smokes_thrown }} / {{ stats.he_thrown }} / {{ stats.molotovs_thrown }}</span>
         </div>
         <div class="score-bar">
-            <span class="score-bar-label">Waffen-Split</span>
+            <span class="score-bar-label">{{ _('Waffen-Split') }}</span>
             <span class="score-bar-value" style="min-width: auto; font-size: 12px;">{{ stats.awp_rifle_split }}</span>
         </div>
         <div class="score-bar">
-            <span class="score-bar-label"><abbr title="Burst vs. Spray — Verhaeltnis von Kills mit 1-3 Schuessen (Burst) vs. 4+ (Spray)">Spray Control</abbr></span>
+            <span class="score-bar-label"><abbr title="{{ _('Burst vs. Spray — Verhaeltnis von Kills mit 1-3 Schuessen (Burst) vs. 4+ (Spray)') }}">Spray Control</abbr></span>
             <span class="score-bar-value" style="min-width: auto; font-size: 12px;">{{ stats.burst_spray_ratio }}</span>
         </div>
         <div class="score-bar">
-            <span class="score-bar-label"><abbr title="Kampfdistanz — N=Nah (<500u), M=Mittel (500-1500u), W=Weit (>1500u). Zeigt dein bevorzugtes Engagement">Kampfdistanz</abbr></span>
+            <span class="score-bar-label"><abbr title="{{ _('Kampfdistanz — N=Nah (<500u), M=Mittel (500-1500u), W=Weit (>1500u). Zeigt dein bevorzugtes Engagement') }}">{{ _('Kampfdistanz') }}</abbr></span>
             <span class="score-bar-value" style="min-width: auto; font-size: 12px;">N:{{ stats.close_range_kills }} M:{{ stats.mid_range_kills }} W:{{ stats.long_range_kills }}</span>
         </div>
     </div>
@@ -441,9 +441,9 @@
 {% set team2_players = [] %}
 {% for p in result.all_players %}
     {% if p.team == target_team %}
-        {% set _ = team1_players.append(p) %}
+        {% set _x = team1_players.append(p) %}
     {% else %}
-        {% set _ = team2_players.append(p) %}
+        {% set _x = team2_players.append(p) %}
     {% endif %}
 {% endfor %}
 
@@ -454,7 +454,7 @@
     <!-- Team 1 (your team) -->
     <div class="sb-team sb-ct">
         <div class="sb-team-header">
-            <div>Spieler</div>
+            <div>{{ _('Spieler') }}</div>
             <div style="text-align:center;">K</div>
             <div style="text-align:center;">A</div>
             <div style="text-align:center;">D</div>
@@ -465,7 +465,7 @@
         <div class="sb-row {% if p.steam_id == stats.steam_id %}sb-row-you{% endif %}">
             <div class="sb-name">
                 {{ p.name }}
-                {% if p.steam_id == stats.steam_id %}<span class="sb-you-badge">Du</span>{% endif %}
+                {% if p.steam_id == stats.steam_id %}<span class="sb-you-badge">{{ _('Du') }}</span>{% endif %}
             </div>
             <div class="sb-cell sb-cell-kd">{{ p.kills }}</div>
             <div class="sb-cell">{{ p.assists }}</div>
@@ -483,7 +483,7 @@
     <!-- Team 2 (enemy) -->
     <div class="sb-team sb-t">
         <div class="sb-team-header">
-            <div>Spieler</div>
+            <div>{{ _('Spieler') }}</div>
             <div style="text-align:center;">K</div>
             <div style="text-align:center;">A</div>
             <div style="text-align:center;">D</div>
@@ -510,17 +510,17 @@
 <!-- ══════ Duel Matrix ══════ -->
 {% if duel_matrix %}
 <div class="card elev-sm" style="margin-bottom: var(--space-5); padding: var(--space-3);">
-    <div class="card-kicker" style="margin-bottom: 10px;">Gegner-Duelle</div>
+    <div class="card-kicker" style="margin-bottom: 10px;">{{ _('Gegner-Duelle') }}</div>
     <table class="duel-table">
         <thead>
             <tr>
-                <th>Gegner</th>
+                <th>{{ _('Gegner') }}</th>
                 <th style="text-align:center;">Kills</th>
                 <th style="text-align:center;">Deaths</th>
-                <th style="text-align:center;">Bilanz</th>
+                <th style="text-align:center;">{{ _('Bilanz') }}</th>
                 <th>K/D</th>
                 <th style="text-align:center;">HS</th>
-                <th>Waffen</th>
+                <th>{{ _('Waffen') }}</th>
             </tr>
         </thead>
         <tbody>
@@ -555,19 +555,19 @@
 <!-- ══════ Round Timeline ══════ -->
 {% if round_timeline %}
 <div class="card elev-sm" style="margin-bottom: var(--space-5); padding: var(--space-3);">
-    <div class="card-kicker" style="margin-bottom: 8px;">Runden-Timeline</div>
+    <div class="card-kicker" style="margin-bottom: 8px;">{{ _('Runden-Timeline') }}</div>
     {% set early_deaths = round_timeline|selectattr('died_early')|list|length %}
     {% set zero_impact = round_timeline|rejectattr('player_kills')|selectattr('player_died')|list|length %}
     <div class="tl-summary">
-        {% if early_deaths > 0 %}<span><strong class="sc-red">{{ early_deaths }}</strong> fruehe Tode</span>{% endif %}
-        {% if zero_impact > 0 %}<span><strong class="sc-red">{{ zero_impact }}</strong> Runden ohne Impact</span>{% endif %}
+        {% if early_deaths > 0 %}<span><strong class="sc-red">{{ early_deaths }}</strong> {{ _('fruehe Tode') }}</span>{% endif %}
+        {% if zero_impact > 0 %}<span><strong class="sc-red">{{ zero_impact }}</strong> {{ _('Runden ohne Impact') }}</span>{% endif %}
         {% set multi_kills = round_timeline|selectattr('player_kills', 'ge', 3)|list|length %}
-        {% if multi_kills > 0 %}<span><strong class="sc-green">{{ multi_kills }}</strong> Multi-Kill Runden</span>{% endif %}
+        {% if multi_kills > 0 %}<span><strong class="sc-green">{{ multi_kills }}</strong> {{ _('Multi-Kill Runden') }}</span>{% endif %}
     </div>
     <div class="tl-grid">
         {% for r in round_timeline %}
         {% if r.round == 13 %}
-        <div class="tl-halftime">— Seitenwechsel —</div>
+        <div class="tl-halftime">— {{ _('Seitenwechsel') }} —</div>
         {% endif %}
         <div class="tl-row {% if r.won %}tl-row-won{% else %}tl-row-lost{% endif %} {% if r.died_early %}tl-row-early{% endif %}">
             <div class="tl-round">R{{ r.round }}</div>
@@ -577,11 +577,11 @@
                     {% if e.type == 'kill' %}
                     <span class="tl-event tl-kill" title="{{ e.target }} ({{ e.weapon }}{% if e.headshot %}, HS{% endif %})">✦ {{ e.target|truncate(10, True, '…') }}</span>
                     {% elif e.type == 'death' %}
-                    <span class="tl-event tl-death" title="Getoetet von {{ e.killer }} ({{ e.weapon }}{% if e.headshot %}, HS{% endif %})">☠ {{ e.killer|truncate(10, True, '…') }}</span>
+                    <span class="tl-event tl-death" title="{{ _('Getoetet von') }} {{ e.killer }} ({{ e.weapon }}{% if e.headshot %}, HS{% endif %})">☠ {{ e.killer|truncate(10, True, '…') }}</span>
                     {% elif e.type == 'bomb_plant' and e.is_self %}
-                    <span class="tl-event tl-bomb" title="Bombe gelegt">💣</span>
+                    <span class="tl-event tl-bomb" title="{{ _('Bombe gelegt') }}">💣</span>
                     {% elif e.type == 'bomb_defuse' and e.is_self %}
-                    <span class="tl-event tl-bomb" title="Bombe entschaerft">🔧</span>
+                    <span class="tl-event tl-bomb" title="{{ _('Bombe entschaerft') }}">🔧</span>
                     {% endif %}
                 {% endfor %}
             </div>
@@ -599,16 +599,16 @@
 <!-- ══════ Economy Performance ══════ -->
 {% if economy %}
 <div style="margin-bottom: var(--space-5);">
-    <div class="card-kicker" style="margin-bottom: 8px;">Wirtschafts-Performance</div>
+    <div class="card-kicker" style="margin-bottom: 8px;">{{ _('Wirtschafts-Performance') }}</div>
     <div class="econ-grid">
-        {% set econ_order = [('pistol', 'Pistole', 'econ-card-pistol'), ('eco', 'Eco', 'econ-card-eco'), ('force', 'Force', 'econ-card-force'), ('fullbuy', 'Fullbuy', 'econ-card-fullbuy')] %}
+        {% set econ_order = [('pistol', _('Pistole'), 'econ-card-pistol'), ('eco', _('Eco'), 'econ-card-eco'), ('force', _('Force'), 'econ-card-force'), ('fullbuy', _('Fullbuy'), 'econ-card-fullbuy')] %}
         {% for key, label, cls in econ_order %}
         {% set e = economy.get(key, {}) %}
         {% if e %}
         <div class="card elev-sm econ-card {{ cls }}">
             <div class="econ-label">{{ label }}</div>
             <div class="econ-big {% if e.kd >= 1.2 %}sc-green{% elif e.kd >= 0.8 %}sc-yellow{% else %}sc-red{% endif %}">{{ e.kd }}</div>
-            <div class="econ-sub">K/D in {{ e.rounds }} Runden</div>
+            <div class="econ-sub">K/D in {{ e.rounds }} {{ _('Runden') }}</div>
             <div style="margin-top: 10px;">
                 <div class="econ-row"><span class="econ-row-label">ADR</span><span>{{ e.adr }}</span></div>
                 <div class="econ-row"><span class="econ-row-label">K / D</span><span>{{ e.kills }} / {{ e.deaths }}</span></div>
@@ -619,7 +619,7 @@
         <div class="card elev-sm econ-card" style="opacity: 0.4;">
             <div class="econ-label">{{ label }}</div>
             <div class="econ-big" style="color: var(--color-neutral-600);">—</div>
-            <div class="econ-sub">Keine Runden</div>
+            <div class="econ-sub">{{ _('Keine Runden') }}</div>
         </div>
         {% endif %}
         {% endfor %}
@@ -629,18 +629,18 @@
 
 <!-- ══════ Focus & Coach ══════ -->
 {% set focus_areas = [] %}
-{% if stats.crosshair_placement_kills > 0 and stats.crosshair_placement_avg > 15 %}{% set _ = focus_areas.append('Crosshair Placement') %}{% endif %}
-{% if stats.counter_strafe_score < 80 %}{% set _ = focus_areas.append('Counter-Strafing') %}{% endif %}
-{% if stats.opening_deaths > stats.opening_kills %}{% set _ = focus_areas.append('Opening Duels') %}{% endif %}
-{% if stats.utility_per_round < 1.5 %}{% set _ = focus_areas.append('Utility-Usage') %}{% endif %}
-{% if stats.adr < 75 %}{% set _ = focus_areas.append('Positionierung') %}{% endif %}
-{% if stats.flash_teammates_blinded > stats.flash_enemies_blinded and stats.flashes_thrown > 3 %}{% set _ = focus_areas.append('Flash-Technik') %}{% endif %}
-{% if stats.avg_recoil_index > 4 %}{% set _ = focus_areas.append('Spray-Control') %}{% endif %}
-{% if stats.kd_ratio < 0.9 %}{% set _ = focus_areas.append('Clutch-Disziplin') %}{% endif %}
+{% if stats.crosshair_placement_kills > 0 and stats.crosshair_placement_avg > 15 %}{% set _x = focus_areas.append(_('Crosshair Placement')) %}{% endif %}
+{% if stats.counter_strafe_score < 80 %}{% set _x = focus_areas.append(_('Counter-Strafing')) %}{% endif %}
+{% if stats.opening_deaths > stats.opening_kills %}{% set _x = focus_areas.append(_('Opening Duels')) %}{% endif %}
+{% if stats.utility_per_round < 1.5 %}{% set _x = focus_areas.append(_('Utility-Usage')) %}{% endif %}
+{% if stats.adr < 75 %}{% set _x = focus_areas.append(_('Positionierung')) %}{% endif %}
+{% if stats.flash_teammates_blinded > stats.flash_enemies_blinded and stats.flashes_thrown > 3 %}{% set _x = focus_areas.append(_('Flash-Technik')) %}{% endif %}
+{% if stats.avg_recoil_index > 4 %}{% set _x = focus_areas.append(_('Spray-Control')) %}{% endif %}
+{% if stats.kd_ratio < 0.9 %}{% set _x = focus_areas.append(_('Clutch-Disziplin')) %}{% endif %}
 
 {% if focus_areas %}
 <div style="margin-bottom: var(--space-4);">
-    <div class="card-kicker" style="margin-bottom: 8px;">Fokus-Bereiche</div>
+    <div class="card-kicker" style="margin-bottom: 8px;">{{ _('Fokus-Bereiche') }}</div>
     <div class="focus-tags">
         {% for area in focus_areas %}
         <span class="tag tag-accent">{{ area }}</span>
@@ -649,25 +649,25 @@
 </div>
 {% endif %}
 
-<div class="card-kicker" style="margin-bottom: 8px;">Coach-Analyse</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Coach-Analyse') }}</div>
 <div class="coach-grid">
     {% if stats.opening_kills + stats.opening_deaths > 0 %}
     <div class="card coach-card">
         <div class="coach-card-header">
             <span class="card-title" style="font-size: 14px;">Opening Duels: {{ stats.opening_kills }}W / {{ stats.opening_deaths }}L</span>
             {% if stats.opening_deaths > stats.opening_kills %}
-            <span class="tag tag-accent">Prioritaet</span>
+            <span class="tag tag-accent">{{ _('Prioritaet') }}</span>
             {% elif stats.opening_kills > stats.opening_deaths %}
-            <span class="tag tag-neutral">Staerke</span>
+            <span class="tag tag-neutral">{{ _('Staerke') }}</span>
             {% else %}
-            <span class="tag tag-neutral">Beobachten</span>
+            <span class="tag tag-neutral">{{ _('Beobachten') }}</span>
             {% endif %}
         </div>
         <div class="card-body">
             {% if stats.opening_deaths > stats.opening_kills %}
-            Du verlierst die Mehrzahl der Opening Duels. Flash + Shoulder-Peek fuer Info, dann erst committen.
+            {{ _('Du verlierst die Mehrzahl der Opening Duels. Flash + Shoulder-Peek fuer Info, dann erst committen.') }}
             {% else %}
-            Gute Opening-Duel-Bilanz. Weiter so, aber variiere deine Peek-Timings.
+            {{ _('Gute Opening-Duel-Bilanz. Weiter so, aber variiere deine Peek-Timings.') }}
             {% endif %}
         </div>
     </div>
@@ -678,24 +678,24 @@
         <div class="coach-card-header">
             <span class="card-title" style="font-size: 14px;">Crosshair Placement: {{ "%.1f"|format(stats.crosshair_placement_avg) }}°</span>
             {% if stats.crosshair_placement_avg > 15 %}
-            <span class="tag tag-accent">Prioritaet</span>
+            <span class="tag tag-accent">{{ _('Prioritaet') }}</span>
             {% elif stats.crosshair_placement_avg <= 5 %}
-            <span class="tag tag-neutral">Staerke</span>
+            <span class="tag tag-neutral">{{ _('Staerke') }}</span>
             {% else %}
-            <span class="tag tag-neutral">Beobachten</span>
+            <span class="tag tag-neutral">{{ _('Beobachten') }}</span>
             {% endif %}
         </div>
         <div class="card-body">
             {% if stats.crosshair_placement_avg > 25 %}
-            Massive Nachkorrekturen bei jedem Fight — immer auf Kopfhoehe pre-aimen.
+            {{ _('Massive Nachkorrekturen bei jedem Fight — immer auf Kopfhoehe pre-aimen.') }}
             {% elif stats.crosshair_placement_avg > 15 %}
-            Crosshair beim Bewegen auf die naechste gefaehrliche Ecke richten.
+            {{ _('Crosshair beim Bewegen auf die naechste gefaehrliche Ecke richten.') }}
             {% elif stats.crosshair_placement_avg > 8 %}
-            Solide, aber Feinschliff noetig — tighter an die Angles kleben.
+            {{ _('Solide, aber Feinschliff noetig — tighter an die Angles kleben.') }}
             {% elif stats.crosshair_placement_avg > 4 %}
-            Gute Placement. Minimale Korrekturen noetig.
+            {{ _('Gute Placement. Minimale Korrekturen noetig.') }}
             {% else %}
-            Exzellent — Pro-Level Pre-Aim.
+            {{ _('Exzellent — Pro-Level Pre-Aim.') }}
             {% endif %}
         </div>
         <div style="margin-top: 4px; font-size: 11px; color: var(--color-neutral-600);">
@@ -708,38 +708,38 @@
         <div class="coach-card-header">
             <span class="card-title" style="font-size: 14px;">Counter-Strafing: {{ "%.0f"|format(stats.counter_strafe_score) }}%</span>
             {% if stats.counter_strafe_score < 80 %}
-            <span class="tag tag-accent">Prioritaet</span>
+            <span class="tag tag-accent">{{ _('Prioritaet') }}</span>
             {% elif stats.counter_strafe_score >= 90 %}
-            <span class="tag tag-neutral">Staerke</span>
+            <span class="tag tag-neutral">{{ _('Staerke') }}</span>
             {% else %}
-            <span class="tag tag-neutral">Beobachten</span>
+            <span class="tag tag-neutral">{{ _('Beobachten') }}</span>
             {% endif %}
         </div>
         <div class="card-body">
             {% if stats.counter_strafe_score < 80 %}
-            Zu oft in Bewegung geschossen — Gegenrichtung antippen, dann feuern.
+            {{ _('Zu oft in Bewegung geschossen — Gegenrichtung antippen, dann feuern.') }}
             {% elif stats.counter_strafe_score >= 90 %}
-            Sauberes Counter-Strafing. Gelegentlich noch Running-Shots in Panik.
+            {{ _('Sauberes Counter-Strafing. Gelegentlich noch Running-Shots in Panik.') }}
             {% else %}
-            Ordentlich, aber auch unter Druck sauber stoppen.
+            {{ _('Ordentlich, aber auch unter Druck sauber stoppen.') }}
             {% endif %}
         </div>
     </div>
 
     <div class="card coach-card">
         <div class="coach-card-header">
-            <span class="card-title" style="font-size: 14px;">Utility: {{ "%.1f"|format(stats.utility_per_round) }}/Runde</span>
+            <span class="card-title" style="font-size: 14px;">Utility: {{ "%.1f"|format(stats.utility_per_round) }}/{{ _('Runde') }}</span>
             {% if stats.utility_per_round < 1.5 %}
-            <span class="tag tag-accent">Prioritaet</span>
+            <span class="tag tag-accent">{{ _('Prioritaet') }}</span>
             {% else %}
-            <span class="tag tag-neutral">Staerke</span>
+            <span class="tag tag-neutral">{{ _('Staerke') }}</span>
             {% endif %}
         </div>
         <div class="card-body">
             {% if stats.utility_per_round < 1.5 %}
-            Zu wenig Nades. Ziel: 2-3 Standard-Lineups pro Map konsequent werfen.
+            {{ _('Zu wenig Nades. Ziel: 2-3 Standard-Lineups pro Map konsequent werfen.') }}
             {% else %}
-            Gute Utility-Nutzung — Peeks und Positionskaempfe werden vorbereitet.
+            {{ _('Gute Utility-Nutzung — Peeks und Positionskaempfe werden vorbereitet.') }}
             {% endif %}
         </div>
     </div>
@@ -748,28 +748,28 @@
         <div class="coach-card-header">
             <span class="card-title" style="font-size: 14px;">ADR: {{ "%.1f"|format(stats.adr) }}</span>
             {% if stats.adr >= 80 %}
-            <span class="tag tag-neutral">Staerke</span>
+            <span class="tag tag-neutral">{{ _('Staerke') }}</span>
             {% elif stats.adr >= 65 %}
-            <span class="tag tag-neutral">Beobachten</span>
+            <span class="tag tag-neutral">{{ _('Beobachten') }}</span>
             {% else %}
-            <span class="tag tag-accent">Prioritaet</span>
+            <span class="tag tag-accent">{{ _('Prioritaet') }}</span>
             {% endif %}
         </div>
         <div class="card-body">
-            {% if stats.adr >= 80 %}Starker ADR-Wert — du dominierst die Fights.
-            {% elif stats.adr >= 65 %}Solide, aber such dir mehr Kontakt in der Rundenmitte.
-            {% else %}Zu wenig Schadensbeitrag — aktiver Fights suchen.{% endif %}
+            {% if stats.adr >= 80 %}{{ _('Starker ADR-Wert — du dominierst die Fights.') }}
+            {% elif stats.adr >= 65 %}{{ _('Solide, aber such dir mehr Kontakt in der Rundenmitte.') }}
+            {% else %}{{ _('Zu wenig Schadensbeitrag — aktiver Fights suchen.') }}{% endif %}
         </div>
     </div>
 
     {% if stats.flash_teammates_blinded > stats.flash_enemies_blinded and stats.flashes_thrown > 3 %}
     <div class="card coach-card">
         <div class="coach-card-header">
-            <span class="card-title" style="font-size: 14px;">Flash-Technik</span>
-            <span class="tag tag-accent">Prioritaet</span>
+            <span class="card-title" style="font-size: 14px;">{{ _('Flash-Technik') }}</span>
+            <span class="tag tag-accent">{{ _('Prioritaet') }}</span>
         </div>
         <div class="card-body">
-            Team oefter geblinded als Gegner ({{ stats.flash_teammates_blinded }} vs. {{ stats.flash_enemies_blinded }}). Pop-Flashes ueben.
+            {{ _('Team oefter geblinded als Gegner') }} ({{ stats.flash_teammates_blinded }} vs. {{ stats.flash_enemies_blinded }}). {{ _('Pop-Flashes ueben.') }}
         </div>
     </div>
     {% endif %}
@@ -805,14 +805,14 @@
             <label class="km-layer"><input type="checkbox" id="km-smoke"><span class="km-dot" style="background:#a3a3a3;"></span> Smokes</label>
             <label class="km-layer"><input type="checkbox" id="km-he"><span class="km-dot" style="background:#fb923c;"></span> HE</label>
             <label class="km-layer"><input type="checkbox" id="km-molotov"><span class="km-dot" style="background:#ef4444;"></span> Molotov</label>
-            <label class="km-layer"><input type="checkbox" id="km-own-only"><abbr title="Nur eigene Utility anzeigen">Nur Eigene</abbr></label>
+            <label class="km-layer"><input type="checkbox" id="km-own-only"><abbr title="{{ _('Nur eigene Utility anzeigen') }}">{{ _('Nur Eigene') }}</abbr></label>
             <div class="km-mode-group">
                 <button class="km-mode active" data-mode="dots">Dots</button>
                 <button class="km-mode" data-mode="heatmap">Heatmap</button>
             </div>
         </div>
         <div class="km-round-ctrl">
-            <span class="km-round-label" id="km-round-text">Alle Runden</span>
+            <span class="km-round-label" id="km-round-text">{{ _('Alle Runden') }}</span>
             <input type="range" id="km-round-slider" min="0" max="{{ kill_map_data.total_rounds }}" value="0">
         </div>
         <div class="km-round-pills" id="km-round-pills"></div>
@@ -826,7 +826,7 @@
 
 <!-- ══════ Collapsible Sections ══════ -->
 <details style="margin-bottom: var(--space-4);">
-    <summary>Alle Rohdaten anzeigen</summary>
+    <summary>{{ _('Alle Rohdaten anzeigen') }}</summary>
     <table class="table" style="margin-top: 10px;">
         <tbody>
             <tr><td>K/D/A</td><td>{{ stats.kills }}/{{ stats.deaths }}/{{ stats.assists }}</td></tr>
@@ -844,9 +844,9 @@
             {% endif %}
             <tr><td>Counter-Strafe</td><td>{{ "%.0f"|format(stats.counter_strafe_score) }}% (inacc: {{ "%.4f"|format(stats.avg_inaccuracy_move) }})</td></tr>
             <tr><td>Spray-Control</td><td>{{ stats.burst_spray_ratio }} (avg recoil: {{ "%.1f"|format(stats.avg_recoil_index) }})</td></tr>
-            <tr><td>Waffen-Split</td><td>{{ stats.awp_rifle_split }}</td></tr>
-            <tr><td>Kampfdistanz</td><td>avg {{ "%.0f"|format(stats.avg_fight_distance) }}u (N:{{ stats.close_range_kills }}/M:{{ stats.mid_range_kills }}/W:{{ stats.long_range_kills }})</td></tr>
-            <tr><td>Utility</td><td>{{ util_total }} ({{ "%.1f"|format(stats.utility_per_round) }}/Runde)</td></tr>
+            <tr><td>{{ _('Waffen-Split') }}</td><td>{{ stats.awp_rifle_split }}</td></tr>
+            <tr><td>{{ _('Kampfdistanz') }}</td><td>avg {{ "%.0f"|format(stats.avg_fight_distance) }}u (N:{{ stats.close_range_kills }}/M:{{ stats.mid_range_kills }}/W:{{ stats.long_range_kills }})</td></tr>
+            <tr><td>Utility</td><td>{{ util_total }} ({{ "%.1f"|format(stats.utility_per_round) }}/{{ _('Runde') }})</td></tr>
             <tr><td>Flashes</td><td>{{ stats.flashes_thrown }} ({{ stats.flash_effectiveness }})</td></tr>
             <tr><td>Smokes / HE / Molotovs</td><td>{{ stats.smokes_thrown }} / {{ stats.he_thrown }} / {{ stats.molotovs_thrown }}</td></tr>
             {% if stats.clutch_attempts > 0 %}
@@ -866,13 +866,13 @@
 </details>
 
 <!-- ══════ Full Report (rendered) ══════ -->
-<div class="card-kicker" style="margin-bottom: 8px;">Vollstaendiger Coach-Report</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Vollstaendiger Coach-Report') }}</div>
 <div id="report-rendered"></div>
 <div id="report-raw" style="display:none;">{{ report }}</div>
 
 {% if obsidian_path %}
 <p style="color: var(--color-neutral-600); font-size: 11px;">
-    Obsidian-Notiz exportiert: {{ obsidian_path }}
+    {{ _('Obsidian-Notiz exportiert:') }} {{ obsidian_path }}
 </p>
 {% endif %}
 {% endblock %}

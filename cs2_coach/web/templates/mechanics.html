@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Mechanik{% endblock %}
+{% block title %}CS2 Coach — {{ _('Mechanik') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Mechanik-Analyse</h2>
+<h2>{{ _('Mechanik-Analyse') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
     Dein Aim, Movement und Schuss-Praezision im Detail — ueber {{ mech.matches_analyzed if mech.has_data else 0 }} Matches.
 </p>
@@ -83,7 +83,7 @@
 
 {% if not mech.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Mechanik-Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Mechanik-Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 
@@ -153,7 +153,7 @@
     <div class="mk-detail-card">
         <div class="mk-detail-title">
             <i data-lucide="ruler" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#60a5fa;"></i>
-            Kampfdistanz
+            {{ _('Kampfdistanz') }}
         </div>
         {% if mech.engage.avg_distance %}
         <div style="text-align:center;margin-bottom:12px;">
@@ -162,19 +162,19 @@
         </div>
         {% endif %}
         <div class="mk-bar-wrap">
-            <div class="mk-bar-label"><span>Nah</span><span>{{ mech.engage.close }} ({{ mech.engage.close_pct }}%)</span></div>
+            <div class="mk-bar-label"><span>{{ _('Nah') }}</span><span>{{ mech.engage.close }} ({{ mech.engage.close_pct }}%)</span></div>
             <div class="mk-bar">
                 <div class="mk-bar-fill" style="width:{{ mech.engage.close_pct }}%;background:#f87171;"></div>
             </div>
         </div>
         <div class="mk-bar-wrap">
-            <div class="mk-bar-label"><span>Mittel</span><span>{{ mech.engage.mid }} ({{ mech.engage.mid_pct }}%)</span></div>
+            <div class="mk-bar-label"><span>{{ _('Mittel') }}</span><span>{{ mech.engage.mid }} ({{ mech.engage.mid_pct }}%)</span></div>
             <div class="mk-bar">
                 <div class="mk-bar-fill" style="width:{{ mech.engage.mid_pct }}%;background:#fbbf24;"></div>
             </div>
         </div>
         <div class="mk-bar-wrap">
-            <div class="mk-bar-label"><span>Weit</span><span>{{ mech.engage.long }} ({{ mech.engage.long_pct }}%)</span></div>
+            <div class="mk-bar-label"><span>{{ _('Weit') }}</span><span>{{ mech.engage.long }} ({{ mech.engage.long_pct }}%)</span></div>
             <div class="mk-bar">
                 <div class="mk-bar-fill" style="width:{{ mech.engage.long_pct }}%;background:#60a5fa;"></div>
             </div>
@@ -188,11 +188,11 @@
     <div class="mk-detail-card">
         <div class="mk-detail-title">
             <i data-lucide="skull" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#f87171;"></i>
-            Tod-Timing
+            {{ _('Tod-Timing') }}
         </div>
         <div style="text-align:center;margin-bottom:12px;">
             <div style="font-family:var(--font-heading);font-size:28px;font-weight:700;color:#f87171;">{{ mech.deaths.total }}</div>
-            <div style="font-size:11px;color:var(--color-neutral-500);">Tode analysiert</div>
+            <div style="font-size:11px;color:var(--color-neutral-500);">{{ _('Tode analysiert') }}</div>
         </div>
         <div class="mk-bar-wrap">
             <div class="mk-bar-label"><span>Frueh (0-30s)</span><span {% if mech.deaths.early_pct > 35 %}style="color:#f87171;"{% endif %}>{{ mech.deaths.early }} ({{ mech.deaths.early_pct }}%)</span></div>
@@ -291,10 +291,10 @@
 <div class="mk-section">
     <div class="mk-section-title">
         <i data-lucide="list" style="width:16px;height:16px;color:var(--color-neutral-400);"></i>
-        Alle Matches — Mechanik-Werte
+        {{ _('Alle Matches — Mechanik-Werte') }}
     </div>
     <div class="mk-match-header">
-        <span>Datum</span><span>Map</span><span style="text-align:center;">Accuracy</span><span style="text-align:center;">HS%</span><span style="text-align:center;">Crosshair</span><span style="text-align:center;">C-Strafe</span><span style="text-align:center;">Recoil</span>
+        <span>{{ _('Datum') }}</span><span>Map</span><span style="text-align:center;">Accuracy</span><span style="text-align:center;">HS%</span><span style="text-align:center;">Crosshair</span><span style="text-align:center;">C-Strafe</span><span style="text-align:center;">Recoil</span>
     </div>
     <div class="mk-match-grid">
         {% for m in mech.matches %}

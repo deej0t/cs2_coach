@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Fortschritt & Achievements{% endblock %}
+{% block title %}CS2 Coach — {{ _('Fortschritt & Achievements') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Fortschritt & Achievements</h2>
+<h2>{{ _('Fortschritt & Achievements') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Vergleiche deine Monate, sammle Achievements und sieh wie du dich entwickelst.
+    {{ _('Vergleiche deine Monate, sammle Achievements und sieh wie du dich entwickelst.') }}
 </p>
 
 <style>
@@ -55,10 +55,10 @@
 <div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <span style="font-size:15px;font-weight:600;">Achievements</span>
-        <span style="font-size:13px;color:var(--color-neutral-400);"><span style="color:#fbbf24;font-weight:700;">{{ unlocked }}</span> / {{ total_ach }} freigeschaltet</span>
+        <span style="font-size:13px;color:var(--color-neutral-400);"><span style="color:#fbbf24;font-weight:700;">{{ unlocked }}</span> / {{ total_ach }} {{ _('freigeschaltet') }}</span>
     </div>
     <div class="ach-prog-bar"><div class="ach-prog-fill" style="width:{{ pct }}%;"></div></div>
-    <div class="ach-prog-text"><span>{{ pct }}% abgeschlossen</span><span>{{ total_ach - unlocked }} verbleibend</span></div>
+    <div class="ach-prog-text"><span>{{ pct }}% {{ _('abgeschlossen') }}</span><span>{{ total_ach - unlocked }} {{ _('verbleibend') }}</span></div>
 </div>
 
 {% set categories = [] %}
@@ -83,7 +83,7 @@
 
 <!-- ══════ Period Comparison ══════ -->
 {% if periods and periods|length >= 1 %}
-<div class="card-kicker" style="margin-bottom: 8px;">Monats-Vergleich</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Monats-Vergleich') }}</div>
 
 {% set month_names = {"01": "Januar", "02": "Februar", "03": "Maerz", "04": "April", "05": "Mai", "06": "Juni", "07": "Juli", "08": "August", "09": "September", "10": "Oktober", "11": "November", "12": "Dezember"} %}
 
@@ -93,7 +93,7 @@
     <table class="pc-table">
         <thead>
             <tr>
-                <th>Monat</th>
+                <th>{{ _('Monat') }}</th>
                 <th>Matches</th>
                 <th>Win-Rate</th>
                 <th>Rating</th>
@@ -109,7 +109,7 @@
         <tr class="{% if p.month == best_rating_month.month %}pc-best{% endif %}">
             <td>
                 {{ month_names.get(p.month[-2:], p.month[-2:]) }} {{ p.month[:4] }}
-                {% if p.month == best_rating_month.month %}<span style="color:#fbbf24;font-size:11px;"> ★ Bester Monat</span>{% endif %}
+                {% if p.month == best_rating_month.month %}<span style="color:#fbbf24;font-size:11px;"> ★ {{ _('Bester Monat') }}</span>{% endif %}
             </td>
             <td>{{ p.matches }} <span style="font-size:11px;color:var(--color-neutral-500);">({{ p.wins }}W/{{ p.losses }}L)</span></td>
             <td>
@@ -143,7 +143,7 @@
 
 <!-- ══════ Formkurve ══════ -->
 {% if exports|length >= 3 %}
-<div class="card-kicker" style="margin-bottom: 8px;">Formkurve — Rating ueber alle Matches</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Formkurve — Rating ueber alle Matches') }}</div>
 <div class="card elev-sm" style="padding: var(--space-3); margin-bottom: var(--space-5);">
     <canvas id="formkurve" class="fk-chart"></canvas>
 </div>

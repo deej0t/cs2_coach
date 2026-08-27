@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Gegner-Analyse{% endblock %}
+{% block title %}CS2 Coach — {{ _('Gegner-Analyse') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Gegner-Analyse</h2>
+<h2>{{ _('Gegner-Analyse') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Alle Gegner aggregiert ueber alle Matches — finde deine Nemesis und deine Opfer.
+    {{ _('Alle Gegner aggregiert ueber alle Matches — finde deine Nemesis und deine Opfer.') }}
 </p>
 
 {% if not opponents %}
 <div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
-    <p style="color: var(--color-neutral-500);">Keine Gegner-Daten vorhanden.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Gegner-Daten vorhanden.') }}</p>
 </div>
 {% else %}
 
@@ -47,26 +47,26 @@
 <div class="opp-summary">
     <div class="card elev-sm opp-sum-card" style="border-top: 3px solid var(--color-neutral-700);">
         <div class="opp-sum-val">{{ opponents|length }}</div>
-        <div class="opp-sum-label">Gegner getroffen</div>
+        <div class="opp-sum-label">{{ _('Gegner getroffen') }}</div>
     </div>
     <div class="card elev-sm opp-sum-card" style="border-top: 3px solid #f87171;">
         <div class="opp-sum-val sc-red">{{ nemeses|length }}</div>
         <div class="opp-sum-label">Nemesis</div>
-        <div class="opp-sum-sub">Gegner die dich dominiert haben</div>
+        <div class="opp-sum-sub">{{ _('Gegner die dich dominiert haben') }}</div>
     </div>
     <div class="card elev-sm opp-sum-card" style="border-top: 3px solid #4ade80;">
         <div class="opp-sum-val sc-green">{{ victims|length }}</div>
-        <div class="opp-sum-label">Dominiert</div>
-        <div class="opp-sum-sub">Gegner die du dominiert hast</div>
+        <div class="opp-sum-label">{{ _('Dominiert') }}</div>
+        <div class="opp-sum-sub">{{ _('Gegner die du dominiert hast') }}</div>
     </div>
 </div>
 
 <!-- Nemesis section -->
 {% if nemeses %}
-<div class="card-kicker" style="margin-bottom: 8px; color: #f87171;">Nemesis — Gegner die dich dominiert haben</div>
+<div class="card-kicker" style="margin-bottom: 8px; color: #f87171;">{{ _('Nemesis — Gegner die dich dominiert haben') }}</div>
 <div class="card elev-sm" style="padding: var(--space-3); margin-bottom: var(--space-5); border-left: 3px solid #f87171;">
     <table class="opp-table">
-        <thead><tr><th>Gegner</th><th style="text-align:center;">Kills</th><th style="text-align:center;">Deaths</th><th>Bilanz</th><th>K/D</th><th>HS%</th><th>Maps</th></tr></thead>
+        <thead><tr><th>{{ _('Gegner') }}</th><th style="text-align:center;">Kills</th><th style="text-align:center;">Deaths</th><th>{{ _('Bilanz') }}</th><th>K/D</th><th>HS%</th><th>Maps</th></tr></thead>
         <tbody>
         {% for o in nemeses %}
         <tr>
@@ -85,18 +85,18 @@
 {% endif %}
 
 <!-- Full table -->
-<div class="card-kicker" style="margin-bottom: 8px;">Alle Gegner ({{ opponents|length }})</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Alle Gegner') }} ({{ opponents|length }})</div>
 <div class="card elev-sm" style="padding: var(--space-3); margin-bottom: var(--space-5);">
     <table class="opp-table">
-        <thead><tr><th>Gegner</th><th>Status</th><th style="text-align:center;">Kills</th><th style="text-align:center;">Deaths</th><th>Bilanz</th><th>K/D</th><th>HS%</th><th>Duelle</th><th>Maps</th><th>Waffen</th></tr></thead>
+        <thead><tr><th>{{ _('Gegner') }}</th><th>{{ _('Status') }}</th><th style="text-align:center;">Kills</th><th style="text-align:center;">Deaths</th><th>{{ _('Bilanz') }}</th><th>K/D</th><th>HS%</th><th>{{ _('Duelle') }}</th><th>Maps</th><th>{{ _('Waffen') }}</th></tr></thead>
         <tbody>
         {% for o in opponents %}
         <tr>
             <td class="opp-name">{{ o.name }}</td>
             <td>
-                {% if o.threat == 'nemesis' %}<span class="opp-threat opp-nemesis">Nemesis</span>
-                {% elif o.threat == 'victim' %}<span class="opp-threat opp-victim">Dominiert</span>
-                {% else %}<span class="opp-threat opp-even">Ausgeglichen</span>{% endif %}
+                {% if o.threat == 'nemesis' %}<span class="opp-threat opp-nemesis">{{ _('Nemesis') }}</span>
+                {% elif o.threat == 'victim' %}<span class="opp-threat opp-victim">{{ _('Dominiert') }}</span>
+                {% else %}<span class="opp-threat opp-even">{{ _('Ausgeglichen') }}</span>{% endif %}
             </td>
             <td style="text-align:center;color:#4ade80;">{{ o.kills }}</td>
             <td style="text-align:center;color:#f87171;">{{ o.deaths }}</td>
@@ -139,7 +139,7 @@
     .os-chart-wrap canvas { position: absolute; inset: 0; }
 </style>
 
-<div class="card-kicker" style="margin-bottom: 8px;">Gegner-Staerke — Deine Performance nach Gegner-Level</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Gegner-Staerke — Deine Performance nach Gegner-Level') }}</div>
 
 {% if ostr.tips %}
 <div class="os-tips">
@@ -156,7 +156,7 @@
     {% for t in ostr.tiers %}
     <div class="card elev-sm os-card" style="border-top-color: {{ t.color }};">
         <div class="os-card-label" style="color: {{ t.color }};">{{ t.label }}</div>
-        <div class="os-card-sub">Gegner K/D {{ t.threshold }} (Ø {{ t.avg_enemy_kd }})</div>
+        <div class="os-card-sub">{{ _('Gegner K/D') }} {{ t.threshold }} (Ø {{ t.avg_enemy_kd }})</div>
         <div class="os-stat-row">
             <div class="os-stat">
                 <div class="os-stat-val {% if t.win_rate >= 55 %}win{% elif t.win_rate >= 45 %}draw{% else %}loss{% endif %}">{{ t.win_rate }}%</div>
@@ -164,11 +164,11 @@
             </div>
             <div class="os-stat">
                 <div class="os-stat-val {% if t.avg_kd >= 1.2 %}win{% elif t.avg_kd >= 0.9 %}draw{% else %}loss{% endif %}">{{ t.avg_kd }}</div>
-                <div class="os-stat-lbl">Dein K/D</div>
+                <div class="os-stat-lbl">{{ _('Dein K/D') }}</div>
             </div>
             <div class="os-stat">
                 <div class="os-stat-val">{{ t.avg_adr }}</div>
-                <div class="os-stat-lbl">Dein ADR</div>
+                <div class="os-stat-lbl">{{ _('Dein ADR') }}</div>
             </div>
             <div class="os-stat">
                 <div class="os-stat-val">{{ t.matches }}</div>
@@ -181,7 +181,7 @@
 
 {% if ostr.tiers|length >= 2 %}
 <div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
-    <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">Performance nach Gegner-Staerke</div>
+    <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">{{ _('Performance nach Gegner-Staerke') }}</div>
     <div class="os-chart-wrap">
         <canvas id="os-chart"></canvas>
     </div>

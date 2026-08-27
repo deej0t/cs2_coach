@@ -5,13 +5,13 @@
 {% block content %}
 <h2>Performance Trends</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Entwicklung deiner Leistung ueber {{ exports|length }} analysierte Matches.
+    {{ _('Entwicklung deiner Leistung ueber') }} {{ exports|length }} {{ _('analysierte Matches') }}.
 </p>
 
 {% if exports|length < 2 %}
 <div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
-    <p style="color: var(--color-neutral-500);">Mindestens 2 analysierte Matches noetig fuer Trends.</p>
-    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">Demo analysieren</a>
+    <p style="color: var(--color-neutral-500);">{{ _('Mindestens 2 analysierte Matches noetig fuer Trends.') }}</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">{{ _('Demo analysieren') }}</a>
 </div>
 {% else %}
 
@@ -49,7 +49,7 @@
 
 <!-- ══════ Map Performance ══════ -->
 {% if map_stats %}
-<div class="card-kicker" style="margin-bottom: 8px;">Map-Performance</div>
+<div class="card-kicker" style="margin-bottom: 8px;">{{ _('Map-Performance') }}</div>
 <div class="map-grid">
     {% for m in map_stats %}
     <div class="map-card card elev-sm" style="border-top-color: {% if m.win_rate >= 60 %}#4ade80{% elif m.win_rate >= 40 %}#fbbf24{% else %}#f87171{% endif %};">
@@ -64,19 +64,19 @@
             <span class="map-stat-value {% if m.win_rate >= 60 %}sc-green{% elif m.win_rate >= 40 %}sc-yellow{% else %}sc-red{% endif %}">{{ m.win_rate }}%</span>
         </div>
         <div class="map-stat-row">
-            <span class="map-stat-label"><abbr title="Durchschnittliches Rating auf dieser Map">Avg Rating</abbr></span>
+            <span class="map-stat-label"><abbr title="{{ _('Durchschnittliches Rating auf dieser Map') }}">Avg Rating</abbr></span>
             <span class="map-stat-value {% if m.avg_rating >= 1.1 %}sc-green{% elif m.avg_rating >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ m.avg_rating }}</span>
         </div>
         <div class="map-stat-row">
-            <span class="map-stat-label"><abbr title="Durchschnittliches Kill/Death-Verhaeltnis">Avg K/D</abbr></span>
+            <span class="map-stat-label"><abbr title="{{ _('Durchschnittliches Kill/Death-Verhaeltnis') }}">Avg K/D</abbr></span>
             <span class="map-stat-value {% if m.avg_kd >= 1.2 %}sc-green{% elif m.avg_kd >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ m.avg_kd }}</span>
         </div>
         <div class="map-stat-row">
-            <span class="map-stat-label"><abbr title="Durchschnittlicher Schaden pro Runde">Avg ADR</abbr></span>
+            <span class="map-stat-label"><abbr title="{{ _('Durchschnittlicher Schaden pro Runde') }}">Avg ADR</abbr></span>
             <span class="map-stat-value">{{ m.avg_adr }}</span>
         </div>
         <div class="map-stat-row">
-            <span class="map-stat-label"><abbr title="Kill, Assist, Survived, Traded — durchschnittliche Rundenbeteiligung">Avg KAST</abbr></span>
+            <span class="map-stat-label"><abbr title="{{ _('Kill, Assist, Survived, Traded — durchschnittliche Rundenbeteiligung') }}">Avg KAST</abbr></span>
             <span class="map-stat-value">{{ m.avg_kast }}%</span>
         </div>
     </div>
@@ -87,27 +87,27 @@
 
 <div class="chart-grid">
     <div class="card elev-sm chart-card">
-        <div class="card-kicker"><abbr title="Gesamtbewertung basierend auf Kills, Deaths, Assists, ADR und Impact">Rating</abbr></div>
+        <div class="card-kicker"><abbr title="{{ _('Gesamtbewertung basierend auf Kills, Deaths, Assists, ADR und Impact') }}">Rating</abbr></div>
         <canvas id="chart-rating"></canvas>
     </div>
     <div class="card elev-sm chart-card">
-        <div class="card-kicker"><abbr title="Kill/Death-Verhaeltnis — ueber 1.0 = mehr Kills als Deaths">K/D Ratio</abbr></div>
+        <div class="card-kicker"><abbr title="{{ _('Kill/Death-Verhaeltnis — ueber 1.0 = mehr Kills als Deaths') }}">K/D Ratio</abbr></div>
         <canvas id="chart-kd"></canvas>
     </div>
     <div class="card elev-sm chart-card">
-        <div class="card-kicker"><abbr title="Average Damage per Round — durchschnittlicher Schaden pro Runde">ADR</abbr></div>
+        <div class="card-kicker"><abbr title="{{ _('Average Damage per Round — durchschnittlicher Schaden pro Runde') }}">ADR</abbr></div>
         <canvas id="chart-adr"></canvas>
     </div>
     <div class="card elev-sm chart-card">
-        <div class="card-kicker"><abbr title="Kill, Assist, Survived, Traded — Prozent der Runden mit positivem Beitrag">KAST%</abbr></div>
+        <div class="card-kicker"><abbr title="{{ _('Kill, Assist, Survived, Traded — Prozent der Runden mit positivem Beitrag') }}">KAST%</abbr></div>
         <canvas id="chart-kast"></canvas>
     </div>
     <div class="card elev-sm chart-card">
-        <div class="card-kicker"><abbr title="Headshot-Prozent — Anteil der Kills durch Kopftreffer">HS%</abbr></div>
+        <div class="card-kicker"><abbr title="{{ _('Headshot-Prozent — Anteil der Kills durch Kopftreffer') }}">HS%</abbr></div>
         <canvas id="chart-hs"></canvas>
     </div>
     <div class="card elev-sm chart-card">
-        <div class="card-kicker"><abbr title="Grad-Abweichung des Fadenkreuzes zur Gegnerposition 0.5s vor dem Kill. Niedriger = besser">Crosshair Placement (Grad)</abbr></div>
+        <div class="card-kicker"><abbr title="{{ _('Grad-Abweichung des Fadenkreuzes zur Gegnerposition 0.5s vor dem Kill. Niedriger = besser') }}">{{ _('Crosshair Placement (Grad)') }}</abbr></div>
         <canvas id="chart-cp"></canvas>
     </div>
 </div>

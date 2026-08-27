@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Kalender{% endblock %}
+{% block title %}CS2 Coach — {{ _('Kalender') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
@@ -111,37 +111,37 @@
     }
 </style>
 
-<h2>Performance-Kalender</h2>
+<h2>{{ _('Performance-Kalender') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Deine Spielaktivitaet und Performance im Jahresueberblick — wie die GitHub Contribution Map, aber fuer CS2.
+    {{ _('Deine Spielaktivitaet und Performance im Jahresueberblick — wie die GitHub Contribution Map, aber fuer CS2.') }}
 </p>
 
 {% if not cal.has_data %}
 <div class="card elev-sm" style="text-align: center; padding: var(--space-8);">
-    <p style="color: var(--color-neutral-500);">Keine analysierten Matches vorhanden.</p>
-    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">Demo analysieren</a>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine analysierten Matches vorhanden.') }}</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: var(--space-4);">{{ _('Demo analysieren') }}</a>
 </div>
 {% else %}
 
 <!-- ── Hero Stats ── -->
 <div class="cal-hero">
     <div class="card elev-sm cal-stat">
-        <span class="card-kicker">Spieltage</span>
+        <span class="card-kicker">{{ _('Spieltage') }}</span>
         <div class="cal-stat-val">{{ cal.active_days }}</div>
-        <div class="cal-stat-label">aktive Tage</div>
+        <div class="cal-stat-label">{{ _('aktive Tage') }}</div>
     </div>
     <div class="card elev-sm cal-stat">
-        <span class="card-kicker">Matches Gesamt</span>
+        <span class="card-kicker">{{ _('Matches Gesamt') }}</span>
         <div class="cal-stat-val">{{ cal.total_matches }}</div>
-        <div class="cal-stat-label">~{{ cal.avg_per_day }} pro Spieltag</div>
+        <div class="cal-stat-label">~{{ cal.avg_per_day }} {{ _('pro Spieltag') }}</div>
     </div>
     <div class="card elev-sm cal-stat">
-        <span class="card-kicker">Laengste Serie</span>
+        <span class="card-kicker">{{ _('Laengste Serie') }}</span>
         <div class="cal-stat-val" style="color:var(--color-accent);">{{ cal.longest_streak }}</div>
-        <div class="cal-stat-label">Tage am Stueck</div>
+        <div class="cal-stat-label">{{ _('Tage am Stueck') }}</div>
     </div>
     <div class="card elev-sm cal-stat">
-        <span class="card-kicker">Bester Tag</span>
+        <span class="card-kicker">{{ _('Bester Tag') }}</span>
         <div class="cal-stat-val win">{{ cal.best_day.avg_rating }}</div>
         <div class="cal-stat-label">{{ cal.best_day.date }} ({{ cal.best_day.matches }} Matches)</div>
     </div>
@@ -162,16 +162,16 @@
 <!-- ── Calendar Heatmap ── -->
 <div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-3);flex-wrap:wrap;gap:6px;">
-        <span class="card-kicker" style="margin:0;">Jahreskalender</span>
+        <span class="card-kicker" style="margin:0;">{{ _('Jahreskalender') }}</span>
         <div class="cal-legend">
-            <span>Weniger</span>
+            <span>{{ _('Weniger') }}</span>
             <div class="cal-legend-cell" style="background:var(--color-neutral-900);"></div>
             <div class="cal-legend-cell" style="background:rgba(74,222,128,0.2);"></div>
             <div class="cal-legend-cell" style="background:rgba(74,222,128,0.4);"></div>
             <div class="cal-legend-cell" style="background:rgba(74,222,128,0.65);"></div>
             <div class="cal-legend-cell" style="background:rgba(74,222,128,0.9);"></div>
-            <span>Mehr</span>
-            <span style="margin-left:8px;"><span style="color:var(--color-green);">Sieg</span> / <span style="color:var(--color-red);">Niederlage</span> / <span style="color:var(--color-yellow);">Gemischt</span></span>
+            <span>{{ _('Mehr') }}</span>
+            <span style="margin-left:8px;"><span style="color:var(--color-green);">{{ _('Sieg') }}</span> / <span style="color:var(--color-red);">{{ _('Niederlage') }}</span> / <span style="color:var(--color-yellow);">{{ _('Gemischt') }}</span></span>
         </div>
     </div>
 
@@ -182,11 +182,11 @@
         <!-- Day-of-week labels -->
         <div class="cal-labels">
             <div class="cal-label">&nbsp;</div>
-            <div class="cal-label">Di</div>
+            <div class="cal-label">{{ _('Di') }}</div>
             <div class="cal-label">&nbsp;</div>
-            <div class="cal-label">Do</div>
+            <div class="cal-label">{{ _('Do') }}</div>
             <div class="cal-label">&nbsp;</div>
-            <div class="cal-label">Sa</div>
+            <div class="cal-label">{{ _('Sa') }}</div>
             <div class="cal-label">&nbsp;</div>
         </div>
         <!-- Heatmap grid -->
@@ -221,7 +221,7 @@
     <div class="table-scroll">
         <table class="table" id="day-detail-table">
             <thead>
-                <tr><th>Map</th><th>Score</th><th>Ergebnis</th><th>Rating</th><th>K/D</th><th>ADR</th><th></th></tr>
+                <tr><th>{{ _('Map') }}</th><th>{{ _('Score') }}</th><th>{{ _('Ergebnis') }}</th><th>{{ _('Rating') }}</th><th>{{ _('K/D') }}</th><th>{{ _('ADR') }}</th><th></th></tr>
             </thead>
             <tbody id="day-detail-tbody"></tbody>
         </table>
@@ -232,7 +232,7 @@
 <div class="grid-2" style="margin-bottom:var(--space-5);">
     <!-- Weekday -->
     <div class="card elev-sm" style="padding:var(--space-4);">
-        <span class="card-kicker">Wochentag-Analyse</span>
+        <span class="card-kicker">{{ _('Wochentag-Analyse') }}</span>
         <div class="wd-chart" style="margin-top:var(--space-3);">
             {% set max_wd_matches = cal.weekday_stats|map(attribute='matches')|max %}
             {% for wd in cal.weekday_stats %}
@@ -247,14 +247,14 @@
         </div>
         <div style="margin-top:var(--space-3);font-size:12px;color:var(--color-neutral-400);">
             {% if cal.best_weekday and cal.best_weekday.matches > 0 %}
-            Bester Tag: <strong style="color:var(--color-green);">{{ cal.best_weekday.day }}</strong> ({{ cal.best_weekday.avg_rating }} Rating, {{ cal.best_weekday.matches }} Matches)
+            {{ _('Bester Tag') }}: <strong style="color:var(--color-green);">{{ cal.best_weekday.day }}</strong> ({{ cal.best_weekday.avg_rating }} Rating, {{ cal.best_weekday.matches }} Matches)
             {% endif %}
         </div>
     </div>
 
     <!-- Hour of Day -->
     <div class="card elev-sm" style="padding:var(--space-4);">
-        <span class="card-kicker">Tageszeit-Analyse</span>
+        <span class="card-kicker">{{ _('Tageszeit-Analyse') }}</span>
         {% set active_hr = cal.hour_stats|selectattr('matches', '>', 0)|list %}
         {% if active_hr %}
         {% set max_hr_matches = active_hr|map(attribute='matches')|max %}
@@ -274,14 +274,14 @@
         </div>
         <div style="margin-top:var(--space-3);font-size:12px;color:var(--color-neutral-400);">
             {% if cal.best_hour %}
-            Beste Zeit: <strong style="color:var(--color-green);">{{ cal.best_hour.label }}</strong> ({{ cal.best_hour.avg_rating }} Rating)
+            {{ _('Beste Zeit') }}: <strong style="color:var(--color-green);">{{ cal.best_hour.label }}</strong> ({{ cal.best_hour.avg_rating }} Rating)
             {% endif %}
             {% if cal.worst_hour %}
-            &nbsp;|&nbsp; Schlechteste: <strong style="color:var(--color-red);">{{ cal.worst_hour.label }}</strong> ({{ cal.worst_hour.avg_rating }})
+            &nbsp;|&nbsp; {{ _('Schlechteste') }}: <strong style="color:var(--color-red);">{{ cal.worst_hour.label }}</strong> ({{ cal.worst_hour.avg_rating }})
             {% endif %}
         </div>
         {% else %}
-        <p style="color:var(--color-neutral-500);font-size:13px;margin-top:var(--space-3);">Keine Uhrzeitdaten vorhanden.</p>
+        <p style="color:var(--color-neutral-500);font-size:13px;margin-top:var(--space-3);">{{ _('Keine Uhrzeitdaten vorhanden.') }}</p>
         {% endif %}
     </div>
 </div>
@@ -289,16 +289,16 @@
 <!-- ── Monthly Breakdown ── -->
 {% if cal.month_stats %}
 <div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
-    <span class="card-kicker">Monatliche Entwicklung</span>
+    <span class="card-kicker">{{ _('Monatliche Entwicklung') }}</span>
     <div class="month-grid" style="margin-top:var(--space-3);">
         {% set month_names = {"01":"Jan","02":"Feb","03":"Mär","04":"Apr","05":"Mai","06":"Jun","07":"Jul","08":"Aug","09":"Sep","10":"Okt","11":"Nov","12":"Dez"} %}
         {% for m in cal.month_stats %}
         <div class="card elev-sm month-card">
             <div class="month-name">{{ month_names.get(m.month[5:7], m.month[5:7]) }} {{ m.month[:4] }}</div>
             <div class="month-stats">
-                <span>{{ m.matches }} Matches</span>
+                <span>{{ m.matches }} {{ _('Matches') }}</span>
                 <span><span style="color:var(--color-green);">{{ m.wins }}W</span> / <span style="color:var(--color-red);">{{ m.losses }}L</span></span>
-                <span>Rating: <strong class="{% if m.avg_rating >= 1.0 %}win{% elif m.avg_rating < 0.85 %}loss{% endif %}">{{ m.avg_rating }}</strong></span>
+                <span>{{ _('Rating') }}: <strong class="{% if m.avg_rating >= 1.0 %}win{% elif m.avg_rating < 0.85 %}loss{% endif %}">{{ m.avg_rating }}</strong></span>
             </div>
             <div class="month-bar">
                 <div class="month-fill" style="width:{{ m.win_rate }}%;background:{% if m.win_rate >= 55 %}var(--color-green){% elif m.win_rate >= 45 %}var(--color-yellow){% else %}var(--color-red){% endif %};"></div>
@@ -312,21 +312,21 @@
 <!-- ── Best & Worst Day ── -->
 <div class="grid-2" style="margin-bottom:var(--space-5);">
     <div class="card elev-sm" style="padding:var(--space-4);border-left:3px solid var(--color-green);">
-        <span class="card-kicker" style="color:var(--color-green);">Bester Tag</span>
+        <span class="card-kicker" style="color:var(--color-green);">{{ _('Bester Tag') }}</span>
         <div style="font-size:20px;font-weight:600;margin:4px 0;">{{ cal.best_day.date }}</div>
         <div style="font-size:13px;color:var(--color-neutral-400);">
-            {{ cal.best_day.matches }} Matches — Rating <strong class="win">{{ cal.best_day.avg_rating }}</strong>
+            {{ cal.best_day.matches }} {{ _('Matches') }} — {{ _('Rating') }} <strong class="win">{{ cal.best_day.avg_rating }}</strong>
             — {{ cal.best_day.wins }}W/{{ cal.best_day.losses }}L
-            — K/D {{ cal.best_day.kd }} — ADR {{ cal.best_day.avg_adr }}
+            — {{ _('K/D') }} {{ cal.best_day.kd }} — ADR {{ cal.best_day.avg_adr }}
         </div>
     </div>
     <div class="card elev-sm" style="padding:var(--space-4);border-left:3px solid var(--color-red);">
-        <span class="card-kicker" style="color:var(--color-red);">Schlechtester Tag</span>
+        <span class="card-kicker" style="color:var(--color-red);">{{ _('Schlechtester Tag') }}</span>
         <div style="font-size:20px;font-weight:600;margin:4px 0;">{{ cal.worst_day.date }}</div>
         <div style="font-size:13px;color:var(--color-neutral-400);">
-            {{ cal.worst_day.matches }} Matches — Rating <strong class="loss">{{ cal.worst_day.avg_rating }}</strong>
+            {{ cal.worst_day.matches }} {{ _('Matches') }} — {{ _('Rating') }} <strong class="loss">{{ cal.worst_day.avg_rating }}</strong>
             — {{ cal.worst_day.wins }}W/{{ cal.worst_day.losses }}L
-            — K/D {{ cal.worst_day.kd }} — ADR {{ cal.worst_day.avg_adr }}
+            — {{ _('K/D') }} {{ cal.worst_day.kd }} — ADR {{ cal.worst_day.avg_adr }}
         </div>
     </div>
 </div>
@@ -375,7 +375,7 @@ function showDay(date) {
 
     // Title
     const d = new Date(date + 'T00:00:00');
-    const dayNames = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+    const dayNames = ['{{ _("Sonntag") }}','{{ _("Montag") }}','{{ _("Dienstag") }}','{{ _("Mittwoch") }}','{{ _("Donnerstag") }}','{{ _("Freitag") }}','{{ _("Samstag") }}'];
     document.getElementById('day-detail-title').textContent = dayNames[d.getDay()] + ', ' + date;
     document.getElementById('day-detail-subtitle').textContent =
         info.matches + ' Match' + (info.matches !== 1 ? 'es' : '') +
@@ -386,15 +386,15 @@ function showDay(date) {
     statsEl.innerHTML = `
         <div style="text-align:center;">
             <div style="font-size:20px;font-weight:600;" class="${info.avg_rating >= 1.0 ? 'win' : info.avg_rating < 0.85 ? 'loss' : ''}">${info.avg_rating}</div>
-            <div style="font-size:10px;color:var(--color-neutral-500);">Rating</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);">{{ _('Rating') }}</div>
         </div>
         <div style="text-align:center;">
             <div style="font-size:20px;font-weight:600;">${info.win_rate}%</div>
-            <div style="font-size:10px;color:var(--color-neutral-500);">Win-Rate</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);">{{ _('Win-Rate') }}</div>
         </div>
         <div style="text-align:center;">
             <div style="font-size:20px;font-weight:600;" class="${info.kd >= 1.0 ? 'win' : 'loss'}">${info.kd}</div>
-            <div style="font-size:10px;color:var(--color-neutral-500);">K/D</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);">{{ _('K/D') }}</div>
         </div>
         <div style="text-align:center;">
             <div style="font-size:20px;font-weight:600;">${info.avg_adr}</div>
@@ -402,7 +402,7 @@ function showDay(date) {
         </div>
         <div style="text-align:center;">
             <div style="font-size:20px;font-weight:600;">${info.total_kills}/${info.total_deaths}</div>
-            <div style="font-size:10px;color:var(--color-neutral-500);">K/D Total</div>
+            <div style="font-size:10px;color:var(--color-neutral-500);">{{ _('K/D Total') }}</div>
         </div>`;
 
     // Match table
@@ -418,7 +418,7 @@ function showDay(date) {
             <td class="${m.rating >= 1.0 ? 'win' : m.rating < 0.85 ? 'loss' : ''}" style="font-weight:600;">${m.rating}</td>
             <td>${m.kd}</td>
             <td>${m.adr}</td>
-            <td>${m.filename ? '<a href="/export/' + m.filename + '_coach.json" class="btn btn-ghost" style="font-size:11px;">Details</a>' : ''}</td>`;
+            <td>${m.filename ? '<a href="/export/' + m.filename + '_coach.json" class="btn btn-ghost" style="font-size:11px;">{{ _("Details") }}</a>' : ''}</td>`;
         tbody.appendChild(tr);
     });
 

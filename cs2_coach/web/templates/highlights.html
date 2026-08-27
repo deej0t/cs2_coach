@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}CS2 Coach — Runden-Highlights{% endblock %}
+{% block title %}CS2 Coach — {{ _('Runden-Highlights') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 
 {% block content %}
-<h2>Runden-Highlights</h2>
+<h2>{{ _('Runden-Highlights') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
-    Jede Runde klassifiziert — Hero, Impact, Invisible. Finde Muster in deinem Spielverhalten.
+    {{ _('Jede Runde klassifiziert — Hero, Impact, Invisible. Finde Muster in deinem Spielverhalten.') }}
 </p>
 
 <style>
@@ -108,7 +108,7 @@
 
 {% if not hl.has_data %}
 <div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
-    <p style="color: var(--color-neutral-500);">Keine Daten vorhanden. Analysiere zuerst einige Demos.</p>
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
 </div>
 {% else %}
 
@@ -116,11 +116,11 @@
 <div class="hl-totals">
     <div class="hl-total-card">
         <div class="hl-total-val" style="color:#fbbf24;">{{ hl.totals.hero }}</div>
-        <div class="hl-total-lbl">Hero-Runden</div>
+        <div class="hl-total-lbl">{{ _('Hero-Runden') }}</div>
     </div>
     <div class="hl-total-card">
         <div class="hl-total-val" style="color:#4ade80;">{{ hl.totals.impact }}</div>
-        <div class="hl-total-lbl">Impact-Runden</div>
+        <div class="hl-total-lbl">{{ _('Impact-Runden') }}</div>
     </div>
     <div class="hl-total-card">
         <div class="hl-total-val" style="color:#60a5fa;">{{ hl.totals.entry }}</div>
@@ -128,15 +128,15 @@
     </div>
     <div class="hl-total-card">
         <div class="hl-total-val" style="color:#b98eff;">{{ hl.totals.survivor }}</div>
-        <div class="hl-total-lbl">Survivor-Runden</div>
+        <div class="hl-total-lbl">{{ _('Survivor-Runden') }}</div>
     </div>
     <div class="hl-total-card">
         <div class="hl-total-val" style="color:#f87171;">{{ hl.totals.invisible }}</div>
-        <div class="hl-total-lbl">Invisible-Runden</div>
+        <div class="hl-total-lbl">{{ _('Invisible-Runden') }}</div>
     </div>
     <div class="hl-total-card">
         <div class="hl-total-val">{{ hl.totals.total_rounds }}</div>
-        <div class="hl-total-lbl">Runden gesamt</div>
+        <div class="hl-total-lbl">{{ _('Runden gesamt') }}</div>
     </div>
 </div>
 
