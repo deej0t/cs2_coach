@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Pistol-Labor{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>{{ _('Pistol-Runden-Labor') }}</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    {{ _('Deine Pistolrunden-Performance — Runde 1 & 13, CT vs T, Conversion und Waffen.') }}
+</p>
+
+<style>
+    .pl-hero { display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap; }
+    .pl-stat-card {
+        flex: 1; min-width: 120px; text-align: center; padding: var(--space-4);
+        border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm);
+    }
+    .pl-stat-val { font-family: var(--font-heading); font-size: 22px; font-weight: 700; line-height: 1; }
+    .pl-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
+    .pl-stat-sub { font-size: 11px; color: var(--color-neutral-500); margin-top: 2px; }
+
+    .pl-sides { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
+    @media (max-width: 600px) { .pl-sides { grid-template-columns: 1fr; } }
+    .pl-side-card {
+        padding: var(--space-5); border-radius: var(--radius-md);
+        background: var(--color-surface); box-shadow: var(--shadow-sm);
+        border-top: 3px solid var(--color-neutral-700);
+    }
+    .pl-side-ct { border-top-color: #60a5fa; }
+    .pl-side-t { border-top-color: #fbbf24; }
+    .pl-side-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .pl-side-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pl-side-stat { text-align: center; padding: 8px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.03); }
+    .pl-side-stat-val { font-family: var(--font-heading); font-size: 20px; font-weight: 700; }
+    .pl-side-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); }
+
+    .pl-conv { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
+    @media (max-width: 600px) { .pl-conv { grid-template-columns: 1fr; } }
+    .pl-conv-card {
+        padding: var(--space-5); border-radius: var(--radius-md); text-align: center;
+        background: var(--color-surface); box-shadow: var(--shadow-sm);
+    }
+    .pl-conv-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 8px; }
+    .pl-conv-val { font-family: var(--font-heading); font-size: 32px; font-weight: 700; }
+    .pl-conv-sub { font-size: 12px; color: var(--color-neutral-500); margin-top: 4px; }
+
+    .pl-weapons { margin-bottom: var(--space-5); }
+    .pl-weapon-bar { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+    .pl-weapon-name { width: 100px; font-size: 13px; font-weight: 500; text-align: right; }
+    .pl-weapon-fill { height: 22px; border-radius: 4px; min-width: 4px; transition: width 0.5s; background: linear-gradient(90deg, rgba(145,132,217,0.6), rgba(145,132,217,0.3)); }
+    .pl-weapon-count { font-size: 12px; color: var(--color-neutral-500); }
+
+    .pl-map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+    .pl-map-card {
+        padding: var(--space-4); border-radius: var(--radius-md);
+        background: var(--color-surface); box-shadow: var(--shadow-sm);
+        border-left: 4px solid var(--color-neutral-700);
+    }
+    .pl-map-card.good { border-left-color: #4ade80; }
+    .pl-map-card.mid { border-left-color: #fbbf24; }
+    .pl-map-card.bad { border-left-color: #f87171; }
+    .pl-map-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .pl-map-name { font-size: 16px; font-weight: 700; font-family: var(--font-heading); }
+    .pl-map-wr { font-size: 13px; font-weight: 700; }
+    .pl-map-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; font-size: 12px; }
+    .pl-map-stat { text-align: center; padding: 4px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.03); }
+    .pl-map-stat-val { font-weight: 700; font-size: 14px; }
+    .pl-map-stat-lbl { font-size: 9px; text-transform: uppercase; color: var(--color-neutral-500); }
+
+    .pl-tips { margin-bottom: var(--space-5); }
+    .pl-tip {
+        padding: 10px 14px; margin-bottom: 6px; border-radius: var(--radius-sm);
+        font-size: 13px; line-height: 1.5; display: flex; align-items: flex-start; gap: 10px;
+    }
+    .pl-tip-positive { background: rgba(74,222,128,0.08); color: #4ade80; border: 1px solid rgba(74,222,128,0.15); }
+    .pl-tip-warning { background: rgba(248,113,113,0.08); color: #f87171; border: 1px solid rgba(248,113,113,0.15); }
+    .pl-tip-info { background: rgba(145,132,217,0.08); color: #9184d9; border: 1px solid rgba(145,132,217,0.15); }
+
+    .pl-trend-wrap { margin-bottom: var(--space-5); }
+</style>
+
+{% if not p.has_data %}
+<div class="card elev-sm" style="padding: var(--space-5); text-align: center;">
+    <p style="color: var(--color-neutral-500);">{{ _('Keine Pistolrunden-Daten vorhanden. Analysiere zuerst einige Demos.') }}</p>
+</div>
+{% else %}
+
+<!-- Hero stats -->
+<div class="pl-hero">
+    <div class="pl-stat-card">
+        <div class="pl-stat-val {% if p.wr >= 55 %}win{% elif p.wr < 40 %}loss{% endif %}">{{ p.wr }}%</div>
+        <div class="pl-stat-lbl">Win-Rate</div>
+        <div class="pl-stat-sub">{{ p.total_won }}/{{ p.total_rounds }}</div>
+    </div>
+    <div class="pl-stat-card">
+        <div class="pl-stat-val {% if p.kd >= 1.2 %}win{% elif p.kd < 0.8 %}loss{% endif %}">{{ p.kd }}</div>
+        <div class="pl-stat-lbl">K/D</div>
+    </div>
+    <div class="pl-stat-card">
+        <div class="pl-stat-val">{{ p.kpr }}</div>
+        <div class="pl-stat-lbl">Kills/Runde</div>
+    </div>
+    <div class="pl-stat-card">
+        <div class="pl-stat-val {% if p.hs_pct >= 50 %}win{% elif p.hs_pct < 30 %}loss{% endif %}">{{ p.hs_pct }}%</div>
+        <div class="pl-stat-lbl">Headshot%</div>
+    </div>
+    <div class="pl-stat-card">
+        <div class="pl-stat-val {% if p.opening_wr >= 55 %}win{% elif p.opening_wr < 40 %}loss{% endif %}">{{ p.opening_wr }}%</div>
+        <div class="pl-stat-lbl">Opening-Duell</div>
+        <div class="pl-stat-sub">{{ p.opening_wins }}/{{ p.opening_attempts }}</div>
+    </div>
+    <div class="pl-stat-card">
+        <div class="pl-stat-val">{{ p.match_count }}</div>
+        <div class="pl-stat-lbl">Matches</div>
+    </div>
+</div>
+
+<!-- CT vs T -->
+<h3 style="margin-top: var(--space-5);">CT vs T Pistolrunden</h3>
+<div class="pl-sides">
+    <div class="pl-side-card pl-side-ct">
+        <div class="pl-side-title">
+            <i data-lucide="shield" style="width:18px;height:18px;color:#60a5fa;"></i>
+            <span style="color:#60a5fa;">CT-Seite</span>
+            <span style="font-size:11px; color:var(--color-neutral-500); font-weight:400;">{{ p.ct.rounds }} Runden</span>
+        </div>
+        <div class="pl-side-stats">
+            <div class="pl-side-stat">
+                <div class="pl-side-stat-val {% if p.ct.wr >= 55 %}win{% elif p.ct.wr < 40 %}loss{% endif %}">{{ p.ct.wr }}%</div>
+                <div class="pl-side-stat-lbl">Win-Rate</div>
+            </div>
+            <div class="pl-side-stat">
+                <div class="pl-side-stat-val {% if p.ct.kd >= 1.2 %}win{% elif p.ct.kd < 0.8 %}loss{% endif %}">{{ p.ct.kd }}</div>
+                <div class="pl-side-stat-lbl">K/D</div>
+            </div>
+        </div>
+    </div>
+    <div class="pl-side-card pl-side-t">
+        <div class="pl-side-title">
+            <i data-lucide="sword" style="width:18px;height:18px;color:#fbbf24;"></i>
+            <span style="color:#fbbf24;">T-Seite</span>
+            <span style="font-size:11px; color:var(--color-neutral-500); font-weight:400;">{{ p.t.rounds }} Runden</span>
+        </div>
+        <div class="pl-side-stats">
+            <div class="pl-side-stat">
+                <div class="pl-side-stat-val {% if p.t.wr >= 55 %}win{% elif p.t.wr < 40 %}loss{% endif %}">{{ p.t.wr }}%</div>
+                <div class="pl-side-stat-lbl">Win-Rate</div>
+            </div>
+            <div class="pl-side-stat">
+                <div class="pl-side-stat-val {% if p.t.kd >= 1.2 %}win{% elif p.t.kd < 0.8 %}loss{% endif %}">{{ p.t.kd }}</div>
+                <div class="pl-side-stat-lbl">K/D</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Conversion -->
+<h3 style="margin-top: var(--space-5);">{{ _('Pistol-Conversion') }}</h3>
+<p style="color: var(--color-neutral-500); font-size: 12px; margin-bottom: var(--space-3);">
+    {{ _('Wie stark beeinflusst der Pistolrunden-Ausgang deine Halftime-Winrate?') }}
+</p>
+<div class="pl-conv">
+    <div class="pl-conv-card" style="border-top: 3px solid #4ade80;">
+        <div class="pl-conv-title" style="color: #4ade80;">{{ _('Nach Pistol-Sieg') }}</div>
+        <div class="pl-conv-val" style="color: #4ade80;">{{ p.conv_win }}%</div>
+        <div class="pl-conv-sub">{{ _('Half-WR') }} ({{ p.pistol_wins_count }} {{ _('Haelften') }})</div>
+    </div>
+    <div class="pl-conv-card" style="border-top: 3px solid #f87171;">
+        <div class="pl-conv-title" style="color: #f87171;">{{ _('Nach Pistol-Niederlage') }}</div>
+        <div class="pl-conv-val" style="color: #f87171;">{{ p.conv_loss }}%</div>
+        <div class="pl-conv-sub">{{ _('Half-WR') }} ({{ p.pistol_losses_count }} {{ _('Haelften') }})</div>
+    </div>
+</div>
+
+<!-- Weapon breakdown -->
+{% if p.top_weapons %}
+<h3 style="margin-top: var(--space-5);">{{ _('Waffen-Verteilung') }}</h3>
+<div class="pl-weapons">
+    {% set max_kills = p.top_weapons[0].kills if p.top_weapons else 1 %}
+    {% for w in p.top_weapons %}
+    <div class="pl-weapon-bar">
+        <div class="pl-weapon-name">{{ w.weapon }}</div>
+        <div class="pl-weapon-fill" style="width: {{ (w.kills / max_kills * 100) | int }}%;"></div>
+        <div class="pl-weapon-count">{{ w.kills }} Kills</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Per-map -->
+{% if p.maps %}
+<h3 style="margin-top: var(--space-5);">{{ _('Pistol-Performance pro Map') }}</h3>
+<div class="pl-map-grid">
+    {% for m in p.maps %}
+    <div class="pl-map-card {% if m.wr >= 55 %}good{% elif m.wr >= 40 %}mid{% else %}bad{% endif %}">
+        <div class="pl-map-head">
+            <div class="pl-map-name">{{ m.map }}</div>
+            <div class="pl-map-wr {% if m.wr >= 55 %}win{% elif m.wr < 40 %}loss{% endif %}">{{ m.wr }}%</div>
+        </div>
+        <div class="pl-map-stats">
+            <div class="pl-map-stat">
+                <div class="pl-map-stat-val">{{ m.rounds }}</div>
+                <div class="pl-map-stat-lbl">Runden</div>
+            </div>
+            <div class="pl-map-stat">
+                <div class="pl-map-stat-val">{{ m.kd }}</div>
+                <div class="pl-map-stat-lbl">K/D</div>
+            </div>
+            <div class="pl-map-stat">
+                <div class="pl-map-stat-val">{{ m.won }}</div>
+                <div class="pl-map-stat-lbl">Siege</div>
+            </div>
+        </div>
+        {% if m.ct_rounds > 0 or m.t_rounds > 0 %}
+        <div style="display:flex; gap:8px; margin-top:8px; font-size:11px;">
+            {% if m.ct_rounds > 0 %}
+            <span style="color:#60a5fa;">CT: {{ m.ct_wr }}%</span>
+            {% endif %}
+            {% if m.t_rounds > 0 %}
+            <span style="color:#fbbf24;">T: {{ m.t_wr }}%</span>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Trend chart -->
+{% if p.trend | length > 3 %}
+<h3 style="margin-top: var(--space-5);">{{ _('Pistol-Trend') }}</h3>
+<div class="pl-trend-wrap">
+    <canvas id="pistol-trend" height="200"></canvas>
+</div>
+{% endif %}
+
+<!-- Coaching tips -->
+{% if p.tips %}
+<h3 style="margin-top: var(--space-5);">{{ _('Coaching-Tipps') }}</h3>
+<div class="pl-tips">
+    {% for tip in p.tips %}
+    <div class="pl-tip pl-tip-{{ tip.type }}">
+        <i data-lucide="{% if tip.type == 'positive' %}check-circle{% elif tip.type == 'warning' %}alert-triangle{% else %}info{% endif %}" style="width:16px;height:16px;flex-shrink:0;margin-top:2px;"></i>
+        <span>{{ tip.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% endif %} {# has_data #}
+{% endblock %}
+
+{% block scripts %}
+{% if p.has_data and p.trend | length > 3 %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    var trend = {{ p.trend | tojson }};
+    var ctx = document.getElementById('pistol-trend');
+    if (!ctx) return;
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: trend.map(function(t) { return t.date + ' (' + t.map + ')'; }),
+            datasets: [{
+                label: 'Pistol-WR (5er Schnitt)',
+                data: trend.map(function(t) { return t.wr; }),
+                borderColor: 'rgba(145,132,217,0.8)',
+                backgroundColor: 'rgba(145,132,217,0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+                borderWidth: 2,
+            }, {
+                label: '50% Linie',
+                data: trend.map(function() { return 50; }),
+                borderColor: 'rgba(233,233,237,0.15)',
+                borderDash: [5, 5],
+                borderWidth: 1,
+                pointRadius: 0,
+                fill: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: 'rgba(233,233,237,0.6)', font: { size: 11 } }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: 'rgba(233,233,237,0.4)', font: { size: 10 }, maxRotation: 45 },
+                    grid: { color: 'rgba(233,233,237,0.06)' }
+                },
+                y: {
+                    min: 0, max: 100,
+                    ticks: {
+                        color: 'rgba(233,233,237,0.4)',
+                        font: { size: 10 },
+                        callback: function(v) { return v + '%'; }
+                    },
+                    grid: { color: 'rgba(233,233,237,0.06)' }
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

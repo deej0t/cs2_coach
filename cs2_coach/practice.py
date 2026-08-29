@@ -1,9 +1,13 @@
 """Practice Server Config Generator — creates CS2 practice configs from demo data.
 
-Reads kill/death positions from exports and generates:
-- Per-map prefire configs with peek positions + view angles from real deaths
-- Death-spot practice configs (practice your weakest positions)
-- server.cfg for the practice Docker container
+Generates per-map configs in 5 modes:
+  prefire   — Bots frozen at your death spots, practice peeking
+  retake    — Bots at enemy hold positions, retake the site
+  spray     — Bots in a line for spray-transfer drills
+  challenge — Timed run, bots shoot back, speed-clear all spots
+  utility   — Grenade trajectories, smoke/flash practice, no bots
+
+Plus: server.cfg, warmup.cfg, practice planner with training routine.
 """
 
 from __future__ import annotations
@@ -13,6 +17,15 @@ import math
 from collections import defaultdict
 from pathlib import Path
 
+# ── Rifles (for spray-transfer relevance check) ──
+_RIFLES = frozenset({
+    "ak47", "m4a1", "m4a1_silencer", "galil", "famas", "aug", "sg556",
+})
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Data loading & clustering
+# ═══════════════════════════════════════════════════════════════════
 
 def _load_positions(cfg: dict) -> dict[str, dict]:
     """Load all kill/death positions grouped by map.
@@ -56,12 +69,10 @@ def _load_positions(cfg: dict) -> dict[str, dict]:
     return by_map
 
 
-def _calc_view_angle(from_x: float, from_y: float, from_z: float,
-                     to_x: float, to_y: float, to_z: float) -> tuple[float, float]:
+def _calc_view_angle(fx: float, fy: float, fz: float,
+                     tx: float, ty: float, tz: float) -> tuple[float, float]:
     """Calculate CS2 view angles (pitch, yaw) from one point to another."""
-    dx = to_x - from_x
-    dy = to_y - from_y
-    dz = to_z - from_z
+    dx, dy, dz = tx - fx, ty - fy, tz - fz
     dist_xy = math.sqrt(dx * dx + dy * dy)
     yaw = math.degrees(math.atan2(dy, dx))
     pitch = -math.degrees(math.atan2(dz, dist_xy)) if dist_xy > 0 else 0
@@ -69,32 +80,22 @@ def _calc_view_angle(from_x: float, from_y: float, from_z: float,
 
 
 def _cluster_positions(positions: list[dict], radius: float = 150.0) -> list[dict]:
-    """Cluster nearby positions into hotspots.
+    """Cluster nearby positions into hotspots (3D).
 
-    Uses 3D distance for accurate clustering. Tracks both enemy positions
-    (bot placement) and player positions (peek points).
-
-    Returns list of clusters sorted by count (descending):
-    {x, y, z, peek_x, peek_y, peek_z, count, positions: [...]}
-    - x/y/z: average enemy position (where bots go)
-    - peek_x/y/z: average player death position (where to peek from)
+    Returns sorted list (most deaths first):
+      {x, y, z, peek_x, peek_y, peek_z, count, positions: [...]}
     """
     if not positions:
         return []
 
     clusters: list[dict] = []
-
     for pos in positions:
-        ex, ey = pos["ex"], pos["ey"]  # enemy position (bot target)
-        ez = pos.get("ez", 0)
-        px, py = pos["x"], pos["y"]  # player death position (peek point)
-        pz = pos.get("z", 0)
+        ex, ey, ez = pos["ex"], pos["ey"], pos.get("ez", 0)
+        px, py, pz = pos["x"], pos["y"], pos.get("z", 0)
         merged = False
         for c in clusters:
-            dx = ex - c["x"]
-            dy = ey - c["y"]
-            dz = ez - c["z"]
-            if (dx * dx + dy * dy + dz * dz) < radius * radius:
+            d2 = (ex - c["x"]) ** 2 + (ey - c["y"]) ** 2 + (ez - c["z"]) ** 2
+            if d2 < radius * radius:
                 n = c["count"]
                 c["x"] = (c["x"] * n + ex) / (n + 1)
                 c["y"] = (c["y"] * n + ey) / (n + 1)
@@ -110,88 +111,554 @@ def _cluster_positions(positions: list[dict], radius: float = 150.0) -> list[dic
             clusters.append({
                 "x": ex, "y": ey, "z": ez,
                 "peek_x": px, "peek_y": py, "peek_z": pz,
-                "count": 1,
-                "positions": [pos],
+                "count": 1, "positions": [pos],
             })
 
     clusters.sort(key=lambda c: -c["count"])
     return clusters
 
 
+# ═══════════════════════════════════════════════════════════════════
+#  Helpers
+# ═══════════════════════════════════════════════════════════════════
+
 def _weapon_to_loadout(weapon: str) -> str:
     """Map weapon name to CS2 give command."""
-    # Common weapon mappings
     mapping = {
-        "ak47": "weapon_ak47",
-        "m4a1": "weapon_m4a1",
-        "m4a1_silencer": "weapon_m4a1_silencer",
-        "awp": "weapon_awp",
-        "deagle": "weapon_deagle",
-        "usp_silencer": "weapon_usp_silencer",
-        "glock": "weapon_glock",
-        "p250": "weapon_p250",
-        "famas": "weapon_famas",
-        "galil": "weapon_galilar",
-        "ssg08": "weapon_ssg08",
-        "aug": "weapon_aug",
-        "sg556": "weapon_sg556",
-        "mac10": "weapon_mac10",
-        "mp9": "weapon_mp9",
-        "mp5sd": "weapon_mp5sd",
-        "ump45": "weapon_ump45",
-        "p90": "weapon_p90",
-        "hkp2000": "weapon_hkp2000",
-        "elite": "weapon_elite",
-        "tec9": "weapon_tec9",
-        "cz75a": "weapon_cz75a",
-        "xm1014": "weapon_xm1014",
-        "mag7": "weapon_mag7",
-        "negev": "weapon_negev",
-        "m249": "weapon_m249",
-        "nova": "weapon_nova",
-        "sawedoff": "weapon_sawedoff",
-        "mp7": "weapon_mp7",
-        "bizon": "weapon_bizon",
-        "revolver": "weapon_revolver",
+        "ak47": "weapon_ak47", "m4a1": "weapon_m4a1",
+        "m4a1_silencer": "weapon_m4a1_silencer", "awp": "weapon_awp",
+        "deagle": "weapon_deagle", "usp_silencer": "weapon_usp_silencer",
+        "glock": "weapon_glock", "p250": "weapon_p250",
+        "famas": "weapon_famas", "galil": "weapon_galilar",
+        "ssg08": "weapon_ssg08", "aug": "weapon_aug", "sg556": "weapon_sg556",
+        "mac10": "weapon_mac10", "mp9": "weapon_mp9", "mp5sd": "weapon_mp5sd",
+        "ump45": "weapon_ump45", "p90": "weapon_p90",
+        "hkp2000": "weapon_hkp2000", "elite": "weapon_elite",
+        "tec9": "weapon_tec9", "cz75a": "weapon_cz75a",
+        "xm1014": "weapon_xm1014", "mag7": "weapon_mag7",
+        "negev": "weapon_negev", "m249": "weapon_m249", "nova": "weapon_nova",
+        "sawedoff": "weapon_sawedoff", "mp7": "weapon_mp7",
+        "bizon": "weapon_bizon", "revolver": "weapon_revolver",
         "hegrenade": "weapon_hegrenade",
     }
     return mapping.get(weapon, f"weapon_{weapon}")
 
 
-def generate_practice_cfg(map_name: str, positions: dict, mode: str = "prefire") -> str:
-    """Generate a CS2 practice config for a specific map.
+def _map_to_bspname(map_name: str) -> str:
+    """Convert display map name to CS2 BSP name."""
+    mapping = {
+        "Mirage": "de_mirage", "Cache": "de_cache", "Dust2": "de_dust2",
+        "Inferno": "de_inferno", "Nuke": "de_nuke", "Ancient": "de_ancient",
+        "Anubis": "de_anubis", "Vertigo": "de_vertigo",
+        "Overpass": "de_overpass", "Train": "de_train",
+    }
+    return mapping.get(map_name, f"de_{map_name.lower()}")
 
-    Two-phase approach:
-    1. SETUP: F2 cycles through spots, teleports player to enemy position,
-       player looks at ground and presses F3 to place a bot there.
-    2. PRACTICE: F4 freezes bots, disables respawn, teleports player to
-       first peek position with correct view angle toward the bot.
-       F2 now cycles through peek positions (where you typically die).
 
-    mode: "prefire" — bots at enemy positions where you die
-          "retake" — bots on site at common post-plant spots
+def _build_spots(clusters: list[dict], max_bots: int) -> list[dict]:
+    """Build enriched spot data from clusters."""
+    spots = []
+    for cluster in clusters[:max_bots]:
+        bx = round(cluster["x"], 1)
+        by_ = round(cluster["y"], 1)
+        bz = round(cluster["z"], 1)
+        px = round(cluster["peek_x"], 1)
+        py = round(cluster["peek_y"], 1)
+        pz = round(cluster["peek_z"], 1)
+        cnt = cluster["count"]
+
+        pitch, yaw = _calc_view_angle(px, py, pz, bx, by_, bz)
+
+        wpn: dict[str, int] = defaultdict(int)
+        enemy: dict[str, int] = defaultdict(int)
+        for p in cluster["positions"]:
+            if p.get("w"):
+                wpn[p["w"]] += 1
+            if p.get("e"):
+                enemy[p["e"]] += 1
+
+        hs_n = sum(1 for p in cluster["positions"] if p.get("hs"))
+
+        spots.append({
+            "bot_x": bx, "bot_y": by_, "bot_z": bz,
+            "peek_x": px, "peek_y": py, "peek_z": pz,
+            "pitch": pitch, "yaw": yaw, "count": cnt,
+            "weapon": max(wpn, key=wpn.get) if wpn else "ak47",
+            "enemy": max(enemy, key=enemy.get) if enemy else "?",
+            "hs_count": hs_n,
+            "hs_pct": round(hs_n / max(cnt, 1) * 100),
+        })
+    return spots
+
+
+# ── Shared cfg blocks ──
+
+def _cfg_server_block(roundtime: int = 60, respawn_ct: int = 0,
+                      respawn_t: int = 0) -> list[str]:
+    """Common server setup lines used by every mode."""
+    return [
+        "sv_cheats 1",
+        "mp_warmup_end",
+        "mp_freezetime 0",
+        f"mp_roundtime {roundtime}",
+        f"mp_roundtime_defuse {roundtime}",
+        "mp_buy_anywhere 1",
+        "mp_buytime 9999",
+        "mp_maxmoney 65535",
+        "mp_startmoney 65535",
+        "mp_free_armor 1",
+        "mp_death_drop_gun 0",
+        "sv_infinite_ammo 1",
+        "ammo_grenade_limit_total 5",
+        "sv_showimpacts 1",
+        "sv_showimpacts_time 0.8",
+        f"mp_respawn_on_death_ct {respawn_ct}",
+        f"mp_respawn_on_death_t {respawn_t}",
+        "mp_autoteambalance 0",
+        "mp_limitteams 0",
+        "mp_solid_teammates 0",
+        "sv_talk_enemy_dead 1",
+        "sv_talk_enemy_living 1",
+        "sv_deadtalk 1",
+        "mp_ct_default_secondary weapon_usp_silencer",
+        "mp_t_default_secondary weapon_glock",
+    ]
+
+
+def _cfg_difficulty_aliases() -> list[str]:
+    return [
+        'alias "cs2c_easy" "bot_difficulty 0; echo Schwierigkeit: LEICHT"',
+        'alias "cs2c_medium" "bot_difficulty 1; echo Schwierigkeit: MITTEL"',
+        'alias "cs2c_hard" "bot_difficulty 2; echo Schwierigkeit: SCHWER"',
+        'alias "cs2c_expert" "bot_difficulty 3; echo Schwierigkeit: EXPERTE"',
+    ]
+
+
+def _cfg_autoplace_chain(spots: list[dict], done_extra: str = "") -> list[str]:
+    """Build alias chain for automatic bot placement at spots."""
+    n = len(spots)
+    L: list[str] = []
+    for i, s in enumerate(spots):
+        nxt = f"cs2c_ab{i + 2}" if i < n - 1 else "cs2c_setup_done"
+        L.append(
+            f'alias "cs2c_ab{i + 1}" '
+            f'"setpos {s["bot_x"]} {s["bot_y"]} {s["bot_z"]}; '
+            f'bot_place; '
+            f'echo [Bot {i + 1}/{n}] {s["count"]}x — '
+            f'{s["enemy"]} ({s["weapon"]}); '
+            f'{nxt}"'
+        )
+
+    done_cmd = (
+        f'"noclip; bot_stop 1; bot_dont_shoot 1; '
+        f'setpos {spots[0]["peek_x"]} {spots[0]["peek_y"]} {spots[0]["peek_z"]}; '
+        f'setang {spots[0]["pitch"]} {spots[0]["yaw"]} 0; '
+        f'bind F2 cs2c_peek; '
+        f'{done_extra}'
+        f'echo ; echo ══════ SETUP FERTIG ══════; '
+        f'echo F2=Naechster Peek  F3=Bots toggle"'
+    )
+    L.append(f'alias "cs2c_setup_done" {done_cmd}')
+    L.append('alias "cs2c_setup" "noclip; cs2c_ab1"')
+    return L
+
+
+def _cfg_peek_aliases(spots: list[dict]) -> list[str]:
+    """Build peek position cycling aliases."""
+    n = len(spots)
+    L: list[str] = []
+    for i, s in enumerate(spots):
+        nxt = f"cs2c_p{i + 2}" if i < n - 1 else "cs2c_p1"
+        L.append(
+            f'alias "cs2c_p{i + 1}" '
+            f'"setpos {s["peek_x"]} {s["peek_y"]} {s["peek_z"]}; '
+            f'setang {s["pitch"]} {s["yaw"]} 0; '
+            f'echo ; '
+            f'echo ══ Peek {i + 1}/{n}: {s["count"]}x deaths ══; '
+            f'echo Gegner: {s["enemy"]} mit {s["weapon"]}; '
+            f'alias cs2c_peek {nxt}"'
+        )
+    L.append("alias cs2c_peek cs2c_p1")
+    return L
+
+
+def _cfg_bot_toggle() -> list[str]:
+    return [
+        'alias "cs2c_freeze" '
+        '"bot_stop 1; bot_dont_shoot 1; '
+        'echo Bots EINGEFROREN; alias cs2c_toggle cs2c_unfreeze"',
+        'alias "cs2c_unfreeze" '
+        '"bot_stop 0; bot_dont_shoot 0; '
+        'echo Bots AKTIV — viel Glueck!; alias cs2c_toggle cs2c_freeze"',
+        'alias "cs2c_toggle" "cs2c_unfreeze"',
+    ]
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  Mode generators
+# ═══════════════════════════════════════════════════════════════════
+
+def _apply_overrides(spots: list[dict], clusters: list[dict],
+                     overrides: dict | None) -> tuple[list[dict], int, int]:
+    """Apply AI overrides to spot list. Returns (spots, bot_difficulty, max_bots)."""
+    ov = overrides or {}
+    difficulty = ov.get("bot_difficulty", 3)
+    max_bots = ov.get("bot_count", len(spots))
+    max_bots = min(max_bots, len(clusters), 10)
+
+    # Re-order spots if AI provided priority list (1-indexed spot numbers)
+    prio = ov.get("priority_spots")
+    if prio and len(prio) > 0:
+        indexed = {i + 1: s for i, s in enumerate(spots)}
+        reordered = []
+        for idx in prio:
+            if idx in indexed:
+                reordered.append(indexed.pop(idx))
+        # Append remaining spots not in the priority list
+        for s in spots:
+            if s not in reordered:
+                reordered.append(s)
+        spots = reordered
+
+    spots = spots[:max_bots]
+    return spots, difficulty, max_bots
+
+
+def generate_practice_cfg(map_name: str, positions: dict,
+                          mode: str = "prefire",
+                          overrides: dict | None = None) -> str:
+    """Prefire mode — bots frozen at death spots, practice your peeks."""
+    deaths = positions.get("deaths", [])
+    kills = positions.get("kills", [])
+    clusters = _cluster_positions(deaths, radius=150.0)
+    if not clusters:
+        return f'// No data for {map_name}\necho "Keine Daten fuer {map_name}"\n'
+
+    nb = min(len(clusters), 10)
+    spots = _build_spots(clusters, nb)
+    spots, difficulty, nb = _apply_overrides(spots, clusters, overrides)
+    mn = map_name.lower()
+
+    L: list[str] = [
+        f"// {'=' * 55}",
+        f"// CS2 Coach — {map_name} PREFIRE (Auto-Setup)",
+        f"// {nb} Bots aus {len(deaths)} Deaths + {len(kills)} Kills",
+        f"// {'=' * 55}", "",
+        "// ── Server Setup ──",
+        *_cfg_server_block(), "",
+        "// ── Bots ──",
+        "bot_kick", "bot_quota 0", f"bot_difficulty {difficulty}",
+        "bot_dont_shoot 1", "",
+    ]
+    for _ in range(nb):
+        L.append("bot_add_t")
+    L += ["", "bot_stop 1", "",
+          f"// ── Auto-Setup: {nb} Spots ──",
+          *_cfg_autoplace_chain(spots), "",
+          f"// ── Peek-Positionen ──",
+          *_cfg_peek_aliases(spots), "",
+          "// ── Bot-Kontrolle ──",
+          *_cfg_bot_toggle(), "",
+          "// ── Schwierigkeit ──",
+          *_cfg_difficulty_aliases(), "",
+          f'alias "cs2c_reset" "exec coach/practice_{mn}"', "",
+          "// ── Keybinds ──",
+          'bind "F2" "cs2c_setup"',
+          'bind "F3" "cs2c_toggle"',
+          'bind "F4" "noclip"',
+          'bind "F5" "cs2c_reset"', "",
+          "mp_restartgame 1", "",
+          ]
+
+    # Console output
+    L += [
+        'echo ""',
+        'echo "══════════════════════════════════════"',
+        f'echo " PREFIRE: {map_name} — {nb} Bots"',
+        'echo " F2=Auto-Setup → Peek-Zyklus"',
+        'echo " F3=Bots toggle  F4=Noclip  F5=Reset"',
+        'echo "══════════════════════════════════════"',
+        'echo ""', "",
+    ]
+    return "\n".join(L)
+
+
+def generate_retake_cfg(map_name: str, positions: dict,
+                        overrides: dict | None = None) -> str:
+    """Retake mode — bots at enemy hold positions (from your kill data).
+
+    Uses kill positions: where enemies stood when you killed them = common
+    hold positions. You approach from your own kill position (entry point).
+    """
+    kills = positions.get("kills", [])
+    deaths = positions.get("deaths", [])
+    if not kills:
+        return f'// No kill data for {map_name}\necho "Keine Kill-Daten fuer {map_name}"\n'
+
+    # For retake: cluster enemy positions from player's kills
+    # Here "ex/ey/ez" = where the enemy was (bot position)
+    # "x/y/z" = where the player was (entry position)
+    clusters = _cluster_positions(kills, radius=150.0)
+    if not clusters:
+        return f'// Not enough data for {map_name}\n'
+
+    nb = min(len(clusters), 8)
+    spots = _build_spots(clusters, nb)
+    spots, difficulty, nb = _apply_overrides(spots, clusters, overrides)
+    mn = map_name.lower()
+
+    L: list[str] = [
+        f"// {'=' * 55}",
+        f"// CS2 Coach — {map_name} RETAKE",
+        f"// {nb} Bots an gegnerischen Hold-Positionen",
+        f"// {'=' * 55}", "",
+        "// ── Server Setup ──",
+        *_cfg_server_block(), "",
+        "// ── Bots (CT-Seite: verteidigen Positionen) ──",
+        "bot_kick", "bot_quota 0", f"bot_difficulty {difficulty}",
+        "bot_dont_shoot 0",  # Retake: bots shoot back
+        "",
+    ]
+    for _ in range(nb):
+        L.append("bot_add_ct")
+    L += ["", "bot_stop 1", "",
+          f"// ── Auto-Setup: {nb} Hold-Positionen ──",
+          *_cfg_autoplace_chain(spots, done_extra="bot_stop 0; bot_dont_shoot 0; "), "",
+          f"// ── Peek-Positionen (deine Entry-Points) ──",
+          *_cfg_peek_aliases(spots), "",
+          "// ── Bot-Kontrolle ──",
+          *_cfg_bot_toggle(), "",
+          "// ── Schwierigkeit ──",
+          *_cfg_difficulty_aliases(), "",
+          f'alias "cs2c_reset" "exec coach/retake_{mn}"', "",
+          "// ── Keybinds ──",
+          'bind "F2" "cs2c_setup"',
+          'bind "F3" "cs2c_toggle"',
+          'bind "F4" "noclip"',
+          'bind "F5" "cs2c_reset"', "",
+          "mp_restartgame 1", "",
+          ]
+
+    L += [
+        'echo ""',
+        'echo "══════════════════════════════════════"',
+        f'echo " RETAKE: {map_name} — {nb} Bots"',
+        'echo " Bots halten Positionen — retake!"',
+        'echo " F2=Setup  F3=Toggle  F4=Noclip  F5=Reset"',
+        'echo "══════════════════════════════════════"',
+        'echo ""', "",
+    ]
+    return "\n".join(L)
+
+
+def generate_spray_cfg(map_name: str, positions: dict,
+                       overrides: dict | None = None) -> str:
+    """Spray-Transfer mode — bots lined up for spray-transfer drills.
+
+    Takes the biggest death cluster, calculates a perpendicular line,
+    places bots along it at even spacing for spray transfer practice.
+    """
+    ov = overrides or {}
+    deaths = positions.get("deaths", [])
+    clusters = _cluster_positions(deaths, radius=200.0)
+    if not clusters:
+        return f'// No data for {map_name}\n'
+
+    # Use the biggest cluster as reference
+    c = clusters[0]
+    bx, by_, bz = c["x"], c["y"], c["z"]
+    px, py, pz = c["peek_x"], c["peek_y"], c["peek_z"]
+
+    # Direction from peek to bot
+    dx, dy = bx - px, by_ - py
+    dist = math.sqrt(dx * dx + dy * dy)
+    if dist < 1:
+        return f'// Insufficient distance data for {map_name}\n'
+
+    # Normalize and get perpendicular
+    ndx, ndy = dx / dist, dy / dist
+    perp_x, perp_y = -ndy, ndx  # 90° rotation
+
+    spacing = ov.get("spray_spacing", 100.0)
+    n_bots = min(ov.get("bot_count", 5), 10)
+    spots = []
+    for i in range(n_bots):
+        offset = (i - n_bots // 2) * spacing
+        sx = round(bx + perp_x * offset, 1)
+        sy = round(by_ + perp_y * offset, 1)
+        pitch, yaw = _calc_view_angle(px, py, pz, sx, sy, bz)
+        spots.append({
+            "bot_x": sx, "bot_y": sy, "bot_z": round(bz, 1),
+            "peek_x": round(px, 1), "peek_y": round(py, 1), "peek_z": round(pz, 1),
+            "pitch": pitch, "yaw": yaw,
+            "count": c["count"], "weapon": "ak47", "enemy": "Target",
+            "hs_count": 0, "hs_pct": 0,
+        })
+
+    mn = map_name.lower()
+    center_pitch, center_yaw = _calc_view_angle(px, py, pz, bx, by_, bz)
+
+    L: list[str] = [
+        f"// {'=' * 55}",
+        f"// CS2 Coach — {map_name} SPRAY-TRANSFER",
+        f"// {n_bots} Bots in Reihe — Spray-Kontrolle ueben",
+        f"// {'=' * 55}", "",
+        "// ── Server Setup ──",
+        *_cfg_server_block(respawn_ct=1, respawn_t=1), "",
+        "// ── Bots (eingefroren in Reihe) ──",
+        "bot_kick", "bot_quota 0", "bot_difficulty 0",
+        "bot_dont_shoot 1", "",
+    ]
+    for _ in range(n_bots):
+        L.append("bot_add_t")
+    L += ["", "bot_stop 1", ""]
+
+    # Auto-place chain
+    L.append(f"// ── Auto-Setup: {n_bots} Bots in Reihe ──")
+    for i, s in enumerate(spots):
+        nxt = f"cs2c_ab{i + 2}" if i < n_bots - 1 else "cs2c_spray_done"
+        L.append(
+            f'alias "cs2c_ab{i + 1}" '
+            f'"setpos {s["bot_x"]} {s["bot_y"]} {s["bot_z"]}; '
+            f'bot_place; echo [Bot {i + 1}/{n_bots}]; {nxt}"'
+        )
+    L.append(
+        f'alias "cs2c_spray_done" '
+        f'"noclip; bot_stop 1; bot_dont_shoot 1; '
+        f'setpos {round(px, 1)} {round(py, 1)} {round(pz, 1)}; '
+        f'setang {center_pitch} {center_yaw} 0; '
+        f'echo ; echo ══════ SPRAY DRILL BEREIT ══════; '
+        f'echo Ziel auf den linken Bot — Spray nach rechts transferieren"'
+    )
+    L.append('alias "cs2c_setup" "noclip; cs2c_ab1"')
+    L += ["",
+          "// ── Zurueck zur Schussposition ──",
+          f'alias "cs2c_origin" '
+          f'"setpos {round(px, 1)} {round(py, 1)} {round(pz, 1)}; '
+          f'setang {center_pitch} {center_yaw} 0; '
+          f'echo Zurueck zur Startposition"', "",
+          f'alias "cs2c_reset" "exec coach/spray_{mn}"', "",
+          "// ── Keybinds ──",
+          'bind "F2" "cs2c_setup"   // Auto-Setup',
+          'bind "F3" "cs2c_origin"  // Zurueck zur Startposition',
+          'bind "F4" "noclip"',
+          'bind "F5" "cs2c_reset"', "",
+          "mp_restartgame 1", "",
+          ]
+
+    L += [
+        'echo ""',
+        'echo "══════════════════════════════════════"',
+        f'echo " SPRAY-TRANSFER: {map_name}"',
+        f'echo " {n_bots} Bots in Reihe"',
+        'echo " F2=Setup  F3=Startposition  F5=Reset"',
+        'echo ""',
+        'echo " Tipp: Links anfangen, nach rechts"',
+        'echo " transferieren. Burst-Kontrolle!"',
+        'echo "══════════════════════════════════════"',
+        'echo ""', "",
+    ]
+    return "\n".join(L)
+
+
+def generate_challenge_cfg(map_name: str, positions: dict,
+                           overrides: dict | None = None) -> str:
+    """Challenge mode — timed prefire run, bots shoot back.
+
+    Same bot positions as prefire, but:
+    - Short round timer (configurable, default 45s)
+    - Bots active (shooting, configurable difficulty)
+    - Respawn disabled — if you die, round lost
+    - Goal: clear all bots as fast as possible
     """
     deaths = positions.get("deaths", [])
     kills = positions.get("kills", [])
-
-    if mode == "prefire":
-        clusters = _cluster_positions(deaths, radius=150.0)
-    else:
-        clusters = _cluster_positions(kills, radius=150.0)
-
+    clusters = _cluster_positions(deaths, radius=150.0)
     if not clusters:
-        return f"// No data for {map_name}\necho \"Keine Daten fuer {map_name}\"\n"
+        return f'// No data for {map_name}\n'
 
-    max_bots = min(len(clusters), 10)
+    nb = min(len(clusters), 8)  # Fewer bots for challenge
+    spots = _build_spots(clusters, nb)
+    spots, difficulty, nb = _apply_overrides(spots, clusters, overrides)
+    challenge_time = (overrides or {}).get("challenge_time", 45)
+    mn = map_name.lower()
 
-    lines = [
-        f"// ═══════════════════════════════════════════════════",
-        f"// CS2 Coach — Practice Config: {map_name}",
-        f"// Mode: {'Prefire Training' if mode == 'prefire' else 'Retake Practice'}",
-        f"// Generated from {len(deaths)} deaths + {len(kills)} kills",
-        f"// {max_bots} Bot-Spots from {len(clusters)} Hotspots",
-        f"// ═══════════════════════════════════════════════════",
+    L: list[str] = [
+        f"// {'=' * 55}",
+        f"// CS2 Coach — {map_name} CHALLENGE (Speed-Run)",
+        f"// {nb} Bots — {challenge_time} Sekunden — schaff sie alle!",
+        f"// {'=' * 55}", "",
+        "// ── Server Setup (kurzer Timer!) ──",
+        *_cfg_server_block(roundtime=challenge_time), "",
+        "// ── Bots (aktiv, Expert) ──",
+        "bot_kick", "bot_quota 0",
+        f"bot_difficulty {difficulty}",
+        "bot_dont_shoot 0",  # Bots shoot back!
         "",
+    ]
+    for _ in range(nb):
+        L.append("bot_add_t")
+    L += ["", "bot_stop 1", ""]  # Frozen until setup
+
+    # Auto-place chain — after setup, UNFREEZE bots
+    L.append(f"// ── Auto-Setup: {nb} Spots + UNFREEZE ──")
+    for i, s in enumerate(spots):
+        nxt = f"cs2c_ab{i + 2}" if i < nb - 1 else "cs2c_challenge_go"
+        L.append(
+            f'alias "cs2c_ab{i + 1}" '
+            f'"setpos {s["bot_x"]} {s["bot_y"]} {s["bot_z"]}; '
+            f'bot_place; '
+            f'echo [Bot {i + 1}/{nb}]; {nxt}"'
+        )
+
+    # After placement: unfreeze, teleport to first peek, start!
+    L.append(
+        f'alias "cs2c_challenge_go" '
+        f'"noclip; '
+        f'setpos {spots[0]["peek_x"]} {spots[0]["peek_y"]} {spots[0]["peek_z"]}; '
+        f'setang {spots[0]["pitch"]} {spots[0]["yaw"]} 0; '
+        f'bot_stop 0; bot_dont_shoot 0; '
+        f'mp_restartgame 1; '
+        f'echo ; '
+        f'echo ══════ CHALLENGE START ══════; '
+        f'echo {nb} Bots — {challenge_time} Sekunden — GO GO GO!; '
+        f'bind F2 cs2c_peek"'
+    )
+    L.append('alias "cs2c_setup" "noclip; cs2c_ab1"')
+    L += ["",
+          f"// ── Peek-Positionen (Hilfe) ──",
+          *_cfg_peek_aliases(spots), "",
+          "// ── Schwierigkeit ──",
+          *_cfg_difficulty_aliases(), "",
+          f'alias "cs2c_reset" "exec coach/challenge_{mn}"', "",
+          "// ── Keybinds ──",
+          'bind "F2" "cs2c_setup"',
+          'bind "F4" "noclip"',
+          'bind "F5" "cs2c_reset"', "",
+          "mp_restartgame 1", "",
+          ]
+
+    L += [
+        'echo ""',
+        'echo "══════════════════════════════════════"',
+        f'echo " CHALLENGE: {map_name} — {nb} Bots"',
+        f'echo " {challenge_time} Sekunden — Bots schiessen zurueck!"',
+        'echo " F2=Setup+Start  F5=Reset"',
+        'echo ""',
+        'echo " Schwierigkeit: cs2c_easy..cs2c_expert"',
+        'echo "══════════════════════════════════════"',
+        'echo ""', "",
+    ]
+    return "\n".join(L)
+
+
+def generate_utility_cfg() -> str:
+    """Utility practice mode — grenade trajectories, no bots."""
+    L: list[str] = [
+        f"// {'=' * 55}",
+        "// CS2 Coach — UTILITY PRACTICE",
+        "// Smoke, Flash, Molotov, HE — mit Trajectories",
+        f"// {'=' * 55}", "",
         "// ── Server Setup ──",
         "sv_cheats 1",
         "mp_warmup_end",
@@ -203,214 +670,97 @@ def generate_practice_cfg(map_name: str, positions: dict, mode: str = "prefire")
         "mp_maxmoney 65535",
         "mp_startmoney 65535",
         "mp_free_armor 1",
-        "mp_death_drop_gun 0",
         "sv_infinite_ammo 1",
-        "ammo_grenade_limit_total 5",
-        "sv_showimpacts 1",
-        "sv_showimpacts_time 1",
-        "mp_respawn_on_death_ct 1",
-        "mp_respawn_on_death_t 1",
-        "",
-        "// ── Clean Slate ──",
-        "bot_kick",
         "mp_autoteambalance 0",
         "mp_limitteams 0",
-        "",
+        "mp_respawn_on_death_ct 1",
+        "mp_respawn_on_death_t 1", "",
+        "// ── Granaten-Einstellungen ──",
+        "ammo_grenade_limit_total 5",
+        "ammo_grenade_limit_flashbang 2",
+        "sv_grenade_trajectory_prac_pipreview 1",
+        "sv_grenade_trajectory_prac_trailtime 8",
+        "cl_sim_grenade_trajectory 1",
+        "sv_rethrow_last_grenade 1", "",
+        "// ── Bots entfernen ──",
+        "bot_kick",
+        "bot_quota 0", "",
+        "// ── Granaten-Binds ──",
+        '// F1-F4: Schnell Granaten kaufen',
+        'alias "cs2c_smoke" "buy weapon_smokegrenade; echo Smoke gekauft"',
+        'alias "cs2c_flash" "buy weapon_flashbang; echo Flash gekauft"',
+        'alias "cs2c_molly" "buy weapon_molotov; buy weapon_incgrenade; echo Molotov gekauft"',
+        'alias "cs2c_he" "buy weapon_hegrenade; echo HE gekauft"', "",
+        "// ── Rethrow (letzte Granate wiederholen) ──",
+        '// Wichtig: sv_rethrow_last_grenade muss 1 sein',
+        'alias "cs2c_rethrow" "sv_rethrow_last_grenade 1; echo Rethrow aktiv — wirf die Granate nochmal!"', "",
+        "// ── Keybinds ──",
+        'bind "F1" "cs2c_smoke"',
+        'bind "F2" "cs2c_flash"',
+        'bind "F3" "cs2c_molly"',
+        'bind "F4" "cs2c_he"',
+        'bind "F5" "noclip"', "",
+        "mp_restartgame 1", "",
+        'echo ""',
+        'echo "══════════════════════════════════════"',
+        'echo " UTILITY PRACTICE"',
+        'echo " Granaten-Trajectories aktiv!"',
+        'echo ""',
+        'echo " F1=Smoke  F2=Flash  F3=Molly  F4=HE"',
+        'echo " F5=Noclip"',
+        'echo ""',
+        'echo " Rethrow: sv_rethrow_last_grenade"',
+        'echo " Preview: cl_sim_grenade_trajectory"',
+        'echo "══════════════════════════════════════"',
+        'echo ""', "",
     ]
+    return "\n".join(L)
 
-    # Build spot info for each cluster
-    spots = []
-    for i, cluster in enumerate(clusters[:max_bots]):
-        # Enemy position (where the bot goes)
-        bot_x = round(cluster["x"], 1)
-        bot_y = round(cluster["y"], 1)
-        bot_z = round(cluster["z"], 1)
-        # Peek position (where player typically dies from this enemy spot)
-        peek_x = round(cluster["peek_x"], 1)
-        peek_y = round(cluster["peek_y"], 1)
-        peek_z = round(cluster["peek_z"], 1)
-        count = cluster["count"]
 
-        # Calculate view angle from peek position toward bot
-        pitch, yaw = _calc_view_angle(peek_x, peek_y, peek_z,
-                                       bot_x, bot_y, bot_z)
+# ═══════════════════════════════════════════════════════════════════
+#  Server & Warmup configs
+# ═══════════════════════════════════════════════════════════════════
 
-        wpn_counts: dict[str, int] = defaultdict(int)
-        for pos in cluster["positions"]:
-            w = pos.get("w", "")
-            if w:
-                wpn_counts[w] += 1
-        cluster_weapon = max(wpn_counts, key=wpn_counts.get) if wpn_counts else "ak47"
-
-        enemy_counts: dict[str, int] = defaultdict(int)
-        for pos in cluster["positions"]:
-            e = pos.get("e", "")
-            if e:
-                enemy_counts[e] += 1
-        top_enemy = max(enemy_counts, key=enemy_counts.get) if enemy_counts else "?"
-
-        spots.append({
-            "bot_x": bot_x, "bot_y": bot_y, "bot_z": bot_z,
-            "peek_x": peek_x, "peek_y": peek_y, "peek_z": peek_z,
-            "pitch": pitch, "yaw": yaw,
-            "count": count,
-            "weapon": cluster_weapon, "enemy": top_enemy,
-        })
-
-    # ── Phase 1: SETUP aliases — fly to bot spots, place bots ──
-    lines.append(f"// ── Phase 1: Bot-Placement ({max_bots} Spots) ──")
-    lines.append(f"// F2 = Naechster Spot (teleportiert zum Gegner-Spot)")
-    lines.append(f"// F3 = Bot platzieren + weiter")
-    lines.append(f"// F4 = Fertig → Practice starten")
-    lines.append(f"// F5 = Noclip an/aus")
-    lines.append(f"// F6 = Reset (alle Bots kicken, neu starten)")
-    lines.append("")
-
-    for i, spot in enumerate(spots):
-        next_alias = f"cs2c_s{i+2}" if i < len(spots) - 1 else "cs2c_setup_done"
-        lines.append(
-            f'alias "cs2c_s{i+1}" '
-            f'"setpos {spot["bot_x"]} {spot["bot_y"]} {spot["bot_z"]}; '
-            f'bot_add_t; '
-            f'echo ; '
-            f'echo === Spot {i+1}/{max_bots}: {spot["count"]}x deaths ===; '
-            f'echo Gegner: {spot["enemy"]} ({spot["weapon"]}); '
-            f'echo Schau auf den Boden und druecke F3; '
-            f'alias cs2c_next {next_alias}"'
-        )
-
-    lines.append(
-        'alias "cs2c_setup_done" '
-        '"echo ; echo Alle Spots besucht!; '
-        'echo Druecke F4 um Practice zu starten.; '
-        'alias cs2c_next cs2c_setup_done"'
-    )
-    lines.append(
-        'alias "cs2c_place" "bot_place; cs2c_next"'
-    )
-    lines.append("")
-
-    # ── Phase 2: PRACTICE aliases — teleport to peek positions with view angles ──
-    lines.append(f"// ── Phase 2: Practice (Peek-Positionen) ──")
-    for i, spot in enumerate(spots):
-        next_peek = f"cs2c_p{i+2}" if i < len(spots) - 1 else "cs2c_p1"
-        lines.append(
-            f'alias "cs2c_p{i+1}" '
-            f'"setpos {spot["peek_x"]} {spot["peek_y"]} {spot["peek_z"]}; '
-            f'setang {spot["pitch"]} {spot["yaw"]} 0; '
-            f'echo ; '
-            f'echo === Peek {i+1}/{max_bots} ===; '
-            f'echo Du stirbst hier {spot["count"]}x - peeke Richtung {spot["enemy"]}; '
-            f'echo Waffe: {spot["weapon"]}; '
-            f'alias cs2c_peek {next_peek}"'
-        )
-    lines.append("")
-
-    # F4 = start practice mode
-    lines.append(
-        f'alias "cs2c_start" '
-        f'"bot_stop 1; '
-        f'mp_respawn_on_death_t 0; '
-        f'noclip; '  # Toggle off (was on from setup)
-        f'echo ; '
-        f'echo ======================================; '
-        f'echo  PRACTICE MODUS AKTIV; '
-        f'echo  Bots eingefroren - uebe deine Peeks!; '
-        f'echo  F2 = Naechste Peek-Position; '
-        f'echo  F6 = Reset; '
-        f'echo ======================================; '
-        f'echo ; '
-        f'bind F2 cs2c_peek; '  # Rebind F2 to peek mode
-        f'bind F4 cs2c_unfreeze; '  # Rebind F4 to unfreeze
-        f'cs2c_p1"'  # Teleport to first peek position
-    )
-
-    # F4 in practice mode = unfreeze bots for live practice
-    lines.append(
-        'alias "cs2c_unfreeze" '
-        '"bot_stop 0; bot_dont_shoot 0; '
-        'echo ; echo Bots AKTIV - viel Glueck!; '
-        'echo F6 zum Reset"'
-    )
-
-    # F6 = full reset
-    lines.append(
-        'alias "cs2c_reset" '
-        '"bot_kick; '
-        'mp_respawn_on_death_t 1; '
-        'alias cs2c_next cs2c_s1; '
-        'alias cs2c_peek cs2c_p1; '
-        'bind F2 cs2c_next; '  # Rebind F2 back to setup mode
-        'bind F4 cs2c_start; '  # Rebind F4 back to start
-        'noclip; '
-        'echo ; echo Reset - druecke F2 fuer Spot 1"'
-    )
-    lines.append("")
-
-    # Start aliases
-    lines.append("alias cs2c_next cs2c_s1")
-    lines.append("alias cs2c_peek cs2c_p1")
-    lines.append("")
-
-    # Key bindings
-    lines.append("// ── Keybinds ──")
-    lines.append('bind "F2" "cs2c_next"')
-    lines.append('bind "F3" "cs2c_place"')
-    lines.append('bind "F4" "cs2c_start"')
-    lines.append('bind "F5" "noclip"')
-    lines.append('bind "F6" "cs2c_reset"')
-    lines.append("")
-
-    # Enable noclip for setup phase
-    lines.append("// ── Start: Noclip an, druecke F2 fuer Spot 1 ──")
-    lines.append("noclip")
-    lines.append("")
-
-    # Spot reference list with peek angles
-    lines.append("// ── Spot-Uebersicht ──")
-    for i, spot in enumerate(spots):
-        lines.append(
-            f"// {i+1}. Bot({spot['bot_x']}, {spot['bot_y']}, {spot['bot_z']}) "
-            f"Peek({spot['peek_x']}, {spot['peek_y']}, {spot['peek_z']}) "
-            f"Angle({spot['pitch']}, {spot['yaw']}) "
-            f"— {spot['count']}x — {spot['enemy']} ({spot['weapon']})"
-        )
-    lines.append("")
-
-    # Console output
-    lines.extend([
-        'echo ""',
-        'echo "══════════════════════════════════════"',
-        f'echo " CS2 Coach Practice: {map_name}"',
-        f'echo " {max_bots} Spots aus deinen Demos"',
-        'echo ""',
-        'echo " SETUP:"',
-        'echo "   F2 = Naechster Bot-Spot (Noclip)"',
-        'echo "   F3 = Bot platzieren"',
-        'echo "   F4 = Practice starten"',
-        'echo ""',
-        'echo " PRACTICE:"',
-        'echo "   F2 = Naechste Peek-Position"',
-        'echo "        (teleportiert + richtet Blick aus)"',
-        'echo "   F4 = Bots aktivieren (live)"',
-        'echo "   F5 = Noclip"',
-        'echo "   F6 = Reset"',
-        'echo ""',
-        'echo " Druecke F2 um zu starten!"',
-        'echo "══════════════════════════════════════"',
-        'echo ""',
-        "",
+def generate_server_cfg() -> str:
+    """Comprehensive practice server.cfg for Docker / LAN."""
+    return "\n".join([
+        "// ═══════════════════════════════════════════════════",
+        "// CS2 Coach — Practice Server Configuration",
+        "// ═══════════════════════════════════════════════════", "",
+        'hostname "CS2 Coach — Practice Server"',
+        'sv_password ""',
+        "sv_lan 1", "sv_region 3", "",
+        "game_type 0", "game_mode 1", "",
+        "sv_cheats 1",
+        "mp_warmuptime 3", "mp_freezetime 0",
+        "mp_roundtime 60", "mp_roundtime_defuse 60",
+        "mp_maxrounds 100", "mp_overtime_enable 0",
+        "mp_buy_anywhere 1", "mp_buytime 9999",
+        "mp_maxmoney 65535", "mp_startmoney 65535",
+        "mp_free_armor 1", "mp_death_drop_gun 0", "",
+        "sv_infinite_ammo 1",
+        "ammo_grenade_limit_total 5", "ammo_grenade_limit_flashbang 2",
+        "sv_grenade_trajectory_prac_pipreview 1",
+        "sv_grenade_trajectory_prac_trailtime 4", "",
+        "sv_showimpacts 1", "sv_showimpacts_time 0.8", "",
+        "bot_quota 0", "bot_quota_mode normal",
+        "bot_difficulty 3", "mp_autoteambalance 0", "mp_limitteams 0", "",
+        "sv_maxrate 0", "sv_minrate 786432", "",
+        "sv_talk_enemy_dead 1", "sv_talk_enemy_living 1",
+        "sv_deadtalk 1", "sv_alltalk 1", "",
+        "mp_respawn_on_death_ct 0", "mp_respawn_on_death_t 0",
+        "mp_solid_teammates 0", "",
+        "log on", "sv_logbans 1", "sv_logecho 1", "sv_logfile 1", "",
+        'echo " CS2 Coach Practice Server — bereit!"',
+        'echo " Configs: exec coach/practice"',
     ])
-
-    return "\n".join(lines)
 
 
 def generate_warmup_cfg(positions: dict[str, dict]) -> str:
-    """Generate a general warmup config with stats summary."""
-    total_deaths = sum(len(p["deaths"]) for p in positions.values())
-    total_kills = sum(len(p["kills"]) for p in positions.values())
+    """Warmup config with moving bots."""
+    total_d = sum(len(p["deaths"]) for p in positions.values())
+    total_k = sum(len(p["kills"]) for p in positions.values())
 
-    # Find weakest maps (most deaths relative to kills)
     map_ratios = []
     for m, p in positions.items():
         k, d = len(p["kills"]), len(p["deaths"])
@@ -418,81 +768,148 @@ def generate_warmup_cfg(positions: dict[str, dict]) -> str:
             map_ratios.append((m, k, d, round(k / max(d, 1), 2)))
     map_ratios.sort(key=lambda x: x[3])
 
-    lines = [
-        "// ═══════════════════════════════════════════════════",
-        "// CS2 Coach — Warmup Config",
-        f"// Total: {total_kills} Kills, {total_deaths} Deaths aus Demos",
-        "// ═══════════════════════════════════════════════════",
-        "",
-        "sv_cheats 1",
-        "mp_warmup_end",
-        "mp_freezetime 0",
-        "mp_roundtime 60",
-        "mp_roundtime_defuse 60",
-        "mp_buy_anywhere 1",
-        "mp_buytime 9999",
-        "mp_startmoney 65535",
-        "mp_free_armor 1",
-        "sv_infinite_ammo 1",
-        "sv_showimpacts 1",
-        "sv_showimpacts_time 0.5",
-        "mp_respawn_on_death_ct 1",
-        "mp_respawn_on_death_t 1",
-        "",
-        "// ── Bot Setup ──",
-        "bot_quota 5",
-        "bot_difficulty 3",
-        "bot_dont_shoot 0",
-        "bot_stop 0",
-        "",
+    L = [
+        "// CS2 Coach — Warmup",
+        f"// {total_k} Kills, {total_d} Deaths aus Demos", "",
+        *_cfg_server_block(respawn_ct=1, respawn_t=1), "",
+        "bot_quota 5", "bot_difficulty 3", "bot_dont_shoot 0", "bot_stop 0", "",
+        *_cfg_difficulty_aliases(), "",
+        'bind "F4" "noclip"', "",
     ]
-
     if map_ratios:
-        lines.append("// ── Deine schwaechtsten Maps ──")
-        for m, k, d, ratio in map_ratios[:3]:
-            lines.append(f"// {m}: {k}K / {d}D (K/D {ratio})")
-        lines.append("")
+        L.append("// Schwaechtste Maps:")
+        for m, k, d, r in map_ratios[:3]:
+            L.append(f"// {m}: {k}K/{d}D (K/D {r})")
+        L.append("")
 
-    lines.extend([
-        "echo \"\"",
-        "echo \"══════════════════════════════════════\"",
-        "echo \" CS2 Coach — Warmup Mode\"",
-        "echo \" Bot Difficulty: Expert\"",
-        "echo \" Infinite Ammo + Free Armor\"",
-        "echo \"══════════════════════════════════════\"",
-        "echo \"\"",
-    ])
-
-    return "\n".join(lines)
+    L += [
+        'echo " CS2 Coach Warmup — Expert Bots"',
+        'echo " cs2c_easy / cs2c_expert fuer Schwierigkeit"',
+    ]
+    return "\n".join(L)
 
 
-def _map_to_bspname(map_name: str) -> str:
-    """Convert display map name to CS2 BSP name."""
-    mapping = {
-        "Mirage": "de_mirage",
-        "Cache": "de_cache",
-        "Dust2": "de_dust2",
-        "Inferno": "de_inferno",
-        "Nuke": "de_nuke",
-        "Ancient": "de_ancient",
-        "Anubis": "de_anubis",
-        "Vertigo": "de_vertigo",
-        "Overpass": "de_overpass",
-        "Train": "de_train",
+# ═══════════════════════════════════════════════════════════════════
+#  Practice planner
+# ═══════════════════════════════════════════════════════════════════
+
+def _build_practice_planner(maps_data: list[dict],
+                            positions: dict[str, dict]) -> dict:
+    """Analyze demo data and generate a practice plan + recommendations."""
+    recommendations: list[dict] = []
+
+    # 1. Weak maps (low K/D)
+    for m in sorted(maps_data, key=lambda x: x["kd"]):
+        if m["kd"] < 1.0 and m["deaths"] >= 10:
+            recommendations.append({
+                "type": "map", "priority": "high",
+                "icon": "crosshair",
+                "title": f'{m["name"]} — K/D {m["kd"]}',
+                "desc": (f'{m["deaths"]} Deaths bei {m["kills"]} Kills. '
+                         f'Prefire-Training auf dieser Map priorisieren.'),
+                "cmd": f'exec coach/practice_{m["name"].lower()}',
+                "mode": "prefire",
+            })
+            if len([r for r in recommendations if r["type"] == "map"]) >= 2:
+                break
+
+    # 2. High HS death rate → crosshair placement
+    for m in maps_data:
+        if m["hs_death_pct"] >= 45 and m["deaths"] >= 10:
+            recommendations.append({
+                "type": "crosshair", "priority": "high",
+                "icon": "target",
+                "title": f'{m["name"]} — {m["hs_death_pct"]}% HS-Deaths',
+                "desc": ("Du wirst ueberdurchschnittlich oft per Headshot getoetet. "
+                         "Challenge-Modus trainiert Reaktion unter Druck."),
+                "cmd": f'exec coach/challenge_{m["name"].lower()}',
+                "mode": "challenge",
+            })
+            break
+
+    # 3. Repeated deaths at same spots
+    for m in maps_data:
+        if m["spots"] and m["spots"][0]["count"] >= 5:
+            s = m["spots"][0]
+            recommendations.append({
+                "type": "spot", "priority": "medium",
+                "icon": "alert-triangle",
+                "title": f'{m["name"]} — {s["count"]}x am selben Spot',
+                "desc": (f'Du stirbst wiederholt durch {s["enemy"]} '
+                         f'({s["weapon"]}). Diesen Winkel gezielt ueben.'),
+                "cmd": f'exec coach/practice_{m["name"].lower()}',
+                "mode": "prefire",
+            })
+            break
+
+    # 4. Rifle deaths → spray transfer
+    total_deaths = sum(m["deaths"] for m in maps_data)
+    rifle_deaths = 0
+    for pos_data in positions.values():
+        for d in pos_data.get("deaths", []):
+            if d.get("w", "") in _RIFLES:
+                rifle_deaths += 1
+    if total_deaths > 0 and rifle_deaths / total_deaths > 0.35:
+        best_map = maps_data[0]["name"] if maps_data else "Mirage"
+        recommendations.append({
+            "type": "spray", "priority": "medium",
+            "icon": "zap",
+            "title": f'Spray-Transfer — {round(rifle_deaths / total_deaths * 100)}% Rifle-Deaths',
+            "desc": ("Ein Grossteil deiner Deaths kommt durch Rifles. "
+                     "Spray-Transfer-Drill verbessert deine Kontrolle."),
+            "cmd": f'exec coach/spray_{best_map.lower()}',
+            "mode": "spray",
+        })
+
+    # 5. Always recommend utility practice
+    recommendations.append({
+        "type": "utility", "priority": "low",
+        "icon": "flame",
+        "title": "Utility-Practice",
+        "desc": ("Smokes, Flashes, Mollys mit Trajectory-Preview ueben. "
+                 "Jede Session 5 Minuten Granaten einplanen."),
+        "cmd": "exec coach/utility",
+        "mode": "utility",
+    })
+
+    # Practice routine
+    routine: list[dict] = []
+    if maps_data:
+        worst = min(maps_data, key=lambda m: m["kd"])
+        second = sorted(maps_data, key=lambda m: m["kd"])[1] if len(maps_data) > 1 else worst
+        routine = [
+            {"step": 1, "duration": "5 Min", "activity": "Warmup",
+             "desc": "Aim aufwaermen mit beweglichen Bots",
+             "cmd": "exec coach/warmup", "mode": "warmup"},
+            {"step": 2, "duration": "10 Min", "activity": f"Prefire — {worst['name']}",
+             "desc": f"Schwaechtste Map (K/D {worst['kd']}), Peeks ueben",
+             "cmd": f"exec coach/practice_{worst['name'].lower()}", "mode": "prefire"},
+            {"step": 3, "duration": "5 Min", "activity": f"Spray — {worst['name']}",
+             "desc": "Spray-Transfer auf 5 Bots in Reihe",
+             "cmd": f"exec coach/spray_{worst['name'].lower()}", "mode": "spray"},
+            {"step": 4, "duration": "10 Min", "activity": f"Challenge — {second['name']}",
+             "desc": f"Speed-Run: {second['name']} in 45 Sekunden clearen",
+             "cmd": f"exec coach/challenge_{second['name'].lower()}", "mode": "challenge"},
+            {"step": 5, "duration": "5 Min", "activity": "Utility",
+             "desc": "Smokes + Flashes mit Trajectory-Preview",
+             "cmd": "exec coach/utility", "mode": "utility"},
+        ]
+
+    return {
+        "recommendations": sorted(
+            recommendations, key=lambda r: {"high": 0, "medium": 1, "low": 2}[r["priority"]]
+        ),
+        "routine": routine,
+        "total_time": "35 Min",
     }
-    return mapping.get(map_name, f"de_{map_name.lower()}")
 
+
+# ═══════════════════════════════════════════════════════════════════
+#  Main data builder
+# ═══════════════════════════════════════════════════════════════════
 
 def build_practice_data(cfg: dict) -> dict:
-    """Build complete practice data for web UI.
-
-    Returns: {
-        has_data: bool,
-        maps: [{name, kills, deaths, hotspots, kd, cfg_preview}],
-        total_positions: int,
-        server_cfg: str,
-    }
-    """
+    """Build complete practice data for web UI — all 5 modes + planner."""
     positions = _load_positions(cfg)
     if not positions:
         return {"has_data": False}
@@ -500,57 +917,74 @@ def build_practice_data(cfg: dict) -> dict:
     maps = []
     total_pos = 0
 
-    for map_name, pos_data in sorted(positions.items(),
-                                      key=lambda x: -(len(x[1]["kills"]) + len(x[1]["deaths"]))):
-        kills = pos_data["kills"]
-        deaths = pos_data["deaths"]
+    for map_name, pos_data in sorted(
+        positions.items(),
+        key=lambda x: -(len(x[1]["kills"]) + len(x[1]["deaths"]))
+    ):
+        kills, deaths = pos_data["kills"], pos_data["deaths"]
         total = len(kills) + len(deaths)
         total_pos += total
-
         if total < 5:
             continue
 
-        # Cluster deaths for hotspot count
         clusters = _cluster_positions(deaths, radius=150.0)
-        significant_hotspots = [c for c in clusters if c["count"] >= 2]
+        significant = [c for c in clusters if c["count"] >= 2]
+        spots = _build_spots(clusters, min(len(clusters), 10))
 
-        # Generate preview of config
-        cfg_text = generate_practice_cfg(map_name, pos_data, mode="prefire")
-
-        # Top death weapons (what kills you most on this map)
-        death_weapons: dict[str, int] = defaultdict(int)
+        # Death weapons
+        dw: dict[str, int] = defaultdict(int)
         for d in deaths:
-            w = d.get("w", "")
-            if w:
-                death_weapons[w] += 1
-        top_death_wpns = sorted(death_weapons.items(), key=lambda x: -x[1])[:3]
+            if d.get("w"):
+                dw[d["w"]] += 1
+        top_wpns = sorted(dw.items(), key=lambda x: -x[1])[:5]
 
-        # Top enemies on this map
-        death_enemies: dict[str, int] = defaultdict(int)
+        # Death enemies
+        de: dict[str, int] = defaultdict(int)
         for d in deaths:
-            e = d.get("e", "")
-            if e:
-                death_enemies[e] += 1
-        top_enemies = sorted(death_enemies.items(), key=lambda x: -x[1])[:3]
+            if d.get("e"):
+                de[d["e"]] += 1
+        top_enemies = sorted(de.items(), key=lambda x: -x[1])[:5]
+
+        hs_deaths = sum(1 for d in deaths if d.get("hs"))
+
+        # Generate all mode configs
+        cfg_prefire = generate_practice_cfg(map_name, pos_data)
+        cfg_retake = generate_retake_cfg(map_name, pos_data)
+        cfg_spray = generate_spray_cfg(map_name, pos_data)
+        cfg_challenge = generate_challenge_cfg(map_name, pos_data)
 
         maps.append({
             "name": map_name,
             "bsp": _map_to_bspname(map_name),
-            "kills": len(kills),
-            "deaths": len(deaths),
+            "kills": len(kills), "deaths": len(deaths),
             "kd": round(len(kills) / max(len(deaths), 1), 2),
-            "hotspots": len(significant_hotspots),
+            "hotspots": len(significant),
             "total_clusters": len(clusters),
-            "top_death_weapons": [{"name": w, "count": c} for w, c in top_death_wpns],
+            "hs_death_pct": round(hs_deaths / max(len(deaths), 1) * 100),
+            "spots": spots,
+            "top_death_weapons": [{"name": w, "count": c} for w, c in top_wpns],
             "top_enemies": [{"name": e, "count": c} for e, c in top_enemies],
-            "cfg": cfg_text,
+            "cfg_prefire": cfg_prefire,
+            "cfg_retake": cfg_retake,
+            "cfg_spray": cfg_spray,
+            "cfg_challenge": cfg_challenge,
         })
 
+    total_deaths = sum(m["deaths"] for m in maps)
+    total_kills = sum(m["kills"] for m in maps)
     warmup_cfg = generate_warmup_cfg(positions)
+    server_cfg = generate_server_cfg()
+    utility_cfg = generate_utility_cfg()
+    planner = _build_practice_planner(maps, positions)
 
     return {
         "has_data": True,
         "maps": maps,
         "total_positions": total_pos,
+        "total_deaths": total_deaths,
+        "total_kills": total_kills,
         "warmup_cfg": warmup_cfg,
+        "server_cfg": server_cfg,
+        "utility_cfg": utility_cfg,
+        "planner": planner,
     }

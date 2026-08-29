@@ -65,6 +65,20 @@
     @media (max-width: 768px) {
         .tm-row, .tm-header { grid-template-columns: 30px 1fr 50px 60px 60px; }
         .tm-row > :nth-child(n+6), .tm-header > :nth-child(n+6) { display: none; }
+        .tm-hero { gap: var(--space-2); }
+        .tm-stat-card { min-width: 90px; padding: var(--space-3); }
+        .tm-stat-val { font-size: 18px; }
+        #tab-impact .dl-grid, #tab-impact > div > div { grid-template-columns: 1fr !important; }
+    }
+    @media (max-width: 480px) {
+        .tm-header { display: none; }
+        .tm-row { grid-template-columns: 24px 1fr 40px 55px; font-size: 12px; padding: 8px 10px; }
+        .tm-row > :nth-child(n+5) { display: none; }
+        .tm-stat-card { min-width: 70px; padding: var(--space-2); }
+        .tm-stat-val { font-size: 16px; }
+        .tm-stat-lbl { font-size: 8px; }
+        .tm-tabs { gap: 3px; }
+        .tm-tab { padding: 5px 10px; font-size: 11px; }
     }
 </style>
 
@@ -95,6 +109,7 @@
     <button class="tm-tab active" data-tab="matches">Haeufigste</button>
     <button class="tm-tab" data-tab="chemistry">Beste Chemie</button>
     <button class="tm-tab" data-tab="winrate">Beste Winrate</button>
+    <button class="tm-tab" data-tab="impact">Premade-Impact</button>
     <button class="tm-tab" data-tab="all">Alle</button>
 </div>
 
@@ -191,6 +206,60 @@
     </div>
     {% else %}
     <div style="padding:var(--space-4);color:var(--color-neutral-500);font-size:13px;">Mindestens 2 Matches mit einem Teammate noetig.</div>
+    {% endif %}
+</div>
+
+<!-- Premade Impact -->
+<div class="tm-section" id="tab-impact" style="display:none;">
+    <div class="tm-section-title">
+        <i data-lucide="git-compare" style="width:16px;height:16px;color:var(--color-accent);"></i>
+        <span style="color:var(--color-accent);">Premade-Impact</span>
+        <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">— spielst du besser MIT oder OHNE diesen Teammate? (min. 3 Matches)</span>
+    </div>
+    {% if tm.by_impact %}
+    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: var(--space-4);">
+        {% for t in tm.by_impact %}
+        <div style="padding: var(--space-4); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm); border-left: 4px solid {% if t.rating_delta > 0.03 %}#4ade80{% elif t.rating_delta < -0.03 %}#f87171{% else %}var(--color-neutral-700){% endif %};">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div style="font-weight:600; font-size:15px;">{{ t.name }}</div>
+                <div style="font-size:11px; color:var(--color-neutral-500);">{{ t.matches }} Matches</div>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; font-size:13px;">
+                <div style="padding:6px 8px; border-radius:var(--radius-sm); background:rgba(255,255,255,0.03);">
+                    <div style="font-size:9px; text-transform:uppercase; color:var(--color-neutral-500); letter-spacing:0.08em;">{{ _('Rating MIT') }}</div>
+                    <div style="font-weight:700; font-size:16px; {% if t.my_rating_with >= 1.0 %}color:#4ade80;{% elif t.my_rating_with < 0.85 %}color:#f87171;{% endif %}">{{ t.my_rating_with }}</div>
+                </div>
+                <div style="padding:6px 8px; border-radius:var(--radius-sm); background:rgba(255,255,255,0.03);">
+                    <div style="font-size:9px; text-transform:uppercase; color:var(--color-neutral-500); letter-spacing:0.08em;">{{ _('Rating OHNE') }}</div>
+                    <div style="font-weight:700; font-size:16px;">{{ t.my_rating_without }}</div>
+                </div>
+                <div style="padding:6px 8px; border-radius:var(--radius-sm); background:rgba(255,255,255,0.03);">
+                    <div style="font-size:9px; text-transform:uppercase; color:var(--color-neutral-500); letter-spacing:0.08em;">{{ _('WR MIT') }}</div>
+                    <div style="font-weight:700;">{{ t.my_wr_with }}%</div>
+                </div>
+                <div style="padding:6px 8px; border-radius:var(--radius-sm); background:rgba(255,255,255,0.03);">
+                    <div style="font-size:9px; text-transform:uppercase; color:var(--color-neutral-500); letter-spacing:0.08em;">{{ _('WR OHNE') }}</div>
+                    <div style="font-weight:700;">{{ t.my_wr_without }}%</div>
+                </div>
+            </div>
+            <div style="margin-top:8px; font-size:12px; font-style:italic; color:var(--color-neutral-400);">
+                {% if t.rating_delta > 0.05 %}
+                    {{ _('Du spielst deutlich besser mit') }} {{ t.name }} <span style="color:#4ade80; font-weight:600;">(+{{ t.rating_delta }} Rating)</span>
+                {% elif t.rating_delta > 0 %}
+                    {{ _('Leicht besser mit') }} {{ t.name }} <span style="color:#4ade80;">(+{{ t.rating_delta }})</span>
+                {% elif t.rating_delta < -0.05 %}
+                    {{ _('Du spielst besser ohne') }} {{ t.name }} <span style="color:#f87171; font-weight:600;">({{ t.rating_delta }} Rating)</span>
+                {% elif t.rating_delta < 0 %}
+                    {{ _('Leicht schlechter mit') }} {{ t.name }} <span style="color:#f87171;">({{ t.rating_delta }})</span>
+                {% else %}
+                    {{ _('Kein Unterschied') }}
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="padding:var(--space-4);color:var(--color-neutral-500);font-size:13px;">{{ _('Mindestens 3 Matches mit einem Teammate noetig.') }}</div>
     {% endif %}
 </div>
 

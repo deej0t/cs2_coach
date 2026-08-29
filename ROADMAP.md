@@ -52,15 +52,14 @@ Basierend auf den Schwaechen der letzten 5-10 Demos:
 - **Schwierigkeitsgrad**: Anfaenger/Fortgeschritten/Profi-Uebungen
 - Trainingsplan aktualisiert sich automatisch nach jeder neuen Demo
 
-### 2.2 Rollen-Erkennung
-Automatisch erkennen welche Rolle der Spieler spielt:
-- **Entry Fragger** — Hohe Opening Duel Rate, aggressive Positionen, stirbt oft als Erster
-- **Support** — Hohe Utility/Runde, viele Assists, Trade Kills
-- **AWPer** — AWP-Kill-Anteil > 40%, lange Kampfdistanz
-- **Lurker** — Spaete Kills, wenig Trades, hohes Survival
-- **Anchor** — CT-fokussiert, wenig Rotation, Site-Hold-Kills
-
-Feedback: "Du spielst wie ein Entry Fragger (66% Opening Duels, 1.8 Erste-Kills/Spiel) aber dein Crosshair Placement ist auf Support-Level → Trainiere Aim oder spiele passiver"
+### 2.2 Rollen-Erkennung ✅
+Dedizierte Rollen-Analyse unter `/role`:
+- **5 Rollen**: Entry Fragger, Support, AWPer, Lurker, Anchor — jeweils mit Score (0-100)
+- **Automatische Klassifikation** aus Opening-Rate, Utility, AWP-Anteil, Survival, Kampfdistanz, Death-Timing
+- **6-Achsen-Radar**: Aggression, Utility, Survival, Aim, Impact, Clutch
+- **Rollen-Fit-Analyse**: "Passt dein Skillset zu deiner Rolle?" mit konkretem Feedback
+- **Trainingsempfehlung**: Rolle-spezifische Tipps (Staerken + Trainingsfokus)
+- **11 Key Stats**: K/D, ADR, HS%, Opening-WR, Utility/R, Survival, AWP%, Trade%, Clutch%, KAST
 
 ### 2.3 Trend-Alerts & Warnungen
 Proaktive Benachrichtigungen statt passiver Charts:
@@ -321,6 +320,58 @@ Vor einem Match auf einer bestimmten Map:
 
 ---
 
+## Phase 8 — Datengetriebene Features
+*Aus der Analyse von 53+ Matches und dem Obsidian-Wissensgraph abgeleitet.*
+
+### 8.1 Map-Mastery-Profil ✅
+Erweiterte `/maps`-Seite mit:
+- **Mastery-Score** (0-100) pro Map als gewichteter Composite aus 7 Dimensionen
+- **Radar-Chart** pro Map (Win-Rate, Rating, ADR, K/D, KAST, Crosshair, Utility)
+- **Mastery-Ranking** als visuelles Balkendiagramm aller Maps
+- **Clutch-Rate & Opening-Duel-WR** pro Map
+- **Delta vs. Durchschnitt** und **Trend** (letzte 5 vs. gesamt)
+- **Trainingstipps** basierend auf der schwaechsten Dimension
+
+### 8.2 Session-Fatigue-Tracker ✅
+*Bereits implementiert in `/sessions` mit `_build_session_insights()`.*
+Automatische Ermüdungserkennung innerhalb einer Session:
+- Performance-Verlauf pro Abend (Rating ueber die Matches einer Session)
+- Erkennung des "Kipp-Punkts" wo die Performance einbricht
+- Empfehlung: "Nach Game 3 aufhoeren" oder "Pause einlegen"
+- Daten zeigen: In Sessions mit 3+ Spielen faellt das Rating teilweise um -0.10
+
+### 8.3 Tilt-Detektor & Mental-Coach ✅
+Dedizierte Tilt-Analyse unter `/tilt`:
+- **Mentale Resilienz-Score** (0-100) als SVG-Ring mit Bewertung
+- **Post-Win vs Post-Loss**: Rating, ADR, Utility-Vergleich mit Delta
+- **Tilt-Score pro Match**: Rolling Degradation aus Rating-Drop + Verlust-Druck
+- **Tilt-Episoden**: Automatische Erkennung von 3+ Niederlagen in Folge
+- **Serien-Tracking**: Laengste Sieg- und Niederlagenserie
+- **Comeback-Faehigkeit**: Rating nach Tilt-Phasen
+- **Tilt-Verlauf-Chart**: Dual-Axis (Rating + Tilt-Score) mit farbigen Punkten (W/L)
+- **Mental-Reset-Toolkit**: 5 konkrete Tipps zur Tilt-Vermeidung
+- **Live-Warnung**: Banner wenn aktuell auf Tilt erkannt
+
+### 8.4 Premade-Synergie-Analyse ✅
+Erkennung und Bewertung von Stamm-Mitspieler:
+- **Auto-Detection**: Spieler die in 3+ Matches auftauchen = Premade
+- **Win-Rate mit vs. ohne** jeden Premade-Partner
+- **Rating-Delta** und **Synergie-Score** pro Duo
+- Beantwortet: "Spielst du besser mit oder ohne Spieler X?"
+- *Implementiert als "Premade-Impact"-Tab in `/teammates`*
+
+### 8.5 Pistol-Runden-Labor ✅
+Dedizierte Pistolrunden-Analyse unter `/pistol`:
+- **CT vs T Pistol**: Getrennte Win-Rate, K/D pro Seite
+- **Conversion-Rate**: Halftime-WR nach Pistol-Sieg vs. -Niederlage
+- **Waffen-Verteilung**: Welche Waffen du in Pistolrunden nutzt
+- **Per-Map Breakdown**: Pistol-Performance pro Map mit CT/T-Split
+- **Opening-Duell-WR** in Pistolrunden
+- **Trend-Chart**: Rollender 5-Match-Durchschnitt der Pistol-WR
+- **Coaching-Tipps**: Automatische Empfehlungen basierend auf Schwaechen
+
+---
+
 ## Priorisierung nach Impact
 
 | Feature | Impact | Aufwand | Prioritaet |
@@ -331,7 +382,7 @@ Vor einem Match auf einer bestimmten Map:
 | Trend-Alerts | Hoch | Niedrig | 2 |
 | Death-Analyse | Sehr hoch | Hoch | 2 |
 | Runden-Highlights | Hoch | Mittel | 2 |
-| Rollen-Erkennung | Hoch | Mittel | 2 |
+| Rollen-Erkennung | Hoch | Mittel | ✅ |
 | Session-Zusammenfassung | Hoch | Niedrig | 3 |
 | Ziele & Fortschritt | Hoch | Mittel | 3 |
 | Achievement-System | Mittel | Mittel | 3 |
@@ -345,6 +396,11 @@ Vor einem Match auf einer bestimmten Map:
 | AI-Coach-Chat | Sehr hoch | Sehr hoch | 6 |
 | Discord-Integration | Mittel | Niedrig | 6 |
 | Mobile-Responsive | Mittel | Mittel | 6 |
+| Map-Mastery-Profil | Hoch | Mittel | ✅ |
+| Session-Fatigue-Tracker | Hoch | Niedrig | ✅ |
+| Premade-Synergie | Hoch | Niedrig | ✅ |
+| Tilt-Detektor | Mittel | Niedrig | ✅ |
+| Pistol-Runden-Labor | Mittel | Mittel | ✅ |
 
 ---
 

@@ -23,8 +23,15 @@ from ..parser import parse_demo, MatchResult
 from ..coach import generate_report
 from ..obsidian import export_match
 from ..maps import MAP_RADAR_DATA, game_to_radar
-from ..ai_chat import build_player_context, stream_gemini, stream_ollama, check_ollama_status
-from ..practice import build_practice_data, generate_practice_cfg, generate_warmup_cfg, _load_positions
+from ..ai_chat import (
+    build_player_context, stream_gemini, stream_ollama, check_ollama_status,
+    call_gemini, call_ollama, build_practice_context, PRACTICE_PLAN_SYSTEM,
+)
+from ..practice import (
+    build_practice_data, generate_practice_cfg, generate_retake_cfg,
+    generate_spray_cfg, generate_challenge_cfg, generate_utility_cfg,
+    generate_server_cfg, generate_warmup_cfg, _load_positions,
+)
 from .i18n import make_translator
 
 CONFIG_PATH = Path(__file__).parent.parent.parent / "config.yaml"
@@ -1287,7 +1294,8 @@ def create_app() -> Flask:
         exports = _get_exports(cfg)
         map_stats = _get_map_stats(exports)
         veto = _build_map_veto(map_stats, exports)
-        return render_template("maps.html", map_stats=map_stats, veto=veto, config=cfg)
+        mastery = _build_map_mastery(exports, map_stats)
+        return render_template("maps.html", map_stats=map_stats, veto=veto, mastery=mastery, config=cfg)
 
     @app.route("/briefing")
     @app.route("/briefing/<map_name>")
@@ -1340,106 +1348,221 @@ def create_app() -> Flask:
 
     @app.route("/practice/generate", methods=["POST"])
     def practice_generate():
-        """Generate practice .cfg files and write to docker/cfg/ + custom path."""
+        """Generate practice .cfg files into docker/cfg/coach/ + custom path."""
         positions = _load_positions(cfg)
         if not positions:
             flash("Keine Positionsdaten vorhanden.", "error")
             return redirect(url_for("practice"))
 
-        cfg_dir = Path(__file__).parent.parent.parent / "docker" / "cfg"
-        cfg_dir.mkdir(parents=True, exist_ok=True)
+        # Coach subfolder in docker/cfg/
+        docker_cfg = Path(__file__).parent.parent.parent / "docker" / "cfg"
+        coach_dir = docker_cfg / "coach"
+        coach_dir.mkdir(parents=True, exist_ok=True)
 
         # Get custom output path from form
         custom_path = request.form.get("cfg_path", "").strip()
         if custom_path:
-            # Save path for next time
             cfg["practice_cfg_path"] = custom_path
             with open(CONFIG_PATH, "w", encoding="utf-8") as f:
                 f.write("# CS2-Coach Konfiguration\n")
                 yaml.dump(dict(cfg), f, default_flow_style=False, allow_unicode=True)
+
+        # Resolve custom output coach subfolder
+        output_coach = None
+        if custom_path:
+            p = Path(custom_path)
+            if p.exists() and p.is_dir():
+                output_coach = p / "coach"
+                output_coach.mkdir(exist_ok=True)
+
+        def _write(dir_path, filename, content):
+            """Write cfg to coach_dir and optionally output_coach."""
+            (dir_path / filename).write_text(content, encoding="utf-8")
+            if output_coach:
+                (output_coach / filename).write_text(content, encoding="utf-8")
 
         generated = []
         map_names = []
         for map_name, pos_data in positions.items():
             if len(pos_data["kills"]) + len(pos_data["deaths"]) < 5:
                 continue
-            cfg_text = generate_practice_cfg(map_name, pos_data, mode="prefire")
-            fname = f"practice_{map_name.lower()}.cfg"
-            (cfg_dir / fname).write_text(cfg_text, encoding="utf-8")
-            generated.append(fname)
+            mn = map_name.lower()
             map_names.append(map_name)
 
-        # Write to custom path (user-specified CS2 cfg folder)
-        output_dir = None
-        if custom_path:
-            p = Path(custom_path)
-            if p.exists() and p.is_dir():
-                output_dir = p
+            # 5 modes per map
+            _write(coach_dir, f"practice_{mn}.cfg",
+                   generate_practice_cfg(map_name, pos_data))
+            _write(coach_dir, f"retake_{mn}.cfg",
+                   generate_retake_cfg(map_name, pos_data))
+            _write(coach_dir, f"spray_{mn}.cfg",
+                   generate_spray_cfg(map_name, pos_data))
+            _write(coach_dir, f"challenge_{mn}.cfg",
+                   generate_challenge_cfg(map_name, pos_data))
+            generated.extend([
+                f"practice_{mn}", f"retake_{mn}",
+                f"spray_{mn}", f"challenge_{mn}",
+            ])
 
-        if output_dir:
-            for fname in generated:
-                src = cfg_dir / fname
-                dst = output_dir / fname
-                dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+        # Utility (map-independent)
+        _write(coach_dir, "utility.cfg", generate_utility_cfg())
+        generated.append("utility")
 
-        # Main practice.cfg — exec this for a quick menu
+        # Main practice.cfg — menu with all modes
         main_lines = [
             '// CS2 Coach — Practice Loader',
-            '// Usage: exec practice',
-            '// Or load map-specific: exec practice_mirage',
-            '',
-            'sv_cheats 1',
-            'mp_warmup_end',
-            'mp_freezetime 0',
-            'mp_roundtime 60',
-            'mp_roundtime_defuse 60',
-            'mp_buy_anywhere 1',
-            'mp_buytime 9999',
-            'mp_startmoney 65535',
-            'mp_maxmoney 65535',
-            'mp_free_armor 1',
-            'mp_death_drop_gun 0',
-            'sv_infinite_ammo 1',
-            'sv_showimpacts 1',
-            'sv_showimpacts_time 1',
-            'mp_respawn_on_death_ct 1',
-            'mp_respawn_on_death_t 1',
-            'mp_autoteambalance 0',
-            'mp_limitteams 0',
-            'bot_quota 0',
-            'bot_kick',
-            '',
+            '// exec coach/practice', '',
+            'sv_cheats 1', 'mp_warmup_end', 'mp_freezetime 0',
+            'mp_roundtime 60', 'mp_roundtime_defuse 60',
+            'mp_buy_anywhere 1', 'mp_buytime 9999',
+            'mp_startmoney 65535', 'mp_maxmoney 65535',
+            'mp_free_armor 1', 'sv_infinite_ammo 1',
+            'mp_autoteambalance 0', 'mp_limitteams 0',
+            'bot_quota 0', 'bot_kick', '',
             'echo ""',
             'echo "══════════════════════════════════════"',
-            'echo " CS2 Coach Practice Mode"',
-            'echo " Verfuegbare Configs:"',
+            'echo " CS2 Coach Practice Server"', 'echo ""',
         ]
         for mn in sorted(map_names):
-            main_lines.append(f'echo "   exec practice_{mn.lower()}"')
+            mnl = mn.lower()
+            main_lines.append(f'echo " {mn}:"')
+            main_lines.append(f'echo "   exec coach/practice_{mnl}   (Prefire)"')
+            main_lines.append(f'echo "   exec coach/retake_{mnl}     (Retake)"')
+            main_lines.append(f'echo "   exec coach/spray_{mnl}      (Spray)"')
+            main_lines.append(f'echo "   exec coach/challenge_{mnl}  (Challenge)"')
         main_lines.extend([
-            'echo "   exec warmup"',
             'echo ""',
-            'echo " F2=Naechster Spot  F3=Bot platzieren"',
-            'echo " F4=Fertig  F5=Noclip  F6=Reset"',
+            'echo " Global:"',
+            'echo "   exec coach/utility   (Grenades)"',
+            'echo "   exec coach/warmup    (Warmup)"',
             'echo "══════════════════════════════════════"',
             'echo ""',
         ])
-        practice_main = "\n".join(main_lines)
-        (cfg_dir / "practice.cfg").write_text(practice_main, encoding="utf-8")
-        if output_dir:
-            (output_dir / "practice.cfg").write_text(practice_main, encoding="utf-8")
-        generated.append("practice.cfg")
+        _write(coach_dir, "practice.cfg", "\n".join(main_lines))
+        generated.append("practice")
 
         # Warmup config
-        warmup_text = generate_warmup_cfg(positions)
-        (cfg_dir / "warmup.cfg").write_text(warmup_text, encoding="utf-8")
-        if output_dir:
-            (output_dir / "warmup.cfg").write_text(warmup_text, encoding="utf-8")
-        generated.append("warmup.cfg")
+        _write(coach_dir, "warmup.cfg", generate_warmup_cfg(positions))
+        generated.append("warmup")
 
-        dest = str(output_dir) if output_dir else "docker/cfg/"
-        flash(f"{len(generated)} Configs gespeichert nach: {dest}", "success")
+        # Server.cfg for Docker container (goes to docker/cfg/ root)
+        (docker_cfg / "server.cfg").write_text(
+            generate_server_cfg(), encoding="utf-8")
+        generated.append("server")
+
+        dest = str(output_coach or coach_dir)
+        flash(f"{len(generated)} Configs gespeichert → {dest}", "success")
         return redirect(url_for("practice"))
+
+    @app.route("/api/practice-plan", methods=["POST"])
+    def api_practice_plan():
+        """AI-driven config adjustment — analyzes data, regenerates cfgs."""
+        pdata = build_practice_data(cfg)
+        if not pdata.get("has_data"):
+            return jsonify({"error": "Keine Daten"}), 400
+
+        provider = cfg.get("ai_provider", "ollama")
+        context = PRACTICE_PLAN_SYSTEM + "\n\n" + build_practice_context(pdata["maps"])
+        prompt = (
+            "Analysiere meine Spielerdaten und erstelle map_overrides "
+            "um meine Practice-Server-Configs individuell anzupassen."
+        )
+
+        try:
+            if provider == "gemini":
+                api_key = cfg.get("gemini_api_key", "")
+                if not api_key:
+                    return jsonify({"error": "Kein Gemini API Key"}), 400
+                model = cfg.get("ai_model", "") or "gemini-2.0-flash"
+                raw = call_gemini(prompt, context, api_key, model)
+            else:
+                ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
+                model = cfg.get("ai_model", "") or "llama3.1:8b"
+                raw = call_ollama(prompt, context, ollama_url, model)
+
+            if raw.startswith("**Fehler:**"):
+                return jsonify({"error": raw}), 500
+
+            # Parse JSON from response (strip markdown fences if present)
+            cleaned = raw.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[-1]
+            if cleaned.endswith("```"):
+                cleaned = cleaned.rsplit("```", 1)[0]
+            cleaned = cleaned.strip()
+
+            plan = json.loads(cleaned)
+
+            # ── Apply overrides: regenerate cfgs and write to disk ──
+            map_overrides = plan.get("map_overrides", {})
+            positions = _load_positions(cfg)
+            changed_cfgs = []
+
+            if map_overrides and positions:
+                # Case-insensitive map name lookup
+                pos_lookup = {k.lower(): (k, v) for k, v in positions.items()}
+
+                docker_cfg = Path(__file__).parent.parent.parent / "docker" / "cfg"
+                coach_dir = docker_cfg / "coach"
+                coach_dir.mkdir(parents=True, exist_ok=True)
+
+                custom_path = cfg.get("practice_cfg_path", "")
+                output_coach = None
+                if custom_path:
+                    p = Path(custom_path)
+                    if p.exists() and p.is_dir():
+                        output_coach = p / "coach"
+                        output_coach.mkdir(exist_ok=True)
+
+                def _write(filename, content):
+                    (coach_dir / filename).write_text(content, encoding="utf-8")
+                    if output_coach:
+                        (output_coach / filename).write_text(content, encoding="utf-8")
+
+                normalized_overrides = {}
+                for ai_map_name, modes in map_overrides.items():
+                    match = pos_lookup.get(ai_map_name.lower())
+                    if not match:
+                        continue
+                    map_name, pos_data = match
+                    mn = map_name.lower()
+                    normalized_overrides[map_name] = modes
+
+                    if "prefire" in modes:
+                        _write(f"practice_{mn}.cfg",
+                               generate_practice_cfg(map_name, pos_data,
+                                                     overrides=modes["prefire"]))
+                        changed_cfgs.append(f"practice_{mn}")
+                    if "retake" in modes:
+                        _write(f"retake_{mn}.cfg",
+                               generate_retake_cfg(map_name, pos_data,
+                                                   overrides=modes["retake"]))
+                        changed_cfgs.append(f"retake_{mn}")
+                    if "spray" in modes:
+                        _write(f"spray_{mn}.cfg",
+                               generate_spray_cfg(map_name, pos_data,
+                                                  overrides=modes["spray"]))
+                        changed_cfgs.append(f"spray_{mn}")
+                    if "challenge" in modes:
+                        _write(f"challenge_{mn}.cfg",
+                               generate_challenge_cfg(map_name, pos_data,
+                                                      overrides=modes["challenge"]))
+                        changed_cfgs.append(f"challenge_{mn}")
+
+                plan["map_overrides"] = normalized_overrides
+            plan["changed_cfgs"] = changed_cfgs
+            return jsonify(plan)
+        except json.JSONDecodeError:
+            return jsonify({
+                "analysis": raw[:500],
+                "map_overrides": {},
+                "focus_mode": {},
+                "routine": [],
+                "total_time": "?",
+                "tips": [],
+                "changed_cfgs": [],
+            })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/momentum")
     def momentum():
@@ -1476,6 +1599,26 @@ def create_app() -> Flask:
     def rounds():
         rd_data = _build_round_timeline(cfg)
         return render_template("rounds.html", rd=rd_data, config=cfg)
+
+    @app.route("/pistol")
+    def pistol():
+        pdata = _build_pistol_analysis(cfg)
+        return render_template("pistol.html", p=pdata, config=cfg)
+
+    @app.route("/tilt")
+    def tilt():
+        tilt_data = _build_tilt_analysis(cfg)
+        return render_template("tilt.html", t=tilt_data, config=cfg)
+
+    @app.route("/role")
+    def role():
+        role_data = _build_role_detection(cfg)
+        return render_template("role.html", r=role_data, config=cfg)
+
+    @app.route("/predict")
+    def predict():
+        pred_data = _build_opponent_prediction(cfg)
+        return render_template("predict.html", p=pred_data, config=cfg)
 
     @app.route("/deaths")
     def deaths():
@@ -4935,6 +5078,134 @@ def _build_map_veto(map_stats: list[dict], exports: list[dict]) -> dict:
     }
 
 
+def _build_map_mastery(exports: list[dict], map_stats: list[dict]) -> dict:
+    """Build per-map mastery profiles with radar charts."""
+    if not map_stats:
+        return {"has_data": False}
+
+    by_map: dict[str, list[dict]] = {}
+    for e in exports:
+        by_map.setdefault(e.get("map", "?"), []).append(e)
+
+    def _safe_avg(lst):
+        return sum(lst) / len(lst) if lst else 0
+
+    global_avg = {
+        "rating": _safe_avg([e.get("rating", 0) for e in exports if e.get("rating")]),
+        "adr": _safe_avg([e.get("adr", 0) for e in exports if e.get("adr")]),
+        "kd": _safe_avg([e.get("kd", 0) for e in exports if e.get("kd")]),
+        "kast": _safe_avg([e.get("kast", 0) for e in exports if e.get("kast")]),
+    }
+
+    def _norm_score(val, metric):
+        ranges = {
+            "rating": (0.5, 1.4), "adr": (40, 140), "kd": (0.4, 2.0),
+            "kast": (40, 90), "crosshair": (30, 3),
+            "counter_strafe": (50, 95), "utility": (0.3, 3.0),
+            "win_rate": (0, 100),
+        }
+        lo, hi = ranges.get(metric, (0, 100))
+        if metric == "crosshair":
+            pct = (lo - val) / (lo - hi) * 100 if lo != hi else 50
+        else:
+            pct = (val - lo) / (hi - lo) * 100 if hi != lo else 50
+        return max(0, min(100, round(pct)))
+
+    radar_labels = ["Win-Rate", "Rating", "ADR", "K/D", "KAST", "Crosshair", "Utility"]
+
+    maps_result = []
+    for ms in map_stats:
+        map_name = ms["map"]
+        map_exports = by_map.get(map_name, [])
+        n = len(map_exports)
+        if n == 0:
+            continue
+
+        avg_rating = _safe_avg([e.get("rating", 0) for e in map_exports if e.get("rating")])
+        avg_adr = _safe_avg([e.get("adr", 0) for e in map_exports if e.get("adr")])
+        avg_kd = _safe_avg([e.get("kd", 0) for e in map_exports if e.get("kd")])
+        avg_kast = _safe_avg([e.get("kast", 0) for e in map_exports if e.get("kast")])
+        avg_cp = _safe_avg([e.get("crosshair_placement", 0) for e in map_exports if e.get("crosshair_placement")])
+        avg_cs = _safe_avg([e.get("counter_strafe", 0) for e in map_exports if e.get("counter_strafe")])
+        avg_util = _safe_avg([e.get("utility_per_round", 0) for e in map_exports if e.get("utility_per_round")])
+
+        clutch_wins = sum(e.get("clutch_wins", 0) for e in map_exports)
+        clutch_attempts = sum(e.get("clutch_attempts", 0) for e in map_exports)
+        clutch_rate = round(clutch_wins / clutch_attempts * 100, 1) if clutch_attempts else 0
+
+        od_wins = sum(e.get("opening_kills", 0) for e in map_exports)
+        od_losses = sum(e.get("opening_deaths", 0) for e in map_exports)
+        od_total = od_wins + od_losses
+        opening_wr = round(od_wins / od_total * 100, 1) if od_total else 0
+
+        radar_scores = [
+            _norm_score(ms["win_rate"], "win_rate"),
+            _norm_score(avg_rating, "rating"),
+            _norm_score(avg_adr, "adr"),
+            _norm_score(avg_kd, "kd"),
+            _norm_score(avg_kast, "kast"),
+            _norm_score(avg_cp, "crosshair"),
+            _norm_score(avg_util, "utility"),
+        ]
+
+        mastery = round(
+            radar_scores[0] * 0.25 +
+            radar_scores[1] * 0.20 +
+            radar_scores[2] * 0.15 +
+            radar_scores[3] * 0.15 +
+            radar_scores[4] * 0.10 +
+            radar_scores[5] * 0.08 +
+            radar_scores[6] * 0.07
+        )
+
+        deltas = {
+            "rating": round(avg_rating - global_avg["rating"], 2),
+            "adr": round(avg_adr - global_avg["adr"], 1),
+            "kd": round(avg_kd - global_avg["kd"], 2),
+            "kast": round(avg_kast - global_avg["kast"], 1),
+        }
+
+        recent = map_exports[:5]
+        recent_rating = _safe_avg([e.get("rating", 0) for e in recent if e.get("rating")])
+        trend = round(recent_rating - avg_rating, 2) if recent else 0
+
+        dim_names = ["Win-Rate", "Rating", "ADR", "K/D", "KAST", "Crosshair", "Utility"]
+        weakest_idx = radar_scores.index(min(radar_scores))
+        weakest_dim = dim_names[weakest_idx]
+
+        maps_result.append({
+            "map": map_name,
+            "matches": n,
+            "mastery": mastery,
+            "radar_scores": radar_scores,
+            "win_rate": ms["win_rate"],
+            "avg_rating": round(avg_rating, 2),
+            "avg_adr": round(avg_adr, 1),
+            "avg_kd": round(avg_kd, 2),
+            "avg_kast": round(avg_kast, 1),
+            "avg_crosshair": round(avg_cp, 1),
+            "avg_counter_strafe": round(avg_cs, 0),
+            "avg_utility": round(avg_util, 2),
+            "clutch_rate": clutch_rate,
+            "clutch_wins": clutch_wins,
+            "clutch_attempts": clutch_attempts,
+            "opening_wr": opening_wr,
+            "opening_wins": od_wins,
+            "opening_total": od_total,
+            "deltas": deltas,
+            "trend": trend,
+            "weakest_dim": weakest_dim,
+        })
+
+    maps_result.sort(key=lambda x: -x["mastery"])
+
+    return {
+        "has_data": True,
+        "maps": maps_result,
+        "radar_labels": radar_labels,
+    }
+
+
 def _build_warmup(exports: list[dict], map_stats: list[dict]) -> dict:
     """Build personalized warm-up protocol based on recent weaknesses."""
     if len(exports) < 3:
@@ -6211,6 +6482,50 @@ def _build_teammates(cfg: dict) -> dict:
     if not agg:
         return {"has_data": False}
 
+    # Collect ALL my match ratings/results for "without" comparison
+    all_my_ratings = []
+    all_my_kds = []
+    all_my_wins = 0
+    for sid_lists in my_stats.values():
+        pass  # already tracked per-teammate
+    # Rebuild from first pass — need per-match unique data
+    all_match_data: list[dict] = []  # one entry per match
+    match_teammate_map: dict[int, set[str]] = {}  # match_idx -> set of teammate sids
+    _seen_files: set[str] = set()
+    _midx = 0
+    for f in sorted((Path(vault_path) / sub / "exports").glob("*_coach.json")):
+        if f.name in _seen_files:
+            continue
+        _seen_files.add(f.name)
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        pl = data.get("player", {})
+        mi = data.get("match", {})
+        sb = data.get("scoreboard", [])
+        if not sb or not mi:
+            continue
+        r = pl.get("rating", 0)
+        k = pl.get("kd", 0)
+        w = mi.get("result", "") == "Sieg"
+        all_match_data.append({"rating": r, "kd": k, "won": w})
+        target_idx = next((i for i, s in enumerate(sb) if s.get("is_target")), None)
+        if target_idx is not None:
+            team_start = 0 if target_idx < 5 else 5
+            tmates = set()
+            for i in range(team_start, team_start + 5):
+                if i < len(sb) and not sb[i].get("is_target"):
+                    sid = sb[i].get("steam_id", "")
+                    if sid:
+                        tmates.add(sid)
+            match_teammate_map[_midx] = tmates
+        _midx += 1
+
+    total_matches = len(all_match_data)
+    overall_rating = round(sum(m["rating"] for m in all_match_data) / total_matches, 2) if total_matches else 0
+    overall_wr = round(sum(1 for m in all_match_data if m["won"]) / total_matches * 100, 1) if total_matches else 0
+
     # Build teammate list
     teammates = []
     for sid, t in agg.items():
@@ -6219,11 +6534,25 @@ def _build_teammates(cfg: dict) -> dict:
         win_rate = round(t["wins"] / t["matches"] * 100, 1)
         top_maps = sorted(t["maps"].items(), key=lambda x: -x[1])[:3]
 
-        # My stats when playing with this teammate
+        # My stats when playing WITH this teammate
         ms = my_stats.get(sid, [])
         my_avg_rating = round(sum(m["rating"] for m in ms) / len(ms), 2) if ms else 0
         my_avg_kd = round(sum(m["kd"] for m in ms) / len(ms), 2) if ms else 0
         my_wr = round(sum(1 for m in ms if m["won"]) / len(ms) * 100, 1) if ms else 0
+
+        # My stats WITHOUT this teammate
+        without_ratings = [all_match_data[i]["rating"]
+                          for i in range(total_matches)
+                          if sid not in match_teammate_map.get(i, set())]
+        without_wins = [all_match_data[i]["won"]
+                       for i in range(total_matches)
+                       if sid not in match_teammate_map.get(i, set())]
+        my_rating_without = round(sum(without_ratings) / len(without_ratings), 2) if without_ratings else 0
+        my_wr_without = round(sum(without_wins) / len(without_wins) * 100, 1) if without_wins else 0
+
+        # Delta: with minus without
+        rating_delta = round(my_avg_rating - my_rating_without, 2) if without_ratings else 0
+        wr_delta = round(my_wr - my_wr_without, 1) if without_wins else 0
 
         # Chemistry score: combination of win rate and my performance with them
         chemistry = round((win_rate * 0.4 + my_avg_rating * 30 + min(kd, 2.0) * 15) / 1, 1)
@@ -6237,6 +6566,10 @@ def _build_teammates(cfg: dict) -> dict:
             "last_played": t["dates"][-1] if t["dates"] else "",
             "my_rating_with": my_avg_rating, "my_kd_with": my_avg_kd,
             "my_wr_with": my_wr, "chemistry": chemistry,
+            "my_rating_without": my_rating_without,
+            "my_wr_without": my_wr_without,
+            "rating_delta": rating_delta,
+            "wr_delta": wr_delta,
         })
 
     # Sort by matches played
@@ -6250,14 +6583,20 @@ def _build_teammates(cfg: dict) -> dict:
     total_unique = len(teammates)
     regulars = [t for t in teammates if t["matches"] >= 3]
 
+    # Premade impact ranking: sort regulars by rating delta
+    by_impact = sorted(regulars, key=lambda x: -x["rating_delta"])
+
     return {
         "has_data": True,
         "match_count": match_count,
         "total_unique": total_unique,
         "regulars_count": len(regulars),
+        "overall_rating": overall_rating,
+        "overall_wr": overall_wr,
         "by_matches": by_matches[:20],
         "by_chemistry": by_chemistry[:10],
         "by_winrate": by_winrate[:10],
+        "by_impact": by_impact[:10],
         "all": by_matches,
     }
 
@@ -8820,4 +9159,1090 @@ def _build_side_analysis(cfg: dict) -> dict:
         "map_stats": map_stats,
         "trend": match_trend[-20:],
         "insights": insights,
+    }
+
+
+# ── Pistol-Runden-Labor ─────────────────────────────────────
+def _build_pistol_analysis(cfg: dict) -> dict:
+    """Analyze pistol round performance across all matches."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    # Aggregate accumulators
+    totals = {
+        "rounds": 0, "won": 0,
+        "ct_rounds": 0, "ct_won": 0,
+        "t_rounds": 0, "t_won": 0,
+        "kills": 0, "deaths": 0, "headshots": 0,
+        "opening_attempts": 0, "opening_wins": 0,
+        "ct_kills": 0, "ct_deaths": 0,
+        "t_kills": 0, "t_deaths": 0,
+    }
+    weapon_kills: dict[str, int] = {}
+    per_map: dict[str, dict] = {}
+    match_trend: list[dict] = []
+    conversion_data: list[dict] = []  # pistol win → half win tracking
+
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        match = data.get("match", {})
+        timeline = data.get("round_timeline", [])
+        if not timeline:
+            continue
+
+        map_name = match.get("map", "?")
+        total_rounds = match.get("total_rounds", 24)
+        second_half_start = total_rounds // 2 + 1 if total_rounds else 13
+        pistol_nums = {1, second_half_start}
+
+        match_pistol_kills = 0
+        match_pistol_deaths = 0
+        match_pistol_won = 0
+        match_pistol_total = 0
+
+        # Track half performance for conversion
+        first_half_won = 0
+        first_half_total = 0
+        second_half_won = 0
+        second_half_total = 0
+        first_pistol_won = None
+        second_pistol_won = None
+
+        for rd in timeline:
+            rnum = rd.get("round", 0)
+            won = rd.get("won", False)
+            side = rd.get("side", "?")
+
+            # Track half stats for conversion
+            if rnum < second_half_start:
+                first_half_total += 1
+                if won:
+                    first_half_won += 1
+            else:
+                second_half_total += 1
+                if won:
+                    second_half_won += 1
+
+            if rnum not in pistol_nums:
+                continue
+
+            # This is a pistol round
+            events = rd.get("events", [])
+            kill_events = [e for e in events if e.get("type") == "kill"]
+            death_events = [e for e in events if e.get("type") == "death"]
+            kills = len(kill_events)
+            deaths = len(death_events)
+            hs = sum(1 for k in kill_events if k.get("headshot", False))
+
+            totals["rounds"] += 1
+            totals["kills"] += kills
+            totals["deaths"] += deaths
+            totals["headshots"] += hs
+            match_pistol_kills += kills
+            match_pistol_deaths += deaths
+            match_pistol_total += 1
+
+            if won:
+                totals["won"] += 1
+                match_pistol_won += 1
+
+            # Side split
+            if side == "CT":
+                totals["ct_rounds"] += 1
+                totals["ct_kills"] += kills
+                totals["ct_deaths"] += deaths
+                if won:
+                    totals["ct_won"] += 1
+            elif side == "T":
+                totals["t_rounds"] += 1
+                totals["t_kills"] += kills
+                totals["t_deaths"] += deaths
+                if won:
+                    totals["t_won"] += 1
+
+            # Opening duel (first event in round)
+            if events:
+                first_evt = events[0]
+                if first_evt.get("type") in ("kill", "death"):
+                    totals["opening_attempts"] += 1
+                    if first_evt["type"] == "kill":
+                        totals["opening_wins"] += 1
+
+            # Weapon tracking
+            for k in kill_events:
+                w = k.get("weapon", "unknown")
+                weapon_kills[w] = weapon_kills.get(w, 0) + 1
+
+            # Per-map
+            if map_name not in per_map:
+                per_map[map_name] = {"rounds": 0, "won": 0, "kills": 0, "deaths": 0,
+                                     "ct_rounds": 0, "ct_won": 0, "t_rounds": 0, "t_won": 0}
+            pm = per_map[map_name]
+            pm["rounds"] += 1
+            pm["kills"] += kills
+            pm["deaths"] += deaths
+            if won:
+                pm["won"] += 1
+            if side == "CT":
+                pm["ct_rounds"] += 1
+                if won:
+                    pm["ct_won"] += 1
+            elif side == "T":
+                pm["t_rounds"] += 1
+                if won:
+                    pm["t_won"] += 1
+
+            # Track which pistol this is for conversion
+            if rnum == 1:
+                first_pistol_won = won
+            elif rnum == second_half_start:
+                second_pistol_won = won
+
+        # Conversion data (pistol win → half win rate)
+        if first_pistol_won is not None and first_half_total > 0:
+            conversion_data.append({
+                "pistol_won": first_pistol_won,
+                "half": "first",
+                "half_wr": round(first_half_won / first_half_total * 100, 1),
+            })
+        if second_pistol_won is not None and second_half_total > 0:
+            conversion_data.append({
+                "pistol_won": second_pistol_won,
+                "half": "second",
+                "half_wr": round(second_half_won / second_half_total * 100, 1),
+            })
+
+        # Match trend entry
+        if match_pistol_total > 0:
+            match_trend.append({
+                "date": match.get("date", "?"),
+                "map": map_name,
+                "pistol_rounds": match_pistol_total,
+                "pistol_won": match_pistol_won,
+                "kills": match_pistol_kills,
+                "deaths": match_pistol_deaths,
+            })
+
+    if totals["rounds"] == 0:
+        return {"has_data": False}
+
+    # Compute aggregates
+    wr = round(totals["won"] / totals["rounds"] * 100, 1)
+    kd = round(totals["kills"] / max(totals["deaths"], 1), 2)
+    kpr = round(totals["kills"] / totals["rounds"], 2)
+    hs_pct = round(totals["headshots"] / max(totals["kills"], 1) * 100, 1)
+
+    ct_wr = round(totals["ct_won"] / max(totals["ct_rounds"], 1) * 100, 1)
+    t_wr = round(totals["t_won"] / max(totals["t_rounds"], 1) * 100, 1)
+    ct_kd = round(totals["ct_kills"] / max(totals["ct_deaths"], 1), 2)
+    t_kd = round(totals["t_kills"] / max(totals["t_deaths"], 1), 2)
+
+    opening_wr = round(totals["opening_wins"] / max(totals["opening_attempts"], 1) * 100, 1)
+
+    # Conversion rates
+    pw_halves = [c for c in conversion_data if c["pistol_won"]]
+    pl_halves = [c for c in conversion_data if not c["pistol_won"]]
+    conv_win = round(sum(c["half_wr"] for c in pw_halves) / len(pw_halves), 1) if pw_halves else 0
+    conv_loss = round(sum(c["half_wr"] for c in pl_halves) / len(pl_halves), 1) if pl_halves else 0
+
+    # Top weapons
+    top_weapons = sorted(weapon_kills.items(), key=lambda x: -x[1])[:8]
+
+    # Per-map summaries
+    map_list = []
+    for mname, pm in sorted(per_map.items(), key=lambda x: -x[1]["rounds"]):
+        m_wr = round(pm["won"] / max(pm["rounds"], 1) * 100, 1)
+        m_kd = round(pm["kills"] / max(pm["deaths"], 1), 2)
+        m_ct_wr = round(pm["ct_won"] / max(pm["ct_rounds"], 1) * 100, 1) if pm["ct_rounds"] else 0
+        m_t_wr = round(pm["t_won"] / max(pm["t_rounds"], 1) * 100, 1) if pm["t_rounds"] else 0
+        map_list.append({
+            "map": mname, "rounds": pm["rounds"], "won": pm["won"],
+            "wr": m_wr, "kd": m_kd,
+            "ct_rounds": pm["ct_rounds"], "ct_wr": m_ct_wr,
+            "t_rounds": pm["t_rounds"], "t_wr": m_t_wr,
+        })
+
+    # Trend: rolling 5 match average
+    trend_chart = []
+    for i, mt in enumerate(match_trend):
+        window = match_trend[max(0, i - 4):i + 1]
+        avg_wr = round(sum(m["pistol_won"] for m in window) / max(sum(m["pistol_rounds"] for m in window), 1) * 100, 1)
+        trend_chart.append({
+            "date": mt["date"], "map": mt["map"],
+            "wr": avg_wr,
+            "kills": mt["kills"], "deaths": mt["deaths"],
+        })
+
+    # Coaching tips
+    tips = []
+    if wr >= 55:
+        tips.append({"type": "positive", "text": f"Starke Pistolrunden: {wr}% Win-Rate — du sicherst deinem Team den oekonomischen Vorteil."})
+    elif wr < 40:
+        tips.append({"type": "warning", "text": f"Pistol-WR nur {wr}% — trainiere USP/Glock-Aim und Pistol-Setups."})
+
+    if ct_wr - t_wr > 15:
+        tips.append({"type": "info", "text": f"CT-Pistol deutlich staerker ({ct_wr}%) als T ({t_wr}%) — T-Execs und Glock-Rushes ueberarbeiten."})
+    elif t_wr - ct_wr > 15:
+        tips.append({"type": "info", "text": f"T-Pistol deutlich staerker ({t_wr}%) als CT ({ct_wr}%) — CT-Setup und USP-Aim ueberarbeiten."})
+
+    if opening_wr >= 60:
+        tips.append({"type": "positive", "text": f"Opening-Duell-WR {opening_wr}% in Pistolrunden — aggressive Picks zahlen sich aus."})
+    elif opening_wr < 35 and totals["opening_attempts"] >= 6:
+        tips.append({"type": "warning", "text": f"Opening-WR nur {opening_wr}% in Pistolrunden — weniger Peeks, mehr Utility nutzen."})
+
+    if hs_pct >= 55:
+        tips.append({"type": "positive", "text": f"Headshot-Rate {hs_pct}% — praezises Aim mit Pistolen."})
+    elif hs_pct < 30:
+        tips.append({"type": "warning", "text": f"Headshot-Rate nur {hs_pct}% — langsamer zielen, Kopfhoehe halten."})
+
+    if conv_win > 0 and conv_loss > 0:
+        diff = round(conv_win - conv_loss, 1)
+        tips.append({"type": "info", "text": f"Halftime-WR nach Pistol-Sieg: {conv_win}% vs. nach Pistol-Niederlage: {conv_loss}% (Δ {diff}pp)."})
+
+    return {
+        "has_data": True,
+        "total_rounds": totals["rounds"],
+        "total_won": totals["won"],
+        "wr": wr, "kd": kd, "kpr": kpr, "hs_pct": hs_pct,
+        "ct": {"rounds": totals["ct_rounds"], "won": totals["ct_won"], "wr": ct_wr, "kd": ct_kd},
+        "t": {"rounds": totals["t_rounds"], "won": totals["t_won"], "wr": t_wr, "kd": t_kd},
+        "opening_wr": opening_wr,
+        "opening_attempts": totals["opening_attempts"],
+        "opening_wins": totals["opening_wins"],
+        "conv_win": conv_win, "conv_loss": conv_loss,
+        "pistol_wins_count": len(pw_halves), "pistol_losses_count": len(pl_halves),
+        "top_weapons": [{"weapon": w, "kills": c} for w, c in top_weapons],
+        "maps": map_list,
+        "trend": trend_chart[-20:],
+        "tips": tips,
+        "match_count": len(match_trend),
+    }
+
+
+# ── Tilt-Detektor & Mental-Coach ────────────────────────────
+def _build_tilt_analysis(cfg: dict) -> dict:
+    """Detect tilt patterns, streaks, and post-loss performance degradation."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    matches: list[dict] = []
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        mi = data.get("match", {})
+        pl = data.get("player", {})
+        if not mi:
+            continue
+        matches.append({
+            "date": mi.get("date", "?"),
+            "datetime": mi.get("datetime", mi.get("date", "?")),
+            "map": mi.get("map", "?"),
+            "result": mi.get("result", "?"),
+            "won": mi.get("result") == "Sieg",
+            "score_own": mi.get("score_own", 0),
+            "score_enemy": mi.get("score_enemy", 0),
+            "rating": pl.get("rating", 0),
+            "kd": pl.get("kd", 0),
+            "adr": pl.get("adr", 0),
+            "hs_pct": pl.get("hs_pct", 0),
+            "utility_per_round": pl.get("utility_per_round", 0),
+            "opening_kills": pl.get("opening_kills", 0),
+            "opening_deaths": pl.get("opening_deaths", 0),
+            "survival_rate": pl.get("survival_rate", 0),
+        })
+
+    if len(matches) < 3:
+        return {"has_data": False}
+
+    # ── Streaks ──
+    streaks: list[dict] = []
+    current_streak = {"type": None, "length": 0, "start": 0}
+    for i, m in enumerate(matches):
+        stype = "win" if m["won"] else "loss"
+        if stype == current_streak["type"]:
+            current_streak["length"] += 1
+        else:
+            if current_streak["length"] >= 2:
+                streaks.append({**current_streak, "end": i - 1})
+            current_streak = {"type": stype, "length": 1, "start": i}
+    if current_streak["length"] >= 2:
+        streaks.append({**current_streak, "end": len(matches) - 1})
+
+    longest_win = max((s for s in streaks if s["type"] == "win"), key=lambda s: s["length"], default=None)
+    longest_loss = max((s for s in streaks if s["type"] == "loss"), key=lambda s: s["length"], default=None)
+
+    # ── Post-Win vs Post-Loss performance ──
+    post_win_ratings = []
+    post_loss_ratings = []
+    post_win_adr = []
+    post_loss_adr = []
+    post_win_util = []
+    post_loss_util = []
+    for i in range(1, len(matches)):
+        prev = matches[i - 1]
+        curr = matches[i]
+        if prev["won"]:
+            post_win_ratings.append(curr["rating"])
+            post_win_adr.append(curr["adr"])
+            post_win_util.append(curr["utility_per_round"])
+        else:
+            post_loss_ratings.append(curr["rating"])
+            post_loss_adr.append(curr["adr"])
+            post_loss_util.append(curr["utility_per_round"])
+
+    def _avg(lst):
+        return round(sum(lst) / len(lst), 2) if lst else 0
+
+    avg_rating_post_win = _avg(post_win_ratings)
+    avg_rating_post_loss = _avg(post_loss_ratings)
+    avg_adr_post_win = _avg(post_win_adr)
+    avg_adr_post_loss = _avg(post_loss_adr)
+    avg_util_post_win = _avg(post_win_util)
+    avg_util_post_loss = _avg(post_loss_util)
+
+    rating_tilt_delta = round(avg_rating_post_win - avg_rating_post_loss, 2)
+    adr_tilt_delta = round(avg_adr_post_win - avg_adr_post_loss, 1)
+
+    # ── Tilt score per match (rolling degradation) ──
+    overall_rating = _avg([m["rating"] for m in matches])
+    overall_adr = _avg([m["adr"] for m in matches])
+    match_tilt: list[dict] = []
+    consecutive_losses = 0
+    for i, m in enumerate(matches):
+        if m["won"]:
+            consecutive_losses = 0
+        else:
+            consecutive_losses += 1
+
+        # Rolling 3-match average
+        window = matches[max(0, i - 2):i + 1]
+        roll_rating = _avg([w["rating"] for w in window])
+        roll_adr = _avg([w["adr"] for w in window])
+
+        # Tilt score: 0 = calm, 100 = full tilt
+        rating_drop = max(0, overall_rating - roll_rating) / max(overall_rating, 0.01) * 100
+        loss_pressure = min(consecutive_losses * 15, 45)
+        tilt_score = min(round(rating_drop * 0.6 + loss_pressure * 0.4, 1), 100)
+
+        match_tilt.append({
+            "date": m["date"],
+            "map": m["map"],
+            "result": "W" if m["won"] else "L",
+            "rating": m["rating"],
+            "adr": m["adr"],
+            "roll_rating": roll_rating,
+            "tilt_score": tilt_score,
+            "consecutive_losses": consecutive_losses,
+        })
+
+    # ── Tilt episodes: 3+ consecutive losses with declining rating ──
+    tilt_episodes: list[dict] = []
+    i = 0
+    while i < len(matches):
+        if not matches[i]["won"]:
+            streak_start = i
+            while i < len(matches) and not matches[i]["won"]:
+                i += 1
+            streak_len = i - streak_start
+            if streak_len >= 3:
+                ep_matches = matches[streak_start:i]
+                ep_ratings = [m["rating"] for m in ep_matches]
+                tilt_episodes.append({
+                    "start_date": ep_matches[0]["date"],
+                    "end_date": ep_matches[-1]["date"],
+                    "length": streak_len,
+                    "maps": [m["map"] for m in ep_matches],
+                    "avg_rating": _avg(ep_ratings),
+                    "rating_trend": round(ep_ratings[-1] - ep_ratings[0], 2),
+                })
+        else:
+            i += 1
+
+    # ── Comeback ability: performance in match right after a tilt episode ──
+    comeback_ratings = []
+    for ep in tilt_episodes:
+        # Find the match right after this episode ends
+        for j, m in enumerate(matches):
+            if m["date"] == ep["end_date"]:
+                if j + 1 < len(matches):
+                    comeback_ratings.append(matches[j + 1]["rating"])
+                break
+    comeback_avg = _avg(comeback_ratings) if comeback_ratings else 0
+
+    # ── Mental resilience score (0-100) ──
+    # Higher = more resilient (less performance drop after losses)
+    tilt_magnitude = abs(rating_tilt_delta) * 50  # 0.10 delta = 5 points
+    episode_penalty = len(tilt_episodes) * 5
+    resilience = max(0, min(100, round(80 - tilt_magnitude - episode_penalty)))
+
+    # ── Current form: is the player currently tilted? ──
+    last_5 = matches[-5:] if len(matches) >= 5 else matches
+    recent_losses = sum(1 for m in last_5 if not m["won"])
+    recent_rating = _avg([m["rating"] for m in last_5])
+    currently_tilted = recent_losses >= 3 and recent_rating < overall_rating - 0.05
+
+    # ── Coaching tips ──
+    tips = []
+    if rating_tilt_delta > 0.08:
+        tips.append({"type": "warning", "icon": "brain",
+                     "text": f"Tilt-Effekt erkannt: Nach Niederlagen faellt dein Rating um {rating_tilt_delta} "
+                             f"(von Ø {avg_rating_post_win} auf Ø {avg_rating_post_loss}). Mach nach einer Niederlage eine kurze Pause."})
+    elif rating_tilt_delta > 0.03:
+        tips.append({"type": "info", "icon": "brain",
+                     "text": f"Leichter Tilt-Effekt: Rating nach Sieg Ø {avg_rating_post_win} vs. nach Niederlage Ø {avg_rating_post_loss} (Δ {rating_tilt_delta})."})
+    else:
+        tips.append({"type": "positive", "icon": "shield",
+                     "text": f"Mental stark: Kaum Performance-Unterschied nach Sieg vs. Niederlage (Δ {rating_tilt_delta}). Gute mentale Stabilitaet!"})
+
+    if tilt_episodes:
+        tips.append({"type": "warning", "icon": "alert-triangle",
+                     "text": f"{len(tilt_episodes)} Tilt-Episode(n) erkannt (3+ Niederlagen in Folge). "
+                             f"Durchschnittliches Rating waehrend Tilt: {_avg([e['avg_rating'] for e in tilt_episodes])}."})
+
+    if adr_tilt_delta > 10:
+        tips.append({"type": "warning", "icon": "target",
+                     "text": f"ADR sinkt nach Niederlagen um {adr_tilt_delta} — du wirst passiver wenn es schlecht laeuft. Bleib aktiv!"})
+
+    if avg_util_post_loss < avg_util_post_win * 0.8 and avg_util_post_win > 1.0:
+        tips.append({"type": "info", "icon": "flame",
+                     "text": f"Utility-Nutzung sinkt nach Niederlagen ({avg_util_post_loss}/R vs. {avg_util_post_win}/R). Vergiss nicht Utility zu werfen auch wenn es schlecht laeuft."})
+
+    if currently_tilted:
+        tips.append({"type": "warning", "icon": "pause-circle",
+                     "text": "Aktuell auf Tilt: Letzte 5 Matches zeigen Abwaertstrend. Mach eine Pause oder spiele Deathmatch zum Reset."})
+
+    if longest_win:
+        tips.append({"type": "positive", "icon": "trending-up",
+                     "text": f"Laengste Siegesserie: {longest_win['length']} Siege in Folge — du kannst Momentum aufbauen!"})
+
+    if comeback_avg > 0:
+        if comeback_avg >= overall_rating:
+            tips.append({"type": "positive", "icon": "rotate-ccw",
+                         "text": f"Gute Comeback-Faehigkeit: Nach Tilt-Phasen spielst du im Schnitt Rating {comeback_avg} (Ø {overall_rating})."})
+        else:
+            tips.append({"type": "info", "icon": "rotate-ccw",
+                         "text": f"Comeback nach Tilt: Rating {comeback_avg} (unter Gesamtschnitt {overall_rating}). Laenger pausieren nach Abwaertsspiralen."})
+
+    # Mental reset tips
+    mental_tips = [
+        "5 Minuten Pause zwischen Matches — aufstehen, Wasser trinken, durchatmen.",
+        "Nach 2 Niederlagen in Folge: Wechsle zu Deathmatch oder Aim-Training.",
+        "Fokus auf Prozess statt Ergebnis — kontrolliere was du kontrollieren kannst.",
+        "Setze dir ein Match-Limit pro Session (z.B. max. 4 Matches).",
+        "Wenn du merkst dass du frustriert bist: Session beenden. Morgen wieder.",
+    ]
+
+    return {
+        "has_data": True,
+        "match_count": len(matches),
+        "overall_rating": overall_rating,
+        "overall_adr": overall_adr,
+        "resilience": resilience,
+        "currently_tilted": currently_tilted,
+        "post_win": {"rating": avg_rating_post_win, "adr": avg_adr_post_win, "utility": avg_util_post_win},
+        "post_loss": {"rating": avg_rating_post_loss, "adr": avg_adr_post_loss, "utility": avg_util_post_loss},
+        "rating_tilt_delta": rating_tilt_delta,
+        "adr_tilt_delta": adr_tilt_delta,
+        "longest_win": {"length": longest_win["length"],
+                        "start": matches[longest_win["start"]]["date"],
+                        "end": matches[longest_win["end"]]["date"]} if longest_win else None,
+        "longest_loss": {"length": longest_loss["length"],
+                         "start": matches[longest_loss["start"]]["date"],
+                         "end": matches[longest_loss["end"]]["date"]} if longest_loss else None,
+        "tilt_episodes": tilt_episodes,
+        "comeback_avg": comeback_avg,
+        "match_tilt": match_tilt[-30:],
+        "tips": tips,
+        "mental_tips": mental_tips,
+    }
+
+
+# ── Rollen-Erkennung ────────────────────────────────────────
+def _build_role_detection(cfg: dict) -> dict:
+    """Automatically detect the player's CS2 role from aggregated stats."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    # Accumulators across all matches
+    totals = {
+        "matches": 0, "kills": 0, "deaths": 0, "assists": 0,
+        "opening_kills": 0, "opening_deaths": 0, "trade_kills": 0,
+        "awp_kills": 0, "rifle_kills": 0, "total_kills_weapon": 0,
+        "utility_total": 0, "flashes": 0, "smokes": 0, "he": 0, "molotovs": 0,
+        "util_per_round_sum": 0,
+        "flash_enemies_blinded": 0,
+        "survival_rate_sum": 0, "adr_sum": 0,
+        "hs_pct_sum": 0, "kast_sum": 0,
+        "dist_close": 0, "dist_mid": 0, "dist_long": 0,
+        "death_early": 0, "death_mid": 0, "death_late": 0,
+        "ct_kills": 0, "ct_deaths": 0, "t_kills": 0, "t_deaths": 0,
+        "multikill_3k": 0, "multikill_4k": 0, "multikill_5k": 0,
+        "clutch_wins": 0, "clutch_attempts": 0,
+    }
+    per_match_roles: list[dict] = []  # per-match role scores for trend
+
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        pl = data.get("player", {})
+        mi = data.get("match", {})
+        if not pl or not mi:
+            continue
+
+        totals["matches"] += 1
+        totals["kills"] += pl.get("kills", 0)
+        totals["deaths"] += pl.get("deaths", 0)
+        totals["assists"] += pl.get("assists", 0)
+        totals["opening_kills"] += pl.get("opening_kills", 0)
+        totals["opening_deaths"] += pl.get("opening_deaths", 0)
+        totals["trade_kills"] += pl.get("trade_kills", 0)
+        totals["survival_rate_sum"] += pl.get("survival_rate", 0)
+        totals["adr_sum"] += pl.get("adr", 0)
+        totals["hs_pct_sum"] += pl.get("hs_pct", 0)
+        totals["kast_sum"] += pl.get("kast_pct", 0)
+        totals["util_per_round_sum"] += pl.get("utility_per_round", 0)
+
+        # Weapons
+        wpn = pl.get("weapons", {})
+        totals["awp_kills"] += wpn.get("awp_kills", 0)
+        totals["rifle_kills"] += wpn.get("rifle_kills", 0)
+        totals["total_kills_weapon"] += wpn.get("awp_kills", 0) + wpn.get("rifle_kills", 0) + wpn.get("pistol_kills", 0)
+
+        # Utility detail
+        util = pl.get("utility", {})
+        totals["utility_total"] += util.get("total", 0)
+        totals["flashes"] += util.get("flashes", 0)
+        totals["smokes"] += util.get("smokes", 0)
+        totals["he"] += util.get("he", 0)
+        totals["molotovs"] += util.get("molotovs", 0)
+
+        # Flash effectiveness
+        fe = pl.get("flash_effectiveness", {})
+        totals["flash_enemies_blinded"] += fe.get("enemies_blinded", 0)
+
+        # Engagement distance
+        eng = pl.get("engagement_distance", {})
+        totals["dist_close"] += eng.get("close", 0)
+        totals["dist_mid"] += eng.get("mid", 0)
+        totals["dist_long"] += eng.get("long", 0)
+
+        # Death timing
+        dt = pl.get("death_timing", {})
+        totals["death_early"] += dt.get("early", 0)
+        totals["death_mid"] += dt.get("mid", 0)
+        totals["death_late"] += dt.get("late", 0)
+
+        # Side split
+        ss = pl.get("side_split", {})
+        totals["ct_kills"] += ss.get("ct_kills", 0)
+        totals["ct_deaths"] += ss.get("ct_deaths", 0)
+        totals["t_kills"] += ss.get("t_kills", 0)
+        totals["t_deaths"] += ss.get("t_deaths", 0)
+
+        # Multikills
+        mk = pl.get("multikills", {})
+        totals["multikill_3k"] += mk.get("3k", 0)
+        totals["multikill_4k"] += mk.get("4k", 0)
+        totals["multikill_5k"] += mk.get("5k", 0)
+
+        # Clutches
+        cl = pl.get("clutches", {})
+        totals["clutch_wins"] += cl.get("wins", 0)
+        totals["clutch_attempts"] += cl.get("attempts", 0)
+
+    n = totals["matches"]
+    if n < 3:
+        return {"has_data": False}
+
+    # ── Compute normalized role indicators (0-100 each) ──
+    avg_opening_kills = totals["opening_kills"] / n
+    avg_opening_deaths = totals["opening_deaths"] / n
+    opening_rate = (totals["opening_kills"] + totals["opening_deaths"]) / max(totals["kills"] + totals["deaths"], 1)
+    opening_wr = totals["opening_kills"] / max(totals["opening_kills"] + totals["opening_deaths"], 1)
+    avg_survival = totals["survival_rate_sum"] / n
+    avg_util = totals["util_per_round_sum"] / n
+    avg_adr = totals["adr_sum"] / n
+    avg_hs = totals["hs_pct_sum"] / n
+    avg_kast = totals["kast_sum"] / n
+    trade_rate = totals["trade_kills"] / max(totals["kills"], 1)
+    awp_ratio = totals["awp_kills"] / max(totals["total_kills_weapon"], 1)
+    total_deaths_timed = totals["death_early"] + totals["death_mid"] + totals["death_late"]
+    early_death_pct = totals["death_early"] / max(total_deaths_timed, 1)
+    late_death_pct = totals["death_late"] / max(total_deaths_timed, 1)
+    dist_total = totals["dist_close"] + totals["dist_mid"] + totals["dist_long"]
+    long_pct = totals["dist_long"] / max(dist_total, 1)
+    close_pct = totals["dist_close"] / max(dist_total, 1)
+    clutch_rate = totals["clutch_wins"] / max(totals["clutch_attempts"], 1)
+    ct_kd = totals["ct_kills"] / max(totals["ct_deaths"], 1)
+    assist_rate = totals["assists"] / max(totals["kills"], 1)
+
+    # ── Role scoring (each 0-100) ──
+    def _clamp(v, lo=0, hi=100):
+        return max(lo, min(hi, round(v)))
+
+    # Entry Fragger: high opening kills, early deaths, aggressive, close distance, low survival
+    entry_score = _clamp(
+        avg_opening_kills * 25 +          # ~0.8-1.5 OK kills → 20-37
+        opening_rate * 80 +                # high duel involvement
+        (1 - avg_survival / 100) * 30 +    # low survival = aggressive
+        close_pct * 25 +                   # close engagements
+        early_death_pct * 20 -             # dies early (aggressive)
+        avg_util * 5                       # less utility usage
+    )
+
+    # Support: high utility, flashes, trades, assists, late deaths
+    support_score = _clamp(
+        avg_util * 18 +                    # ~1.5-2.5 util/r → 27-45
+        trade_rate * 60 +                  # trade kills
+        assist_rate * 40 +                 # assists relative to kills
+        totals["flash_enemies_blinded"] / max(n, 1) * 8 +  # flash impact
+        late_death_pct * 20 -              # dies late = support role
+        avg_opening_kills * 10             # fewer opening kills
+    )
+
+    # AWPer: high AWP ratio, long distance, high impact per kill
+    awper_score = _clamp(
+        awp_ratio * 120 +                  # AWP kill share (>40% = strong signal)
+        long_pct * 40 +                    # long distance engagements
+        avg_adr / 100 * 15 -              # good damage output
+        close_pct * 20 -                   # NOT close range
+        avg_util * 5                       # less utility typically
+    )
+
+    # Lurker: late kills, high survival, low opening involvement, solo plays
+    lurker_score = _clamp(
+        late_death_pct * 35 +              # dies late
+        avg_survival / 100 * 30 +          # survives often
+        clutch_rate * 30 +                 # clutch situations
+        (1 - opening_rate) * 25 -          # avoids opening duels
+        avg_util * 5 -                     # less utility
+        trade_rate * 30                    # not trading (solo player)
+    )
+
+    # Anchor: CT-focused, high survival, holds site, trades, mid-late deaths
+    anchor_score = _clamp(
+        ct_kd * 15 +                       # strong CT performance
+        avg_survival / 100 * 25 +          # holds position, survives
+        (1 - early_death_pct) * 25 +       # doesn't die early
+        avg_kast / 100 * 20 +              # consistent contribution
+        avg_util * 8 -                     # uses utility to hold
+        avg_opening_kills * 15             # not aggressive opener
+    )
+
+    roles = {
+        "Entry Fragger": entry_score,
+        "Support": support_score,
+        "AWPer": awper_score,
+        "Lurker": lurker_score,
+        "Anchor": anchor_score,
+    }
+
+    # Primary + secondary role
+    sorted_roles = sorted(roles.items(), key=lambda x: -x[1])
+    primary_role = sorted_roles[0][0]
+    primary_score = sorted_roles[0][1]
+    secondary_role = sorted_roles[1][0]
+    secondary_score = sorted_roles[1][1]
+
+    # Role descriptions & icons
+    role_meta = {
+        "Entry Fragger": {
+            "icon": "swords", "color": "#f87171",
+            "desc": "Du gehst als Erster rein und suchst den Erstkontakt. Aggressiv, risikoreich, matchentscheidend.",
+            "strengths": "Opening Duels, Aggression, Space Creation",
+            "train": "Crosshair Placement, Prefire-Angles, Counter-Strafe",
+        },
+        "Support": {
+            "icon": "shield", "color": "#60a5fa",
+            "desc": "Du unterstuetzt dein Team mit Utility, Trades und guter Positionierung. Das Rueckgrat des Teams.",
+            "strengths": "Utility-Einsatz, Trade Kills, Team-Support",
+            "train": "Smoke/Flash Lineups, Flash Timing, Positioning",
+        },
+        "AWPer": {
+            "icon": "crosshair", "color": "#a78bfa",
+            "desc": "Du kontrollierst lange Sightlines mit der AWP. Hoher Impact pro Kill, teuer aber effektiv.",
+            "strengths": "AWP-Aim, Angle Holding, Map Control",
+            "train": "Flick-Aim, Quick-Scope, Repositioning nach Schuss",
+        },
+        "Lurker": {
+            "icon": "eye", "color": "#fbbf24",
+            "desc": "Du spielst abseits des Teams, sammelst Info und schlaegst spaet zu. Der stille Killer.",
+            "strengths": "Game Sense, Timing, Clutch-Faehigkeit",
+            "train": "Rotation Timing, Sound Cues, 1vX Situationen",
+        },
+        "Anchor": {
+            "icon": "home", "color": "#4ade80",
+            "desc": "Du haeltst die Site auf CT-Seite. Solide, zuverlaessig, der letzte Mann der faellt.",
+            "strengths": "Site Holding, Utility-Defense, Konsistenz",
+            "train": "Retake Setups, Molotov/HE Lineups, Off-Angles",
+        },
+    }
+
+    # ── Radar chart data: 6 dimensions ──
+    radar_labels = ["Aggression", "Utility", "Survival", "Aim", "Impact", "Clutch"]
+    aggression = _clamp(opening_rate * 120 + close_pct * 40 + early_death_pct * 40)
+    utility_dim = _clamp(avg_util * 25 + totals["flash_enemies_blinded"] / max(n, 1) * 10)
+    survival_dim = _clamp(avg_survival)
+    aim_dim = _clamp(avg_hs * 1.2 + (avg_adr - 50) * 0.6)
+    impact_dim = _clamp(avg_adr / 100 * 40 + (totals["multikill_3k"] + totals["multikill_4k"] * 2 + totals["multikill_5k"] * 3) / n * 15 + avg_opening_kills * 20)
+    clutch_dim = _clamp(clutch_rate * 80 + totals["clutch_wins"] / max(n, 1) * 20)
+
+    radar_scores = [aggression, utility_dim, survival_dim, aim_dim, impact_dim, clutch_dim]
+
+    # ── Role fit analysis: does skill match the role? ──
+    fit_issues = []
+    if primary_role == "Entry Fragger":
+        if avg_hs < 40:
+            fit_issues.append({"type": "warning", "text": f"Als Entry Fragger brauchst du praezises Aim — deine HS-Rate ist nur {avg_hs:.0f}%. Trainiere Prefire und Crosshair Placement."})
+        if opening_wr < 0.45:
+            fit_issues.append({"type": "warning", "text": f"Opening-Duel-WR nur {opening_wr*100:.0f}% — als Entry musst du diese Duelle gewinnen. Arbeite an Peeking-Technik."})
+        if opening_wr >= 0.55:
+            fit_issues.append({"type": "positive", "text": f"Opening-Duel-WR {opening_wr*100:.0f}% — du gewinnst deine Erstduelle zuverlaessig. Starker Entry!"})
+    elif primary_role == "Support":
+        if avg_util < 1.5:
+            fit_issues.append({"type": "warning", "text": f"Als Support nur {avg_util:.1f} Utility/Runde — das ist zu wenig. Lerne mehr Lineups und wirf jede Runde Utility."})
+        if avg_util >= 2.0:
+            fit_issues.append({"type": "positive", "text": f"{avg_util:.1f} Utility/Runde — du nutzt dein Equipment gut. Exzellenter Support-Spieler!"})
+    elif primary_role == "AWPer":
+        if awp_ratio < 0.3:
+            fit_issues.append({"type": "info", "text": f"AWP-Anteil {awp_ratio*100:.0f}% — du spielst auch viel Rifle. Hybrid-Spieler mit AWP-Tendenz."})
+        if awp_ratio >= 0.5:
+            fit_issues.append({"type": "positive", "text": f"AWP-Anteil {awp_ratio*100:.0f}% — klarer AWP-Fokus. Stelle sicher dass du Economy im Griff hast."})
+    elif primary_role == "Lurker":
+        if avg_survival < 30:
+            fit_issues.append({"type": "warning", "text": f"Survival-Rate nur {avg_survival:.0f}% — fuer einen Lurker zu niedrig. Positioniere dich sicherer."})
+        if clutch_rate >= 0.3:
+            fit_issues.append({"type": "positive", "text": f"Clutch-Rate {clutch_rate*100:.0f}% — du bist in 1vX Situationen stark. Perfekt fuer die Lurker-Rolle."})
+    elif primary_role == "Anchor":
+        if ct_kd < 1.0:
+            fit_issues.append({"type": "warning", "text": f"CT K/D nur {ct_kd:.2f} — als Anchor solltest du auf CT staerker sein. Arbeite an Site-Holds."})
+        if ct_kd >= 1.3:
+            fit_issues.append({"type": "positive", "text": f"CT K/D {ct_kd:.2f} — starke CT-Performance. Du bist ein zuverlaessiger Anchor."})
+
+    # General fit insight
+    if abs(primary_score - secondary_score) < 8:
+        fit_issues.append({"type": "info", "text": f"Dein Profil liegt zwischen {primary_role} und {secondary_role} — du bist ein vielseitiger Spieler (Hybrid)."})
+
+    # ── Key stats summary ──
+    key_stats = {
+        "kd": round(totals["kills"] / max(totals["deaths"], 1), 2),
+        "adr": round(avg_adr, 1),
+        "hs_pct": round(avg_hs, 1),
+        "opening_kills_per_match": round(avg_opening_kills, 1),
+        "opening_wr": round(opening_wr * 100, 1),
+        "utility_per_round": round(avg_util, 2),
+        "survival_rate": round(avg_survival, 1),
+        "awp_ratio": round(awp_ratio * 100, 1),
+        "trade_rate": round(trade_rate * 100, 1),
+        "clutch_rate": round(clutch_rate * 100, 1),
+        "kast": round(avg_kast, 1),
+    }
+
+    return {
+        "has_data": True,
+        "match_count": n,
+        "primary_role": primary_role,
+        "primary_score": primary_score,
+        "secondary_role": secondary_role,
+        "secondary_score": secondary_score,
+        "roles": {name: {"score": score, **role_meta.get(name, {})} for name, score in sorted_roles},
+        "radar_labels": radar_labels,
+        "radar_scores": radar_scores,
+        "fit_issues": fit_issues,
+        "key_stats": key_stats,
+    }
+
+
+# ── Gegner-Vorhersage (Opponent Prediction) ─────────────────
+def _build_opponent_prediction(cfg: dict) -> dict:
+    """Build behavioral predictions for recurring opponents."""
+    vault_path = cfg.get("obsidian_vault_path", "")
+    sub = cfg.get("coach_subfolder", "CS2-Coach")
+    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
+    if not export_dir or not export_dir.exists():
+        return {"has_data": False}
+
+    opp_agg: dict[str, dict] = {}
+    my_match_count = 0
+
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        mi = data.get("match", {})
+        pl = data.get("player", {})
+        duels = data.get("duel_matrix", [])
+        kp = data.get("kill_positions", [])
+        timeline = data.get("round_timeline", [])
+        sb = data.get("scoreboard", [])
+        if not duels:
+            continue
+        my_match_count += 1
+
+        map_name = mi.get("map", "?")
+        result = mi.get("result", "?")
+        match_date = mi.get("date", "?")
+
+        # Build teammate set
+        target_sid = pl.get("steam_id", "")
+        teammate_sids = {target_sid} if target_sid else set()
+        target_idx = next((i for i, s in enumerate(sb) if s.get("is_target")), None)
+        if target_idx is not None:
+            team_start = 0 if target_idx < 5 else 5
+            for i in range(team_start, team_start + 5):
+                if i < len(sb):
+                    sid = sb[i].get("steam_id", "")
+                    if sid:
+                        teammate_sids.add(sid)
+
+        # Opponent scoreboard stats (from enemy half)
+        enemy_start = 5 if (target_idx is not None and target_idx < 5) else 0
+        enemy_sb = {}
+        for i in range(enemy_start, enemy_start + 5):
+            if i < len(sb):
+                s = sb[i]
+                sid = s.get("steam_id", "")
+                if sid and sid not in teammate_sids:
+                    enemy_sb[s.get("name", "")] = {
+                        "kills": s.get("kills", 0), "deaths": s.get("deaths", 0),
+                        "adr": s.get("adr", 0), "rating": s.get("rating", 0),
+                    }
+
+        # Round timeline: detect early kills/deaths per opponent for aggression
+        round_first_events: dict[str, dict] = {}  # opp_name -> {first_kills, first_deaths}
+        for rd in timeline:
+            events = rd.get("events", [])
+            if events:
+                first = events[0]
+                name = first.get("target", first.get("killer", ""))
+                if name and name not in teammate_sids:
+                    if name not in round_first_events:
+                        round_first_events[name] = {"first_kills": 0, "first_deaths": 0, "rounds": 0}
+                    round_first_events[name]["rounds"] += 1
+                    if first.get("type") == "kill":
+                        round_first_events[name]["first_deaths"] += 1  # they died first to you
+                    elif first.get("type") == "death":
+                        round_first_events[name]["first_kills"] += 1  # they got opening on you
+
+        for d in duels:
+            sid = d.get("steam_id", d.get("name", ""))
+            name = d.get("name", "?")
+            if not sid or sid in teammate_sids:
+                continue
+
+            if sid not in opp_agg:
+                opp_agg[sid] = {
+                    "name": name, "steam_id": sid,
+                    "kills_on_you": 0, "deaths_to_you": 0,
+                    "hs_on_you": 0, "hs_by_you": 0,
+                    "matches": 0, "weapons": {},
+                    "maps": {}, "results": [],
+                    "dates": [], "ratings": [], "adrs": [],
+                    "opening_kills_on_you": 0, "opening_deaths_to_you": 0,
+                    "positions_kill": [], "positions_death": [],
+                }
+            e = opp_agg[sid]
+            e["name"] = name
+            e["matches"] += 1
+            e["kills_on_you"] += d.get("kills", 0)
+            e["deaths_to_you"] += d.get("deaths", 0)
+            e["hs_on_you"] += d.get("hs_kills", 0)
+            e["hs_by_you"] += d.get("hs_deaths", 0)
+            e["dates"].append(match_date)
+            e["results"].append(result)
+
+            # Weapons they use
+            for w in d.get("top_weapons", []):
+                e["weapons"][w] = e["weapons"].get(w, 0) + 1
+
+            # Map tracking
+            if map_name not in e["maps"]:
+                e["maps"][map_name] = {"played": 0, "wins": 0, "losses": 0}
+            e["maps"][map_name]["played"] += 1
+            if result == "Sieg":
+                e["maps"][map_name]["wins"] += 1
+            elif result == "Niederlage":
+                e["maps"][map_name]["losses"] += 1
+
+            # Scoreboard stats for this opponent
+            opp_sb = enemy_sb.get(name, {})
+            if opp_sb.get("rating"):
+                e["ratings"].append(opp_sb["rating"])
+            if opp_sb.get("adr"):
+                e["adrs"].append(opp_sb["adr"])
+
+            # Opening events
+            rfe = round_first_events.get(name, {})
+            e["opening_kills_on_you"] += rfe.get("first_kills", 0)
+            e["opening_deaths_to_you"] += rfe.get("first_deaths", 0)
+
+        # Kill positions per opponent
+        for pos in kp:
+            enemy_name = pos.get("e", "")
+            for sid, e in opp_agg.items():
+                if e["name"] == enemy_name:
+                    entry = {"x": pos.get("x", 0), "y": pos.get("y", 0),
+                             "ex": pos.get("ex", 0), "ey": pos.get("ey", 0),
+                             "map": map_name, "w": pos.get("w", ""), "hs": pos.get("hs", False)}
+                    if pos.get("t") == "k":
+                        e["positions_kill"].append(entry)
+                    elif pos.get("t") == "d":
+                        e["positions_death"].append(entry)
+                    break
+
+    if not opp_agg:
+        return {"has_data": False}
+
+    # ── Build prediction cards for recurring opponents (2+ matches) ──
+    predictions = []
+    for sid, e in opp_agg.items():
+        if e["matches"] < 2:
+            continue
+
+        total_duels = e["kills_on_you"] + e["deaths_to_you"]
+        if total_duels < 3:
+            continue
+
+        kd_vs = round(e["deaths_to_you"] / max(e["kills_on_you"], 1), 2)
+        their_hs_pct = round(e["hs_on_you"] / max(e["kills_on_you"], 1) * 100, 1)
+        your_hs_pct = round(e["hs_by_you"] / max(e["deaths_to_you"], 1) * 100, 1)
+        wr = round(sum(1 for r in e["results"] if r == "Sieg") / len(e["results"]) * 100, 1)
+        avg_rating = round(sum(e["ratings"]) / len(e["ratings"]), 2) if e["ratings"] else 0
+        avg_adr = round(sum(e["adrs"]) / len(e["adrs"]), 1) if e["adrs"] else 0
+
+        # Weapon prediction: most likely weapon
+        total_weapon = sum(e["weapons"].values()) if e["weapons"] else 0
+        weapon_probs = []
+        for w, c in sorted(e["weapons"].items(), key=lambda x: -x[1])[:4]:
+            weapon_probs.append({"weapon": w, "count": c,
+                                 "pct": round(c / max(total_weapon, 1) * 100, 1)})
+        primary_weapon = weapon_probs[0]["weapon"] if weapon_probs else "?"
+
+        # Playstyle classification
+        opening_total = e["opening_kills_on_you"] + e["opening_deaths_to_you"]
+        aggression = e["opening_kills_on_you"] / max(opening_total, 1) if opening_total >= 2 else 0.5
+        if aggression > 0.6:
+            playstyle = "Aggressiv"
+            playstyle_color = "#f87171"
+            playstyle_icon = "swords"
+        elif aggression < 0.35:
+            playstyle = "Passiv"
+            playstyle_color = "#60a5fa"
+            playstyle_icon = "shield"
+        else:
+            playstyle = "Ausgewogen"
+            playstyle_color = "#fbbf24"
+            playstyle_icon = "scale"
+
+        # AWP detection
+        awp_pct = e["weapons"].get("awp", 0) / max(total_weapon, 1)
+        if awp_pct > 0.35:
+            playstyle = "AWPer"
+            playstyle_color = "#a78bfa"
+            playstyle_icon = "crosshair"
+
+        # Map preference
+        map_stats = []
+        for m, ms in sorted(e["maps"].items(), key=lambda x: -x[1]["played"]):
+            m_wr = round(ms["wins"] / max(ms["played"], 1) * 100, 1)
+            map_stats.append({"map": m, "played": ms["played"],
+                              "wins": ms["wins"], "losses": ms["losses"], "wr": m_wr})
+
+        # Threat level
+        if kd_vs >= 1.5 and total_duels >= 8:
+            threat = "low"
+            threat_label = "Leichte Beute"
+        elif kd_vs <= 0.7 and total_duels >= 8:
+            threat = "high"
+            threat_label = "Gefaehrlich"
+        elif kd_vs <= 0.9:
+            threat = "medium"
+            threat_label = "Herausforderung"
+        else:
+            threat = "low"
+            threat_label = "Kontrollierbar"
+
+        # Confidence: more data = more confident
+        confidence = min(100, e["matches"] * 15 + total_duels * 3)
+
+        # Tactical predictions
+        tactics = []
+        if awp_pct > 0.3:
+            tactics.append(f"Spielt {round(awp_pct*100)}% AWP — Smokes werfen, nicht wide peeken.")
+        if their_hs_pct >= 50:
+            tactics.append(f"Hohe HS-Rate ({their_hs_pct}%) — Jiggle-Peeks und Off-Angles nutzen.")
+        elif their_hs_pct < 25 and e["kills_on_you"] >= 5:
+            tactics.append(f"Spray-Spieler ({their_hs_pct}% HS) — Aim-Duelle suchen.")
+        if aggression > 0.6 and opening_total >= 4:
+            tactics.append("Aggressiver Spieler — Angles vorhalten, nicht reinrennen.")
+        elif aggression < 0.35 and opening_total >= 4:
+            tactics.append("Passiver Spieler — Push-Setups mit Utility vorbereiten.")
+        if wr < 40 and len(e["results"]) >= 3:
+            tactics.append(f"Du verlierst oft gegen ihn ({wr}% WR) — anders spielen als bisher.")
+        elif wr > 65 and len(e["results"]) >= 3:
+            tactics.append(f"Gute Bilanz ({wr}% WR) — weiter so spielen.")
+
+        # Best/worst map vs this opponent
+        if len(map_stats) >= 2:
+            best_map = max(map_stats, key=lambda m: m["wr"])
+            worst_map = min(map_stats, key=lambda m: m["wr"])
+            if best_map["wr"] != worst_map["wr"]:
+                tactics.append(f"Beste Map: {best_map['map']} ({best_map['wr']}%) — Schlechteste: {worst_map['map']} ({worst_map['wr']}%)")
+
+        last_seen = sorted([d for d in e["dates"] if d != "?"], reverse=True)
+        predictions.append({
+            "name": e["name"],
+            "matches": e["matches"],
+            "kills_on_you": e["kills_on_you"],
+            "deaths_to_you": e["deaths_to_you"],
+            "kd_vs": kd_vs,
+            "wr": wr,
+            "their_hs_pct": their_hs_pct,
+            "avg_rating": avg_rating,
+            "avg_adr": avg_adr,
+            "primary_weapon": primary_weapon,
+            "weapon_probs": weapon_probs,
+            "playstyle": playstyle,
+            "playstyle_color": playstyle_color,
+            "playstyle_icon": playstyle_icon,
+            "threat": threat,
+            "threat_label": threat_label,
+            "confidence": confidence,
+            "map_stats": map_stats,
+            "tactics": tactics,
+            "last_seen": last_seen[0] if last_seen else "?",
+        })
+
+    # Sort by most encountered
+    predictions.sort(key=lambda x: -x["matches"])
+
+    # Stats summary
+    nemeses = [p for p in predictions if p["threat"] == "high"]
+    victims = [p for p in predictions if p["kd_vs"] >= 1.5 and p["matches"] >= 2]
+
+    return {
+        "has_data": bool(predictions),
+        "predictions": predictions[:20],
+        "total_recurring": len(predictions),
+        "match_count": my_match_count,
+        "nemesis_count": len(nemeses),
+        "victim_count": len(victims),
     }

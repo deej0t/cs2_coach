@@ -263,6 +263,152 @@ def stream_ollama(
         yield f"\n\n**Fehler:** {e}"
 
 
+def call_gemini(
+    prompt: str,
+    context: str,
+    api_key: str,
+    model: str = "gemini-2.0-flash",
+) -> str:
+    """Non-streaming Gemini call. Returns full response text."""
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}"
+        f":generateContent?key={api_key}"
+    )
+    payload = json.dumps({
+        "system_instruction": {"parts": [{"text": context}]},
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4096},
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=payload,
+        headers={"Content-Type": "application/json"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read())
+            parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            return "".join(p.get("text", "") for p in parts)
+    except Exception as e:
+        return f"**Fehler:** {e}"
+
+
+def call_ollama(
+    prompt: str,
+    context: str,
+    ollama_url: str = "http://192.168.188.71:11434",
+    model: str = "llama3.1:8b",
+) -> str:
+    """Non-streaming Ollama call. Returns full response text."""
+    url = f"{ollama_url.rstrip('/')}/api/chat"
+    payload = json.dumps({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": context},
+            {"role": "user", "content": prompt},
+        ],
+        "stream": False,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=payload,
+        headers={"Content-Type": "application/json"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+            return data.get("message", {}).get("content", "")
+    except Exception as e:
+        return f"**Fehler:** {e}"
+
+
+PRACTICE_PLAN_SYSTEM = """Du bist ein erfahrener CS2 Coach. Du analysierst Spielerdaten und passt die Practice-Server-Configs individuell an.
+
+Du bekommst die Spielerdaten (K/D pro Map, Death-Spots mit Häufigkeit, Waffen, HS%, etc.).
+Deine Aufgabe: Für JEDE Map konkrete Config-Anpassungen vorschlagen, die der Practice-Server übernimmt.
+
+WICHTIG — Antworte EXAKT in diesem JSON-Format (kein Markdown, kein Code-Block, nur reines JSON):
+{
+  "analysis": "2-3 Sätze: Was sind die größten Schwächen?",
+  "map_overrides": {
+    "MapName": {
+      "prefire": {"bot_count": 5, "bot_difficulty": 3, "priority_spots": [1, 3, 2]},
+      "retake": {"bot_count": 4, "bot_difficulty": 2},
+      "spray":  {"bot_count": 5, "spray_spacing": 100},
+      "challenge": {"bot_count": 6, "bot_difficulty": 3, "challenge_time": 45}
+    }
+  },
+  "focus_mode": {"MapName": "prefire"},
+  "routine": [
+    {"step": 1, "duration": "X Min", "activity": "Name", "mode": "prefire/retake/spray/challenge/utility/warmup", "map": "MapName oder null", "desc": "Was genau tun"}
+  ],
+  "total_time": "XX Min",
+  "tips": ["Tipp 1", "Tipp 2", "Tipp 3"]
+}
+
+Config-Parameter pro Modus:
+- prefire:   bot_count (1-10), bot_difficulty (0-3), priority_spots (1-indexed Liste der wichtigsten Spots)
+- retake:    bot_count (1-8), bot_difficulty (0-3), priority_spots
+- spray:     bot_count (3-10, default 5), spray_spacing (50-200 Units, default 100)
+- challenge: bot_count (1-8), bot_difficulty (0-3), challenge_time (30-90 Sekunden)
+
+bot_difficulty: 0=Leicht, 1=Mittel, 2=Schwer, 3=Experte
+priority_spots: Sortiert nach Wichtigkeit, 1-indexed. Z.B. [3, 1, 5] = Spot 3 zuerst üben
+
+Regeln:
+- map_overrides: NUR für Maps die in den Daten vorkommen
+- Schwache Maps (K/D < 1.0): mehr Bots, niedrigere Difficulty zum Üben
+- Starke Maps: weniger Bots, höhere Difficulty zum Feinschliff
+- Spots mit vielen Deaths (>= 5x) als priority_spots markieren
+- challenge_time kürzer bei guten Spielern, länger bei schwachen
+- spray_spacing enger (70-80) für Anfänger, weiter (120-150) für Fortgeschrittene
+- routine: 5-7 Schritte, 30-45 Min total
+- tips: genau 3 konkrete Tipps
+- Antworte auf Deutsch
+- NUR JSON, keine anderen Zeichen davor oder danach"""
+
+
+def build_practice_context(maps_data: list[dict]) -> str:
+    """Build LLM context string from practice map data."""
+    lines = ["=== PRACTICE-DATEN DES SPIELERS ===\n"]
+
+    total_k = sum(m["kills"] for m in maps_data)
+    total_d = sum(m["deaths"] for m in maps_data)
+    lines.append(f"GESAMT: {total_k} Kills, {total_d} Deaths, K/D {round(total_k / max(total_d, 1), 2)}")
+    lines.append(f"Maps analysiert: {len(maps_data)}\n")
+
+    for m in maps_data:
+        lines.append(f"--- {m['name']} ---")
+        lines.append(f"  K/D: {m['kd']}, Kills: {m['kills']}, Deaths: {m['deaths']}")
+        lines.append(f"  HS-Death%: {m['hs_death_pct']}%, Hotspots: {m['hotspots']}")
+
+        if m.get("spots"):
+            lines.append(f"  Bot-Spots ({len(m['spots'])} Stück):")
+            for i, s in enumerate(m["spots"][:5]):
+                lines.append(
+                    f"    {i+1}. {s['count']}x deaths — Gegner: {s['enemy']}, "
+                    f"Waffe: {s['weapon']}, HS%: {s['hs_pct']}%"
+                )
+
+        if m.get("top_death_weapons"):
+            wpns = ", ".join(f"{w['name']}({w['count']}x)" for w in m["top_death_weapons"])
+            lines.append(f"  Tod durch: {wpns}")
+
+        if m.get("top_enemies"):
+            enemies = ", ".join(f"{e['name']}({e['count']}x)" for e in m["top_enemies"])
+            lines.append(f"  Häufigste Gegner: {enemies}")
+
+        lines.append("")
+
+    lines.append("VERFÜGBARE PRACTICE-MODI:")
+    lines.append("  prefire  — Bots eingefroren an Death-Spots")
+    lines.append("  retake   — Bots an Hold-Positionen, retake die Site")
+    lines.append("  spray    — 5 Bots in Reihe, Spray-Transfer")
+    lines.append("  challenge — 45 Sek Timer, Bots schiessen zurück")
+    lines.append("  utility  — Granaten-Trajectories, keine Bots")
+    lines.append("  warmup   — Aufwärmen mit beweglichen Bots")
+
+    return "\n".join(lines)
+
+
 def check_ollama_status(ollama_url: str = "http://192.168.188.71:11434") -> dict:
     """Check if Ollama is running and list available models."""
     url = f"{ollama_url.rstrip('/')}/api/tags"
