@@ -1,0 +1,66 @@
+# CS2 Coach — Portainer Stack fuer Unraid
+#
+# Voraussetzung: Image muss vorher gebaut werden:
+#   cd /mnt/user/appdata/cs2-coach && docker build -t cs2-coach:latest .
+#
+# In Portainer: Stacks > Add stack > Web editor > diesen Inhalt einfuegen
+
+services:
+  # ── CS2 Coach Web-UI ──
+  cs2-coach:
+    image: cs2-coach:latest
+    container_name: cs2-coach
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - CS2COACH_CONFIG=/data/config.yaml
+      - PYTHONUNBUFFERED=1
+      - TZ=Europe/Berlin
+    volumes:
+      - /mnt/user/appdata/cs2-coach/data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # ── CS2 Practice Server (optional — auskommentieren wenn nicht gebraucht) ──
+  cs2-practice:
+    image: joedwards32/cs2:latest
+    container_name: cs2-practice
+    restart: unless-stopped
+    depends_on:
+      cs2-coach:
+        condition: service_healthy
+    ports:
+      - "27015:27015/tcp"
+      - "27015:27015/udp"
+      - "27020:27020/tcp"
+    environment:
+      CS2_SERVERNAME: "CS2 Coach Practice Server"
+      CS2_PORT: 27015
+      CS2_RCON_PORT: 27020
+      CS2_RCONPW: "coach2024"
+      CS2_PW: ""
+      CS2_GAMETYPE: 0
+      CS2_GAMEMODE: 1
+      CS2_MAPGROUP: "mg_active"
+      CS2_STARTMAP: "de_mirage"
+      CS2_MAXPLAYERS: 12
+      CS2_LAN: 1
+      CS2_BOT_QUOTA: 5
+      CS2_BOT_DIFFICULTY: 3
+      STEAMUSER: ""
+      STEAMPASS: ""
+      CS2_ADDITIONAL_ARGS: "+sv_lan 1"
+    volumes:
+      # Practice configs aus cs2-coach
+      - /mnt/user/appdata/cs2-coach/data/cfg/coach:/home/steam/cs2-dedicated/game/csgo/cfg/coach:ro
+      # CS2 Server-Daten
+      - /mnt/user/appdata/cs2-coach/cs2-server:/home/steam/cs2-dedicated
+    deploy:
+      resources:
+        limits:
+          memory: 8G

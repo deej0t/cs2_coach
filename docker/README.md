@@ -4,54 +4,62 @@ Zwei Services:
 - **cs2-coach** — Web-UI fuer Demo-Analyse, KI-Coaching, Practice-Config-Generator
 - **cs2-practice** — CS2 Dedicated Server mit den generierten Practice-Configs (optional)
 
-## Quick Start
+## Quick Start (Portainer auf Unraid)
 
-### Nur Web-UI (empfohlen zum Start)
+### 1. Image bauen
 
+Per SSH / Unraid Terminal:
 ```bash
-cd docker/
-docker-compose up -d cs2-coach
+cd /mnt/user/appdata/
+git clone https://github.com/deej0t/cs2_coach.git cs2-coach
+cd cs2-coach
+docker build -t cs2-coach:latest .
 ```
 
-Oeffne http://UNRAID-IP:5000
+### 2a. Portainer Stack (empfohlen)
 
-### Web-UI + CS2 Practice Server
+1. Portainer oeffnen > **Stacks** > **Add stack**
+2. Name: `cs2-coach`
+3. **Web editor** > Inhalt von `docker/portainer-stack.yml` einfuegen
+4. **Deploy the stack**
+5. Oeffne http://UNRAID-IP:5000
+
+Den CS2 Practice Server Block kann man auskommentieren wenn man nur die Web-UI braucht.
+
+### 2b. Portainer — Einzelner Container (nur Web-UI)
+
+1. Portainer > **Containers** > **Add container**
+2. **Name:** `cs2-coach`
+3. **Image:** `cs2-coach:latest`
+4. **Port mapping:** Host `5000` → Container `5000`
+5. **Volumes:** `/mnt/user/appdata/cs2-coach/data` → `/data`
+6. **Env:**
+   - `CS2COACH_CONFIG` = `/data/config.yaml`
+   - `TZ` = `Europe/Berlin`
+7. **Restart policy:** Unless stopped
+8. **Deploy**
+
+### 2c. Docker CLI (ohne Portainer)
 
 ```bash
-cd docker/
-docker-compose up -d
+# Nur Web-UI:
+docker run -d \
+  --name cs2-coach \
+  --restart unless-stopped \
+  -p 5000:5000 \
+  -v /mnt/user/appdata/cs2-coach/data:/data \
+  -e CS2COACH_CONFIG=/data/config.yaml \
+  -e TZ=Europe/Berlin \
+  cs2-coach:latest
 ```
 
-Erster Start des CS2 Servers dauert ~10-15 Min (CS2 Download ~35 GB).
-
-## Unraid Installation
-
-### Option A: Docker Compose (empfohlen)
-
-1. **Docker Compose Manager** installieren: Apps > "Docker Compose Manager"
-2. Repository klonen oder Dateien kopieren:
-   ```bash
-   cd /mnt/user/appdata/
-   git clone https://github.com/deej0t/cs2_coach.git cs2-coach
-   cd cs2-coach/docker
-   docker-compose up -d cs2-coach
-   ```
-
-### Option B: Unraid Docker UI
-
-1. **Add Container** in der Docker-Seite
-2. Template XML: `docker/unraid-template.xml`
-3. Oder manuell:
-   - **Repository:** `cs2-coach:latest` (lokal gebaut)
-   - **Port:** 5000 → 5000
-   - **Path:** `/mnt/user/appdata/cs2-coach` → `/data`
-   - **Variable:** `TZ` = `Europe/Berlin`
-
-### Image lokal bauen
+### Image aktualisieren
 
 ```bash
 cd /mnt/user/appdata/cs2-coach
+git pull
 docker build -t cs2-coach:latest .
+# In Portainer: Container stoppen > Recreate
 ```
 
 ## Konfiguration
