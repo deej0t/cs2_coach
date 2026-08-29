@@ -12,7 +12,7 @@ services:
     container_name: cs2-coach
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       - CS2COACH_CONFIG=/data/config.yaml
       - PYTHONUNBUFFERED=1

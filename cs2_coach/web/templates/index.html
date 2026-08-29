@@ -684,9 +684,9 @@
         new Chart(spiderEl, {
             type: 'radar',
             data: {
-                labels: {{ dashboard.spider.labels | tojson }},
+                labels: {{ (dashboard.spider.labels if dashboard.spider is defined else []) | tojson }},
                 datasets: [{
-                    data: {{ dashboard.spider.scores | tojson }},
+                    data: {{ (dashboard.spider.scores if dashboard.spider is defined else []) | tojson }},
                     backgroundColor: 'rgba(145,132,217,0.18)',
                     borderColor: 'rgba(145,132,217,0.8)',
                     borderWidth: 2,
