@@ -34,7 +34,7 @@ from ..practice import (
 )
 from .i18n import make_translator
 
-CONFIG_PATH = Path(__file__).parent.parent.parent / "config.yaml"
+CONFIG_PATH = Path(os.environ.get("CS2COACH_CONFIG", "")) if os.environ.get("CS2COACH_CONFIG") else Path(__file__).parent.parent.parent / "config.yaml"
 UPLOAD_FOLDER = tempfile.mkdtemp(prefix="cs2coach_")
 ALLOWED_EXTENSIONS = {".dem"}
 
@@ -1354,8 +1354,12 @@ def create_app() -> Flask:
             flash("Keine Positionsdaten vorhanden.", "error")
             return redirect(url_for("practice"))
 
-        # Coach subfolder in docker/cfg/
-        docker_cfg = Path(__file__).parent.parent.parent / "docker" / "cfg"
+        # Primary output: docker/cfg/ (or practice_cfg_path if set)
+        practice_base = cfg.get("practice_cfg_path", "")
+        if practice_base and Path(practice_base).is_dir():
+            docker_cfg = Path(practice_base)
+        else:
+            docker_cfg = Path(__file__).parent.parent.parent / "docker" / "cfg"
         coach_dir = docker_cfg / "coach"
         coach_dir.mkdir(parents=True, exist_ok=True)
 

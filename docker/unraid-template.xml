@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>CS2-Coach</Name>
+  <Repository>cs2-coach:latest</Repository>
+  <Registry/>
+  <Network>bridge</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Overview>CS2 Coach - Demo-Analyse, KI-Coaching und Practice-Server-Konfigurator.&#xD;
+Analysiert deine CS2 Demos, gibt KI-basiertes Coaching und generiert individuelle Practice-Server Configs.&#xD;
+&#xD;
+Features:&#xD;
+- Demo-Analyse mit Kill/Death Heatmaps&#xD;
+- KI-Coach (Gemini/Ollama)&#xD;
+- Practice Server Config Generator (5 Modi)&#xD;
+- KI-gesteuerte Config-Anpassung&#xD;
+- Obsidian Vault Export</Overview>
+  <Category>GameServers: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:5000]/</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/deej0t/cs2_coach/main/cs2_coach/web/static/favicon.ico</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <DateInstalled/>
+  <Description>CS2 Coach - Analysiert deine Demos und macht dich besser.</Description>
+  <Config Name="Web UI Port" Target="5000" Default="5000" Mode="tcp" Description="Web Interface Port" Type="Port" Display="always" Required="true" Mask="false">5000</Config>
+  <Config Name="Daten" Target="/data" Default="/mnt/user/appdata/cs2-coach" Mode="rw" Description="Config, Demos, Vault-Exports und generierte CFGs" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/cs2-coach</Config>
+  <Config Name="Config Pfad" Target="CS2COACH_CONFIG" Default="/data/config.yaml" Mode="" Description="Pfad zur config.yaml im Container" Type="Variable" Display="advanced" Required="false" Mask="false">/data/config.yaml</Config>
+  <Config Name="Zeitzone" Target="TZ" Default="Europe/Berlin" Mode="" Description="Zeitzone" Type="Variable" Display="always" Required="false" Mask="false">Europe/Berlin</Config>
+</Container>
