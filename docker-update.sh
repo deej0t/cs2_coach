@@ -25,6 +25,7 @@ git log --oneline "$LOCAL".."$REMOTE"
 
 git checkout -- . 2>/dev/null
 git pull origin "$BRANCH" --quiet
+chmod +x /app/docker-update.sh /app/docker-entrypoint.sh 2>/dev/null
 log "Code aktualisiert: $(git log --oneline -1)"
 
 # Reinstall dependencies if requirements changed
