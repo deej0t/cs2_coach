@@ -2198,6 +2198,7 @@ def _get_exports(cfg: dict) -> list[dict]:
         except (json.JSONDecodeError, KeyError):
             continue
 
+    exports.sort(key=lambda e: e.get("datetime", e.get("date", "")), reverse=True)
     return exports
 
 

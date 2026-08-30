@@ -510,10 +510,10 @@
 <div class="hr"></div>
 <h3>{{ _('Letzte Analysen') }}</h3>
 <div class="table-scroll">
-<table class="table">
+<table class="table" id="recent-table">
     <thead>
         <tr>
-            <th>{{ _('Datum') }}</th><th>Map</th><th>Score</th><th>{{ _('Ergebnis') }}</th>
+            <th data-sort="date" data-type="string" style="cursor:pointer;">{{ _('Datum') }} <span class="sort-icon">▼</span></th><th>Map</th><th>Score</th><th>{{ _('Ergebnis') }}</th>
             <th><abbr title="{{ _('Kill/Death-Verhaeltnis') }}">K/D</abbr></th>
             <th><abbr title="Average Damage per Round">ADR</abbr></th>
             <th><abbr title="Kill, Assist, Survived, Traded">KAST%</abbr></th>
@@ -523,7 +523,7 @@
     </thead>
     <tbody>
         {% for e in exports[:10] %}
-        <tr>
+        <tr data-date="{{ e.datetime or e.date }}">
             <td style="color: var(--color-neutral-500); white-space: nowrap;">{{ e.datetime or e.date }}</td>
             <td>{{ e.map }}</td>
             <td>{{ e.score }}</td>
@@ -677,6 +677,24 @@
 (function() {
     if (window.lucide) lucide.createIcons();
     var MAX_SIZE = 500 * 1024 * 1024;
+
+    // ── Recent table date sort ──
+    var rt = document.getElementById('recent-table');
+    if (rt) {
+        var th = rt.querySelector('th[data-sort="date"]');
+        var dir = 'desc';
+        th.addEventListener('click', function() {
+            dir = dir === 'desc' ? 'asc' : 'desc';
+            th.querySelector('.sort-icon').textContent = dir === 'asc' ? '▲' : '▼';
+            var tbody = rt.querySelector('tbody');
+            var rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort(function(a, b) {
+                var cmp = (a.dataset.date || '').localeCompare(b.dataset.date || '');
+                return dir === 'asc' ? cmp : -cmp;
+            });
+            rows.forEach(function(r) { tbody.appendChild(r); });
+        });
+    }
 
     // ── Spider Chart ──
     var spiderEl = document.getElementById('spider-chart');
