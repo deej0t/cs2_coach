@@ -1,0 +1,50 @@
+<!-- ══════ Kill Map ══════ -->
+{% if kill_map_data %}
+<style>
+    .km-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .km-layer { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; cursor: pointer; user-select: none; padding: 3px 8px; border-radius: var(--radius-sm); transition: background 0.15s; }
+    .km-layer:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+    .km-layer input { accent-color: var(--color-accent); }
+    .km-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+    .km-mode-group { display: flex; gap: 2px; margin-left: auto; }
+    .km-mode { padding: 3px 10px; font-size: 11px; border: 1px solid var(--color-neutral-700); background: transparent; color: var(--color-neutral-400); cursor: pointer; transition: all 0.15s; }
+    .km-mode:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+    .km-mode:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+    .km-mode.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+    .km-round-ctrl { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px; }
+    .km-round-ctrl input[type=range] { flex: 1; accent-color: var(--color-accent); }
+    .km-round-label { font-size: 11px; min-width: 70px; color: var(--color-neutral-400); }
+    .km-round-pills { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 4px; }
+    .km-pill { width: 22px; height: 18px; font-size: 9px; font-weight: 600; border: none; border-radius: 3px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.1s; }
+    .km-pill.active { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+</style>
+<div style="margin-bottom: var(--space-5);">
+    <div class="card-kicker" style="margin-bottom: 8px;">Kill Map — {{ kill_map_data.map }}</div>
+    <div class="card elev-sm" style="padding: var(--space-3);">
+        <div class="km-controls">
+            <label class="km-layer"><input type="checkbox" id="km-kills" checked><span class="km-dot" style="background:#4ade80;"></span> Kills</label>
+            <label class="km-layer"><input type="checkbox" id="km-deaths" checked><span class="km-dot" style="background:#f87171;"></span> Deaths</label>
+{% if kill_map_data.utils %}
+            <label class="km-layer"><input type="checkbox" id="km-flash"><span class="km-dot" style="background:#60a5fa;"></span> Flashes</label>
+            <label class="km-layer"><input type="checkbox" id="km-smoke"><span class="km-dot" style="background:#a3a3a3;"></span> Smokes</label>
+            <label class="km-layer"><input type="checkbox" id="km-he"><span class="km-dot" style="background:#fb923c;"></span> HE</label>
+            <label class="km-layer"><input type="checkbox" id="km-molotov"><span class="km-dot" style="background:#ef4444;"></span> Molotov</label>
+            <label class="km-layer"><input type="checkbox" id="km-own-only"><abbr title="{{ _('Nur eigene Utility anzeigen') }}">{{ _('Nur Eigene') }}</abbr></label>
+{% endif %}
+            <div class="km-mode-group">
+                <button class="km-mode active" data-mode="dots">Dots</button>
+                <button class="km-mode" data-mode="heatmap">Heatmap</button>
+            </div>
+        </div>
+        <div class="km-round-ctrl">
+            <span class="km-round-label" id="km-round-text">{{ _('Alle Runden') }}</span>
+            <input type="range" id="km-round-slider" min="0" max="{{ kill_map_data.total_rounds }}" value="0">
+        </div>
+        <div class="km-round-pills" id="km-round-pills"></div>
+        <div style="position: relative; width: 100%; max-width: 600px; margin-top: 8px;">
+            <canvas id="kill-map" width="600" height="600" style="width:100%;border-radius:var(--radius-md);background:var(--color-bg);"></canvas>
+            <div id="kill-map-tooltip" style="display:none;position:absolute;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-sm);padding:4px 8px;font-size:11px;pointer-events:none;white-space:nowrap;z-index:10;"></div>
+        </div>
+    </div>
+</div>
+{% endif %}

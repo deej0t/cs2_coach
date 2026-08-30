@@ -305,6 +305,7 @@
         <span class="card-kicker">{{ _('Mechanik') }}</span>
         <table class="table"><tbody>
             <tr><td><abbr title="{{ _('Anteil der Schuesse im Stillstand (inacc = Movement Inaccuracy)') }}">Counter-Strafe</abbr></td><td>{{ p.counter_strafe_pct }}% (inacc: {{ p.avg_inaccuracy_move }})</td></tr>
+            {% if p.crosshair_placement and p.crosshair_placement.kills_analyzed > 0 %}<tr><td><abbr title="{{ _('Durchschnittliche Winkelkorrektur vor dem Kill — niedriger ist besser') }}">Crosshair Placement</abbr></td><td>{{ p.crosshair_placement.avg_degrees }}°{% if p.crosshair_placement.excellent is defined %} ({{ p.crosshair_placement.excellent }}x &lt;5° / {{ p.crosshair_placement.good }}x 5-15° / {{ p.crosshair_placement.average }}x 15-30° / {{ p.crosshair_placement.poor }}x &gt;30°){% else %} ({{ p.crosshair_placement.kills_analyzed }} Kills){% endif %}</td></tr>{% endif %}
             {% if p.spray_control %}<tr><td><abbr title="{{ _('Burst (1-3 Schuesse) vs. Spray (4+) Kills') }}">Spray-Control</abbr></td><td>Burst {{ p.spray_control.burst_kills }} / Spray {{ p.spray_control.spray_kills }}</td></tr>
             <tr><td><abbr title="{{ _('Durchschnittliche Schussnummer im Magazin beim Kill — niedrig = Burst, hoch = Spray') }}">Avg Recoil-Index</abbr></td><td>{{ p.spray_control.avg_recoil_index }}</td></tr>{% endif %}
             {% if p.weapons %}<tr><td>AWP Kills</td><td>{{ p.weapons.awp_kills }}</td></tr>
@@ -369,6 +370,8 @@
     </table>
 </div>
 {% endif %}
+
+{% include "_partials/kill_map.html" %}
 
 <!-- ══════ Death Analysis ══════ -->
 {% if analysis and analysis.death_summary and analysis.death_summary.total > 0 %}
@@ -946,4 +949,5 @@ function switchPlayer(steamId) {
     form.submit();
 }
 </script>
+{% include "_partials/kill_map_js.html" %}
 {% endblock %}

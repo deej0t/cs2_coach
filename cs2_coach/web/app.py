@@ -794,7 +794,9 @@ def create_app() -> Flask:
             }
         return render_template("export_detail.html", data=data, analysis=analysis,
                                filename=filename, demo_path=demo_path,
-                               player_avg=avg, config=cfg)
+                               player_avg=avg,
+                               kill_map_data=_build_kill_map_data_from_export(data),
+                               config=cfg)
 
     @app.route("/share/<path:filename>")
     def share_card(filename):
@@ -2390,6 +2392,54 @@ def _build_kill_map_data(result: MatchResult) -> dict | None:
         "map": map_key,
         "dots": dots,
         "utils": utils,
+        "total_rounds": total_rounds,
+    }
+
+
+def _build_kill_map_data_from_export(data: dict) -> dict | None:
+    """Build kill map JSON from a stored export (compact kill_positions format).
+
+    Mirrors _build_kill_map_data() but reads the compacted export schema so the
+    export detail view can render the same 2D map as the fresh-analysis view.
+    Utility positions are not part of the export schema, so "utils" stays empty.
+    """
+    match_info = data.get("match", {})
+    map_key = (match_info.get("map") or "").lower()
+    if not map_key or map_key not in MAP_RADAR_DATA:
+        return None
+
+    positions = data.get("kill_positions", [])
+    if not positions:
+        return None
+
+    dots = []
+    for pos in positions:
+        px = game_to_radar(pos.get("x", 0), pos.get("y", 0), map_key)
+        if not px:
+            continue
+        is_kill = pos.get("t") == "k"
+        enemy = pos.get("e", "")
+        dots.append({
+            "x": round(px[0], 1),
+            "y": round(px[1], 1),
+            "type": "kill" if is_kill else "death",
+            "weapon": pos.get("w", "").replace("weapon_", ""),
+            "headshot": pos.get("hs", False),
+            "label": (f"Kill: {enemy}" if is_kill else f"Death by {enemy}"),
+            "round": pos.get("r", 0),
+        })
+
+    if not dots:
+        return None
+
+    total_rounds = match_info.get("total_rounds") or (
+        match_info.get("score_own", 0) + match_info.get("score_enemy", 0)
+    )
+
+    return {
+        "map": map_key,
+        "dots": dots,
+        "utils": [],
         "total_rounds": total_rounds,
     }
 
