@@ -33,7 +33,16 @@ if git diff "$LOCAL" "$REMOTE" --name-only | grep -q "requirements"; then
 fi
 
 # Reload gunicorn workers (graceful restart, no downtime)
-GUNICORN_PID=$(ps -eo pid,args | grep '[g]unicorn.*wsgi:app' | head -1 | awk '{print $1}')
+# /proc is always available — no need for ps or pkill
+GUNICORN_PID=""
+for pid_dir in /proc/[0-9]*; do
+    pid="${pid_dir##*/}"
+    if grep -qs 'gunicorn' "$pid_dir/cmdline" 2>/dev/null; then
+        # Master is PID 1 or lowest gunicorn PID
+        GUNICORN_PID="$pid"
+        break
+    fi
+done
 if [ -n "$GUNICORN_PID" ] && kill -HUP "$GUNICORN_PID" 2>/dev/null; then
     log "Gunicorn neu geladen (PID $GUNICORN_PID)."
 else
