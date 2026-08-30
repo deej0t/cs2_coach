@@ -770,8 +770,21 @@ def create_app() -> Flask:
                 candidate = Path(demo_folder) / demo_file
                 if candidate.exists():
                     demo_path = str(candidate)
+        # Build player averages for trend comparison
+        all_exports = _get_exports(cfg)
+        avg = {}
+        if len(all_exports) >= 2:
+            n = len(all_exports)
+            avg = {
+                "kd": round(sum(e.get("kd", 0) for e in all_exports) / n, 2),
+                "adr": round(sum(e.get("adr", 0) for e in all_exports) / n, 1),
+                "rating": round(sum(e.get("rating", 0) for e in all_exports) / n, 2),
+                "kast": round(sum(e.get("kast", 0) for e in all_exports) / n, 1),
+                "hs_pct": round(sum(e.get("hs_pct", 0) for e in all_exports) / n, 1),
+            }
         return render_template("export_detail.html", data=data, analysis=analysis,
-                               filename=filename, demo_path=demo_path, config=cfg)
+                               filename=filename, demo_path=demo_path,
+                               player_avg=avg, config=cfg)
 
     @app.route("/share/<path:filename>")
     def share_card(filename):

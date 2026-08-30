@@ -169,40 +169,64 @@
     "Train": "linear-gradient(135deg, #8b7355, #5a4a3a)",
     "Cache": "linear-gradient(135deg, #6b8e5a, #4a6b3a)",
 } %}
-<div style="position:relative;overflow:hidden;display:flex;align-items:center;gap:var(--space-5);padding:var(--space-5) var(--space-6);margin-bottom:var(--space-6);border-radius:var(--radius-lg);border:1px solid rgba(255,255,255,0.06);">
+
+<!-- ══════ Header ══════ -->
+<div class="ed-header" style="position:relative;overflow:hidden;padding:var(--space-5) var(--space-6);margin-bottom:var(--space-5);border-radius:var(--radius-lg);border:1px solid rgba(255,255,255,0.06);">
     <div style="position:absolute;inset:0;opacity:0.08;background:{{ ed_map_gradients.get(data.match.map, 'linear-gradient(135deg, #555, #333)') }};pointer-events:none;"></div>
-    <a href="{{ url_for('exports') }}" class="btn btn-ghost" style="position:relative;z-index:1;">&#8592; {{ _('Zurueck') }}</a>
-    <a href="{{ url_for('share_card', filename=filename) }}" class="btn btn-ghost" style="position:relative;z-index:1;" title="Share Card">
-        <i data-lucide="share-2" style="width:14px;height:14px;vertical-align:middle;"></i> {{ _('Teilen') }}
-    </a>
-    <button id="mn-trigger" class="btn btn-ghost" style="position:relative;z-index:1;" onclick="narrateMatch()" title="{{ _('KI-Analyse des gesamten Matches') }}">
-        <i data-lucide="sparkles" style="width:14px;height:14px;vertical-align:middle;"></i> {{ _('KI-Analyse') }}
-    </button>
-    <div style="position:relative;z-index:1;flex:1;">
-        <h2 style="margin:0;font-size:22px;">
-            {{ data.match.map }}
-            <span class="{% if data.match.result == 'Sieg' %}win{% elif data.match.result == 'Niederlage' %}loss{% else %}draw{% endif %}" style="font-size:26px;">
-                {{ data.match.score_own }}:{{ data.match.score_enemy }}
-            </span>
-        </h2>
-        <div style="display:flex;gap:var(--space-3);align-items:center;margin-top:var(--space-1);">
-            {% if data.match.result == 'Sieg' %}<span class="tag tag-win">{{ _('Sieg') }}</span>
-            {% elif data.match.result == 'Niederlage' %}<span class="tag tag-loss">{{ _('Niederlage') }}</span>
-            {% else %}<span class="tag tag-draw">{{ data.match.result }}</span>{% endif %}
-            {% if data.match.get('date', '') %}
-            <span style="font-size:13px;color:var(--color-neutral-500);">{{ data.match.get('date', '') }}</span>
+    <!-- Top row: nav + actions -->
+    <div style="position:relative;z-index:1;display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4);flex-wrap:wrap;">
+        <a href="{{ url_for('exports') }}" class="btn btn-ghost">&#8592; {{ _('Zurueck') }}</a>
+        <a href="{{ url_for('share_card', filename=filename) }}" class="btn btn-ghost" title="Share Card">
+            <i data-lucide="share-2" style="width:14px;height:14px;vertical-align:middle;"></i> {{ _('Teilen') }}
+        </a>
+        <button id="mn-trigger" class="btn btn-ghost" onclick="narrateMatch()" title="{{ _('KI-Analyse des gesamten Matches') }}">
+            <i data-lucide="sparkles" style="width:14px;height:14px;vertical-align:middle;"></i> {{ _('KI-Analyse') }}
+        </button>
+        {% if demo_path and data.scoreboard|length > 1 %}
+        <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);"></span>
+        <select id="player-switch" class="input" style="width:auto;min-height:28px;padding:2px 10px;font-size:12px;background:rgba(0,0,0,0.3);border-color:rgba(255,255,255,0.1);" onchange="switchPlayer(this.value)">
+            <option value="">{{ p.name }}</option>
+            {% for s in data.scoreboard %}
+            {% if not s.is_target %}
+            <option value="{{ s.steam_id }}">{{ s.name }} ({{ s.kills }}/{{ s.deaths }})</option>
             {% endif %}
-            {% if data.match.get('total_rounds') %}
-            <span style="font-size:12px;color:var(--color-neutral-600);">{{ data.match.total_rounds }} {{ _('Runden') }}</span>
+            {% endfor %}
+        </select>
+        {% endif %}
+    </div>
+    <!-- Main info row -->
+    <div style="position:relative;z-index:1;display:flex;align-items:center;gap:var(--space-5);">
+        <div style="flex:1;">
+            <h2 style="margin:0;font-size:24px;letter-spacing:-0.02em;">
+                {{ data.match.map }}
+                <span class="{% if data.match.result == 'Sieg' %}win{% elif data.match.result == 'Niederlage' %}loss{% else %}draw{% endif %}" style="font-size:28px;font-weight:700;">
+                    {{ data.match.score_own }}:{{ data.match.score_enemy }}
+                </span>
+            </h2>
+            <div style="display:flex;gap:var(--space-3);align-items:center;margin-top:var(--space-2);flex-wrap:wrap;">
+                {% if data.match.result == 'Sieg' %}<span class="tag tag-win">{{ _('Sieg') }}</span>
+                {% elif data.match.result == 'Niederlage' %}<span class="tag tag-loss">{{ _('Niederlage') }}</span>
+                {% else %}<span class="tag tag-draw">{{ data.match.result }}</span>{% endif %}
+                <span style="font-size:13px;color:var(--color-neutral-500);">{{ data.match.get('datetime', data.match.get('date', '')) }}</span>
+                {% if data.match.get('total_rounds') %}
+                <span style="font-size:12px;color:var(--color-neutral-600);">{{ data.match.total_rounds }} {{ _('Runden') }}</span>
+                {% endif %}
+                <span style="font-size:12px;color:var(--color-neutral-600);">{{ p.name }}</span>
+            </div>
+        </div>
+        {% if p.get('rating') %}
+        <div style="text-align:center;min-width:70px;">
+            <div style="font-family:var(--font-heading);font-size:34px;font-weight:700;line-height:1;{% if p.rating >= 1.1 %}color:var(--color-green);{% elif p.rating >= 0.9 %}color:var(--color-text);{% else %}color:var(--color-red);{% endif %}">{{ p.rating }}</div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--color-neutral-500);margin-top:2px;">Rating</div>
+            {% if player_avg and player_avg.rating %}
+            {% set rd = p.rating - player_avg.rating %}
+            <div style="font-size:10px;margin-top:2px;{% if rd > 0 %}color:#4ade80;{% elif rd < 0 %}color:#f87171;{% else %}color:var(--color-neutral-600);{% endif %}">
+                {% if rd > 0 %}&#9650; +{{ rd|round(2) }}{% elif rd < 0 %}&#9660; {{ rd|round(2) }}{% else %}&#9644; {{ _('Schnitt') }}{% endif %}
+            </div>
             {% endif %}
         </div>
+        {% endif %}
     </div>
-    {% if p.get('rating') %}
-    <div style="position:relative;z-index:1;text-align:center;">
-        <div style="font-family:var(--font-heading);font-size:32px;font-weight:700;{% if p.rating >= 1.1 %}color:var(--color-green);{% elif p.rating >= 0.9 %}color:var(--color-text);{% else %}color:var(--color-red);{% endif %}">{{ p.rating }}</div>
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--color-neutral-500);">Rating</div>
-    </div>
-    {% endif %}
 </div>
 
 <!-- Match Narration Panel -->
@@ -219,30 +243,45 @@
     </div>
 </div>
 
-<!-- Stats overview -->
+<!-- ══════ Stats overview ══════ -->
+{% macro trend_arrow(current, avg_key) %}
+{% if player_avg and player_avg.get(avg_key) %}
+{% set diff = current - player_avg[avg_key] %}
+<span style="font-size:10px;display:block;margin-top:2px;{% if diff > 0 %}color:#4ade80;{% elif diff < 0 %}color:#f87171;{% else %}color:var(--color-neutral-600);{% endif %}">
+    {% if diff > 0 %}&#9650; +{{ diff|round(1) }}{% elif diff < 0 %}&#9660; {{ diff|round(1) }}{% else %}&#9644;{% endif %}
+    <span style="color:var(--color-neutral-600);font-size:9px;">{{ _('vs') }} &#8709; {{ player_avg[avg_key] }}</span>
+</span>
+{% endif %}
+{% endmacro %}
+
 <div class="grid-3" style="margin-bottom:var(--space-4);">
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker"><abbr title="{{ _('Kill/Death-Verhaeltnis — ueber 1.0 = mehr Kills als Deaths') }}">K/D</abbr></span>
         <span class="ed-stat {% if p.kd >= 1.2 %}sc-green{% elif p.kd >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.kd }}</span>
         <span style="font-size:12px;color:var(--color-neutral-500);">{{ p.kills }} / {{ p.deaths }} / {{ p.assists }}</span>
+        {{ trend_arrow(p.kd, 'kd') }}
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker"><abbr title="{{ _('Average Damage per Round — durchschnittlicher Schaden pro Runde') }}">ADR</abbr></span>
         <span class="ed-stat {% if p.adr >= 80 %}sc-green{% elif p.adr >= 65 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.adr }}</span>
+        {{ trend_arrow(p.adr, 'adr') }}
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker"><abbr title="{{ _('Gesamtbewertung basierend auf Kills, Deaths, Assists, ADR und Impact') }}">Rating</abbr></span>
         <span class="ed-stat {% if p.get('rating', 0) >= 1.1 %}sc-green{% elif p.get('rating', 0) >= 0.9 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.get('rating', '-') }}</span>
+        {% if p.get('rating') %}{{ trend_arrow(p.rating, 'rating') }}{% endif %}
     </div>
 </div>
 <div class="grid-3" style="margin-bottom:var(--space-6);">
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker"><abbr title="{{ _('Kill, Assist, Survived, Traded — Prozent der Runden mit positivem Beitrag') }}">KAST%</abbr></span>
-        <span class="ed-stat">{{ p.kast_pct }}%</span>
+        <span class="ed-stat {% if p.kast_pct >= 75 %}sc-green{% elif p.kast_pct >= 60 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.kast_pct }}%</span>
+        {{ trend_arrow(p.kast_pct, 'kast') }}
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker"><abbr title="{{ _('Headshot-Prozent — Anteil der Kills durch Kopftreffer') }}">HS%</abbr></span>
-        <span class="ed-stat">{{ p.hs_pct }}%</span>
+        <span class="ed-stat {% if p.hs_pct >= 50 %}sc-green{% elif p.hs_pct >= 35 %}sc-yellow{% else %}sc-red{% endif %}">{{ p.hs_pct }}%</span>
+        {{ trend_arrow(p.hs_pct, 'hs_pct') }}
     </div>
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker"><abbr title="{{ _('Anteil der Schuesse im Stillstand — gutes Counter-Strafing bedeutet vor dem Schuss stehen bleiben') }}">Counter-Strafe</abbr></span>
@@ -536,45 +575,54 @@
 <div id="ed-report-raw" style="display:none;">{{ data.report }}</div>
 {% endif %}
 
-<!-- ══════ KI-Analyse ══════ -->
-{% set ai_ready = config.get('ai_provider') == 'gemini' and config.get('gemini_api_key') or config.get('ai_provider', 'ollama') == 'ollama' %}
-{% if ai_ready %}
-<div style="margin-top:var(--space-5);">
-    <button id="ai-analyze-btn" class="btn btn-accent" onclick="requestAiAnalysis()">
-        <i data-lucide="brain" style="width:14px;height:14px;margin-right:4px;"></i> {{ _('KI-Analyse starten') }}
-    </button>
-    <div id="ai-analysis-result" style="display:none;margin-top:var(--space-4);">
-        <div class="card-kicker" style="margin-bottom:8px;">{{ _('KI-Coaching-Analyse') }}</div>
-        <div id="ai-analysis-content" class="card elev-sm" style="padding:var(--space-4);white-space:pre-wrap;line-height:1.7;font-size:13px;"></div>
-    </div>
-</div>
-{% endif %}
-
-<!-- Scoreboard -->
-<details style="margin-top:var(--space-5);">
-    <summary>{{ _('Scoreboard anzeigen') }}</summary>
-    <table class="table" style="margin-top:var(--space-3);">
-        <thead><tr><th>{{ _('Spieler') }}</th><th>K</th><th>D</th><th>A</th><th>ADR</th><th>K/D</th><th></th></tr></thead>
+<!-- ══════ Scoreboard ══════ -->
+{% if data.scoreboard %}
+{% set target_team = p.get('team', '') %}
+{% set team1 = [] %}
+{% set team2 = [] %}
+{% for s in data.scoreboard %}
+    {% if s.is_target or (loop.index0 < 5) %}{% set _ = team1.append(s) %}
+    {% else %}{% set _ = team2.append(s) %}{% endif %}
+{% endfor %}
+<div class="card elev-sm" style="margin-top:var(--space-5);padding:var(--space-4);">
+    <div class="card-kicker" style="margin-bottom:10px;">Scoreboard</div>
+    <table class="table" style="font-size:13px;">
+        <thead><tr>
+            <th>{{ _('Spieler') }}</th><th style="text-align:center;">K</th><th style="text-align:center;">D</th><th style="text-align:center;">A</th>
+            <th style="text-align:center;">ADR</th><th style="text-align:center;">K/D</th><th style="text-align:center;">KAST%</th>
+            {% if demo_path %}<th></th>{% endif %}
+        </tr></thead>
         <tbody>
-            {% for s in data.scoreboard %}
-            <tr{% if s.is_target %} style="background:color-mix(in srgb, var(--color-accent) 10%, transparent);"{% endif %}>
-                <td>{{ s.name }}{% if s.is_target %} <span class="tag tag-accent" style="margin-left:4px;">{{ _('Du') }}</span>{% endif %}</td>
-                <td>{{ s.kills }}</td><td>{{ s.deaths }}</td><td>{{ s.assists }}</td><td>{{ s.adr }}</td><td>{{ s.kd }}</td>
-                <td>
-                    {% if not s.is_target and demo_path %}
-                    <form method="POST" action="{{ url_for('analyze_path') }}" style="margin:0;">
+            {% for s in data.scoreboard|sort(attribute='kills', reverse=True) %}
+            <tr style="{% if s.is_target %}background:color-mix(in srgb, var(--color-accent) 8%, transparent);{% endif %}">
+                <td style="font-weight:{% if s.is_target %}600{% else %}400{% endif %};">
+                    {{ s.name }}
+                    {% if s.is_target %}<span class="tag tag-accent" style="margin-left:4px;font-size:9px;">{{ _('Du') }}</span>{% endif %}
+                </td>
+                <td style="text-align:center;color:#4ade80;">{{ s.kills }}</td>
+                <td style="text-align:center;color:#f87171;">{{ s.deaths }}</td>
+                <td style="text-align:center;">{{ s.assists }}</td>
+                <td style="text-align:center;">{{ s.adr }}</td>
+                <td style="text-align:center;font-weight:600;{% if s.kd >= 1.2 %}color:#4ade80;{% elif s.kd < 0.8 %}color:#f87171;{% endif %}">{{ s.kd }}</td>
+                <td style="text-align:center;">{{ s.kast_pct }}%</td>
+                {% if demo_path %}
+                <td style="text-align:right;">
+                    {% if not s.is_target %}
+                    <form method="POST" action="{{ url_for('analyze_path') }}" style="margin:0;display:inline;">
                         <input type="hidden" name="demo_path" value="{{ demo_path }}">
                         <input type="hidden" name="steamid" value="{{ s.steam_id }}">
                         <input type="hidden" name="player" value="{{ s.name }}">
-                        <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:2px 8px;">{{ _('Analysieren') }}</button>
+                        <button type="submit" class="btn btn-ghost" style="font-size:10px;padding:2px 8px;" title="{{ _('Vollstaendige Analyse fuer diesen Spieler') }}">{{ _('Analysieren') }}</button>
                     </form>
                     {% endif %}
                 </td>
+                {% endif %}
             </tr>
             {% endfor %}
         </tbody>
     </table>
-</details>
+</div>
+{% endif %}
 
 <p style="margin-top:var(--space-6);color:var(--color-neutral-600);font-size:12px;">{{ _('Datei') }}: {{ filename }}</p>
 {% endblock %}
@@ -882,56 +930,20 @@ function closeMatchNarration() {
     }
 })();
 
-function requestAiAnalysis() {
-    var btn = document.getElementById('ai-analyze-btn');
-    var result = document.getElementById('ai-analysis-result');
-    var content = document.getElementById('ai-analysis-content');
-    if (!btn || !result || !content) return;
-
-    btn.disabled = true;
-    btn.textContent = '{{ _("Analysiere...") }}';
-    result.style.display = 'block';
-    content.textContent = '';
-
-    var payload = {
-        report: (document.getElementById('ed-report-raw') || {}).textContent || '',
-        player: {{ data.player | tojson }},
-        match: {{ data.match | tojson }}
-    };
-
-    fetch('{{ url_for("api_ai_analyze_export") }}', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload)
-    }).then(function(resp) {
-        var reader = resp.body.getReader();
-        var decoder = new TextDecoder();
-        var buffer = '';
-
-        function read() {
-            reader.read().then(function(r) {
-                if (r.done) { btn.textContent = '{{ _("KI-Analyse erneut starten") }}'; btn.disabled = false; return; }
-                buffer += decoder.decode(r.value, {stream: true});
-                var lines = buffer.split('\n');
-                buffer = lines.pop();
-                lines.forEach(function(line) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            var d = JSON.parse(line.slice(6));
-                            if (d.text) content.textContent += d.text;
-                            if (d.done) { btn.textContent = '{{ _("KI-Analyse erneut starten") }}'; btn.disabled = false; }
-                        } catch(e) {}
-                    }
-                });
-                read();
-            });
-        }
-        read();
-    }).catch(function(e) {
-        content.textContent = 'Fehler: ' + e.message;
-        btn.textContent = '{{ _("KI-Analyse starten") }}';
-        btn.disabled = false;
-    });
+// Player switch — re-analyze demo for a different player
+function switchPlayer(steamId) {
+    if (!steamId) return;
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ url_for("analyze_path") }}';
+    var fields = {demo_path: '{{ demo_path }}', steamid: steamId, player: ''};
+    for (var k in fields) {
+        var inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = k; inp.value = fields[k];
+        form.appendChild(inp);
+    }
+    document.body.appendChild(form);
+    form.submit();
 }
 </script>
 {% endblock %}
