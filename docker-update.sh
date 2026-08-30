@@ -50,3 +50,4 @@ else
 fi
 
 log "Fertig. Version: $(git rev-parse --short HEAD)"
+log "Update-Script Version: v2"
