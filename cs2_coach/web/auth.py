@@ -17,6 +17,7 @@ import secrets
 import time
 from pathlib import Path
 
+import yaml
 from werkzeug.security import check_password_hash, generate_password_hash
 
 # Endpoints reachable without a session. "static" is required so the login
@@ -72,24 +73,55 @@ def load_or_create_secret_key(config_path: Path) -> bytes:
     return secrets.token_bytes(32)
 
 
-def get_password_hash(cfg: dict) -> str:
+# The password hash is read from disk rather than from an in-memory config
+# dict: gunicorn runs several workers, and a password set through the UI only
+# mutates the dict of the worker that handled that request. The others would
+# keep serving with auth disabled, and a login landing on such a worker would
+# redirect without ever establishing a session. Cached on the config file's
+# mtime so this costs one stat() per request.
+_env_hash: str | None = None
+_cache_mtime: int | None = None
+_cache_hash: str = ""
+
+
+def get_password_hash(config_path: Path) -> str:
     """Return the configured password hash, or "" if auth is off."""
+    global _env_hash, _cache_mtime, _cache_hash
+
     env_pw = os.environ.get("CS2COACH_PASSWORD", "")
     if env_pw:
-        return generate_password_hash(env_pw)
-    auth_cfg = cfg.get("auth") or {}
-    if isinstance(auth_cfg, dict):
-        return (auth_cfg.get("password_hash") or "").strip()
-    return ""
+        # Hashing is deliberately slow - do it once, not per request.
+        if _env_hash is None:
+            _env_hash = generate_password_hash(env_pw)
+        return _env_hash
+
+    try:
+        mtime = config_path.stat().st_mtime_ns
+    except OSError:
+        return ""
+
+    if mtime != _cache_mtime:
+        try:
+            data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            data = {}
+        auth_cfg = data.get("auth") or {}
+        _cache_hash = (
+            (auth_cfg.get("password_hash") or "").strip()
+            if isinstance(auth_cfg, dict) else ""
+        )
+        _cache_mtime = mtime
+
+    return _cache_hash
 
 
-def is_enabled(cfg: dict) -> bool:
+def is_enabled(config_path: Path) -> bool:
     """True if a password is configured and the app should require login."""
-    return bool(get_password_hash(cfg))
+    return bool(get_password_hash(config_path))
 
 
-def verify_password(cfg: dict, password: str) -> bool:
-    stored = get_password_hash(cfg)
+def verify_password(config_path: Path, password: str) -> bool:
+    stored = get_password_hash(config_path)
     if not stored or not password:
         return False
     try:

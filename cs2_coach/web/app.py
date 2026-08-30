@@ -244,14 +244,14 @@ def create_app() -> Flask:
 
     @app.context_processor
     def _inject_auth_state():
-        return {"auth_enabled": auth.is_enabled(cfg)}
+        return {"auth_enabled": auth.is_enabled(CONFIG_PATH)}
 
     # ── Authentication ──────────────────────────────────────────────
     # Only active once a password is configured; otherwise the app stays
     # open so an update can never lock anyone out of a running instance.
     @app.before_request
     def _require_login():
-        if not auth.is_enabled(cfg):
+        if not auth.is_enabled(CONFIG_PATH):
             return None
         if request.endpoint in auth.PUBLIC_ENDPOINTS:
             return None
@@ -259,11 +259,14 @@ def create_app() -> Flask:
             return None
         if request.path.startswith("/api/"):
             return jsonify({"error": "Nicht angemeldet"}), 401
-        return redirect(url_for("login", next=request.full_path.rstrip("?")))
+        wants_html = "text/html" in request.headers.get("Accept", "")
+        if request.method == "GET" and wants_html:
+            return redirect(url_for("login", next=request.full_path.rstrip("?")))
+        return redirect(url_for("login"))
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
-        if not auth.is_enabled(cfg):
+        if not auth.is_enabled(CONFIG_PATH):
             return redirect(url_for("index"))
 
         next_url = request.values.get("next", "") or url_for("index")
@@ -281,7 +284,7 @@ def create_app() -> Flask:
                 flash(f"Zu viele Fehlversuche. Bitte {wait}s warten.", "error")
                 return render_template("login.html", next_url=next_url), 429
 
-            if auth.verify_password(cfg, request.form.get("password", "")):
+            if auth.verify_password(CONFIG_PATH, request.form.get("password", "")):
                 auth.record_success(ip)
                 session.clear()
                 session["authenticated"] = True
@@ -297,7 +300,7 @@ def create_app() -> Flask:
     @app.route("/logout", methods=["GET", "POST"])
     def logout():
         session.clear()
-        if auth.is_enabled(cfg):
+        if auth.is_enabled(CONFIG_PATH):
             return redirect(url_for("login"))
         return redirect(url_for("index"))
 
@@ -1785,7 +1788,7 @@ def create_app() -> Flask:
             notes_count=notes_count,
             pyc_count=pyc_count,
             pycache_count=len(pycache_dirs),
-            auth_enabled=auth.is_enabled(current),
+            auth_enabled=auth.is_enabled(CONFIG_PATH),
             auth_env_managed=bool(os.environ.get("CS2COACH_PASSWORD")),
         )
 
@@ -1830,7 +1833,7 @@ def create_app() -> Flask:
             return redirect(url_for("settings"))
 
         # Changing an existing password requires the old one.
-        if auth.is_enabled(cfg) and not auth.verify_password(cfg, current):
+        if auth.is_enabled(CONFIG_PATH) and not auth.verify_password(CONFIG_PATH, current):
             flash("Aktuelles Passwort ist falsch.", "error")
             return redirect(url_for("settings"))
 
