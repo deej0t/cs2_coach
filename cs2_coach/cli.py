@@ -120,7 +120,7 @@ def analyze(ctx, demo_path, player, steamid, no_export, raw, raw_out, raw_stdout
             console.print("[red]Kein Obsidian-Vault-Pfad konfiguriert![/red]")
             return
 
-        filepath = export_match(result, report, vault_path, subfolder)
+        filepath, _ = export_match(result, report, vault_path, subfolder)
         filepath_str = str(filepath).replace("\\", "/")
         console.print(
             f"\n[bold green]OK[/bold green] Obsidian-Notiz exportiert: "

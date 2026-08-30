@@ -302,11 +302,16 @@ def create_app() -> Flask:
             vault_path = cfg.get("obsidian_vault_path", "")
             subfolder = cfg.get("coach_subfolder", "CS2-Coach")
             obsidian_path = None
+            json_filename = None
             if vault_path:
-                obsidian_path = str(export_match(result, report, vault_path, subfolder))
+                md_path, json_filename = export_match(result, report, vault_path, subfolder)
+                obsidian_path = str(md_path)
 
             # Discord webhook (file upload route)
             _post_discord(cfg.get("discord_webhook", ""), result, cfg)
+
+            if json_filename:
+                return redirect(url_for("view_export", filename=json_filename))
 
             return render_template(
                 "result.html",
@@ -347,11 +352,16 @@ def create_app() -> Flask:
             vault_path = cfg.get("obsidian_vault_path", "")
             subfolder = cfg.get("coach_subfolder", "CS2-Coach")
             obsidian_path = None
+            json_filename = None
             if vault_path:
-                obsidian_path = str(export_match(result, report, vault_path, subfolder))
+                md_path, json_filename = export_match(result, report, vault_path, subfolder)
+                obsidian_path = str(md_path)
 
             # Discord webhook (path-based route)
             _post_discord(cfg.get("discord_webhook", ""), result, cfg)
+
+            if json_filename:
+                return redirect(url_for("view_export", filename=json_filename))
 
             return render_template(
                 "result.html",

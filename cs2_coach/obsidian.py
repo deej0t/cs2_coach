@@ -10,7 +10,7 @@ from .parser import MatchResult, PlayerStats
 
 
 def export_match(result: MatchResult, coach_report: str, vault_path: str,
-                 subfolder: str = "CS2-Coach") -> Path:
+                 subfolder: str = "CS2-Coach") -> tuple[Path, str]:
     vault = Path(vault_path)
     coach_dir = vault / subfolder
     coach_dir.mkdir(parents=True, exist_ok=True)
@@ -38,7 +38,7 @@ def export_match(result: MatchResult, coach_report: str, vault_path: str,
         encoding="utf-8",
     )
 
-    return md_path
+    return md_path, json_filename
 
 
 def _compact_kill_positions(positions: list[dict], target_id: str) -> list[dict]:
