@@ -761,8 +761,17 @@ def create_app() -> Flask:
 
         data = json.loads(filepath.read_text(encoding="utf-8"))
         analysis = _analyze_rounds(data)
+        # Resolve demo path for re-analysis with different player
+        demo_file = data.get("match", {}).get("demo_file", "")
+        demo_path = ""
+        if demo_file:
+            demo_folder = cfg.get("demo_folder", "")
+            if demo_folder:
+                candidate = Path(demo_folder) / demo_file
+                if candidate.exists():
+                    demo_path = str(candidate)
         return render_template("export_detail.html", data=data, analysis=analysis,
-                               filename=filename, config=cfg)
+                               filename=filename, demo_path=demo_path, config=cfg)
 
     @app.route("/share/<path:filename>")
     def share_card(filename):

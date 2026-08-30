@@ -540,12 +540,22 @@
 <details style="margin-top:var(--space-5);">
     <summary>{{ _('Scoreboard anzeigen') }}</summary>
     <table class="table" style="margin-top:var(--space-3);">
-        <thead><tr><th>{{ _('Spieler') }}</th><th>K</th><th>D</th><th>A</th><th>ADR</th><th>K/D</th></tr></thead>
+        <thead><tr><th>{{ _('Spieler') }}</th><th>K</th><th>D</th><th>A</th><th>ADR</th><th>K/D</th><th></th></tr></thead>
         <tbody>
             {% for s in data.scoreboard %}
             <tr{% if s.is_target %} style="background:color-mix(in srgb, var(--color-accent) 10%, transparent);"{% endif %}>
                 <td>{{ s.name }}{% if s.is_target %} <span class="tag tag-accent" style="margin-left:4px;">{{ _('Du') }}</span>{% endif %}</td>
                 <td>{{ s.kills }}</td><td>{{ s.deaths }}</td><td>{{ s.assists }}</td><td>{{ s.adr }}</td><td>{{ s.kd }}</td>
+                <td>
+                    {% if not s.is_target and demo_path %}
+                    <form method="POST" action="{{ url_for('analyze_path') }}" style="margin:0;">
+                        <input type="hidden" name="demo_path" value="{{ demo_path }}">
+                        <input type="hidden" name="steamid" value="{{ s.steam_id }}">
+                        <input type="hidden" name="player" value="{{ s.name }}">
+                        <button type="submit" class="btn btn-ghost" style="font-size:11px;padding:2px 8px;">{{ _('Analysieren') }}</button>
+                    </form>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
