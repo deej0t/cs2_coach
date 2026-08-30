@@ -420,11 +420,7 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
 
     # 2) Damage
     if hurt_df is not None:
-        for _, dmg in hurt_df.iterrows():
-            attacker_id = str(dmg.get("attacker_steamid", ""))
-            amount = int(dmg.get("dmg_health", 0))
-            if attacker_id in player_lookup:
-                player_lookup[attacker_id].damage += amount
+        _process_damage(hurt_df, round_ticks, player_lookup)
 
     # 3) Counter-Strafing + Spray + Distance (bullet_damage)
     if bullet_df is not None:
@@ -538,6 +534,8 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
 # -- Starting Side Detection --
 
 # In-game team_num values from kill events (NOT parse_player_info team_number)
+_MAX_HEALTH = 100
+
 _INGAME_T = 2
 _INGAME_CT = 3
 
@@ -627,6 +625,43 @@ def _assign_starting_sides(parser: DemoParser, player_lookup: dict[str, PlayerSt
 
 
 # -- Kill-Processing --
+
+def _process_damage(hurt_df, round_ticks, player_lookup):
+    """Schaden aufsummieren, gedeckelt auf die Rest-HP des Opfers.
+
+    player_hurt.dmg_health meldet den rohen Waffenschaden, nicht die
+    tatsaechlich entfernte Gesundheit: ein toedlicher Treffer auf ein Opfer
+    mit 20 HP kann dort als 108 oder (bei Explosionen) als 438 auftauchen.
+    Ungedeckelt summiert ergab das einen um rund 30 Prozent zu hohen ADR.
+
+    Deshalb werden die HP jedes Opfers je Runde mitgefuehrt und jeder
+    Treffer auf den verbleibenden Wert begrenzt. Team- und Selbstschaden
+    zaehlen nicht auf das eigene Konto.
+    """
+    hurt_df = hurt_df.sort_values("tick") if "tick" in hurt_df.columns else hurt_df
+
+    health: dict[tuple[int, str], int] = {}  # (Runde, Opfer) -> aktuelle HP
+
+    for _, dmg in hurt_df.iterrows():
+        attacker_id = str(dmg.get("attacker_steamid", ""))
+        victim_id = str(dmg.get("user_steamid", ""))
+        raw = int(dmg.get("dmg_health", 0) or 0)
+        if raw <= 0:
+            continue
+
+        key = (_tick_to_round(int(dmg.get("tick", 0)), round_ticks), victim_id)
+        remaining = health.get(key, _MAX_HEALTH)
+        actual = max(0, min(raw, remaining))
+        health[key] = remaining - actual
+
+        if actual == 0 or attacker_id not in player_lookup:
+            continue
+        # Selbstschaden (Fallschaden, eigene Granate) ist keine Leistung
+        if attacker_id == victim_id:
+            continue
+
+        player_lookup[attacker_id].damage += actual
+
 
 def _process_kills(kills_df, round_ticks, player_lookup, round_first_kill):
     for _, kill in kills_df.iterrows():
