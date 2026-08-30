@@ -23,6 +23,7 @@ COMMITS=$(git log --oneline "$LOCAL".."$REMOTE" | wc -l)
 log "Update: $COMMITS neue Commits"
 git log --oneline "$LOCAL".."$REMOTE"
 
+git checkout -- . 2>/dev/null
 git pull origin "$BRANCH" --quiet
 log "Code aktualisiert: $(git log --oneline -1)"
 
@@ -40,4 +41,3 @@ else
 fi
 
 log "Fertig. Version: $(git rev-parse --short HEAD)"
-log "Update-Script Version: v2"
