@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — {{ _('Gegner-Prognose') }}{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom:var(--space-2);">{{ _('Gegner-Prognose') }}</h2>
+<p style="font-size:12px;color:var(--color-neutral-500);margin-top:0;margin-bottom:var(--space-5);">
+    {{ _('Verhaltensmuster wiederkehrender Gegner aus') }} {{ p.match_count|default(0) }} {{ _('Matches') }}.
+</p>
+
+{% if not p.has_data %}
+<div class="card elev-sm">
+    <p class="card-body" style="margin:0;">
+        {{ _('Keine wiederkehrenden Gegner gefunden. Sobald dir dieselben Spieler mehrfach begegnen, entstehen hier Prognosen zu Spielstil, Waffenwahl und passenden Gegenmassnahmen.') }}
+    </p>
+</div>
+{% else %}
+
+<div style="display:flex;gap:var(--space-5);font-size:13px;color:var(--color-neutral-500);margin-bottom:var(--space-5);">
+    <span>{{ _('Wiederkehrend') }}: <strong style="color:var(--color-text);">{{ p.total_recurring }}</strong></span>
+    <span>{{ _('Angstgegner') }}: <strong style="color:var(--color-red);">{{ p.nemesis_count }}</strong></span>
+    <span>{{ _('Lieblingsopfer') }}: <strong style="color:var(--color-green);">{{ p.victim_count }}</strong></span>
+</div>
+
+<div class="grid-2" style="gap:var(--space-4);">
+{% for o in p.predictions %}
+    <div class="card elev-sm" style="border-left:2px solid {% if o.threat == 'high' %}var(--color-red){% elif o.threat == 'low' %}var(--color-green){% else %}var(--color-neutral-700){% endif %};">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-3);">
+            <h3 class="card-title" style="margin:0;font-size:14px;">{{ o.name }}</h3>
+            <span class="tag tag-neutral">{{ o.matches }}× {{ _('begegnet') }}</span>
+        </div>
+
+        <div style="font-size:12px;color:var(--color-neutral-500);margin-top:var(--space-2);">
+            {{ o.playstyle }} · {{ o.threat_label }}
+            {% if o.confidence %} · {{ _('Konfidenz') }} {{ o.confidence }}%{% endif %}
+        </div>
+
+        <table class="table" style="margin-top:var(--space-3);"><tbody>
+            <tr><td>{{ _('Duell-Bilanz') }}</td><td>{{ o.kills_on_you }}{{ _('K gegen dich') }} / {{ o.deaths_to_you }}{{ _('K von dir') }} (K/D {{ o.kd_vs }})</td></tr>
+            <tr><td>{{ _('Deine Winrate') }}</td><td>{{ o.wr }}%</td></tr>
+            <tr><td>HS%</td><td>{{ o.their_hs_pct }}%</td></tr>
+            <tr><td>{{ _('Rating / ADR') }}</td><td>{{ o.avg_rating }} / {{ o.avg_adr }}</td></tr>
+            {% if o.primary_weapon %}<tr><td>{{ _('Hauptwaffe') }}</td><td>{{ o.primary_weapon }}</td></tr>{% endif %}
+            <tr><td>{{ _('Zuletzt') }}</td><td>{{ o.last_seen }}</td></tr>
+        </tbody></table>
+
+        {% if o.tactics %}
+        <div style="margin-top:var(--space-3);">
+            <div class="card-kicker" style="margin-bottom:var(--space-2);">{{ _('Gegenmassnahmen') }}</div>
+            <ul style="margin:0;padding-left:16px;font-size:12px;color:var(--color-neutral-400);">
+                {% for t in o.tactics %}<li style="margin-bottom:3px;">{{ t }}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+{% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}

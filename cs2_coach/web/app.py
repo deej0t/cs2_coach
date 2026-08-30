@@ -23,6 +23,7 @@ from ..parser import parse_demo, MatchResult
 from ..coach import generate_report
 from ..obsidian import export_match
 from ..maps import MAP_RADAR_DATA, game_to_radar
+from .. import findings as findings_mod
 from . import auth
 from ..ai_chat import (
     build_player_context, stream_gemini, stream_ollama, check_ollama_status,
@@ -658,6 +659,34 @@ def create_app() -> Flask:
         habits = _build_habits(export_list)
         return render_template("goals.html", goals=progress, records=records,
                                habits=habits, exports=export_list, config=cfg)
+
+    @app.route("/coaching")
+    def coaching():
+        """Nachverfolgung: welche Empfehlung kam wann, und hat sie gewirkt?"""
+        matches = _load_match_findings(cfg)
+        tracks = findings_mod.build_tracks(matches)
+        by_status = {}
+        for t in tracks:
+            by_status.setdefault(t.status, []).append(t)
+        latest_issues = []
+        if matches:
+            latest_issues = findings_mod.issues(matches[-1].get("player", {}))
+        return render_template(
+            "coaching.html",
+            tracks=tracks,
+            by_status=by_status,
+            matches=matches,
+            latest=matches[-1] if matches else None,
+            latest_issues=latest_issues,
+            status_labels={
+                findings_mod.CHRONIC: "Chronisch",
+                findings_mod.NEW: "Neu",
+                findings_mod.STABLE: "Schwankend",
+                findings_mod.IMPROVING: "Auf dem Weg",
+                findings_mod.RESOLVED: "Erledigt",
+            },
+            config=cfg,
+        )
 
     @app.route("/goals/add", methods=["POST"])
     def goals_add():
@@ -2322,6 +2351,43 @@ Regeln:
         return jsonify(status)
 
     return app
+
+
+def _load_match_findings(cfg: dict) -> list[dict]:
+    """Alle Exports chronologisch aufsteigend fuer die Befund-Nachverfolgung.
+
+    Liest die vollstaendigen Spieler-Dicts, die _get_exports() wegflacht.
+    Die Befunde werden hier bewusst nicht gespeichert, sondern bei Bedarf
+    berechnet: so gibt es nur eine Quelle der Wahrheit fuer die Schwellen,
+    und Aenderungen daran wirken rueckwirkend auf alle Matches.
+    """
+    vault_path = cfg.get("obsidian_vault_path", "")
+    subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+    if not vault_path:
+        return []
+
+    export_dir = Path(vault_path) / subfolder / "exports"
+    if not export_dir.exists():
+        return []
+
+    matches = []
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        match = data.get("match", {})
+        matches.append({
+            "date": match.get("date", ""),
+            "datetime": match.get("datetime", "") or match.get("date", ""),
+            "map": match.get("map", ""),
+            "result": match.get("result", ""),
+            "filename": f.name,
+            "player": data.get("player", {}) or {},
+        })
+
+    matches.sort(key=lambda m: m.get("datetime") or m.get("date") or "")
+    return matches
 
 
 def _get_exports(cfg: dict) -> list[dict]:

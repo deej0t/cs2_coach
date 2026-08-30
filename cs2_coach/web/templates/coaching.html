@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — {{ _('Empfehlungen') }}{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% macro sev_dot(sev) -%}
+{% if sev == 'critical' %}<span title="{{ _('Kritisch') }}" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--color-red);"></span>
+{% elif sev == 'warning' %}<span title="{{ _('Auffaellig') }}" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--color-yellow);"></span>
+{% else %}<span title="OK" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--color-green);"></span>{% endif %}
+{%- endmacro %}
+
+{% set status_color = {
+    'chronic': 'var(--color-red)',
+    'new': 'var(--color-yellow)',
+    'stable': 'var(--color-neutral-500)',
+    'improving': 'var(--color-accent)',
+    'resolved': 'var(--color-green)'
+} %}
+
+{% block content %}
+<h2 style="margin-bottom:var(--space-2);">{{ _('Empfehlungen im Verlauf') }}</h2>
+<p style="font-size:12px;color:var(--color-neutral-500);margin-top:0;margin-bottom:var(--space-5);">
+    {{ _('Ausgewertet ueber') }} {{ matches|length }} {{ _('Matches') }}{% if matches %} ({{ matches[0].date }} – {{ matches[-1].date }}){% endif %}.
+    {{ _('Zeigt, welcher Befund wiederkehrt und ob sich die Metrik seitdem bewegt hat.') }}
+</p>
+
+{% if not tracks %}
+<div class="card elev-sm">
+    <p class="card-body">{{ _('Noch keine Exports vorhanden. Analysiere Demos, um den Verlauf zu fuellen.') }}</p>
+</div>
+{% else %}
+
+<!-- Aktuellstes Match -->
+{% if latest %}
+<div class="card elev-sm" style="margin-bottom:var(--space-5);">
+    <span class="card-kicker">{{ _('Letztes Match') }}</span>
+    <h3 class="card-title" style="margin-bottom:var(--space-3);">
+        {{ latest.map }} — {{ latest.date }}
+    </h3>
+    {% if latest_issues %}
+    <div style="display:flex;flex-wrap:wrap;gap:var(--space-2);">
+        {% for f in latest_issues %}
+        <span class="tag" style="border-color:{{ 'var(--color-red)' if f.severity == 'critical' else 'var(--color-yellow)' }};">
+            {{ f.label }}: {{ f.value }}{{ f.unit }}
+        </span>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p style="font-size:13px;color:var(--color-green);margin:0;">{{ _('Keine Auffaelligkeiten.') }}</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Verlaeufe nach Status -->
+{% for status in ['chronic', 'new', 'stable', 'improving', 'resolved'] %}
+{% if by_status.get(status) %}
+<div style="margin-bottom:var(--space-6);">
+    <div class="card-kicker" style="margin-bottom:var(--space-3);color:{{ status_color[status] }};">
+        {{ status_labels[status] }} <span style="color:var(--color-neutral-600);">({{ by_status[status]|length }})</span>
+    </div>
+
+    <div class="grid-2" style="gap:var(--space-4);">
+    {% for t in by_status[status] %}
+        <div class="card elev-sm" style="border-left:2px solid {{ status_color[status] }};">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-3);">
+                <h3 class="card-title" style="margin:0;font-size:14px;">{{ t.label }}</h3>
+                <span style="font-size:12px;color:var(--color-neutral-500);white-space:nowrap;">
+                    {{ t.issue_count }}/{{ t.total_matches }} {{ _('auffaellig') }}
+                </span>
+            </div>
+
+            <!-- Verlaufswert -->
+            <div style="display:flex;align-items:baseline;gap:var(--space-3);margin-top:var(--space-3);">
+                <span style="font-size:12px;color:var(--color-neutral-600);">{{ _('erste') }} {{ t.first_value }}{{ t.unit }}</span>
+                <span style="color:var(--color-neutral-700);">→</span>
+                <span style="font-size:16px;font-weight:600;">{{ t.recent_value }}{{ t.unit }}</span>
+                {% if t.delta != 0 %}
+                <span style="font-size:12px;font-weight:600;color:{{ 'var(--color-green)' if t.improved else 'var(--color-red)' }};">
+                    {{ '▲' if t.delta > 0 else '▼' }} {{ t.delta|abs }}{{ t.unit }}
+                </span>
+                {% endif %}
+            </div>
+
+            <!-- Sparkline aus Schweregraden -->
+            <div style="display:flex;gap:2px;margin-top:var(--space-3);flex-wrap:wrap;">
+                {% for h in t.history %}
+                <span title="{{ h.date }} · {{ h.map }} · {{ h.value }}{{ t.unit }}"
+                      style="display:inline-block;width:7px;height:14px;border-radius:2px;background:{% if h.severity == 'critical' %}var(--color-red){% elif h.severity == 'warning' %}var(--color-yellow){% else %}var(--color-green){% endif %};"></span>
+                {% endfor %}
+            </div>
+
+            {% if t.current_streak > 1 %}
+            <p style="font-size:12px;color:var(--color-red);margin:var(--space-3) 0 0;">
+                {{ _('Seit') }} {{ t.current_streak }} {{ _('Matches durchgehend auffaellig') }}
+            </p>
+            {% endif %}
+
+            {% if t.status in ['chronic', 'new'] and t.advice %}
+            <p style="font-size:12px;color:var(--color-neutral-400);margin:var(--space-3) 0 0;">{{ t.advice }}</p>
+            {% endif %}
+        </div>
+    {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% endblock %}
