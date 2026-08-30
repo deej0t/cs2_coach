@@ -20,9 +20,10 @@ RUN git clone -b "$CS2COACH_BRANCH" \
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
-# Entrypoint and update script
+# Entrypoint (copy, runs before app code exists on updates)
 RUN cp docker-entrypoint.sh /usr/local/bin/ && chmod +x /usr/local/bin/docker-entrypoint.sh
-RUN cp docker-update.sh /usr/local/bin/ && chmod +x /usr/local/bin/docker-update.sh
+# Update script (symlink so git pull updates it in-place)
+RUN ln -sf /app/docker-update.sh /usr/local/bin/docker-update.sh && chmod +x docker-update.sh
 
 # Create directories for mounted volumes
 RUN mkdir -p /data/demos /data/vault /data/cfg
