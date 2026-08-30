@@ -474,8 +474,14 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
                 player_lookup[sid].rank_wins = int(row.get("num_wins", 0))
 
     # 9) Accuracy (shots fired)
+    # Nur Schusswaffen: Granaten und Messer sind keine Zielschuesse und
+    # blaehten den Nenner um rund zwoelf Prozent auf, was die Accuracy
+    # durchgehend zu schlecht aussehen liess.
     shots_df = _get_event_df(parser, "weapon_fire")
     if shots_df is not None:
+        if "weapon" in shots_df.columns:
+            shots_df = shots_df[~shots_df["weapon"].astype(str).str.contains(
+                "|".join(_NON_GUN_WEAPONS), case=False, na=False)]
         for _, row in shots_df.iterrows():
             sid = str(row.get("user_steamid", ""))
             if sid in player_lookup:

@@ -183,3 +183,25 @@ def test_score_mixes_both_counters():
     assert players["A"].shots_standing == 3
     assert players["A"].shots_running == 1
     assert players["A"].counter_strafe_score == pytest.approx(75.0)
+
+
+# ── Accuracy ────────────────────────────────────────────────────────────
+
+def test_non_gun_weapons_excluded_from_shot_list():
+    """Granaten und Messer duerfen den Accuracy-Nenner nicht aufblaehen.
+
+    Gemessen ueber fuenf Demos: 28 bis 50 Wuerfe pro Match, was die
+    Accuracy um rund zwoelf Prozent relativ zu schlecht aussehen liess.
+    """
+    from cs2_coach.parser import _NON_GUN_WEAPONS
+    for w in ("weapon_hegrenade", "weapon_flashbang", "weapon_smokegrenade",
+              "weapon_molotov", "weapon_incgrenade", "weapon_knife_skeleton",
+              "weapon_taser", "weapon_decoy"):
+        assert any(frag in w for frag in _NON_GUN_WEAPONS), w
+
+
+def test_gun_weapons_survive_the_filter():
+    from cs2_coach.parser import _NON_GUN_WEAPONS
+    for w in ("weapon_ak47", "weapon_m4a1", "weapon_awp", "weapon_deagle",
+              "weapon_usp_silencer", "weapon_mp9", "weapon_famas"):
+        assert not any(frag in w for frag in _NON_GUN_WEAPONS), w
