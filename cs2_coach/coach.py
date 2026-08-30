@@ -224,7 +224,7 @@ def _counter_strafe(s: PlayerStats) -> str:
 
 
 def _spray_control(s: PlayerStats) -> str:
-    if s.burst_kills + s.spray_kills == 0:
+    if s.burst_hits + s.spray_hits == 0:
         return ""
 
     lines = [f"### Spray-Control: {s.burst_spray_ratio} (avg Recoil-Index: {s.avg_recoil_index:.1f})"]

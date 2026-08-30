@@ -492,8 +492,8 @@ def _player_to_dict(p, is_target: bool, include_rating: float | None = None) -> 
         "counter_strafe_pct": round(p.counter_strafe_score, 1),
         "avg_inaccuracy_move": round(p.avg_inaccuracy_move, 5),
         "spray_control": {
-            "burst_kills": p.burst_kills,
-            "spray_kills": p.spray_kills,
+            "burst_hits": p.burst_hits,
+            "spray_hits": p.spray_hits,
             "avg_recoil_index": round(p.avg_recoil_index, 2),
         },
         "weapons": {

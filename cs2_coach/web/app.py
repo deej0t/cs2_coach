@@ -2390,6 +2390,18 @@ def _load_match_findings(cfg: dict) -> list[dict]:
     return matches
 
 
+def _spray_count(spray_control: dict, kind: str) -> int:
+    """Burst-/Spray-Treffer lesen, alte und neue Schluessel.
+
+    Die Felder hiessen frueher burst_kills/spray_kills, zaehlen aber Treffer
+    und keine Kills. Bestehende Exports tragen noch die alten Namen.
+    """
+    if not spray_control:
+        return 0
+    return int(spray_control.get(f"{kind}_hits")
+               or spray_control.get(f"{kind}_kills") or 0)
+
+
 def _get_exports(cfg: dict) -> list[dict]:
     vault_path = cfg.get("obsidian_vault_path", "")
     subfolder = cfg.get("coach_subfolder", "CS2-Coach")
@@ -2469,8 +2481,8 @@ def _get_exports(cfg: dict) -> list[dict]:
                 "flash_enemies": player.get("flash_effectiveness", {}).get("enemies_blinded", 0),
                 "flash_teammates": player.get("flash_effectiveness", {}).get("teammates_blinded", 0),
                 "accuracy": player.get("accuracy", 0),
-                "burst_kills": player.get("spray_control", {}).get("burst_kills", 0),
-                "spray_kills": player.get("spray_control", {}).get("spray_kills", 0),
+                "burst_kills": _spray_count(player.get("spray_control", {}), "burst"),
+                "spray_kills": _spray_count(player.get("spray_control", {}), "spray"),
                 "target_player": player.get("steam_id", ""),
                 "player_stats_map": player_stats_map,
             })
@@ -7581,8 +7593,8 @@ def _build_mechanics(cfg: dict) -> dict:
 
         if ch.get("avg_degrees") is not None:
             crosshair_vals.append(ch["avg_degrees"])
-        spray_burst_total += sp.get("burst_kills", 0)
-        spray_spray_total += sp.get("spray_kills", 0)
+        spray_burst_total += _spray_count(sp, "burst")
+        spray_spray_total += _spray_count(sp, "spray")
         if sp.get("avg_recoil_index") is not None:
             recoil_vals.append(sp["avg_recoil_index"])
         if cs_s is not None:
@@ -8221,8 +8233,8 @@ def _build_motor_skills(cfg: dict) -> dict:
             "crosshair": cp.get("avg_degrees", 0),
             "crosshair_kills": cp.get("kills_analyzed", 0),
             "recoil_index": sp.get("avg_recoil_index", 0) if sp else 0,
-            "burst_kills": sp.get("burst_kills", 0) if sp else 0,
-            "spray_kills": sp.get("spray_kills", 0) if sp else 0,
+            "burst_kills": _spray_count(sp, "burst"),
+            "spray_kills": _spray_count(sp, "spray"),
             "accuracy": player.get("accuracy", 0),
             "avg_inaccuracy": player.get("avg_inaccuracy_move", 0),
             "hs_pct": player.get("hs_pct", 0),

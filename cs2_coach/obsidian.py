@@ -136,10 +136,10 @@ def _player_to_json(p: PlayerStats, is_target: bool,
                 "2k": p.rounds_2k, "3k": p.rounds_3k,
                 "4k": p.rounds_4k, "5k": p.rounds_5k,
             }
-        if p.burst_kills or p.spray_kills or p.avg_recoil_index:
+        if p.burst_hits or p.spray_hits or p.avg_recoil_index:
             d["spray_control"] = {
-                "burst_kills": p.burst_kills,
-                "spray_kills": p.spray_kills,
+                "burst_hits": p.burst_hits,
+                "spray_hits": p.spray_hits,
                 "avg_recoil_index": round(p.avg_recoil_index, 2),
             }
         if p.awp_kills or p.rifle_kills or p.pistol_kills:

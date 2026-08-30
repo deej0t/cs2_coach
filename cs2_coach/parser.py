@@ -32,13 +32,13 @@ class PlayerStats:
     rifle_kills: int = 0
     pistol_kills: int = 0
     # Counter-Strafing (bullet_damage-basiert)
-    shots_accurate: int = 0  # inaccuracy_move == 0
-    shots_moving: int = 0    # inaccuracy_move > 0
+    shots_standing: int = 0  # ueber ALLE Schuesse (weapon_fire + Geschwindigkeit)
+    shots_running: int = 0
     total_shots_hit: int = 0
     avg_inaccuracy_move: float = 0.0
     # Spray Control
-    burst_kills: int = 0     # recoil_index <= 3
-    spray_kills: int = 0     # recoil_index > 6
+    burst_hits: int = 0      # Treffer mit recoil_index <= 3 (NICHT Kills)
+    spray_hits: int = 0      # Treffer mit recoil_index > 6
     avg_recoil_index: float = 0.0
     # Engagement Distance
     avg_fight_distance: float = 0.0
@@ -124,10 +124,10 @@ class PlayerStats:
 
     @property
     def counter_strafe_score(self) -> float:
-        total = self.shots_accurate + self.shots_moving
+        total = self.shots_standing + self.shots_running
         if total == 0:
             return 100.0
-        return (self.shots_accurate / total) * 100
+        return (self.shots_standing / total) * 100
 
     @property
     def awp_rifle_split(self) -> str:
@@ -152,10 +152,10 @@ class PlayerStats:
 
     @property
     def burst_spray_ratio(self) -> str:
-        total = self.burst_kills + self.spray_kills
+        total = self.burst_hits + self.spray_hits
         if total == 0:
             return "Keine Daten"
-        burst_pct = (self.burst_kills / total) * 100
+        burst_pct = (self.burst_hits / total) * 100
         return f"Burst {burst_pct:.0f}% / Spray {100 - burst_pct:.0f}%"
 
     @property
@@ -292,6 +292,18 @@ class MatchResult:
 TRADE_WINDOW_TICKS = 3 * 64  # ~3 Sekunden (Pro-Standard)
 INACCURACY_MOVE_THRESHOLD = 0.005  # Engine-Wert ab dem Bewegung zählt
 
+# Geschwindigkeit (units/s), ab der die Bewegungsungenauigkeit greift.
+# In CS setzt sie bei etwa 34 Prozent der Maximalgeschwindigkeit ein. An 60
+# Treffern mit bekanntem inaccuracy_move kalibriert: stehende Schuesse lagen
+# bei bis zu 86 u/s, bewegte ab 75 u/s.
+COUNTER_STRAFE_SPEED_THRESHOLD = 80.0
+
+# Nur Schusswaffen zaehlen - Granaten und Messer sind keine Aim-Duelle.
+_NON_GUN_WEAPONS = (
+    "grenade", "molotov", "incgrenade", "flashbang", "smoke",
+    "decoy", "knife", "bayonet", "taser", "karambit", "daggers",
+)
+
 AWP_WEAPONS = {"weapon_awp", "awp"}
 RIFLE_WEAPONS = {
     "weapon_ak47", "ak47", "weapon_m4a1", "m4a1",
@@ -425,6 +437,7 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
     # 3) Counter-Strafing + Spray + Distance (bullet_damage)
     if bullet_df is not None:
         _process_bullet_damage(bullet_df, player_lookup)
+    _process_counter_strafe(parser, player_lookup)
 
     # 4) Utility-Usage
     _process_utility(parser, player_lookup)
@@ -535,6 +548,7 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
 
 # In-game team_num values from kill events (NOT parse_player_info team_number)
 _MAX_HEALTH = 100
+_TICKRATE = 64
 
 _INGAME_T = 2
 _INGAME_CT = 3
@@ -724,6 +738,64 @@ def _process_kills(kills_df, round_ticks, player_lookup, round_first_kill):
 
 # -- bullet_damage: Counter-Strafing, Spray, Distance --
 
+def _process_counter_strafe(parser: DemoParser, player_lookup: dict[str, PlayerStats]):
+    """Counter-Strafing ueber ALLE Schuesse bestimmen, nicht nur ueber Treffer.
+
+    bullet_damage traegt zwar inaccuracy_move, feuert aber nur bei Treffern.
+    Schuesse aus der Bewegung gehen ueberdurchschnittlich oft daneben und
+    fehlen dort - in einer Stichprobe waren 81 Prozent aller Schuesse
+    unsichtbar, und die Quote fiel dadurch bis zu 17 Punkte zu gut aus.
+
+    weapon_fire kennt jeden Schuss, aber keine Bewegungsdaten. Die
+    Geschwindigkeit wird deshalb aus dem Positionsdelta zum vorherigen Tick
+    rekonstruiert und gegen COUNTER_STRAFE_SPEED_THRESHOLD geprueft.
+    """
+    shots_df = _get_event_df(parser, "weapon_fire")
+    if shots_df is None or len(shots_df) == 0:
+        return
+    if "weapon" in shots_df.columns:
+        mask = ~shots_df["weapon"].astype(str).str.contains(
+            "|".join(_NON_GUN_WEAPONS), case=False, na=False)
+        shots_df = shots_df[mask]
+    if len(shots_df) == 0:
+        return
+
+    shots = []
+    for _, row in shots_df.iterrows():
+        sid = str(row.get("user_steamid", ""))
+        if sid in player_lookup:
+            shots.append((int(row.get("tick", 0)), sid))
+    if not shots:
+        return
+
+    ticks = {t for t, _ in shots}
+    try:
+        tick_df = parser.parse_ticks(["X", "Y"], ticks=sorted(ticks | {t - 1 for t in ticks}))
+    except Exception:
+        return
+    if tick_df is None or "X" not in tick_df.columns:
+        return
+
+    pos: dict[tuple[int, str], tuple] = {}
+    for _, row in tick_df.iterrows():
+        x, y = row.get("X"), row.get("Y")
+        if x is None or y is None:
+            continue
+        pos[(int(row["tick"]), str(row.get("steamid", "")))] = (float(x), float(y))
+
+    for tick, sid in shots:
+        here = pos.get((tick, sid))
+        before = pos.get((tick - 1, sid))
+        if here is None or before is None:
+            continue
+        speed = math.dist(before, here) * _TICKRATE
+        stats = player_lookup[sid]
+        if speed <= COUNTER_STRAFE_SPEED_THRESHOLD:
+            stats.shots_standing += 1
+        else:
+            stats.shots_running += 1
+
+
 def _process_bullet_damage(bullet_df, player_lookup):
     inaccuracy_sums: dict[str, list[float]] = {}
     recoil_sums: dict[str, list[float]] = {}
@@ -741,19 +813,18 @@ def _process_bullet_damage(bullet_df, player_lookup):
 
         stats.total_shots_hit += 1
 
-        # Counter-Strafing
-        if inacc_move <= INACCURACY_MOVE_THRESHOLD:
-            stats.shots_accurate += 1
-        else:
-            stats.shots_moving += 1
+        # Counter-Strafing wird NICHT hier bestimmt: bullet_damage feuert nur
+        # bei Treffern, und Schuesse aus der Bewegung gehen ueberdurchschnittlich
+        # oft daneben. Ueber Treffer gemessen faellt die Quote dadurch rund acht
+        # Punkte zu gut aus. Siehe _process_counter_strafe().
         inaccuracy_sums.setdefault(attacker_id, []).append(inacc_move)
 
         # Spray Control
         recoil_sums.setdefault(attacker_id, []).append(recoil)
         if recoil <= 3.0:
-            stats.burst_kills += 1
+            stats.burst_hits += 1
         elif recoil > 6.0:
-            stats.spray_kills += 1
+            stats.spray_hits += 1
 
         # Distance
         distance_sums.setdefault(attacker_id, []).append(distance)
