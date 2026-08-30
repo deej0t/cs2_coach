@@ -24,4 +24,15 @@ if ! grep -q "practice_cfg_path" "$CONFIG" 2>/dev/null; then
     echo "practice_cfg_path: /data/cfg" >> "$CONFIG"
 fi
 
+# Auto-update checker (default: alle 6 Stunden, 0 = deaktiviert)
+UPDATE_INTERVAL="${CS2COACH_UPDATE_INTERVAL:-21600}"
+if [ "$UPDATE_INTERVAL" -gt 0 ] 2>/dev/null; then
+    echo "Auto-Update aktiv: prüfe alle ${UPDATE_INTERVAL}s"
+    (while true; do
+        sleep "$UPDATE_INTERVAL"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Auto-Update Check..."
+        docker-update.sh || true
+    done) &
+fi
+
 exec "$@"

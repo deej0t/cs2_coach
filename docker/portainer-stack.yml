@@ -17,6 +17,8 @@ services:
       - CS2COACH_CONFIG=/data/config.yaml
       - PYTHONUNBUFFERED=1
       - TZ=Europe/Berlin
+      # Auto-Update Intervall in Sekunden (default: 21600 = 6h, 0 = aus)
+      - CS2COACH_UPDATE_INTERVAL=21600
     volumes:
       - /mnt/user/appdata/cs2-coach/data:/data
     healthcheck:
