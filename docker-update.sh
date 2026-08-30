@@ -32,19 +32,9 @@ if git diff "$LOCAL" "$REMOTE" --name-only | grep -q "requirements"; then
     pip install -r requirements.txt --quiet
 fi
 
-# Reload gunicorn workers (graceful restart, no downtime)
-# /proc is always available — no need for ps or pkill
-GUNICORN_PID=""
-for pid_dir in /proc/[0-9]*; do
-    pid="${pid_dir##*/}"
-    if grep -qs 'gunicorn' "$pid_dir/cmdline" 2>/dev/null; then
-        # Master is PID 1 or lowest gunicorn PID
-        GUNICORN_PID="$pid"
-        break
-    fi
-done
-if [ -n "$GUNICORN_PID" ] && kill -HUP "$GUNICORN_PID" 2>/dev/null; then
-    log "Gunicorn neu geladen (PID $GUNICORN_PID)."
+# Reload gunicorn (PID 1 via exec in entrypoint, graceful restart)
+if kill -HUP 1 2>/dev/null; then
+    log "Gunicorn neu geladen (PID 1)."
 else
     log "HINWEIS: Gunicorn konnte nicht neu geladen werden — Container-Neustart nötig."
 fi
