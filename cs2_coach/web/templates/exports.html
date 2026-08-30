@@ -131,11 +131,12 @@
     function sortRows() {
         var col = currentSort.col;
         var dir = currentSort.dir;
+        var th = table.querySelector('th[data-sort="' + col + '"]');
+        var type = th ? th.dataset.type : 'string';
         rows.sort(function(a, b) {
             var va = a.dataset[col] || '';
             var vb = b.dataset[col] || '';
-            var isNum = !isNaN(parseFloat(va)) && !isNaN(parseFloat(vb));
-            if (isNum) {
+            if (type === 'number') {
                 var diff = parseFloat(va) - parseFloat(vb);
                 return dir === 'asc' ? diff : -diff;
             }
