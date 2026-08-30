@@ -33,8 +33,9 @@ if git diff "$LOCAL" "$REMOTE" --name-only | grep -q "requirements"; then
 fi
 
 # Reload gunicorn workers (graceful restart, no downtime)
-if pkill -HUP gunicorn 2>/dev/null; then
-    log "Gunicorn neu geladen."
+GUNICORN_PID=$(ps -eo pid,args | grep '[g]unicorn.*wsgi:app' | head -1 | awk '{print $1}')
+if [ -n "$GUNICORN_PID" ] && kill -HUP "$GUNICORN_PID" 2>/dev/null; then
+    log "Gunicorn neu geladen (PID $GUNICORN_PID)."
 else
     log "HINWEIS: Gunicorn konnte nicht neu geladen werden — Container-Neustart nötig."
 fi
