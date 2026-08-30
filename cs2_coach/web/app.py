@@ -738,7 +738,15 @@ def create_app() -> Flask:
     @app.route("/exports")
     def exports():
         export_list = _get_exports(cfg)
-        return render_template("exports.html", exports=export_list, config=cfg)
+        # Build unique players list across all exports
+        players_seen = {}
+        for e in export_list:
+            for sid, p in e.get("player_stats_map", {}).items():
+                if sid not in players_seen:
+                    players_seen[sid] = p.get("name", sid)
+        all_players = sorted(players_seen.items(), key=lambda x: x[1].lower())
+        return render_template("exports.html", exports=export_list,
+                               all_players=all_players, config=cfg)
 
     @app.route("/export/<path:filename>")
     def view_export(filename):
@@ -2129,6 +2137,19 @@ def _get_exports(cfg: dict) -> list[dict]:
                     time_hour = int(dt_str.split(" ")[1].split(":")[0])
                 except (ValueError, IndexError):
                     pass
+            # Build per-player stats lookup from scoreboard
+            scoreboard = data.get("scoreboard", [])
+            player_stats_map = {}
+            for sp in scoreboard:
+                sid = sp.get("steam_id", "")
+                if sid:
+                    player_stats_map[sid] = {
+                        "name": sp.get("name", ""),
+                        "kd": sp.get("kd", 0),
+                        "adr": sp.get("adr", 0),
+                        "kast": sp.get("kast_pct", 0),
+                        "rating": sp.get("rating", ""),
+                    }
             exports.append({
                 "filename": f.name,
                 "date": match.get("date", match.get("datetime", "?")),
@@ -2171,6 +2192,8 @@ def _get_exports(cfg: dict) -> list[dict]:
                 "accuracy": player.get("accuracy", 0),
                 "burst_kills": player.get("spray_control", {}).get("burst_kills", 0),
                 "spray_kills": player.get("spray_control", {}).get("spray_kills", 0),
+                "target_player": player.get("steam_id", ""),
+                "player_stats_map": player_stats_map,
             })
         except (json.JSONDecodeError, KeyError):
             continue

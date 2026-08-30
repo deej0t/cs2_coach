@@ -524,7 +524,7 @@
     <tbody>
         {% for e in exports[:10] %}
         <tr>
-            <td style="color: var(--color-neutral-500);">{{ e.date }}</td>
+            <td style="color: var(--color-neutral-500); white-space: nowrap;">{{ e.datetime or e.date }}</td>
             <td>{{ e.map }}</td>
             <td>{{ e.score }}</td>
             <td>

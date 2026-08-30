@@ -24,6 +24,15 @@
             {% endif %}
         {% endfor %}
     </select>
+    {% if all_players|length > 1 %}
+    <span style="width: 1px; height: 20px; background: var(--color-divider); margin: 0 4px;"></span>
+    <select id="player-filter" class="input" style="width: auto; min-height: 30px; padding: 3px 10px; font-size: 12px; background: var(--color-bg);">
+        <option value="">{{ _('Analysierter Spieler') }}</option>
+        {% for sid, name in all_players %}
+        <option value="{{ sid }}">{{ name }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
 </div>
 
 <div class="table-scroll">
@@ -43,8 +52,8 @@
     </thead>
     <tbody>
         {% for e in exports %}
-        <tr data-result="{{ e.result }}" data-map="{{ e.map }}" data-date="{{ e.date }}" data-kd="{{ e.kd }}" data-adr="{{ e.adr }}" data-kast="{{ e.kast }}" data-rating="{{ e.rating }}" data-score="{{ e.score }}">
-            <td style="color: var(--color-neutral-500);">{{ e.date }}</td>
+        <tr data-result="{{ e.result }}" data-map="{{ e.map }}" data-date="{{ e.datetime or e.date }}" data-kd="{{ e.kd }}" data-adr="{{ e.adr }}" data-kast="{{ e.kast }}" data-rating="{{ e.rating }}" data-score="{{ e.score }}" data-players='{{ e.player_stats_map | tojson }}' data-target="{{ e.target_player }}">
+            <td style="color: var(--color-neutral-500); white-space: nowrap;">{{ e.datetime or e.date }}</td>
             <td>{{ e.map }}</td>
             <td>{{ e.score }}</td>
             <td>
@@ -52,10 +61,10 @@
                 {% elif e.result == 'Niederlage' %}<span class="tag tag-loss">{{ _('Niederlage') }}</span>
                 {% else %}<span class="tag tag-draw">{{ e.result }}</span>{% endif %}
             </td>
-            <td>{{ e.kd }}</td>
-            <td>{{ e.adr }}</td>
-            <td>{{ e.kast }}%</td>
-            <td>{{ e.rating }}</td>
+            <td class="col-kd">{{ e.kd }}</td>
+            <td class="col-adr">{{ e.adr }}</td>
+            <td class="col-kast">{{ e.kast }}%</td>
+            <td class="col-rating">{{ e.rating }}</td>
             <td style="white-space:nowrap;">
                 <a href="{{ url_for('view_export', filename=e.filename) }}" class="btn btn-ghost">Details</a>
                 <a href="{{ url_for('share_card', filename=e.filename) }}" class="btn btn-ghost" title="Share Card"><i data-lucide="share-2" style="width:13px;height:13px;"></i></a>
@@ -152,16 +161,45 @@
         applyFilters();
     });
 
+    // ── Player switching ──
+    var playerFilter = document.getElementById('player-filter');
+    if (playerFilter) {
+        playerFilter.addEventListener('change', function() {
+            var sid = this.value;
+            rows.forEach(function(r) {
+                var players = JSON.parse(r.dataset.players || '{}');
+                var target = r.dataset.target;
+                var p = sid ? players[sid] : players[target];
+                if (!p) return;
+                r.querySelector('.col-kd').textContent = p.kd;
+                r.querySelector('.col-adr').textContent = p.adr;
+                r.querySelector('.col-kast').textContent = p.kast + '%';
+                r.querySelector('.col-rating').textContent = p.rating !== '' ? p.rating : '–';
+                r.dataset.kd = p.kd;
+                r.dataset.adr = p.adr;
+                r.dataset.kast = p.kast;
+                r.dataset.rating = p.rating !== '' ? p.rating : 0;
+            });
+            sortRows();
+        });
+    }
+
     function applyFilters() {
         var visible = 0;
+        var selectedPlayer = playerFilter ? playerFilter.value : '';
         rows.forEach(function(r) {
             var matchResult = currentResultFilter === 'all' || r.dataset.result === currentResultFilter;
             var matchMap = !currentMapFilter || r.dataset.map === currentMapFilter;
-            var show = matchResult && matchMap;
+            var matchPlayer = true;
+            if (selectedPlayer) {
+                var players = JSON.parse(r.dataset.players || '{}');
+                matchPlayer = selectedPlayer in players;
+            }
+            var show = matchResult && matchMap && matchPlayer;
             r.style.display = show ? '' : 'none';
             if (show) visible++;
         });
-        if (currentResultFilter !== 'all' || currentMapFilter) {
+        if (currentResultFilter !== 'all' || currentMapFilter || selectedPlayer) {
             filteredCount.style.display = '';
             filteredCount.textContent = visible + ' {{ _("von") }} ' + rows.length + ' {{ _("angezeigt") }}';
         } else {
