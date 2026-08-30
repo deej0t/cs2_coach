@@ -7,22 +7,22 @@ LABEL org.opencontainers.image.source="https://github.com/deej0t/cs2_coach"
 # System dependencies for demoparser2 (needs Rust bindings compiled)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install Python dependencies (cached layer)
-COPY requirements.txt .
+# Clone repository
+ARG CS2COACH_BRANCH=main
+RUN git clone -b "$CS2COACH_BRANCH" \
+    https://github.com/deej0t/cs2_coach.git .
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
-# Copy application code
-COPY cs2_coach/ cs2_coach/
-COPY wsgi.py .
-COPY config.yaml.example .
-
-# Entrypoint for first-run config setup
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+# Entrypoint and update script
+RUN cp docker-entrypoint.sh /usr/local/bin/ && chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN cp docker-update.sh /usr/local/bin/ && chmod +x /usr/local/bin/docker-update.sh
 
 # Create directories for mounted volumes
 RUN mkdir -p /data/demos /data/vault /data/cfg
