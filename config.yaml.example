@@ -18,3 +18,10 @@ steam_id: ''
 # Wird benoetigt um Demos direkt von Valve-Servern herunterzuladen.
 # Session-Cookies werden lokal gespeichert, Passwort wird NICHT dauerhaft gespeichert.
 steam_username: ''
+
+# Passwortschutz fuer die Web-UI (optional)
+# Ist kein Passwort gesetzt, ist die App ohne Anmeldung erreichbar.
+# Am einfachsten ueber Einstellungen -> Sicherheit setzen; der Hash landet dann hier.
+# Alternativ per Umgebungsvariable CS2COACH_PASSWORD (hat Vorrang vor diesem Wert).
+# auth:
+#   password_hash: 'scrypt:32768:8:1$...'

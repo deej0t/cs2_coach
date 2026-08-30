@@ -420,6 +420,7 @@
             <a href="{{ url_for('graph') }}"       data-page="graph"><i data-lucide="git-fork"></i> {{ _('Wissensgraph') }}</a>
             <a href="{{ url_for('export_csv') }}"  data-page="export_csv"><i data-lucide="download"></i> {{ _('CSV-Export') }}</a>
             <a href="{{ url_for('settings') }}"    data-page="settings"><i data-lucide="settings"></i> {{ _('Einstellungen') }}</a>
+            {% if auth_enabled %}<a href="{{ url_for('logout') }}" data-page="logout"><i data-lucide="log-out"></i> {{ _('Abmelden') }}</a>{% endif %}
         </div>
 
         {% if config and config.get('player_name') %}

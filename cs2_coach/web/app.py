@@ -10,11 +10,11 @@ import sys
 import tempfile
 import time
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import yaml
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, stream_with_context, session
 from werkzeug.utils import secure_filename
 
 from demoparser2 import DemoParser
@@ -23,6 +23,7 @@ from ..parser import parse_demo, MatchResult
 from ..coach import generate_report
 from ..obsidian import export_match
 from ..maps import MAP_RADAR_DATA, game_to_radar
+from . import auth
 from ..ai_chat import (
     build_player_context, stream_gemini, stream_ollama, check_ollama_status,
     call_gemini, call_ollama, build_practice_context, PRACTICE_PLAN_SYSTEM,
@@ -215,19 +216,90 @@ def _post_discord(webhook_url: str, result, cfg: dict) -> None:
 def load_config() -> dict:
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH, encoding="utf-8") as f:
-            return yaml.safe_load(f)
+            return yaml.safe_load(f) or {}
     return {}
+
+
+def _write_config(data: dict) -> None:
+    """Persist the config to disk, preserving every key it is given."""
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        f.write("# CS2-Coach Konfiguration\n")
+        yaml.dump(dict(data), f, default_flow_style=False, allow_unicode=True)
 
 
 def create_app() -> Flask:
     app = Flask(__name__, template_folder="templates", static_folder="static")
-    app.secret_key = os.urandom(24)
+    # Must be stable across restarts and gunicorn workers, otherwise every
+    # worker would sign session cookies with a different key.
+    app.secret_key = auth.load_or_create_secret_key(CONFIG_PATH)
+    app.permanent_session_lifetime = timedelta(days=30)
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
     app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500MB max
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # no static file caching in dev
 
     cfg = load_config()
+
+    @app.context_processor
+    def _inject_auth_state():
+        return {"auth_enabled": auth.is_enabled(cfg)}
+
+    # ── Authentication ──────────────────────────────────────────────
+    # Only active once a password is configured; otherwise the app stays
+    # open so an update can never lock anyone out of a running instance.
+    @app.before_request
+    def _require_login():
+        if not auth.is_enabled(cfg):
+            return None
+        if request.endpoint in auth.PUBLIC_ENDPOINTS:
+            return None
+        if session.get("authenticated"):
+            return None
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Nicht angemeldet"}), 401
+        return redirect(url_for("login", next=request.full_path.rstrip("?")))
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if not auth.is_enabled(cfg):
+            return redirect(url_for("index"))
+
+        next_url = request.values.get("next", "") or url_for("index")
+        # Only allow relative targets, so ?next= cannot bounce to another host.
+        if not next_url.startswith("/") or next_url.startswith("//"):
+            next_url = url_for("index")
+
+        if session.get("authenticated"):
+            return redirect(next_url)
+
+        if request.method == "POST":
+            ip = request.remote_addr or "?"
+            wait = auth.lockout_remaining(ip)
+            if wait:
+                flash(f"Zu viele Fehlversuche. Bitte {wait}s warten.", "error")
+                return render_template("login.html", next_url=next_url), 429
+
+            if auth.verify_password(cfg, request.form.get("password", "")):
+                auth.record_success(ip)
+                session.clear()
+                session["authenticated"] = True
+                session.permanent = True
+                return redirect(next_url)
+
+            auth.record_failure(ip)
+            flash("Falsches Passwort.", "error")
+            return render_template("login.html", next_url=next_url), 401
+
+        return render_template("login.html", next_url=next_url)
+
+    @app.route("/logout", methods=["GET", "POST"])
+    def logout():
+        session.clear()
+        if auth.is_enabled(cfg):
+            return redirect(url_for("login"))
+        return redirect(url_for("index"))
 
     def _resolve_steam_id() -> str:
         """Get SteamID64 from config or first export."""
@@ -1713,11 +1785,16 @@ def create_app() -> Flask:
             notes_count=notes_count,
             pyc_count=pyc_count,
             pycache_count=len(pycache_dirs),
+            auth_enabled=auth.is_enabled(current),
+            auth_env_managed=bool(os.environ.get("CS2COACH_PASSWORD")),
         )
 
     @app.route("/settings/save", methods=["POST"])
     def settings_save():
-        new_cfg = {
+        # Start from the existing config so keys this form does not manage
+        # (auth block, future additions) survive a save.
+        new_cfg = dict(cfg)
+        new_cfg.update({
             "obsidian_vault_path": request.form.get("obsidian_vault_path", "").strip(),
             "coach_subfolder": request.form.get("coach_subfolder", "CS2-Coach").strip(),
             "player_name": request.form.get("player_name", "").strip(),
@@ -1732,7 +1809,7 @@ def create_app() -> Flask:
             "gemini_api_key": request.form.get("gemini_api_key", cfg.get("gemini_api_key", "")).strip(),
             "ollama_url": request.form.get("ollama_url", cfg.get("ollama_url", "http://192.168.188.71:11434")).strip(),
             "ai_model": request.form.get("ai_model", cfg.get("ai_model", "")).strip(),
-        }
+        })
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             f.write("# CS2-Coach Konfiguration\n")
             yaml.dump(new_cfg, f, default_flow_style=False, allow_unicode=True)
@@ -1740,6 +1817,43 @@ def create_app() -> Flask:
         cfg.clear()
         cfg.update(new_cfg)
         flash("Einstellungen gespeichert.", "success")
+        return redirect(url_for("settings"))
+
+    @app.route("/settings/password", methods=["POST"])
+    def settings_password():
+        current = request.form.get("current_password", "")
+        new_pw = request.form.get("new_password", "")
+        confirm = request.form.get("confirm_password", "")
+
+        if os.environ.get("CS2COACH_PASSWORD"):
+            flash("Passwort wird per CS2COACH_PASSWORD gesetzt und kann hier nicht geaendert werden.", "error")
+            return redirect(url_for("settings"))
+
+        # Changing an existing password requires the old one.
+        if auth.is_enabled(cfg) and not auth.verify_password(cfg, current):
+            flash("Aktuelles Passwort ist falsch.", "error")
+            return redirect(url_for("settings"))
+
+        if new_pw == "":
+            # Empty new password turns the protection off again.
+            cfg.pop("auth", None)
+            _write_config(cfg)
+            session.clear()
+            flash("Passwortschutz deaktiviert.", "success")
+            return redirect(url_for("settings"))
+
+        if len(new_pw) < 6:
+            flash("Passwort muss mindestens 6 Zeichen haben.", "error")
+            return redirect(url_for("settings"))
+        if new_pw != confirm:
+            flash("Passwoerter stimmen nicht ueberein.", "error")
+            return redirect(url_for("settings"))
+
+        cfg["auth"] = {"password_hash": auth.hash_password(new_pw)}
+        _write_config(cfg)
+        session["authenticated"] = True
+        session.permanent = True
+        flash("Passwort gesetzt. Die App ist jetzt geschuetzt.", "success")
         return redirect(url_for("settings"))
 
     @app.route("/settings/clear-cache", methods=["POST"])

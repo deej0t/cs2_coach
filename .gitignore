@@ -29,6 +29,7 @@ Desktop.ini
 # Config (contains API keys and personal data)
 config.yaml
 .steam_session
+.secret_key
 
 # UI mockups
 cs2-coach-ui-mockups/
