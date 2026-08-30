@@ -536,6 +536,20 @@
 <div id="ed-report-raw" style="display:none;">{{ data.report }}</div>
 {% endif %}
 
+<!-- ══════ KI-Analyse ══════ -->
+{% set ai_ready = config.get('ai_provider') == 'gemini' and config.get('gemini_api_key') or config.get('ai_provider', 'ollama') == 'ollama' %}
+{% if ai_ready %}
+<div style="margin-top:var(--space-5);">
+    <button id="ai-analyze-btn" class="btn btn-accent" onclick="requestAiAnalysis()">
+        <i data-lucide="brain" style="width:14px;height:14px;margin-right:4px;"></i> {{ _('KI-Analyse starten') }}
+    </button>
+    <div id="ai-analysis-result" style="display:none;margin-top:var(--space-4);">
+        <div class="card-kicker" style="margin-bottom:8px;">{{ _('KI-Coaching-Analyse') }}</div>
+        <div id="ai-analysis-content" class="card elev-sm" style="padding:var(--space-4);white-space:pre-wrap;line-height:1.7;font-size:13px;"></div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Scoreboard -->
 <details style="margin-top:var(--space-5);">
     <summary>{{ _('Scoreboard anzeigen') }}</summary>
@@ -867,5 +881,57 @@ function closeMatchNarration() {
         }
     }
 })();
+
+function requestAiAnalysis() {
+    var btn = document.getElementById('ai-analyze-btn');
+    var result = document.getElementById('ai-analysis-result');
+    var content = document.getElementById('ai-analysis-content');
+    if (!btn || !result || !content) return;
+
+    btn.disabled = true;
+    btn.textContent = '{{ _("Analysiere...") }}';
+    result.style.display = 'block';
+    content.textContent = '';
+
+    var payload = {
+        report: (document.getElementById('ed-report-raw') || {}).textContent || '',
+        player: {{ data.player | tojson }},
+        match: {{ data.match | tojson }}
+    };
+
+    fetch('{{ url_for("api_ai_analyze_export") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    }).then(function(resp) {
+        var reader = resp.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
+
+        function read() {
+            reader.read().then(function(r) {
+                if (r.done) { btn.textContent = '{{ _("KI-Analyse erneut starten") }}'; btn.disabled = false; return; }
+                buffer += decoder.decode(r.value, {stream: true});
+                var lines = buffer.split('\n');
+                buffer = lines.pop();
+                lines.forEach(function(line) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            var d = JSON.parse(line.slice(6));
+                            if (d.text) content.textContent += d.text;
+                            if (d.done) { btn.textContent = '{{ _("KI-Analyse erneut starten") }}'; btn.disabled = false; }
+                        } catch(e) {}
+                    }
+                });
+                read();
+            });
+        }
+        read();
+    }).catch(function(e) {
+        content.textContent = 'Fehler: ' + e.message;
+        btn.textContent = '{{ _("KI-Analyse starten") }}';
+        btn.disabled = false;
+    });
+}
 </script>
 {% endblock %}

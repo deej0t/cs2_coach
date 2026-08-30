@@ -1883,6 +1883,68 @@ def create_app() -> Flask:
         return render_template("chat.html", config=cfg,
                                ollama_status=ollama_status)
 
+    @app.route("/api/ai-analyze-export", methods=["POST"])
+    def api_ai_analyze_export():
+        """SSE endpoint: AI deep analysis of a single export."""
+        data = request.get_json(silent=True) or {}
+        report = data.get("report", "")
+        player = data.get("player", {})
+        match = data.get("match", {})
+
+        if not report and not player:
+            return jsonify({"error": "Keine Daten"}), 400
+
+        provider = cfg.get("ai_provider", "ollama")
+        player_name = player.get("name", cfg.get("player_name", ""))
+
+        context = (
+            f"Spieler: {player_name}\n"
+            f"Map: {match.get('map', '?')} — {match.get('score_own', '?')}:{match.get('score_enemy', '?')} "
+            f"({match.get('result', '?')})\n"
+            f"K/D: {player.get('kd', '?')} | ADR: {player.get('adr', '?')} | "
+            f"KAST: {player.get('kast_pct', '?')}% | Rating: {player.get('rating', '?')}\n"
+            f"HS%: {player.get('hs_pct', '?')} | Accuracy: {player.get('accuracy', '?')}%\n"
+            f"Opening Kills: {player.get('opening_kills', 0)} | Opening Deaths: {player.get('opening_deaths', 0)}\n"
+            f"Trade Kills: {player.get('trade_kills', 0)} | Survival Rate: {player.get('survival_rate', '?')}%\n"
+            f"Counter-Strafe: {player.get('counter_strafe_score', '?')} | "
+            f"Utility/Runde: {player.get('utility_per_round', '?')}\n\n"
+            f"--- Regelbasierter Coach-Report ---\n{report}"
+        )
+
+        prompt = (
+            "Du bist ein erfahrener CS2-Coach. Analysiere dieses Match tiefgehend. "
+            "Gib 3 konkrete Staerken und 3 konkrete Schwaechen basierend auf den Daten. "
+            "Erstelle dann einen priorisierten Trainingsplan mit 3 Uebungen. "
+            "Beziehe dich auf die tatsaechlichen Zahlen. Antworte auf Deutsch."
+        )
+
+        messages = [{"role": "user", "content": prompt}]
+
+        def generate():
+            try:
+                if provider == "gemini":
+                    api_key = cfg.get("gemini_api_key", "")
+                    if not api_key:
+                        yield f"data: {json.dumps({'text': '**Fehler:** Kein Gemini API Key konfiguriert.'})}\n\n"
+                        yield f"data: {json.dumps({'done': True})}\n\n"
+                        return
+                    model = cfg.get("ai_model", "") or "gemini-2.0-flash"
+                    for chunk in stream_gemini(messages, context, api_key, model):
+                        yield f"data: {json.dumps({'text': chunk})}\n\n"
+                else:
+                    ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
+                    model = cfg.get("ai_model", "")
+                    if not model:
+                        status = check_ollama_status(ollama_url)
+                        model = status["models"][0] if status["online"] and status["models"] else "llama3.1:8b"
+                    for chunk in stream_ollama(messages, context, ollama_url, model):
+                        yield f"data: {json.dumps({'text': chunk})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'text': f'**Fehler:** {e}'})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+
+        return app.response_class(generate(), mimetype="text/event-stream")
+
     @app.route("/api/chat", methods=["POST"])
     def api_chat():
         """SSE endpoint for AI coach chat streaming."""
