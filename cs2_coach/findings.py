@@ -61,6 +61,10 @@ class Rule:
     min_sample: float = 0.0
     # Aeltere Exports kennen den bevorzugten Schluessel noch nicht.
     fallback_path: tuple[str, ...] | None = None
+    # True, wenn der Wert auch dann steigt, wenn schlicht die Runde gewonnen
+    # wurde. Solche Metriken korrelieren zwangslaeufig mit dem Ergebnis und
+    # taugen nicht als Ursache - wer Runden gewinnt, ueberlebt sie auch.
+    outcome_driven: bool = False
 
     def extract(self, player: dict) -> float | None:
         for path in (self.path, self.fallback_path):
@@ -126,6 +130,7 @@ RULES: list[Rule] = [
     ),
     Rule(
         key="adr",
+        outcome_driven=True,
         label="ADR",
         path=("adr",),
         critical=65.0, warning=80.0, lower_is_better=False,
@@ -133,6 +138,7 @@ RULES: list[Rule] = [
     ),
     Rule(
         key="kd",
+        outcome_driven=True,
         label="K/D",
         path=("kd",),
         critical=0.9, warning=1.1, lower_is_better=False,
@@ -140,6 +146,7 @@ RULES: list[Rule] = [
     ),
     Rule(
         key="kast",
+        outcome_driven=True,
         label="KAST",
         path=("kast_pct",),
         critical=65.0, warning=72.0, lower_is_better=False, unit="%",
@@ -154,6 +161,7 @@ RULES: list[Rule] = [
     ),
     Rule(
         key="survival",
+        outcome_driven=True,
         label="Survival",
         path=("survival_rate",),
         critical=30.0, warning=40.0, lower_is_better=False, unit="%",
@@ -322,3 +330,160 @@ def _status_for(t: Track, recent: list[dict]) -> str:
         return NEW if older_issues == 0 and t.total_matches > len(recent) else CHRONIC
 
     return STABLE
+
+
+# ── Persoenliche Baseline ───────────────────────────────────────────────
+
+# Ab so vielen Matches ist eine persoenliche Verteilung aussagekraeftig
+# genug, um Perzentile darauf zu stuetzen.
+MIN_MATCHES_FOR_BASELINE = 10
+
+
+def _percentile(sorted_vals: list[float], p: float) -> float:
+    if not sorted_vals:
+        return 0.0
+    i = int(len(sorted_vals) * p / 100)
+    return sorted_vals[min(i, len(sorted_vals) - 1)]
+
+
+@dataclass
+class Baseline:
+    """Verteilung einer Metrik ueber die eigene Historie.
+
+    Die absoluten Schwellen in RULES beantworten "ist das nach
+    CS2-Massstab gut?". Sie sagen aber nichts darueber, ob ein Match fuer
+    diesen Spieler ungewoehnlich war. Bei einem Spieler, dessen bestes
+    Zehntel unter der Warnschwelle liegt, feuert die Regel in nahezu jedem
+    Match und trennt gute nicht mehr von schlechten Tagen.
+    """
+
+    key: str
+    label: str
+    unit: str = ""
+    n: int = 0
+    p10: float = 0.0
+    p25: float = 0.0
+    p50: float = 0.0
+    p75: float = 0.0
+    p90: float = 0.0
+    always_fires: bool = False
+    never_fires: bool = False
+
+    @property
+    def is_uninformative(self) -> bool:
+        """Regel, die praktisch immer oder nie ausloest, ordnet nichts ein."""
+        return self.always_fires or self.never_fires
+
+    def percentile_of(self, value: float) -> int:
+        """Wo liegt *value* in der eigenen Historie? 0 = schlechtester Wert."""
+        rule = RULES_BY_KEY.get(self.key)
+        if rule is None or self.n == 0:
+            return 50
+        better = sum(1 for v in self._vals if (v > value) == rule.lower_is_better)
+        return round(better / self.n * 100)
+
+    _vals: list[float] = field(default_factory=list)
+
+
+def build_baselines(matches: list[dict]) -> dict[str, Baseline]:
+    """Persoenliche Verteilung je Metrik aus der eigenen Historie."""
+    vals: dict[str, list[float]] = {}
+    for m in matches:
+        for f in evaluate(m.get("player") or {}):
+            vals.setdefault(f.key, []).append(f.value)
+
+    out: dict[str, Baseline] = {}
+    for key, v in vals.items():
+        if len(v) < MIN_MATCHES_FOR_BASELINE:
+            continue
+        rule = RULES_BY_KEY[key]
+        sv = sorted(v)
+        hits = sum(1 for x in v if rule.severity_for(x) != OK)
+        b = Baseline(
+            key=key, label=rule.label, unit=rule.unit, n=len(v),
+            p10=round(_percentile(sv, 10), 2), p25=round(_percentile(sv, 25), 2),
+            p50=round(_percentile(sv, 50), 2), p75=round(_percentile(sv, 75), 2),
+            p90=round(_percentile(sv, 90), 2),
+            always_fires=hits >= len(v) * 0.9,
+            never_fires=hits <= len(v) * 0.05,
+        )
+        b._vals = sv
+        out[key] = b
+    return out
+
+
+# ── Zusammenhang mit dem Spielausgang ───────────────────────────────────
+
+MIN_MATCHES_PER_OUTCOME = 8
+
+
+@dataclass
+class Relevance:
+    """Wie stark trennt eine Metrik Siege von Niederlagen?"""
+
+    key: str
+    label: str
+    unit: str = ""
+    mean_win: float = 0.0
+    mean_loss: float = 0.0
+    effect: float = 0.0          # Cohens d, auf "hoeher ist besser" normiert
+    outcome_driven: bool = False
+
+    @property
+    def strength(self) -> str:
+        a = abs(self.effect)
+        if a >= 0.8:
+            return "gross"
+        if a >= 0.5:
+            return "mittel"
+        if a >= 0.2:
+            return "klein"
+        return "keiner"
+
+
+def build_relevance(matches: list[dict]) -> list[Relevance]:
+    """Effektstaerke je Metrik zwischen Siegen und Niederlagen.
+
+    Wichtig bei der Deutung: Metriken mit outcome_driven=True steigen auch
+    dann, wenn schlicht die Runde gewonnen wurde. Ihr Zusammenhang mit dem
+    Ergebnis ist teilweise ein Zirkelschluss und keine Ursache. Verlaesslich
+    interpretierbar sind vor allem die uebrigen, weil sie Verhalten
+    abbilden, das unabhaengig vom Rundenausgang gesteuert wird.
+    """
+    wins: dict[str, list[float]] = {}
+    losses: dict[str, list[float]] = {}
+
+    for m in matches:
+        result = m.get("result", "")
+        if result not in ("Sieg", "Niederlage"):
+            continue
+        target = wins if result == "Sieg" else losses
+        for f in evaluate(m.get("player") or {}):
+            target.setdefault(f.key, []).append(f.value)
+
+    out: list[Relevance] = []
+    for key, w in wins.items():
+        l = losses.get(key, [])
+        if len(w) < MIN_MATCHES_PER_OUTCOME or len(l) < MIN_MATCHES_PER_OUTCOME:
+            continue
+        rule = RULES_BY_KEY[key]
+        mw, ml = sum(w) / len(w), sum(l) / len(l)
+        pooled = _stdev(w + l)
+        effect = (mw - ml) / pooled if pooled else 0.0
+        if rule.lower_is_better:
+            effect = -effect
+        out.append(Relevance(
+            key=key, label=rule.label, unit=rule.unit,
+            mean_win=round(mw, 2), mean_loss=round(ml, 2),
+            effect=round(effect, 2), outcome_driven=rule.outcome_driven,
+        ))
+
+    out.sort(key=lambda r: -abs(r.effect))
+    return out
+
+
+def _stdev(vals: list[float]) -> float:
+    if len(vals) < 2:
+        return 0.0
+    m = sum(vals) / len(vals)
+    return (sum((v - m) ** 2 for v in vals) / len(vals)) ** 0.5

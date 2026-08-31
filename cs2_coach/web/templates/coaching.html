@@ -50,6 +50,41 @@
 </div>
 {% endif %}
 
+<!-- Zusammenhang mit dem Spielausgang -->
+{% if relevance %}
+<div class="card elev-sm" style="margin-bottom:var(--space-5);">
+    <span class="card-kicker">{{ _('Zusammenhang mit deinen Ergebnissen') }}</span>
+    <h3 class="card-title" style="margin-bottom:var(--space-2);">{{ _('Was trennt deine Siege von deinen Niederlagen?') }}</h3>
+    <p style="font-size:12px;color:var(--color-neutral-500);margin:0 0 var(--space-3);">
+        {{ _('Effektstaerke (Cohens d) ueber alle Matches mit Ergebnis. Ab 0.8 gross, unter 0.2 vernachlaessigbar.') }}
+    </p>
+    <table class="table"><tbody>
+        {% for r in relevance %}
+        <tr>
+            <td>
+                {{ r.label }}
+                {% if r.outcome_driven %}
+                <abbr title="{{ _('Diese Zahl steigt auch dann, wenn schlicht die Runde gewonnen wurde. Der Zusammenhang ist teils Zirkelschluss, keine Ursache.') }}" style="color:var(--color-yellow);font-size:11px;margin-left:4px;">{{ _('ergebnisabhaengig') }}</abbr>
+                {% endif %}
+            </td>
+            <td style="color:var(--color-neutral-500);white-space:nowrap;">
+                {{ r.mean_win }}{{ r.unit }} {{ _('vs') }} {{ r.mean_loss }}{{ r.unit }}
+            </td>
+            <td style="width:120px;">
+                <div style="height:6px;background:var(--color-neutral-900);border-radius:3px;overflow:hidden;">
+                    <div style="height:100%;width:{{ [ (r.effect|abs) / 1.5 * 100, 100 ]|min }}%;background:{% if r.effect < 0.2 %}var(--color-neutral-700){% elif r.effect < 0.5 %}var(--color-yellow){% else %}var(--color-green){% endif %};"></div>
+                </div>
+            </td>
+            <td style="text-align:right;font-weight:600;white-space:nowrap;">{{ r.effect }}</td>
+        </tr>
+        {% endfor %}
+    </tbody></table>
+    <p style="font-size:11px;color:var(--color-neutral-600);margin:var(--space-3) 0 0;">
+        {{ _('Am ehesten handlungsleitend sind die Zeilen OHNE Kennzeichnung: sie bilden Verhalten ab, das du unabhaengig vom Rundenausgang steuerst.') }}
+    </p>
+</div>
+{% endif %}
+
 <!-- Verlaeufe nach Status -->
 {% for status in ['chronic', 'new', 'stable', 'improving', 'resolved'] %}
 {% if by_status.get(status) %}
@@ -87,6 +122,22 @@
                       style="display:inline-block;width:7px;height:14px;border-radius:2px;background:{% if h.severity == 'critical' %}var(--color-red){% elif h.severity == 'warning' %}var(--color-yellow){% else %}var(--color-green){% endif %};"></span>
                 {% endfor %}
             </div>
+
+            {% set b = baselines.get(t.key) %}
+            {% if b and b.is_uninformative %}
+            <p style="font-size:11px;color:var(--color-yellow);margin:var(--space-3) 0 0;">
+                {% if b.always_fires %}
+                {{ _('Diese Regel loest in fast jedem deiner Matches aus und ordnet daher wenig ein. Deine Spanne:') }}
+                {% else %}
+                {{ _('Diese Regel loest bei dir praktisch nie aus. Deine Spanne:') }}
+                {% endif %}
+                {{ b.p10 }}{{ b.unit }} – {{ b.p90 }}{{ b.unit }} ({{ _('typisch') }} {{ b.p50 }}{{ b.unit }})
+            </p>
+            {% elif b %}
+            <p style="font-size:11px;color:var(--color-neutral-600);margin:var(--space-3) 0 0;">
+                {{ _('Deine Spanne') }}: {{ b.p10 }}{{ b.unit }} – {{ b.p90 }}{{ b.unit }} ({{ _('typisch') }} {{ b.p50 }}{{ b.unit }})
+            </p>
+            {% endif %}
 
             {% if t.current_streak > 1 %}
             <p style="font-size:12px;color:var(--color-red);margin:var(--space-3) 0 0;">

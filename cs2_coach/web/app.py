@@ -671,11 +671,15 @@ def create_app() -> Flask:
         latest_issues = []
         if matches:
             latest_issues = findings_mod.issues(matches[-1].get("player", {}))
+        baselines = findings_mod.build_baselines(matches)
+        relevance = findings_mod.build_relevance(matches)
         return render_template(
             "coaching.html",
             tracks=tracks,
             by_status=by_status,
             matches=matches,
+            baselines=baselines,
+            relevance=relevance,
             latest=matches[-1] if matches else None,
             latest_issues=latest_issues,
             status_labels={
