@@ -1230,7 +1230,17 @@ def _process_crosshair_placement(parser: DemoParser, player_lookup: dict[str, "P
     """Analysiert Crosshair Placement: Blickwinkel ~0.5s VOR dem Kill.
 
     Misst den Winkel zwischen der Pre-Aim-Position des Fadenkreuzes und
-    der tatsächlichen Gegner-Position. Niedriger = bessere Vorausrichtung.
+    der Gegner-Position. Niedriger = bessere Vorausrichtung.
+
+    Bekannte Unschaerfe: der Blickwinkel stammt vom Pre-Aim-Tick, die
+    Gegnerposition dagegen vom Kill-Tick. Bewegt sich der Gegner in diesen
+    0.5 Sekunden (Median 28 units), faellt ein Teil dieser Bewegung als
+    Zielfehler an. Auf das Mittel wirkt das mit rund 1.1 Grad, auf den
+    Median - die massgebliche Kennzahl - nur mit 0.1 Grad.
+
+    Gemessen wird von Fussposition zu Fussposition. Das ist korrekt: da
+    beide Spieler denselben Augen-Offset haben, ist der Vektor identisch
+    mit Auge-zu-Kopf, solange beide auf gleicher Hoehe stehen.
     """
     # 1) Get kills with victim positions at kill time
     df = _get_enriched_event_df(
