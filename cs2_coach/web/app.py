@@ -2390,6 +2390,21 @@ def _load_match_findings(cfg: dict) -> list[dict]:
     return matches
 
 
+def _crosshair_value(cp: dict) -> float:
+    """Typischen Winkelfehler lesen, Median bevorzugt.
+
+    Der Median ist massgeblich, weil ein einzelner Ueberraschungs-Kill mit
+    ueber 100 Grad Fehler das Mittel verzerrt. Aeltere Exports kennen nur
+    avg_degrees.
+    """
+    if not cp:
+        return 0.0
+    v = cp.get("median_degrees")
+    if v is None:
+        v = cp.get("avg_degrees")
+    return float(v or 0)
+
+
 def _spray_count(spray_control: dict, kind: str) -> int:
     """Burst-/Spray-Treffer lesen, alte und neue Schluessel.
 
@@ -2458,7 +2473,7 @@ def _get_exports(cfg: dict) -> list[dict]:
                 "kills": player.get("kills", 0),
                 "deaths": player.get("deaths", 0),
                 "assists": player.get("assists", 0),
-                "crosshair_placement": player.get("crosshair_placement", {}).get("avg_degrees", 0),
+                "crosshair_placement": _crosshair_value(player.get("crosshair_placement", {})),
                 "counter_strafe": player.get("counter_strafe_score", 0),
                 "utility_per_round": player.get("utility_per_round", 0),
                 "opening_kills": player.get("opening_kills", 0),
@@ -7591,8 +7606,8 @@ def _build_mechanics(cfg: dict) -> dict:
         cs_s = player.get("counter_strafe_score")
         hs = player.get("hs_pct")
 
-        if ch.get("avg_degrees") is not None:
-            crosshair_vals.append(ch["avg_degrees"])
+        if ch:
+            crosshair_vals.append(_crosshair_value(ch))
         spray_burst_total += _spray_count(sp, "burst")
         spray_spray_total += _spray_count(sp, "spray")
         if sp.get("avg_recoil_index") is not None:
@@ -7626,7 +7641,7 @@ def _build_mechanics(cfg: dict) -> dict:
         entry = {
             "date": date_str,
             "map": map_name,
-            "crosshair": ch.get("avg_degrees"),
+            "crosshair": _crosshair_value(ch),
             "accuracy": acc,
             "cs_score": cs_s,
             "hs_pct": hs,
@@ -8230,7 +8245,7 @@ def _build_motor_skills(cfg: dict) -> dict:
             "date": match.get("date", ""),
             "map": match.get("map", "?"),
             "counter_strafe": player.get("counter_strafe_score", 0) or player.get("counter_strafe_pct", 0),
-            "crosshair": cp.get("avg_degrees", 0),
+            "crosshair": _crosshair_value(cp),
             "crosshair_kills": cp.get("kills_analyzed", 0),
             "recoil_index": sp.get("avg_recoil_index", 0) if sp else 0,
             "burst_kills": _spray_count(sp, "burst"),

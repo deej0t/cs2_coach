@@ -482,6 +482,7 @@ def _player_to_dict(p, is_target: bool, include_rating: float | None = None) -> 
         "trade_kills": p.trade_kills,
         "crosshair_placement": {
             "avg_degrees": round(p.crosshair_placement_avg, 1),
+            "median_degrees": round(p.crosshair_placement_median, 1),
             "kills_analyzed": p.crosshair_placement_kills,
             "rating": p.crosshair_placement_rating,
             "excellent_under_5": p.crosshair_placement_excellent,
@@ -575,7 +576,7 @@ def _print_stats_table(result):
     table.add_row("Opening Duels", f"{s.opening_kills}W / {s.opening_deaths}L ({s.opening_duel_rating})")
     table.add_row("Trade Kills", str(s.trade_kills))
     if s.crosshair_placement_kills > 0:
-        table.add_row("Crosshair Placement", f"{s.crosshair_placement_avg:.1f}° ({s.crosshair_placement_rating})")
+        table.add_row("Crosshair Placement", f"{s.crosshair_placement_median:.1f}° ({s.crosshair_placement_rating})")
     table.add_row("Counter-Strafe", f"{s.counter_strafe_score:.0f}% (inacc: {s.avg_inaccuracy_move:.4f})")
     table.add_row("Spray-Control", f"{s.burst_spray_ratio} (avg recoil: {s.avg_recoil_index:.1f})")
     table.add_row("Waffen-Split", s.awp_rifle_split)

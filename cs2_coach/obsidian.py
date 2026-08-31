@@ -113,6 +113,7 @@ def _player_to_json(p: PlayerStats, is_target: bool,
         "trade_kills": p.trade_kills,
         "crosshair_placement": {
             "avg_degrees": round(p.crosshair_placement_avg, 1),
+            "median_degrees": round(p.crosshair_placement_median, 1),
             "kills_analyzed": p.crosshair_placement_kills,
             "rating": p.crosshair_placement_rating,
             "excellent": p.crosshair_placement_excellent,
@@ -266,7 +267,7 @@ def _build_stats_table(s: PlayerStats) -> str:
         f"| HS% | {s.headshot_pct:.0f}% |",
         f"| Opening Duels | {s.opening_kills}W / {s.opening_deaths}L |",
         f"| Trade Kills | {s.trade_kills} |",
-        f"| Crosshair Placement | {s.crosshair_placement_avg:.1f}° ({s.crosshair_placement_rating}) |",
+        f"| Crosshair Placement | {s.crosshair_placement_median:.1f}° ({s.crosshair_placement_rating}) |",
         f"| Counter-Strafe | {s.counter_strafe_score:.0f}% |",
         f"| Spray-Control | {s.burst_spray_ratio} |",
         f"| Waffen-Split | {s.awp_rifle_split} |",
@@ -319,7 +320,7 @@ def _generate_tags(result: MatchResult) -> list[str]:
     elif result.result_str == "Niederlage":
         tags.append("niederlage")
 
-    if s.crosshair_placement_kills > 0 and s.crosshair_placement_avg > 15:
+    if s.crosshair_placement_kills > 0 and s.crosshair_placement_median > 15:
         tags.append("crosshair-placement-schwach")
     if s.counter_strafe_score < 70:
         tags.append("counter-strafe-problem")
@@ -348,7 +349,7 @@ def _build_links_section(result: MatchResult) -> str:
     if s.rifle_kills > 0:
         links.add("[[Rifle]]")
 
-    if s.crosshair_placement_kills > 0 and s.crosshair_placement_avg > 15:
+    if s.crosshair_placement_kills > 0 and s.crosshair_placement_median > 15:
         links.add("[[Crosshair Placement]]")
     if s.counter_strafe_score < 80:
         links.add("[[Counter-Strafing]]")

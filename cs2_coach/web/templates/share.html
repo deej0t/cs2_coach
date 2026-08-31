@@ -174,7 +174,7 @@
             {% if data.player.crosshair_placement %}
             <div class="sh-detail-row">
                 <span class="sh-detail-label">Crosshair Placement</span>
-                <span class="sh-detail-val">{{ data.player.crosshair_placement.avg_degrees }}° ({{ data.player.crosshair_placement.rating }})</span>
+                <span class="sh-detail-val">{{ data.player.crosshair_placement.median_degrees | default(data.player.crosshair_placement.avg_degrees, true) }}° ({{ data.player.crosshair_placement.rating }})</span>
             </div>
             {% endif %}
             <div class="sh-detail-row">

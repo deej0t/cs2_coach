@@ -377,10 +377,10 @@
         <div class="score-bar">
             <span class="score-bar-label"><abbr title="{{ _('Crosshair Placement — Grad-Abweichung des Fadenkreuzes zur Gegnerposition 0.5s vor dem Kill. Niedriger = besser') }}">CP</abbr></span>
             <div class="score-bar-track">
-                {% set cp_pct = [100 - (stats.crosshair_placement_avg / 40 * 100), 0]|max %}
-                <div class="score-bar-fill" style="width: {{ cp_pct }}%; background: {% if stats.crosshair_placement_avg < 5 %}#4ade80{% elif stats.crosshair_placement_avg < 15 %}#fbbf24{% else %}#f87171{% endif %};"></div>
+                {% set cp_pct = [100 - (stats.crosshair_placement_median / 40 * 100), 0]|max %}
+                <div class="score-bar-fill" style="width: {{ cp_pct }}%; background: {% if stats.crosshair_placement_median < 5 %}#4ade80{% elif stats.crosshair_placement_median < 15 %}#fbbf24{% else %}#f87171{% endif %};"></div>
             </div>
-            <span class="score-bar-value">{{ "%.1f"|format(stats.crosshair_placement_avg) }}°</span>
+            <span class="score-bar-value">{{ "%.1f"|format(stats.crosshair_placement_median) }}°</span>
         </div>
         {% endif %}
         <div class="score-bar">
@@ -629,7 +629,7 @@
 
 <!-- ══════ Focus & Coach ══════ -->
 {% set focus_areas = [] %}
-{% if stats.crosshair_placement_kills > 0 and stats.crosshair_placement_avg > 15 %}{% set _x = focus_areas.append(_('Crosshair Placement')) %}{% endif %}
+{% if stats.crosshair_placement_kills > 0 and stats.crosshair_placement_median > 15 %}{% set _x = focus_areas.append(_('Crosshair Placement')) %}{% endif %}
 {% if stats.counter_strafe_score < 80 %}{% set _x = focus_areas.append(_('Counter-Strafing')) %}{% endif %}
 {% if stats.opening_deaths > stats.opening_kills %}{% set _x = focus_areas.append(_('Opening Duels')) %}{% endif %}
 {% if stats.utility_per_round < 1.5 %}{% set _x = focus_areas.append(_('Utility-Usage')) %}{% endif %}
@@ -676,23 +676,23 @@
     {% if stats.crosshair_placement_kills > 0 %}
     <div class="card coach-card">
         <div class="coach-card-header">
-            <span class="card-title" style="font-size: 14px;">Crosshair Placement: {{ "%.1f"|format(stats.crosshair_placement_avg) }}°</span>
-            {% if stats.crosshair_placement_avg > 15 %}
+            <span class="card-title" style="font-size: 14px;">Crosshair Placement: {{ "%.1f"|format(stats.crosshair_placement_median) }}°</span>
+            {% if stats.crosshair_placement_median > 15 %}
             <span class="tag tag-accent">{{ _('Prioritaet') }}</span>
-            {% elif stats.crosshair_placement_avg <= 5 %}
+            {% elif stats.crosshair_placement_median <= 5 %}
             <span class="tag tag-neutral">{{ _('Staerke') }}</span>
             {% else %}
             <span class="tag tag-neutral">{{ _('Beobachten') }}</span>
             {% endif %}
         </div>
         <div class="card-body">
-            {% if stats.crosshair_placement_avg > 25 %}
+            {% if stats.crosshair_placement_median > 25 %}
             {{ _('Massive Nachkorrekturen bei jedem Fight — immer auf Kopfhoehe pre-aimen.') }}
-            {% elif stats.crosshair_placement_avg > 15 %}
+            {% elif stats.crosshair_placement_median > 15 %}
             {{ _('Crosshair beim Bewegen auf die naechste gefaehrliche Ecke richten.') }}
-            {% elif stats.crosshair_placement_avg > 8 %}
+            {% elif stats.crosshair_placement_median > 8 %}
             {{ _('Solide, aber Feinschliff noetig — tighter an die Angles kleben.') }}
-            {% elif stats.crosshair_placement_avg > 4 %}
+            {% elif stats.crosshair_placement_median > 4 %}
             {{ _('Gute Placement. Minimale Korrekturen noetig.') }}
             {% else %}
             {{ _('Exzellent — Pro-Level Pre-Aim.') }}

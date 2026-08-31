@@ -140,7 +140,7 @@ def _crosshair_placement(s: PlayerStats) -> str:
     if s.crosshair_placement_kills == 0:
         return ""
 
-    avg = s.crosshair_placement_avg
+    avg = s.crosshair_placement_median
     lines = [
         f"### Crosshair Placement: {avg:.1f}° avg ({s.crosshair_placement_rating})",
         f"Verteilung: {s.crosshair_placement_str}",
@@ -799,7 +799,7 @@ def _overall_verdict(r: MatchResult) -> str:
     lines = ["### Gesamtbewertung\n"]
 
     weaknesses = []
-    if s.crosshair_placement_kills > 0 and s.crosshair_placement_avg > 15:
+    if s.crosshair_placement_kills > 0 and s.crosshair_placement_median > 15:
         weaknesses.append("[[Crosshair Placement]]")
     if s.counter_strafe_score < 70:
         weaknesses.append("[[Counter-Strafing]]")
@@ -848,7 +848,7 @@ def _overall_verdict(r: MatchResult) -> str:
     lines.append("\n### Trainingsplan\n")
     plan = []
 
-    if s.crosshair_placement_kills > 0 and s.crosshair_placement_avg > 15:
+    if s.crosshair_placement_kills > 0 and s.crosshair_placement_median > 15:
         plan.append(
             "**Crosshair Placement (10 Min/Tag):** "
             "Workshop-Map \"Prefire Practice\" oder \"Yprac\" — "

@@ -59,16 +59,24 @@ class Rule:
     advice: str = ""
     min_sample_path: tuple[str, ...] | None = None
     min_sample: float = 0.0
+    # Aeltere Exports kennen den bevorzugten Schluessel noch nicht.
+    fallback_path: tuple[str, ...] | None = None
 
     def extract(self, player: dict) -> float | None:
-        node = player
-        for part in self.path:
-            if not isinstance(node, dict) or part not in node:
-                return None
-            node = node[part]
-        if isinstance(node, bool) or not isinstance(node, (int, float)):
-            return None
-        return float(node)
+        for path in (self.path, self.fallback_path):
+            if path is None:
+                continue
+            node = player
+            for part in path:
+                if not isinstance(node, dict) or part not in node:
+                    node = None
+                    break
+                node = node[part]
+            if node is None or isinstance(node, bool):
+                continue
+            if isinstance(node, (int, float)):
+                return float(node)
+        return None
 
     def has_enough_data(self, player: dict) -> bool:
         if self.min_sample_path is None:
@@ -103,7 +111,8 @@ RULES: list[Rule] = [
     Rule(
         key="crosshair_placement",
         label="Crosshair Placement",
-        path=("crosshair_placement", "avg_degrees"),
+        path=("crosshair_placement", "median_degrees"),
+        fallback_path=("crosshair_placement", "avg_degrees"),
         critical=15.0, warning=8.0, lower_is_better=True, unit="°",
         advice="Fadenkreuz auf Kopfhoehe und auf den naechsten erwarteten Angle.",
         min_sample_path=("crosshair_placement", "kills_analyzed"), min_sample=1,
