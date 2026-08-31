@@ -732,6 +732,16 @@ function streamAI(url, payload, bodyEl, onDone) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     }).then(function(resp) {
+        // 401 heisst hier immer: Session weg. Die Seite selbst wird per
+        // Redirect geschuetzt, /api/* antwortet dagegen mit 401 - ohne
+        // Hinweis bliebe nur ein nichtssagendes "HTTP 401" stehen.
+        if (resp.status === 401) {
+            bodyEl.innerHTML = '<p style="color:#f87171;">{{ _("Sitzung abgelaufen.") }} ' +
+                '<a href="{{ url_for("login") }}?next={{ request.path }}" style="color:var(--color-accent);">' +
+                '{{ _("Neu anmelden") }}</a></p>';
+            if (onDone) onDone(null);
+            return;
+        }
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         var reader = resp.body.getReader();
         var decoder = new TextDecoder();
