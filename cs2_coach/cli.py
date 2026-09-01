@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -23,8 +24,20 @@ console = Console()
 DEFAULT_CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 
 
+def _default_config_path() -> Path:
+    """Config-Pfad wie in der Web-App aufloesen.
+
+    Die Web-App liest CS2COACH_CONFIG, die CLI tat es nicht. Im Container
+    liegt die Config unter /data/config.yaml, waehrend die CLI stur
+    /app/config.yaml suchte - die Batch-Analyse brach dort ab, obwohl die
+    Web-Oberflaeche im selben Container laeuft.
+    """
+    env = os.environ.get("CS2COACH_CONFIG", "").strip()
+    return Path(env) if env else DEFAULT_CONFIG_PATH
+
+
 def load_config(config_path: str | None = None) -> dict:
-    path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
+    path = Path(config_path) if config_path else _default_config_path()
     if not path.exists():
         console.print(f"[red]Config nicht gefunden: {path}[/red]")
         console.print(
