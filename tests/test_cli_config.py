@@ -52,15 +52,29 @@ def test_explicit_path_beats_env(monkeypatch, tmp_path):
     assert load_config(str(arg_cfg))["player_name"] == "aus_argument"
 
 
-def test_cli_and_webapp_agree_on_the_same_file(monkeypatch, tmp_path):
-    """Beide Einstiegspunkte muessen dieselbe Config sehen."""
+@pytest.fixture
+def reloaded_webapp(monkeypatch, tmp_path):
+    """Web-App mit temporaerer Config neu laden UND danach zuruecksetzen.
+
+    Ohne das Zuruecksetzen bleibt das Modul auf die temporaere Config
+    zeigen, die nach dem Test verschwindet - nachfolgende Tests finden dann
+    keinen Vault mehr und der Seiten-Smoke-Test schlaegt fehl.
+    """
+    import importlib
+    import cs2_coach.web.app as webapp
+
     cfg = tmp_path / "config.yaml"
     cfg.write_text(yaml.dump({"player_name": "deej0t", "steam_id": "123"}), encoding="utf-8")
     monkeypatch.setenv("CS2COACH_CONFIG", str(cfg))
-
-    import importlib
-    import cs2_coach.web.app as webapp
     importlib.reload(webapp)
+    try:
+        yield webapp
+    finally:
+        monkeypatch.delenv("CS2COACH_CONFIG", raising=False)
+        importlib.reload(webapp)
 
-    assert Path(webapp.CONFIG_PATH) == _default_config_path()
-    assert webapp.load_config() == load_config()
+
+def test_cli_and_webapp_agree_on_the_same_file(reloaded_webapp):
+    """Beide Einstiegspunkte muessen dieselbe Config sehen."""
+    assert Path(reloaded_webapp.CONFIG_PATH) == _default_config_path()
+    assert reloaded_webapp.load_config() == load_config()
