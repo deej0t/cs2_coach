@@ -124,3 +124,59 @@ def test_relevance_is_sorted_by_absolute_effect():
           + [match("Niederlage", utility_per_round=0.8, accuracy=25.0) for _ in range(10)])
     rel = F.build_relevance(ms)
     assert [abs(r.effect) for r in rel] == sorted([abs(r.effect) for r in rel], reverse=True)
+
+
+# ── Trainings-Prioritaeten ──────────────────────────────────────────────
+
+def many(result, n, **over):
+    return [match(result, **over) for _ in range(n)]
+
+
+def test_outcome_driven_metrics_are_never_training_goals():
+    """"Trainiere Ueberleben" ist kein Ratschlag.
+
+    Survival hatte an echten Daten den groessten Effekt (1.17), steigt aber
+    auch dann, wenn schlicht die Runde gewonnen wurde.
+    """
+    ms = many("Sieg", 15, survival_rate=10.0, kd=0.3, adr=40.0, kast_pct=40.0)
+    keys = {t.key for t in F.training_priorities(ms, limit=8)}
+    assert not (keys & {"survival", "kd", "adr", "kast"})
+
+
+def test_uninformative_rule_is_not_a_training_goal():
+    """Counter-Strafing loeste in 93 Prozent der Matches aus und ordnet nichts ein.
+
+    Utility muss dagegen schwanken, sonst waere auch diese Regel nicht
+    trennscharf und beide fielen raus.
+    """
+    util = [0.8, 2.0, 0.9, 2.1, 1.2, 2.2, 0.7, 2.0, 1.1, 2.3, 0.9, 2.1, 1.0, 2.0, 0.8]
+    ms = [match("Sieg", counter_strafe_pct=82.0, utility_per_round=u) for u in util]
+
+    prios = F.training_priorities(ms, limit=5)
+    keys = {t.key for t in prios}
+    assert "counter_strafe" not in keys, "loest immer aus, ordnet nichts ein"
+    assert "utility" in keys, "schwankt und ist damit trennscharf"
+
+
+def test_trainable_issue_is_picked():
+    util = [0.5, 2.0, 0.6, 2.1, 0.4, 2.2, 0.5, 2.0, 0.7, 2.1, 0.5, 2.0, 0.6, 2.2, 0.5]
+    ms = [match("Sieg", utility_per_round=u) for u in util]
+    assert F.training_priorities(ms)[0].key == "utility"
+
+
+def test_limit_is_respected():
+    util = [0.5, 2.0] * 8
+    acc = [12.0, 30.0] * 8
+    ms = [match("Sieg", utility_per_round=u, accuracy=a) for u, a in zip(util, acc)]
+    assert len(F.training_priorities(ms, limit=1)) == 1
+
+
+def test_clean_player_still_gets_trainable_suggestions_only():
+    """Ohne jeden Befund darf trotzdem nichts Ergebnisgetriebenes kommen."""
+    ms = many("Sieg", 15)
+    keys = {t.key for t in F.training_priorities(ms, limit=8)}
+    assert not (keys & {"survival", "kd", "adr", "kast"})
+
+
+def test_no_matches_yields_no_priorities():
+    assert F.training_priorities([]) == []

@@ -341,7 +341,10 @@ def create_app() -> Flask:
     def index():
         exports = _get_exports(cfg)
         map_stats = _get_map_stats(exports)
-        dashboard = _build_dashboard_data(exports, map_stats)
+        dashboard = _build_dashboard_data(
+            exports, map_stats,
+            priorities=findings_mod.training_priorities(_load_match_findings(cfg)),
+        )
         return render_template("index.html", exports=exports, map_stats=map_stats,
                                dashboard=dashboard, config=cfg)
 
@@ -4469,7 +4472,8 @@ def _build_economy_iq(exports: list[dict], cfg: dict) -> dict:
     }
 
 
-def _build_dashboard_data(exports: list[dict], map_stats: list[dict]) -> dict:
+def _build_dashboard_data(exports: list[dict], map_stats: list[dict],
+                         priorities: list | None = None) -> dict:
     """Compute dashboard metrics from export data."""
     if not exports:
         return {"has_data": False}
@@ -4547,9 +4551,22 @@ def _build_dashboard_data(exports: list[dict], map_stats: list[dict]) -> dict:
         "counter_strafe": "Counter-Strafe trainieren — YPRAC Movement Map spielen",
         "utility": "Mehr Utility einsetzen — Smoke/Flash Lineups lernen",
         "crosshair": "Crosshair Placement verbessern — Prefire Maps spielen",
+        # Schluessel aus findings.py, damit training_priorities() greift
+        "crosshair_placement": "Crosshair Placement verbessern — Prefire Maps spielen",
+        "accuracy": "Treffsicherheit erhoehen — kurze Bursts statt Dauerfeuer, Aim-Botz taeglich",
+        "survival": "Weniger Positionen ohne Rueckzugsweg halten",
+        "kd": "Weniger Duelle ohne Trade-Absicherung suchen",
     }
     worst = ranked[-1]
     focus = focus_map.get(worst["key"], "Weiter trainieren!")
+
+    # Trainingsziele kommen aus findings.py, damit Dashboard,
+    # Empfehlungsseite und Trainingsplan dieselbe Quelle nutzen. Das
+    # Benchmark-Ranking oben bleibt fuer den Pro-Vergleich erhalten, taugt
+    # aber nicht als Trainingsziel: es enthaelt Rating und ADR, also
+    # Ergebnisse statt uebbarer Faehigkeiten.
+    if priorities:
+        focus = focus_map.get(priorities[0].key, focus)
 
     # Best/worst map
     best_map = map_stats[0]["map"] if map_stats else None
@@ -4687,7 +4704,8 @@ def _build_dashboard_data(exports: list[dict], map_stats: list[dict]) -> dict:
     training = {
         "exercises": training_exercises,
         "total_minutes": total_training_min,
-        "weak_areas": [w["label"] for w in weaknesses],
+        "weak_areas": ([p.label for p in priorities] if priorities
+                       else [w["label"] for w in weaknesses]),
         "role_exercise": role_exercises[primary_role],
     }
 

@@ -487,3 +487,47 @@ def _stdev(vals: list[float]) -> float:
         return 0.0
     m = sum(vals) / len(vals)
     return (sum((v - m) ** 2 for v in vals) / len(vals)) ** 0.5
+
+
+# ── Trainings-Prioritaeten ──────────────────────────────────────────────
+
+def training_priorities(matches: list[dict], limit: int = 2) -> list[Track]:
+    """Welche Befunde sollte der Spieler tatsaechlich trainieren?
+
+    Unterscheidet sich bewusst von build_tracks():
+
+    - Ergebnisgetriebene Kennzahlen (Survival, K/D, ADR, KAST) fallen raus.
+      Sie steigen auch dann, wenn schlicht die Runde gewonnen wurde, und
+      sind keine Faehigkeit, die man direkt ueben kann. "Trainiere
+      Ueberleben" ist kein Ratschlag.
+    - Regeln ohne Trennschaerfe fallen raus. Loest eine Regel in ueber 90
+      Prozent der Matches aus, ordnet sie nichts ein und taugt nicht zur
+      Priorisierung.
+
+    Damit haben Dashboard, Empfehlungsseite und Trainingsplan dieselbe
+    Quelle, statt sich zu widersprechen.
+    """
+    tracks = build_tracks(matches)
+    baselines = build_baselines(matches)
+
+    candidates = []
+    for t in tracks:
+        rule = RULES_BY_KEY.get(t.key)
+        if rule is None or rule.outcome_driven:
+            continue
+        if t.issue_count == 0:
+            continue
+        b = baselines.get(t.key)
+        if b is not None and b.is_uninformative:
+            continue
+        candidates.append(t)
+
+    if not candidates:
+        # Lieber die trennscharfen Regeln ohne Befund als gar nichts, aber
+        # niemals eine ergebnisgetriebene Kennzahl als Trainingsziel.
+        candidates = [t for t in tracks
+                      if (RULES_BY_KEY.get(t.key) and not RULES_BY_KEY[t.key].outcome_driven)]
+
+    order = {CHRONIC: 0, NEW: 1, STABLE: 2, IMPROVING: 3, RESOLVED: 4}
+    candidates.sort(key=lambda t: (order.get(t.status, 9), -t.issue_count))
+    return candidates[:limit]
