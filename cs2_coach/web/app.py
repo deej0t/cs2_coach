@@ -24,6 +24,7 @@ from ..coach import generate_report
 from ..obsidian import export_match
 from ..maps import MAP_RADAR_DATA, game_to_radar
 from .. import findings as findings_mod
+from .. import chat_store
 from . import auth
 from ..ai_chat import (
     build_player_context, stream_gemini, stream_ollama, check_ollama_status,
@@ -2090,7 +2091,10 @@ def create_app() -> Flask:
         ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
         ollama_status = check_ollama_status(ollama_url) if provider == "ollama" else {"online": False, "models": []}
         return render_template("chat.html", config=cfg,
-                               ollama_status=ollama_status)
+                               ollama_status=ollama_status,
+                               sessions=chat_store.list_sessions(
+                                   cfg.get("obsidian_vault_path", ""),
+                                   cfg.get("coach_subfolder", "CS2-Coach")))
 
     @app.route("/api/ai-analyze-export", methods=["POST"])
     def api_ai_analyze_export():
@@ -2153,6 +2157,43 @@ def create_app() -> Flask:
             yield f"data: {json.dumps({'done': True})}\n\n"
 
         return app.response_class(generate(), mimetype="text/event-stream")
+
+    def _vault_pair():
+        return (cfg.get("obsidian_vault_path", ""),
+                cfg.get("coach_subfolder", "CS2-Coach"))
+
+    @app.route("/api/chat-sessions", methods=["GET"])
+    def api_chat_sessions():
+        """Gespeicherte Chat-Sitzungen auflisten."""
+        return jsonify({"sessions": chat_store.list_sessions(*_vault_pair())})
+
+    @app.route("/api/chat-sessions", methods=["POST"])
+    def api_chat_session_save():
+        """Sitzung anlegen oder fortschreiben."""
+        data = request.get_json(silent=True) or {}
+        messages = data.get("messages", [])
+        if not messages:
+            return jsonify({"error": "Keine Nachrichten"}), 400
+        vault, sub = _vault_pair()
+        if not vault:
+            return jsonify({"error": "Kein Vault konfiguriert"}), 400
+        meta = chat_store.save_session(vault, sub, messages, data.get("id"))
+        if meta is None:
+            return jsonify({"error": "Speichern fehlgeschlagen"}), 500
+        return jsonify(meta)
+
+    @app.route("/api/chat-sessions/<session_id>", methods=["GET"])
+    def api_chat_session_load(session_id):
+        rec = chat_store.load_session(*_vault_pair(), session_id)
+        if rec is None:
+            return jsonify({"error": "Sitzung nicht gefunden"}), 404
+        return jsonify(rec)
+
+    @app.route("/api/chat-sessions/<session_id>", methods=["DELETE"])
+    def api_chat_session_delete(session_id):
+        if not chat_store.delete_session(*_vault_pair(), session_id):
+            return jsonify({"error": "Sitzung nicht gefunden"}), 404
+        return jsonify({"ok": True})
 
     @app.route("/api/chat", methods=["POST"])
     def api_chat():

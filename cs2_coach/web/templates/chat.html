@@ -53,6 +53,15 @@
     <!-- Header -->
     <div class="ch-header">
         <h2 style="margin: 0;">AI Coach</h2>
+        <button class="btn btn-ghost" onclick="newSession()" title="{{ _('Neues Gespraech beginnen') }}">+ {{ _('Neu') }}</button>
+        <select id="ch-sessions" class="input" style="width:auto;max-width:280px;min-height:28px;padding:2px 8px;font-size:12px;">
+            <option value="">{{ _('Gespeicherte Gespraeche') }} ({{ sessions|length }})</option>
+            {% for s in sessions %}
+            <option value="{{ s.id }}">{{ s.updated }} — {{ s.title }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn btn-ghost" id="ch-del" onclick="deleteSession()" style="display:none;" title="{{ _('Dieses Gespraech loeschen') }}">🗑</button>
+        <span id="ch-saved" style="font-size:11px;color:var(--color-neutral-600);"></span>
         {% set provider = config.get('ai_provider', 'ollama') %}
         {% if provider == 'ollama' %}
             {% if ollama_status.online %}
@@ -213,11 +222,85 @@
     function finishStream(text) {
         if (text) {
             history.push({role: 'assistant', content: text});
+            saveSession();
         }
         streaming = false;
         sendBtn.disabled = false;
         inputEl.focus();
     }
+
+    // ── Sitzungen ────────────────────────────────────────────────────
+    // Der Verlauf lag bisher nur in dieser Variable und war nach einem
+    // Reload verloren. Gespeichert wird nach jeder Antwort, damit auch ein
+    // abgebrochenes Gespraech erhalten bleibt.
+    var currentSessionId = null;
+    var sessionSel = document.getElementById('ch-sessions');
+    var savedHint = document.getElementById('ch-saved');
+    var delBtn = document.getElementById('ch-del');
+
+    function saveSession() {
+        if (!history.length) return;
+        fetch('{{ url_for("api_chat_session_save") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: currentSessionId, messages: history })
+        }).then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(meta) {
+            if (!meta) { savedHint.textContent = 'nicht gespeichert'; return; }
+            var isNew = !currentSessionId;
+            currentSessionId = meta.id;
+            delBtn.style.display = '';
+            savedHint.textContent = 'gespeichert ' + meta.updated;
+            if (isNew) {
+                var o = document.createElement('option');
+                o.value = meta.id;
+                o.textContent = meta.updated + ' — ' + meta.title;
+                sessionSel.insertBefore(o, sessionSel.children[1] || null);
+            }
+            sessionSel.value = meta.id;
+          }).catch(function() { savedHint.textContent = 'nicht gespeichert'; });
+    }
+
+    window.newSession = function() {
+        history = [];
+        currentSessionId = null;
+        sessionSel.value = '';
+        delBtn.style.display = 'none';
+        savedHint.textContent = '';
+        messagesEl.innerHTML = '<div class="ch-msg ch-msg-system">' +
+            '{{ _("Frag mich etwas ueber deine CS2-Performance. Ich kenne alle deine analysierten Demos.") }}</div>';
+        if (suggestionsEl) suggestionsEl.style.display = '';
+        inputEl.focus();
+    };
+
+    window.deleteSession = function() {
+        if (!currentSessionId) return;
+        if (!confirm('{{ _("Dieses Gespraech loeschen?") }}')) return;
+        fetch('{{ url_for("api_chat_sessions") }}/' + currentSessionId, { method: 'DELETE' })
+            .then(function() {
+                var opt = sessionSel.querySelector('option[value="' + currentSessionId + '"]');
+                if (opt) opt.remove();
+                newSession();
+            });
+    };
+
+    sessionSel.addEventListener('change', function() {
+        var id = this.value;
+        if (!id) { newSession(); return; }
+        fetch('{{ url_for("api_chat_sessions") }}/' + id)
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(rec) {
+                if (!rec) return;
+                history = rec.messages || [];
+                currentSessionId = rec.id;
+                delBtn.style.display = '';
+                savedHint.textContent = 'geladen';
+                messagesEl.innerHTML = '';
+                history.forEach(function(m) { addMessage(m.role, m.content); });
+                if (suggestionsEl) suggestionsEl.style.display = 'none';
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            });
+    });
 
     function addMessage(role, text) {
         var el = document.createElement('div');
