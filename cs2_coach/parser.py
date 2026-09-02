@@ -1386,6 +1386,7 @@ def _extract_kill_positions(
         round_num = _tick_to_round(tick, round_ticks) + 1  # 1-based
 
         positions.append({
+            "tick": tick,
             "attacker_id": attacker_id,
             "attacker_name": att_name,
             "victim_id": victim_id,

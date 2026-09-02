@@ -60,6 +60,9 @@ def _compact_kill_positions(positions: list[dict], target_id: str) -> list[dict]
             "w": kp["weapon"],
             "hs": kp["headshot"],
             "r": kp["round"],
+            # Tick ermoeglicht das Anspringen des Moments in der Demo
+            # (demo_gototick) und das Replay des Ausschnitts.
+            "tk": kp.get("tick", 0),
             "e": kp["victim_name"] if is_kill else kp["attacker_name"],
         })
     return compact

@@ -526,10 +526,35 @@
             <div class="ed-tl-info" style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">
                 {% if r.player_kills >= 3 %}<span class="ed-tl-mk">{{ r.player_kills }}K</span>{% elif r.player_kills > 0 %}{{ r.player_kills }}K{% elif r.player_died %}0K{% endif %}
                 <button class="rn-btn" onclick="narrateRound({{ r.round }}, this)" title="{{ _('KI-Analyse dieser Runde') }}">KI</button>
+                {% if demo_path %}<button class="rn-btn" onclick="playRound({{ r.round }})" title="{{ _('Runde als 2D-Replay abspielen') }}">▶</button>{% endif %}
             </div>
         </div>
         {% endfor %}
     </div>
+    <!-- 2D-Replay -->
+    {% if demo_path %}
+    <div id="rp-panel" style="display:none;margin-top:var(--space-3);border-top:1px solid var(--color-divider);padding-top:var(--space-3);">
+        <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-2);">
+            <span id="rp-title" style="font-size:13px;font-weight:600;"></span>
+            <button class="btn btn-ghost" id="rp-play">❚❚</button>
+            <select id="rp-speed" class="input" style="width:auto;min-height:26px;padding:2px 8px;font-size:11px;">
+                <option value="0.5">0.5×</option>
+                <option value="1" selected>1×</option>
+                <option value="2">2×</option>
+            </select>
+            <input type="range" id="rp-seek" min="0" value="0" style="flex:1;min-width:140px;accent-color:var(--color-accent);">
+            <span id="rp-time" style="font-size:11px;color:var(--color-neutral-500);min-width:52px;"></span>
+            <button class="rn-close" onclick="closeReplay()">&times;</button>
+        </div>
+        <div style="position:relative;width:100%;max-width:560px;">
+            <canvas id="rp-canvas" width="600" height="600" style="width:100%;border-radius:var(--radius-md);background:var(--color-bg);"></canvas>
+        </div>
+        <p style="font-size:11px;color:var(--color-neutral-600);margin-top:var(--space-2);">
+            {{ _('Rekonstruktion aus Positionsdaten, kein Spielvideo. Gruen = du, blau = Team, rot = Gegner, blass = tot.') }}
+        </p>
+    </div>
+    {% endif %}
+
     <!-- Narration panel -->
     <div id="rn-panel" class="rn-panel">
         <div class="rn-header">
@@ -960,4 +985,121 @@ function switchPlayer(steamId) {
 }
 </script>
 {% include "_partials/kill_map_js.html" %}
+
+{% if demo_path %}
+<script>
+// ── 2D-Replay ────────────────────────────────────────────────────────
+// Rekonstruktion aus Positionsdaten. Kein Spielvideo: dafuer muesste CS2
+// mit GPU laufen. Fuer das Nachvollziehen einer Situation ist die
+// Draufsicht oft brauchbarer, weil alle zehn Spieler gleichzeitig
+// sichtbar sind.
+var rpData = null, rpFrame = 0, rpTimer = null, rpImg = null, rpPlaying = false;
+
+function closeReplay() {
+    if (rpTimer) { clearInterval(rpTimer); rpTimer = null; }
+    rpPlaying = false;
+    document.getElementById('rp-panel').style.display = 'none';
+}
+
+function playRound(round) {
+    var panel = document.getElementById('rp-panel');
+    var title = document.getElementById('rp-title');
+    panel.style.display = 'block';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    title.textContent = 'Runde ' + round + ' — wird geladen...';
+
+    fetch('{{ url_for("api_replay", filename=filename, round_num=0) }}'.replace(/0$/, round))
+        .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
+        .then(function(res) {
+            if (!res.ok) { title.textContent = 'Runde ' + round + ' — ' + (res.j.error || 'Fehler'); return; }
+            rpData = res.j;
+            rpFrame = 0;
+            title.textContent = 'Runde ' + round + ' (' + rpData.duration_s + 's)';
+            var seek = document.getElementById('rp-seek');
+            seek.max = rpData.frames.length - 1;
+            seek.value = 0;
+            rpImg = new Image();
+            rpImg.onload = startReplay;
+            rpImg.onerror = startReplay;
+            rpImg.src = '{{ url_for("static", filename="radars/") }}' + rpData.map + '.png';
+        })
+        .catch(function(e) { title.textContent = 'Fehler: ' + e.message; });
+}
+
+function startReplay() {
+    if (rpTimer) clearInterval(rpTimer);
+    rpPlaying = true;
+    document.getElementById('rp-play').textContent = '❚❚';
+    var fps = rpData.fps * parseFloat(document.getElementById('rp-speed').value);
+    rpTimer = setInterval(function() {
+        rpFrame++;
+        if (rpFrame >= rpData.frames.length) { rpFrame = rpData.frames.length - 1; togglePlay(); }
+        document.getElementById('rp-seek').value = rpFrame;
+        drawReplay();
+    }, 1000 / fps);
+    drawReplay();
+}
+
+function togglePlay() {
+    if (rpPlaying) {
+        clearInterval(rpTimer); rpTimer = null; rpPlaying = false;
+        document.getElementById('rp-play').textContent = '▶';
+    } else if (rpData) {
+        if (rpFrame >= rpData.frames.length - 1) rpFrame = 0;
+        startReplay();
+    }
+}
+
+function drawReplay() {
+    if (!rpData) return;
+    var canvas = document.getElementById('rp-canvas');
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, scale = W / 1024;
+    ctx.clearRect(0, 0, W, W);
+    if (rpImg && rpImg.complete && rpImg.naturalWidth) ctx.drawImage(rpImg, 0, 0, W, W);
+
+    var frame = rpData.frames[rpFrame];
+    if (!frame) return;
+
+    // Kills der letzten Sekunde als Linie einblenden
+    var window_ = 64;
+    rpData.kills.forEach(function(k) {
+        if (k.tick > frame.t || frame.t - k.tick > window_) return;
+        ctx.strokeStyle = 'rgba(248,113,113,0.55)';
+        ctx.lineWidth = 1.5;
+    });
+
+    frame.p.forEach(function(e) {
+        var pi = e[0], x = e[1], y = e[2], hp = e[3];
+        var pl = rpData.players[pi];
+        if (!pl) return;
+        var alive = hp > 0;
+        ctx.globalAlpha = alive ? 1 : 0.28;
+        ctx.beginPath();
+        ctx.arc(x * scale, y * scale, pl.is_target ? 6 : 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = pl.is_target ? '#4ade80' : '#60a5fa';
+        ctx.fill();
+        if (pl.is_target) { ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke(); }
+        ctx.globalAlpha = 1;
+    });
+
+    var secs = ((frame.t - rpData.start_tick) / 64).toFixed(1);
+    document.getElementById('rp-time').textContent = secs + 's';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var pb = document.getElementById('rp-play');
+    if (pb) pb.addEventListener('click', togglePlay);
+    var sp = document.getElementById('rp-speed');
+    if (sp) sp.addEventListener('change', function() { if (rpPlaying) startReplay(); });
+    var sk = document.getElementById('rp-seek');
+    if (sk) sk.addEventListener('input', function() {
+        rpFrame = parseInt(this.value, 10);
+        if (rpPlaying) togglePlay();
+        drawReplay();
+    });
+});
+</script>
+{% endif %}
+
 {% endblock %}

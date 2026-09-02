@@ -910,6 +910,36 @@ def create_app() -> Flask:
                                kill_map_data=_build_kill_map_data_from_export(data),
                                config=cfg)
 
+    @app.route("/api/replay/<path:filename>/<int:round_num>")
+    def api_replay(filename, round_num):
+        """Positionsdaten einer Runde fuer das 2D-Replay."""
+        vault_path = cfg.get("obsidian_vault_path", "")
+        subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+        export_dir = Path(vault_path) / subfolder / "exports"
+        filepath = export_dir / filename
+        if not filepath.resolve().is_relative_to(export_dir.resolve()) or not filepath.exists():
+            return jsonify({"error": "Export nicht gefunden"}), 404
+
+        data = json.loads(filepath.read_text(encoding="utf-8"))
+        demo_file = data.get("match", {}).get("demo_file", "")
+        demo_folder = cfg.get("demo_folder", "")
+        if not demo_file or not demo_folder:
+            return jsonify({"error": "Keine Demo hinterlegt"}), 404
+        demo_path = Path(demo_folder) / demo_file
+        if not demo_path.exists():
+            return jsonify({"error": f"Demo fehlt: {demo_file}"}), 404
+
+        map_key = (data.get("match", {}).get("map") or "").lower()
+        if map_key not in MAP_RADAR_DATA:
+            return jsonify({"error": f"Map ohne Radardaten: {map_key}"}), 400
+
+        result = build_round_replay(str(demo_path), round_num,
+                                    _resolve_steam_id(), map_key)
+        if "error" in result:
+            return jsonify(result), 400
+        result["map"] = map_key
+        return jsonify(result)
+
     @app.route("/share/<path:filename>")
     def share_card(filename):
         vault_path = cfg.get("obsidian_vault_path", "")
@@ -2678,6 +2708,108 @@ def _build_kill_map_data_from_export(data: dict) -> dict | None:
         "dots": dots,
         "utils": utils,
         "total_rounds": total_rounds,
+    }
+
+
+# Bilder je Sekunde im Replay. 8 ist fluessig genug fuer taktisches
+# Nachvollziehen und haelt die Datenmenge klein.
+REPLAY_FPS = 8
+_CS2_TICKRATE = 64
+
+
+def build_round_replay(demo_path: str, round_num: int, target_id: str = "",
+                       map_key: str = "") -> dict:
+    """Positionen aller Spieler fuer eine einzelne Runde.
+
+    Wird bei Bedarf aus der Demo gelesen statt im Export gespeichert: eine
+    Runde kostet rund 0.3 Sekunden, waehrend alle Runden aller Matches den
+    Export um ein Vielfaches aufblaehen wuerden.
+
+    Kein Video - eine Rekonstruktion auf der Radar-Karte. Fuer das
+    Nachvollziehen einer Situation ist das oft brauchbarer, weil sich alle
+    zehn Spieler gleichzeitig verfolgen lassen.
+    """
+    from demoparser2 import DemoParser
+
+    parser = DemoParser(demo_path)
+    ends = sorted(parser.parse_event("round_end")["tick"].tolist())
+    try:
+        freezes = sorted(parser.parse_event("round_freeze_end")["tick"].tolist())
+    except Exception:
+        freezes = []
+
+    idx = round_num - 1
+    if idx < 0 or idx >= len(ends):
+        return {"error": "Runde nicht gefunden"}
+
+    end = int(ends[idx])
+    start = int(freezes[idx]) if idx < len(freezes) else (
+        int(ends[idx - 1]) if idx > 0 else max(end - 120 * _CS2_TICKRATE, 0))
+    if start >= end:
+        return {"error": "Ungueltiger Rundenbereich"}
+
+    step = max(_CS2_TICKRATE // REPLAY_FPS, 1)
+    ticks = list(range(start, end, step))
+    try:
+        df = parser.parse_ticks(["X", "Y", "health"], ticks=ticks)
+    except Exception as e:
+        return {"error": f"Tickdaten nicht lesbar: {e}"}
+
+    names = {}
+    try:
+        info = parser.parse_player_info()
+        names = {str(r["steamid"]): str(r["name"]) for _, r in info.iterrows()}
+    except Exception:
+        pass
+
+    # Frames als Liste je Zeitpunkt, Spieler ueber einen Index referenziert -
+    # das haelt die Antwort deutlich kleiner als wiederholte SteamIDs.
+    players: list[str] = []
+    pidx: dict[str, int] = {}
+    frames: dict[int, list] = {}
+    for _, row in df.iterrows():
+        sid = str(row.get("steamid", ""))
+        if sid not in pidx:
+            pidx[sid] = len(players)
+            players.append(sid)
+        x, y = row.get("X"), row.get("Y")
+        if x is None or y is None:
+            continue
+        # Umrechnung auf Radarkoordinaten hier statt im Browser - so gibt
+        # es die Transformation nur an einer Stelle.
+        pos = game_to_radar(float(x), float(y), map_key) if map_key else None
+        if pos is None:
+            continue
+        frames.setdefault(int(row["tick"]), []).append([
+            pidx[sid], round(pos[0], 1), round(pos[1], 1),
+            int(row.get("health") or 0),
+        ])
+
+    kills = []
+    try:
+        kdf = parser.parse_event("player_death")
+        for _, r in kdf.iterrows():
+            t = int(r.get("tick", 0))
+            if start <= t <= end:
+                kills.append({
+                    "tick": t,
+                    "attacker": str(r.get("attacker_steamid", "")),
+                    "victim": str(r.get("user_steamid", "")),
+                    "weapon": str(r.get("weapon", "")),
+                })
+    except Exception:
+        pass
+
+    return {
+        "round": round_num,
+        "start_tick": start,
+        "end_tick": end,
+        "fps": REPLAY_FPS,
+        "duration_s": round((end - start) / _CS2_TICKRATE, 1),
+        "players": [{"steamid": sid, "name": names.get(sid, "?"),
+                     "is_target": sid == str(target_id)} for sid in players],
+        "frames": [{"t": t, "p": frames[t]} for t in sorted(frames)],
+        "kills": kills,
     }
 
 
