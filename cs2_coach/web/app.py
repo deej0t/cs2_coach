@@ -744,7 +744,8 @@ def create_app() -> Flask:
     @app.route("/utility")
     def utility():
         util_data = _build_utility_analysis(cfg)
-        return render_template("utility.html", util=util_data, config=cfg)
+        return render_template("utility.html", util=util_data,
+                               umap=_build_utility_map_data(cfg), config=cfg)
 
     @app.route("/calendar")
     def calendar():
@@ -2653,11 +2654,100 @@ def _build_kill_map_data_from_export(data: dict) -> dict | None:
         match_info.get("score_own", 0) + match_info.get("score_enemy", 0)
     )
 
+    # Utility-Positionen wurden frueher nicht exportiert; aeltere Exports
+    # haben das Feld daher nicht. Dort bleibt die Ebene leer und die
+    # zugehoerigen Schalter ausgeblendet.
+    long_type = {"f": "flash", "s": "smoke", "h": "he", "m": "molotov"}
+    own_name = (data.get("player") or {}).get("name", "")
+    utils = []
+    for up in data.get("utility_positions", []):
+        pos = game_to_radar(up.get("x", 0), up.get("y", 0), map_key)
+        if not pos:
+            continue
+        utils.append({
+            "x": round(pos[0], 1),
+            "y": round(pos[1], 1),
+            "type": long_type.get(up.get("t", ""), "he"),
+            "player": own_name,
+            "is_own": True,
+            "round": up.get("r", 0),
+        })
+
     return {
         "map": map_key,
         "dots": dots,
-        "utils": [],
+        "utils": utils,
         "total_rounds": total_rounds,
+    }
+
+
+def _build_utility_map_data(cfg: dict) -> dict:
+    """Eigene Granaten-Detonationen je Map ueber alle Matches.
+
+    Beantwortet, WO Utility geworfen wird - nicht nur wie viel. Die
+    Aufteilung nach Ergebnis erlaubt die eigentliche Coaching-Frage:
+    welche Granaten fehlen in Niederlagen?
+    """
+    vault_path = cfg.get("obsidian_vault_path", "")
+    subfolder = cfg.get("coach_subfolder", "CS2-Coach")
+    if not vault_path:
+        return {"has_data": False, "maps": []}
+
+    export_dir = Path(vault_path) / subfolder / "exports"
+    if not export_dir.exists():
+        return {"has_data": False, "maps": []}
+
+    long_type = {"f": "flash", "s": "smoke", "h": "he", "m": "molotov"}
+    maps: dict[str, dict] = {}
+    matches_without_data = 0
+
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        ups = data.get("utility_positions")
+        if ups is None:
+            matches_without_data += 1
+            continue
+
+        info = data.get("match", {})
+        map_key = (info.get("map") or "").lower()
+        if not map_key or map_key not in MAP_RADAR_DATA:
+            continue
+        won = info.get("result") == "Sieg"
+
+        entry = maps.setdefault(map_key, {
+            "map": map_key, "dots": [], "matches": 0,
+            "wins": 0, "losses": 0, "by_type": {},
+        })
+        entry["matches"] += 1
+        entry["wins" if won else "losses"] += 1
+
+        for up in ups:
+            pos = game_to_radar(up.get("x", 0), up.get("y", 0), map_key)
+            if not pos:
+                continue
+            t = long_type.get(up.get("t", ""), "he")
+            entry["dots"].append({
+                "x": round(pos[0], 1), "y": round(pos[1], 1),
+                "type": t, "won": won, "round": up.get("r", 0),
+            })
+            entry["by_type"][t] = entry["by_type"].get(t, 0) + 1
+
+    ordered = sorted(maps.values(), key=lambda m: -len(m["dots"]))
+    for m in ordered:
+        # Wurf-Dichte je Runde getrennt nach Ausgang - der eigentliche
+        # Vergleich, weil Siege oft mehr Runden haben.
+        wins = sum(1 for d in m["dots"] if d["won"])
+        m["per_match_win"] = round(wins / max(m["wins"], 1), 1)
+        m["per_match_loss"] = round((len(m["dots"]) - wins) / max(m["losses"], 1), 1)
+
+    return {
+        "has_data": bool(ordered),
+        "maps": ordered,
+        "default_map": ordered[0]["map"] if ordered else "",
+        "matches_without_data": matches_without_data,
     }
 
 

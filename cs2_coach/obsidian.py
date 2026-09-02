@@ -65,6 +65,36 @@ def _compact_kill_positions(positions: list[dict], target_id: str) -> list[dict]
     return compact
 
 
+_UTIL_SHORT = {"flash": "f", "smoke": "s", "he": "h", "molotov": "m"}
+
+
+def _compact_utility_positions(positions: list[dict], target_id: str) -> list[dict]:
+    """Detonationsorte der eigenen Granaten, kompakt.
+
+    Der Parser ermittelt diese Positionen bei jeder Analyse, der Export hat
+    sie bisher verworfen - damit waren sie nach dem Wechsel auf die
+    Export-Detailseite gar nicht mehr erreichbar. Sie beantworten, WO
+    Utility geworfen wird, nicht nur wie viel.
+
+    Wie bei den Kill-Positionen nur die des Zielspielers, sonst waere der
+    Export um ein Vielfaches groesser.
+    """
+    compact = []
+    for up in positions:
+        if str(up.get("player_id", "")) != str(target_id):
+            continue
+        t = _UTIL_SHORT.get(up.get("type", ""))
+        if t is None:
+            continue
+        compact.append({
+            "t": t,
+            "x": round(float(up.get("x", 0)), 1),
+            "y": round(float(up.get("y", 0)), 1),
+            "r": int(up.get("round", 0)),
+        })
+    return compact
+
+
 def _build_export_json(result: MatchResult, coach_report: str) -> dict:
     """Build JSON export with all stats for web UI consumption."""
     s = result.player_stats
@@ -90,6 +120,8 @@ def _build_export_json(result: MatchResult, coach_report: str) -> dict:
         "round_timeline": result.round_timeline,
         "economy": result.economy_performance,
         "kill_positions": _compact_kill_positions(result.kill_positions, s.steam_id),
+        "utility_positions": _compact_utility_positions(
+            getattr(result, "utility_positions", []), s.steam_id),
     }
 
 

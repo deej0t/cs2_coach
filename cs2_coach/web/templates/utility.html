@@ -9,6 +9,10 @@
 </p>
 
 <style>
+    .um-layer { display:inline-flex; align-items:center; gap:5px; font-size:11px; cursor:pointer; user-select:none; padding:3px 8px; border-radius:var(--radius-sm); }
+    .um-layer:hover { background:color-mix(in srgb, var(--color-text) 6%, transparent); }
+    .um-dot { display:inline-block; width:10px; height:10px; border-radius:50%; }
+
     .ut-hero { display:grid; grid-template-columns:repeat(4, 1fr); gap:var(--space-4); margin-bottom:var(--space-5); }
     .ut-hero-card { text-align:center; }
     .ut-hero-val { font-size:32px; font-weight:600; line-height:1.1; }
@@ -122,6 +126,66 @@
         <div class="ut-hero-sub">Durchschn. Blendzeit</div>
     </div>
 </div>
+
+<!-- ── Wurf-Karte ── -->
+{% if umap.has_data %}
+<div class="card elev-sm" style="margin-bottom:var(--space-5);">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:var(--space-3);">
+        <div>
+            <span class="card-kicker">{{ _('Wurf-Karte') }}</span>
+            <h3 class="card-title" style="margin:0;">{{ _('Wo wirfst du deine Utility?') }}</h3>
+        </div>
+        <div style="display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;">
+            <select id="um-map" class="input" style="width:auto;min-height:30px;padding:3px 10px;font-size:12px;">
+                {% for m in umap.maps %}
+                <option value="{{ m.map }}">{{ m.map }} ({{ m.dots|length }})</option>
+                {% endfor %}
+            </select>
+            <select id="um-outcome" class="input" style="width:auto;min-height:30px;padding:3px 10px;font-size:12px;">
+                <option value="all">{{ _('Alle Matches') }}</option>
+                <option value="win">{{ _('Nur Siege') }}</option>
+                <option value="loss">{{ _('Nur Niederlagen') }}</option>
+            </select>
+        </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:var(--space-3);">
+        <label class="um-layer"><input type="checkbox" data-type="flash" checked><span class="um-dot" style="background:#fbbf24;"></span> Flash</label>
+        <label class="um-layer"><input type="checkbox" data-type="smoke" checked><span class="um-dot" style="background:#94a3b8;"></span> Smoke</label>
+        <label class="um-layer"><input type="checkbox" data-type="he" checked><span class="um-dot" style="background:#f87171;"></span> HE</label>
+        <label class="um-layer"><input type="checkbox" data-type="molotov" checked><span class="um-dot" style="background:#fb923c;"></span> Molotov</label>
+    </div>
+
+    <div style="display:flex;gap:var(--space-5);align-items:flex-start;flex-wrap:wrap;margin-top:var(--space-4);">
+        <div style="position:relative;width:100%;max-width:520px;">
+            <canvas id="um-canvas" width="600" height="600" style="width:100%;border-radius:var(--radius-md);background:var(--color-bg);"></canvas>
+        </div>
+        <div style="flex:1;min-width:200px;">
+            <div class="card-kicker" style="margin-bottom:var(--space-2);">{{ _('Wuerfe pro Match') }}</div>
+            <table class="table"><tbody>
+                <tr><td>{{ _('in Siegen') }}</td><td id="um-win" style="text-align:right;font-weight:600;color:var(--color-green);">–</td></tr>
+                <tr><td>{{ _('in Niederlagen') }}</td><td id="um-loss" style="text-align:right;font-weight:600;color:var(--color-red);">–</td></tr>
+            </tbody></table>
+            <p id="um-hint" style="font-size:11px;color:var(--color-neutral-500);margin-top:var(--space-3);"></p>
+            <div class="card-kicker" style="margin:var(--space-4) 0 var(--space-2);">{{ _('Verteilung') }}</div>
+            <table class="table"><tbody id="um-types"></tbody></table>
+        </div>
+    </div>
+
+    {% if umap.matches_without_data %}
+    <p style="font-size:11px;color:var(--color-yellow);margin-top:var(--space-3);">
+        {{ umap.matches_without_data }} {{ _('Matches enthalten noch keine Wurfpositionen — sie stammen aus Exports von vor dieser Funktion. Eine Neuanalyse ergaenzt sie.') }}
+    </p>
+    {% endif %}
+</div>
+{% elif umap.matches_without_data %}
+<div class="card elev-sm" style="margin-bottom:var(--space-5);">
+    <span class="card-kicker">{{ _('Wurf-Karte') }}</span>
+    <p class="card-body" style="margin:var(--space-2) 0 0;">
+        {{ _('Noch keine Wurfpositionen gespeichert. Die Daten entstehen bei jeder Analyse, wurden bisher aber nicht mitexportiert — eine Neuanalyse der Demos fuellt die Karte.') }}
+    </p>
+</div>
+{% endif %}
 
 <!-- ── Coaching Insights ── -->
 {% if util.insights %}
@@ -387,4 +451,101 @@
     });
 })();
 </script>
+
+{% if umap.has_data %}
+<script>
+(function() {
+    var MAPS = {{ umap.maps | tojson }};
+    var canvas = document.getElementById('um-canvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, RADAR = 1024, scale = W / RADAR;
+    var COLORS = { flash: '#fbbf24', smoke: '#94a3b8', he: '#f87171', molotov: '#fb923c' };
+    var LABELS = { flash: 'Flash', smoke: 'Smoke', he: 'HE', molotov: 'Molotov' };
+
+    var mapSel = document.getElementById('um-map');
+    var outSel = document.getElementById('um-outcome');
+    var img = new Image();
+    var current = MAPS[0];
+
+    function activeTypes() {
+        var on = {};
+        document.querySelectorAll('.um-layer input').forEach(function(cb) {
+            on[cb.dataset.type] = cb.checked;
+        });
+        return on;
+    }
+
+    function visibleDots() {
+        var on = activeTypes(), mode = outSel.value;
+        return current.dots.filter(function(d) {
+            if (!on[d.type]) return false;
+            if (mode === 'win') return d.won;
+            if (mode === 'loss') return !d.won;
+            return true;
+        });
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, W, W);
+        if (img.complete && img.naturalWidth) ctx.drawImage(img, 0, 0, W, W);
+
+        var dots = visibleDots();
+        dots.forEach(function(d) {
+            ctx.beginPath();
+            ctx.arc(d.x * scale, d.y * scale, 4, 0, Math.PI * 2);
+            ctx.fillStyle = COLORS[d.type] || '#fff';
+            ctx.globalAlpha = 0.75;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+            ctx.stroke();
+        });
+
+        // Seitenpanel
+        document.getElementById('um-win').textContent = current.per_match_win;
+        document.getElementById('um-loss').textContent = current.per_match_loss;
+
+        var diff = (current.per_match_win - current.per_match_loss).toFixed(1);
+        var hint = document.getElementById('um-hint');
+        if (current.wins && current.losses) {
+            hint.textContent = diff > 0
+                ? 'In Siegen wirfst du ' + diff + ' Granaten mehr pro Match.'
+                : (diff < 0 ? 'In Niederlagen wirfst du ' + Math.abs(diff) + ' mehr — Menge allein ist hier nicht der Unterschied.'
+                            : 'Kein Unterschied zwischen Siegen und Niederlagen.');
+        } else {
+            hint.textContent = 'Zu wenige Matches fuer einen Vergleich auf dieser Map.';
+        }
+
+        var counts = {};
+        dots.forEach(function(d) { counts[d.type] = (counts[d.type] || 0) + 1; });
+        var tb = document.getElementById('um-types');
+        tb.innerHTML = '';
+        Object.keys(LABELS).forEach(function(t) {
+            var n = counts[t] || 0;
+            var pct = dots.length ? Math.round(n / dots.length * 100) : 0;
+            tb.innerHTML += '<tr><td><span class="um-dot" style="background:' + COLORS[t] +
+                            ';margin-right:6px;"></span>' + LABELS[t] + '</td>' +
+                            '<td style="text-align:right;">' + n + ' <span style="color:var(--color-neutral-600);">(' + pct + '%)</span></td></tr>';
+        });
+    }
+
+    function loadMap() {
+        current = MAPS.filter(function(m) { return m.map === mapSel.value; })[0] || MAPS[0];
+        img = new Image();
+        img.onload = draw;
+        img.onerror = draw;
+        img.src = '{{ url_for("static", filename="radars/") }}' + current.map + '.png';
+    }
+
+    mapSel.addEventListener('change', loadMap);
+    outSel.addEventListener('change', draw);
+    document.querySelectorAll('.um-layer input').forEach(function(cb) {
+        cb.addEventListener('change', draw);
+    });
+    loadMap();
+})();
+</script>
+{% endif %}
 {% endblock %}
