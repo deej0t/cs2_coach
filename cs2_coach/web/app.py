@@ -1321,6 +1321,45 @@ def create_app() -> Flask:
             pass
         return jsonify({"ok": True, "code": code})
 
+    @app.route("/api/steam-qr-begin", methods=["POST"])
+    def api_steam_qr_begin():
+        """QR-Anmeldung starten und den Code als SVG zurueckgeben."""
+        from ..sharecode import steam_login_qr_begin, SteamLoginError
+        try:
+            data = steam_login_qr_begin()
+        except SteamLoginError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            return jsonify({"error": f"Steam nicht erreichbar: {e}"}), 502
+        data["svg"] = _qr_svg(data["challenge_url"])
+        return jsonify(data)
+
+    @app.route("/api/steam-qr-poll", methods=["POST"])
+    def api_steam_qr_poll():
+        """Status der QR-Anmeldung abfragen."""
+        from ..sharecode import steam_login_qr_poll, SteamLoginError
+        body = request.get_json(silent=True) or {}
+        client_id = str(body.get("client_id", ""))
+        request_id = str(body.get("request_id", ""))
+        if not client_id or not request_id:
+            return jsonify({"error": "client_id und request_id erforderlich"}), 400
+        try:
+            result = steam_login_qr_poll(client_id, request_id)
+        except SteamLoginError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            return jsonify({"error": f"Steam nicht erreichbar: {e}"}), 502
+
+        # Steam rotiert den Code waehrend des Wartens
+        if result.get("challenge_url"):
+            result["svg"] = _qr_svg(result["challenge_url"])
+        if result.get("status") == "ok" and result.get("steamid"):
+            # SteamID nur uebernehmen, wenn noch keine hinterlegt ist
+            if not cfg.get("steam_id"):
+                cfg["steam_id"] = result["steamid"]
+                _write_config(cfg)
+        return jsonify(result)
+
     @app.route("/api/steam-login", methods=["POST"])
     def steam_login_api():
         """Authenticate to Steam for automatic demo downloads."""
@@ -2852,6 +2891,29 @@ def build_round_replay(demo_path: str, round_num: int, target_id: str = "",
         "frames": [{"t": t, "p": frames[t]} for t in sorted(frames)],
         "kills": kills,
     }
+
+
+def _qr_svg(payload: str) -> str:
+    """QR-Code als eingebettetes SVG.
+
+    SVG statt PNG, weil der SVG-Weg von qrcode ohne Pillow auskommt - eine
+    Bildbibliothek nur fuer einen QR-Code waere unverhaeltnismaessig.
+    """
+    try:
+        import qrcode
+        import qrcode.image.svg
+    except ImportError:
+        return ""
+
+    import io as _io
+
+    qr = qrcode.QRCode(box_size=10, border=2,
+                       error_correction=qrcode.constants.ERROR_CORRECT_M)
+    qr.add_data(payload)
+    qr.make(fit=True)
+    buf = _io.BytesIO()
+    qr.make_image(image_factory=qrcode.image.svg.SvgPathImage).save(buf)
+    return buf.getvalue().decode("utf-8")
 
 
 def _build_utility_map_data(cfg: dict) -> dict:

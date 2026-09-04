@@ -311,10 +311,137 @@ class SteamEmailCodeRequired(SteamLoginError):
     """Raised when Steam Guard email code is required."""
 
 
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
 _STEAM_API = "https://api.steampowered.com"
 _STEAM_COMMUNITY = "https://steamcommunity.com"
 _STEAM_STORE = "https://store.steampowered.com"
 _STEAM_HELP = "https://help.steampowered.com"
+
+
+def steam_login_qr_begin() -> dict:
+    """QR-Anmeldung starten.
+
+    Steam bietet neben Benutzername und Passwort eine Anmeldung per
+    QR-Code: die Steam-App scannt ihn und bestaetigt. Das erspart es,
+    Passwort und Steam-Guard-Code durch die Web-Oberflaeche zu schicken.
+
+    Gibt client_id, request_id, das Abfrageintervall und die URL zurueck,
+    die als QR dargestellt wird. Die eigentliche Anmeldung passiert erst
+    beim Abfragen ueber steam_login_qr_poll().
+    """
+    import requests
+
+    session = requests.Session()
+    session.headers.update({"User-Agent": _BROWSER_UA})
+
+    resp = session.post(
+        f"{_STEAM_API}/IAuthenticationService/BeginAuthSessionViaQR/v1",
+        data={
+            "device_friendly_name": "CS2 Coach",
+            "platform_type": "2",          # WebBrowser
+            "device_details": _json.dumps({
+                "device_friendly_name": "CS2 Coach",
+                "platform_type": 2,
+            }),
+            "website_id": "Community",
+        },
+        headers={"Referer": f"{_STEAM_COMMUNITY}/", "Origin": _STEAM_COMMUNITY},
+        timeout=15,
+    )
+    try:
+        data = resp.json().get("response", {})
+    except ValueError:
+        raise SteamLoginError("Unerwartete Antwort von Steam.")
+
+    challenge_url = data.get("challenge_url")
+    if not challenge_url or not data.get("client_id"):
+        msg = data.get("extended_error_message") or "Steam hat keine QR-Sitzung geliefert."
+        raise SteamLoginError(msg)
+
+    return {
+        "client_id": str(data["client_id"]),
+        "request_id": data.get("request_id", ""),
+        "interval": float(data.get("interval", 5.0)),
+        "challenge_url": challenge_url,
+    }
+
+
+def steam_login_qr_poll(client_id: str, request_id: str) -> dict:
+    """Status einer QR-Anmeldung abfragen.
+
+    Liefert {"status": "pending"} solange nicht bestaetigt wurde,
+    {"status": "ok", ...} nach erfolgreicher Anmeldung. Bei Erfolg werden
+    die Sitzungs-Cookies gesetzt und wie beim Passwort-Login gespeichert.
+
+    Steam liefert waehrend des Wartens teils eine neue challenge_url; die
+    wird durchgereicht, damit die Oberflaeche den Code auffrischen kann.
+    """
+    import requests
+
+    session = requests.Session()
+    session.headers.update({"User-Agent": _BROWSER_UA})
+
+    resp = session.post(
+        f"{_STEAM_API}/IAuthenticationService/PollAuthSessionStatus/v1",
+        data={"client_id": client_id, "request_id": request_id},
+        timeout=15,
+    )
+    try:
+        data = resp.json().get("response", {})
+    except ValueError:
+        raise SteamLoginError("Unerwartete Antwort von Steam.")
+
+    # Steam meldet abgelaufene Sitzungen ueber ein leeres Ergebnis.
+    if data.get("had_remote_interaction") is None and not data:
+        raise SteamLoginError("QR-Sitzung abgelaufen. Bitte neu starten.")
+
+    refresh_token = data.get("refresh_token")
+    if not refresh_token:
+        return {
+            "status": "pending",
+            "scanned": bool(data.get("had_remote_interaction")),
+            "challenge_url": data.get("new_challenge_url") or "",
+            "client_id": str(data.get("new_client_id") or client_id),
+        }
+
+    access_token = data.get("access_token", "")
+    steamid = _steamid_from_token(refresh_token)
+    if not steamid:
+        raise SteamLoginError("Konnte SteamID nicht aus dem Token lesen.")
+
+    _finalize_steam_login(session, steamid, refresh_token, access_token)
+    _save_session(session)
+    return {
+        "status": "ok",
+        "steamid": steamid,
+        "account_name": data.get("account_name", ""),
+    }
+
+
+def _steamid_from_token(token: str) -> str:
+    """SteamID aus dem JWT lesen.
+
+    Beim Passwort-Login liefert Steam die SteamID direkt mit; bei der
+    QR-Anmeldung steht sie nur im Token ("sub"). Die Signatur wird nicht
+    geprueft - das Token kommt ueber HTTPS direkt von Steam, und wir
+    lesen daraus lediglich die Kennung.
+    """
+    import base64
+
+    parts = token.split(".")
+    if len(parts) < 2:
+        return ""
+    payload = parts[1]
+    payload += "=" * (-len(payload) % 4)   # Base64-Padding ergaenzen
+    try:
+        claims = _json.loads(base64.urlsafe_b64decode(payload))
+    except Exception:
+        return ""
+    return str(claims.get("sub", ""))
 
 
 def steam_login(
@@ -339,10 +466,7 @@ def steam_login(
     from base64 import b64encode
 
     session = _requests.Session()
-    session.headers["User-Agent"] = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
+    session.headers["User-Agent"] = _BROWSER_UA
 
     # Step 1: Get RSA public key
     rsa_resp = session.get(

@@ -6,3 +6,4 @@ click>=8.1
 flask>=3.0
 requests>=2.28.0
 pycryptodomex>=3.19.0
+qrcode>=7.4

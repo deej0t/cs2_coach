@@ -222,8 +222,31 @@
             Passwort wird <strong>nicht</strong> gespeichert — nur temporaere Session-Cookies.
         </p>
 
+        <!-- Umschalter QR / Passwort -->
+        <div style="display:flex;gap:2px;margin-bottom:var(--space-4);">
+            <button class="sc-btn sq-tab" data-tab="qr" style="flex:1;padding:7px;font-size:12px;">
+                <i data-lucide="qr-code" style="width:13px;height:13px;vertical-align:middle;margin-right:5px;"></i>QR-Code
+            </button>
+            <button class="sc-btn sq-tab" data-tab="pw" style="flex:1;padding:7px;font-size:12px;background:var(--color-neutral-700);">
+                Passwort
+            </button>
+        </div>
+
+        <!-- QR-Anmeldung -->
+        <div id="sq-panel" style="text-align:center;">
+            <div id="sq-code" style="min-height:200px;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:var(--radius-md);padding:10px;">
+                <span style="color:#555;font-size:12px;">Wird geladen...</span>
+            </div>
+            <p id="sq-status" style="font-size:12px;color:var(--color-neutral-400);margin:var(--space-3) 0 0;">
+                Mit der Steam-App scannen und bestaetigen.
+            </p>
+            <button class="sc-btn" id="sq-refresh" style="margin-top:var(--space-3);padding:6px 14px;font-size:12px;background:var(--color-neutral-700);" onclick="startSteamQr()">
+                Neuen Code holen
+            </button>
+        </div>
+
         <!-- Form -->
-        <div style="display:flex;flex-direction:column;gap:var(--space-3);">
+        <div id="sq-pw-panel" style="display:none;flex-direction:column;gap:var(--space-3);">
             <input type="text" id="steam-username" class="sc-input" placeholder="Steam-Benutzername" value="{{ config.get('steam_username', '') }}" style="font-size:14px;padding:10px 14px;width:100%;box-sizing:border-box;">
             <input type="password" id="steam-password" class="sc-input" placeholder="Passwort" style="font-size:14px;padding:10px 14px;width:100%;box-sizing:border-box;">
             <input type="text" id="steam-2fa" class="sc-input" placeholder="Steam Guard Code (falls aktiv)" style="font-size:14px;padding:10px 14px;width:100%;box-sizing:border-box;">
@@ -234,7 +257,7 @@
 
         <!-- Actions -->
         <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);">
-            <button id="steam-login-btn" class="sc-btn" style="flex:1;padding:10px;font-size:14px;" onclick="steamLogin()">
+            <button id="steam-login-btn" class="sc-btn" style="flex:1;padding:10px;font-size:14px;display:none;" onclick="steamLogin()">
                 <i data-lucide="log-in" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;"></i>
                 Einloggen
             </button>
@@ -413,13 +436,106 @@ function openSteamModal() {
     document.getElementById('steam-2fa').value = '';
     document.getElementById('steam-2fa').style.borderColor = '';
     document.getElementById('steam-2fa').placeholder = 'Steam Guard Code (falls aktiv)';
-    setTimeout(function() { document.getElementById('steam-username').focus(); }, 100);
     if (typeof lucide !== 'undefined') lucide.createIcons();
+    setSteamTab('qr');
 }
 
 function closeSteamModal() {
     document.getElementById('steam-modal-overlay').style.display = 'none';
+    stopSteamQr();
 }
+
+// ── Steam-Anmeldung per QR ───────────────────────────────────────────
+// Die Steam-App scannt den Code und bestaetigt; Passwort und Guard-Code
+// muessen damit nicht durch diese Oberflaeche wandern.
+var sqTimer = null, sqClientId = null, sqRequestId = null;
+
+function setSteamTab(tab) {
+    document.querySelectorAll('.sq-tab').forEach(function(b) {
+        b.style.background = b.dataset.tab === tab ? '' : 'var(--color-neutral-700)';
+    });
+    var qr = tab === 'qr';
+    document.getElementById('sq-panel').style.display = qr ? '' : 'none';
+    document.getElementById('sq-pw-panel').style.display = qr ? 'none' : 'flex';
+    document.getElementById('steam-login-btn').style.display = qr ? 'none' : '';
+    document.getElementById('steam-login-msg').textContent = '';
+    if (qr) {
+        startSteamQr();
+    } else {
+        stopSteamQr();
+        setTimeout(function() { document.getElementById('steam-username').focus(); }, 50);
+    }
+}
+
+function stopSteamQr() {
+    if (sqTimer) { clearTimeout(sqTimer); sqTimer = null; }
+}
+
+function sqSay(text, color) {
+    var el = document.getElementById('sq-status');
+    el.textContent = text;
+    el.style.color = color || 'var(--color-neutral-400)';
+}
+
+function startSteamQr() {
+    stopSteamQr();
+    document.getElementById('sq-code').innerHTML =
+        '<span style="color:#555;font-size:12px;">Wird geladen...</span>';
+    sqSay('Mit der Steam-App scannen und bestaetigen.');
+
+    fetch('{{ url_for("api_steam_qr_begin") }}', { method: 'POST' })
+        .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
+        .then(function(res) {
+            if (!res.ok) { sqSay(res.j.error || 'Fehler', '#f87171'); 
+                document.getElementById('sq-code').innerHTML = ''; return; }
+            sqClientId = res.j.client_id;
+            sqRequestId = res.j.request_id;
+            showSqCode(res.j.svg);
+            sqTimer = setTimeout(pollSteamQr, (res.j.interval || 5) * 1000);
+        })
+        .catch(function(e) { sqSay('Fehler: ' + e.message, '#f87171'); });
+}
+
+function showSqCode(svg) {
+    var box = document.getElementById('sq-code');
+    if (!svg) {
+        box.innerHTML = '<span style="color:#555;font-size:12px;">QR-Code nicht verfuegbar ' +
+                        '(Paket "qrcode" fehlt) — bitte Passwort-Anmeldung nutzen.</span>';
+        return;
+    }
+    box.innerHTML = svg;
+    var el = box.querySelector('svg');
+    if (el) { el.style.width = '200px'; el.style.height = '200px'; }
+}
+
+function pollSteamQr() {
+    fetch('{{ url_for("api_steam_qr_poll") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: sqClientId, request_id: sqRequestId })
+    }).then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
+      .then(function(res) {
+        if (!res.ok) { sqSay(res.j.error || 'Fehler', '#f87171'); return; }
+        if (res.j.status === 'ok') {
+            sqSay('Angemeldet als ' + (res.j.account_name || 'Steam-Konto'), '#4ade80');
+            stopSteamQr();
+            setTimeout(function() { closeSteamModal(); location.reload(); }, 1200);
+            return;
+        }
+        if (res.j.svg) { showSqCode(res.j.svg); sqClientId = res.j.client_id; }
+        sqSay(res.j.scanned ? 'Gescannt — bitte in der App bestaetigen.'
+                            : 'Mit der Steam-App scannen und bestaetigen.',
+              res.j.scanned ? '#fbbf24' : null);
+        sqTimer = setTimeout(pollSteamQr, 5000);
+      })
+      .catch(function(e) { sqSay('Fehler: ' + e.message, '#f87171'); });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.sq-tab').forEach(function(b) {
+        b.addEventListener('click', function() { setSteamTab(this.dataset.tab); });
+    });
+});
 
 // Close modal on overlay click or Escape
 document.getElementById('steam-modal-overlay').addEventListener('click', function(e) {
