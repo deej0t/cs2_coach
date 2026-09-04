@@ -180,3 +180,70 @@ def test_clean_player_still_gets_trainable_suggestions_only():
 
 def test_no_matches_yields_no_priorities():
     assert F.training_priorities([]) == []
+
+
+# ── Verlaesslichkeit der Effektstaerken ─────────────────────────────────
+
+def varied(result, n, key, values):
+    """n Matches mit streuenden Werten - konstante Werte ergaeben SD 0."""
+    return [match(result, **{key: values[i % len(values)]}) for i in range(n)]
+
+
+def test_confidence_interval_is_reported():
+    ms = (varied("Sieg", 15, "utility_per_round", [2.4, 2.6, 2.5])
+          + varied("Niederlage", 15, "utility_per_round", [0.7, 0.9, 0.8]))
+    r = {x.key: x for x in F.build_relevance(ms)}["utility"]
+    assert r.ci_low < r.effect < r.ci_high
+
+
+def test_small_sample_stays_undecided():
+    """Kern des Problems: 0.69 bei ~30 Matches je Gruppe belegt nichts.
+
+    Realer Fall - die Empfehlungsseite meldete "grosser Effekt", waehrend
+    der Bereich von praktisch null bis sehr gross reichte.
+    """
+    # Streuung wie in echten Daten: der Unterschied der Mittelwerte ist
+    # klein gegenueber der Schwankung zwischen Matches.
+    ms = (varied("Sieg", 15, "utility_per_round", [1.2, 1.6, 2.0, 2.4, 2.8])
+          + varied("Niederlage", 15, "utility_per_round", [0.8, 1.2, 1.6, 2.0, 2.4]))
+    r = {x.key: x for x in F.build_relevance(ms)}["utility"]
+    assert r.verdict == F.UNDECIDED, f"d={r.effect} CI=[{r.ci_low},{r.ci_high}]"
+    assert not r.is_solid
+    assert r.matches_needed > 20, "muss sagen, wie viele Matches fehlen"
+
+
+def test_large_clear_effect_becomes_solid():
+    ms = (varied("Sieg", 30, "utility_per_round", [2.9, 3.1, 3.0])
+          + varied("Niederlage", 30, "utility_per_round", [0.3, 0.5, 0.4]))
+    r = {x.key: x for x in F.build_relevance(ms)}["utility"]
+    assert r.verdict == F.SOLID_POSITIVE
+    assert r.is_solid
+    assert r.matches_needed == 0
+
+
+def test_tiny_effect_is_never_worth_chasing():
+    """Counter-Strafing lag bei -0.14 - auch beliebig viele Matches helfen nicht."""
+    assert F._matches_needed(0.14) == 0
+    assert F._matches_needed(-0.14) == 0
+    assert F._matches_needed(F.MEANINGFUL_EFFECT) == 0
+
+
+def test_matches_needed_shrinks_with_larger_effect():
+    assert F._matches_needed(0.9) < F._matches_needed(0.4)
+
+
+@pytest.mark.parametrize("lo,hi,expected", [
+    (0.3, 1.2, F.SOLID_POSITIVE),
+    (-1.2, -0.3, F.SOLID_NEGATIVE),
+    (-0.1, 0.1, F.SOLID_NEGLIGIBLE),
+    (-0.5, 0.9, F.UNDECIDED),
+    (0.1, 0.9, F.UNDECIDED),
+])
+def test_verdict_boundaries(lo, hi, expected):
+    assert F._verdict_for(lo, hi) == expected
+
+
+def test_interval_narrows_with_more_data():
+    lo_small, hi_small = F._effect_ci(0.7, 10, 10)
+    lo_big, hi_big = F._effect_ci(0.7, 200, 200)
+    assert (hi_big - lo_big) < (hi_small - lo_small)

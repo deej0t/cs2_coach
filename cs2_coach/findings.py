@@ -14,6 +14,7 @@ alle vorhandenen Exports, ohne eine einzige Demo neu zu parsen.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 from statistics import median
 
 # Schweregrade, absteigend nach Dringlichkeit
@@ -417,9 +418,26 @@ def build_baselines(matches: list[dict]) -> dict[str, Baseline]:
 MIN_MATCHES_PER_OUTCOME = 8
 
 
+# Ab dieser Effektstaerke gilt ein Zusammenhang als praktisch bedeutsam
+# (Cohens Konvention fuer "klein").
+MEANINGFUL_EFFECT = 0.2
+
+SOLID_POSITIVE = "solid_positive"
+SOLID_NEGATIVE = "solid_negative"
+SOLID_NEGLIGIBLE = "solid_negligible"
+UNDECIDED = "undecided"
+
+
 @dataclass
 class Relevance:
-    """Wie stark trennt eine Metrik Siege von Niederlagen?"""
+    """Wie stark trennt eine Metrik Siege von Niederlagen?
+
+    Die Effektstaerke allein ist irrefuehrend. Bei rund 30 Matches je
+    Gruppe ist der Vertrauensbereich so breit, dass ein gemessenes d von
+    0.69 alles zwischen "praktisch nichts" und "sehr gross" bedeuten kann.
+    Ein Coaching-Tool, das solche Zahlen als Tatsachen praesentiert,
+    schickt den Nutzer mit voller Ueberzeugung auf die falsche Baustelle.
+    """
 
     key: str
     label: str
@@ -428,6 +446,10 @@ class Relevance:
     mean_loss: float = 0.0
     effect: float = 0.0          # Cohens d, auf "hoeher ist besser" normiert
     outcome_driven: bool = False
+    ci_low: float = 0.0
+    ci_high: float = 0.0
+    verdict: str = UNDECIDED
+    matches_needed: int = 0      # 0 = nicht sinnvoll erreichbar
 
     @property
     def strength(self) -> str:
@@ -439,6 +461,42 @@ class Relevance:
         if a >= 0.2:
             return "klein"
         return "keiner"
+
+    @property
+    def is_solid(self) -> bool:
+        return self.verdict != UNDECIDED
+
+
+def _effect_ci(d: float, n1: int, n2: int) -> tuple[float, float]:
+    """95-Prozent-Bereich fuer Cohens d (Hedges/Olkin-Naeherung)."""
+    if n1 < 2 or n2 < 2:
+        return (d, d)
+    se = math.sqrt((n1 + n2) / (n1 * n2) + d * d / (2 * (n1 + n2)))
+    return (round(d - 1.96 * se, 2), round(d + 1.96 * se, 2))
+
+
+def _verdict_for(lo: float, hi: float) -> str:
+    if lo > MEANINGFUL_EFFECT:
+        return SOLID_POSITIVE
+    if hi < -MEANINGFUL_EFFECT:
+        return SOLID_NEGATIVE
+    if lo > -MEANINGFUL_EFFECT and hi < MEANINGFUL_EFFECT:
+        return SOLID_NEGLIGIBLE
+    return UNDECIDED
+
+
+def _matches_needed(d: float) -> int:
+    """Wie viele Matches insgesamt, bis der Bereich die Schwelle verlaesst?
+
+    Null, wenn der Effekt so klein ist, dass auch beliebig viele Matches
+    keine bedeutsame Aussage ergeben wuerden.
+    """
+    a = abs(d)
+    if a <= MEANINGFUL_EFFECT:
+        return 0
+    se_needed = (a - MEANINGFUL_EFFECT) / 1.96
+    per_group = (2 + a * a / 2) / (se_needed ** 2)
+    return math.ceil(per_group * 2)
 
 
 def build_relevance(matches: list[dict]) -> list[Relevance]:
@@ -472,10 +530,16 @@ def build_relevance(matches: list[dict]) -> list[Relevance]:
         effect = (mw - ml) / pooled if pooled else 0.0
         if rule.lower_is_better:
             effect = -effect
+        effect = round(effect, 2)
+        lo, hi = _effect_ci(effect, len(w), len(l))
+        verdict = _verdict_for(lo, hi)
         out.append(Relevance(
             key=key, label=rule.label, unit=rule.unit,
             mean_win=round(mw, 2), mean_loss=round(ml, 2),
-            effect=round(effect, 2), outcome_driven=rule.outcome_driven,
+            effect=effect, outcome_driven=rule.outcome_driven,
+            ci_low=lo, ci_high=hi, verdict=verdict,
+            matches_needed=(_matches_needed(effect)
+                            if verdict == UNDECIDED else 0),
         ))
 
     out.sort(key=lambda r: -abs(r.effect))

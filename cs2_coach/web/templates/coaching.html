@@ -56,7 +56,7 @@
     <span class="card-kicker">{{ _('Zusammenhang mit deinen Ergebnissen') }}</span>
     <h3 class="card-title" style="margin-bottom:var(--space-2);">{{ _('Was trennt deine Siege von deinen Niederlagen?') }}</h3>
     <p style="font-size:12px;color:var(--color-neutral-500);margin:0 0 var(--space-3);">
-        {{ _('Effektstaerke (Cohens d) ueber alle Matches mit Ergebnis. Ab 0.8 gross, unter 0.2 vernachlaessigbar.') }}
+        {{ _('Effektstaerke mit 95%-Bereich. Ein Wert allein sagt wenig: bei wenigen Matches ist der Bereich so breit, dass er von "praktisch nichts" bis "sehr gross" reicht.') }}
     </p>
     <table class="table"><tbody>
         {% for r in relevance %}
@@ -70,17 +70,31 @@
             <td style="color:var(--color-neutral-500);white-space:nowrap;">
                 {{ r.mean_win }}{{ r.unit }} {{ _('vs') }} {{ r.mean_loss }}{{ r.unit }}
             </td>
-            <td style="width:120px;">
-                <div style="height:6px;background:var(--color-neutral-900);border-radius:3px;overflow:hidden;">
-                    <div style="height:100%;width:{{ [ (r.effect|abs) / 1.5 * 100, 100 ]|min }}%;background:{% if r.effect < 0.2 %}var(--color-neutral-700){% elif r.effect < 0.5 %}var(--color-yellow){% else %}var(--color-green){% endif %};"></div>
-                </div>
+            <td style="width:150px;color:var(--color-neutral-500);font-size:12px;white-space:nowrap;">
+                {{ r.effect }} <span style="color:var(--color-neutral-600);">[{{ r.ci_low }} … {{ r.ci_high }}]</span>
             </td>
-            <td style="text-align:right;font-weight:600;white-space:nowrap;">{{ r.effect }}</td>
+            <td style="text-align:right;white-space:nowrap;">
+                {% if r.verdict == 'solid_positive' %}
+                <span class="tag" style="border-color:var(--color-green);color:var(--color-green);">{{ _('belastbar') }}</span>
+                {% elif r.verdict == 'solid_negative' %}
+                <span class="tag" style="border-color:var(--color-red);color:var(--color-red);">{{ _('belastbar negativ') }}</span>
+                {% elif r.verdict == 'solid_negligible' %}
+                <span class="tag tag-neutral">{{ _('belegt irrelevant') }}</span>
+                {% else %}
+                <span class="tag" style="border-color:var(--color-yellow);color:var(--color-yellow);"
+                      title="{{ _('Der Bereich schliesst sowohl bedeutsame als auch vernachlaessigbare Werte ein.') }}">{{ _('unentschieden') }}</span>
+                {% if r.matches_needed %}
+                <div style="font-size:10px;color:var(--color-neutral-600);margin-top:2px;">
+                    {{ _('ab ca.') }} {{ r.matches_needed }} {{ _('Matches') }}
+                </div>
+                {% endif %}
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
     </tbody></table>
     <p style="font-size:11px;color:var(--color-neutral-600);margin:var(--space-3) 0 0;">
-        {{ _('Am ehesten handlungsleitend sind die Zeilen OHNE Kennzeichnung: sie bilden Verhalten ab, das du unabhaengig vom Rundenausgang steuerst.') }}
+        {{ _('Handlungsleitend ist eine Zeile nur, wenn sie belastbar UND nicht ergebnisabhaengig ist. "Unentschieden" heisst: die Daten reichen noch nicht, um zwischen bedeutsam und belanglos zu unterscheiden - der angezeigte Wert kann sich mit weiteren Matches deutlich verschieben.') }}
     </p>
 </div>
 {% endif %}
