@@ -167,3 +167,21 @@ def test_expired_session_raises(fake_requests):
     fake_requests["session"] = FakeSession({"response": {}})
     with pytest.raises(SC.SteamLoginError, match="abgelaufen"):
         SC.steam_login_qr_poll("1", "r")
+
+
+def test_device_details_is_not_sent(fake_requests):
+    """Regression: mit device_details antwortet Steam mit HTTP 400.
+
+    Das Feld ist in Steams API eine Protobuf-Teilnachricht. Als
+    JSON-String im Formular uebergeben liefert die API eine
+    HTML-Fehlerseite ("Please verify that all required parameters are
+    being sent") statt JSON - gegen die echte API verifiziert.
+    """
+    sess = FakeSession({"response": {
+        "client_id": 1, "request_id": "r", "challenge_url": "https://s.team/q/1/A"}})
+    fake_requests["session"] = sess
+    SC.steam_login_qr_begin()
+
+    _url, data = sess.calls[0]
+    assert "device_details" not in data
+    assert data["device_friendly_name"] and data["platform_type"] == "2"

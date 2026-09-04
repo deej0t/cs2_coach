@@ -343,11 +343,11 @@ def steam_login_qr_begin() -> dict:
         data={
             "device_friendly_name": "CS2 Coach",
             "platform_type": "2",          # WebBrowser
-            "device_details": _json.dumps({
-                "device_friendly_name": "CS2 Coach",
-                "platform_type": 2,
-            }),
             "website_id": "Community",
+            # KEIN device_details: das Feld ist in Steams API eine
+            # Protobuf-Teilnachricht. Formularkodiert als JSON-String
+            # uebergeben, quittiert Steam die Anfrage mit HTTP 400 und
+            # einer HTML-Fehlerseite statt JSON.
         },
         headers={"Referer": f"{_STEAM_COMMUNITY}/", "Origin": _STEAM_COMMUNITY},
         timeout=15,
