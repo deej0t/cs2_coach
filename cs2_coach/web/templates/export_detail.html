@@ -545,12 +545,16 @@
             <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;user-select:none;">
                 <input type="checkbox" id="rp-util" checked style="accent-color:var(--color-accent);"> {{ _('Utility') }}
             </label>
+            <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;user-select:none;">
+                <input type="checkbox" id="rp-names" checked style="accent-color:var(--color-accent);"> {{ _('Namen') }}
+            </label>
             <input type="range" id="rp-seek" min="0" value="0" style="flex:1;min-width:140px;accent-color:var(--color-accent);">
             <span id="rp-time" style="font-size:11px;color:var(--color-neutral-500);min-width:52px;"></span>
             <button class="rn-close" onclick="closeReplay()">&times;</button>
         </div>
         <div style="position:relative;width:100%;max-width:560px;">
             <canvas id="rp-canvas" width="600" height="600" style="width:100%;border-radius:var(--radius-md);background:var(--color-bg);"></canvas>
+            <div id="rp-tip" style="display:none;position:absolute;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-sm);padding:4px 8px;font-size:11px;pointer-events:none;white-space:nowrap;z-index:10;"></div>
         </div>
         <p style="font-size:11px;color:var(--color-neutral-600);margin-top:var(--space-2);">
             <span id="rp-legend"></span>
@@ -1007,7 +1011,15 @@ var rpData = null, rpFrame = 0, rpTimer = null, rpImg = null, rpPlaying = false;
 
 // Farben nach Team. Ohne diese Unterscheidung waren beide Mannschaften
 // gleich eingefaerbt und das Replay damit nicht zu lesen.
-var rpUtilOn = true;
+var rpUtilOn = true, rpNamesOn = true, rpFrameDots = [];
+
+function rpShortName(name) {
+    var n = (name || '?').trim();
+    // Nur Zeichen behalten, die als Kuerzel taugen - Clantags und
+    // Zierzeichen machen die Karte sonst unleserlich.
+    var clean = n.replace(/[^\p{L}\p{N}_.\- ]/gu, '').trim() || n;
+    return clean.length > 9 ? clean.slice(0, 8) + '…' : clean;
+}
 
 // Symbol und Flaeche getrennt: die Flaeche zeigt, was Raum einnimmt
 // (Smoke, Feuer), das Symbol den Typ. Vier aehnlich gefaerbte Kreise
@@ -1160,7 +1172,24 @@ function drawReplay() {
         ctx.fill();
         if (pl.is_target) { ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke(); }
         ctx.globalAlpha = 1;
+
+        if (rpNamesOn) {
+            // Kurzform unter dem Punkt. Volle Namen sind oft lang und
+            // enthalten Sonderzeichen; die Karte wuerde sonst zulaufen.
+            ctx.globalAlpha = alive ? 1 : 0.4;
+            ctx.font = '600 10px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+            ctx.strokeText(rpShortName(pl.name), x * scale, y * scale + 7);
+            ctx.fillStyle = RP_TEAM_COLORS[pl.team] || '#9ca3af';
+            ctx.fillText(rpShortName(pl.name), x * scale, y * scale + 7);
+            ctx.globalAlpha = 1;
+        }
     });
+
+    rpFrameDots = frame.p;
 
     var secs = ((frame.t - rpData.start_tick) / 64).toFixed(1);
     document.getElementById('rp-time').textContent = secs + 's';
@@ -1173,6 +1202,36 @@ document.addEventListener('DOMContentLoaded', function() {
     if (sp) sp.addEventListener('change', function() { if (rpPlaying) startReplay(); });
     var ub = document.getElementById('rp-util');
     if (ub) ub.addEventListener('change', function() { rpUtilOn = this.checked; drawReplay(); });
+    var nb = document.getElementById('rp-names');
+    if (nb) nb.addEventListener('change', function() { rpNamesOn = this.checked; drawReplay(); });
+
+    // Vollstaendiger Name beim Ueberfahren - die Kurzform auf der Karte
+    // reicht zum Wiedererkennen, nicht zum genauen Nachschlagen.
+    var cv = document.getElementById('rp-canvas');
+    var tip = document.getElementById('rp-tip');
+    if (cv && tip) {
+        cv.addEventListener('mousemove', function(e) {
+            if (!rpData) return;
+            var rect = cv.getBoundingClientRect();
+            var mx = (e.clientX - rect.left) / rect.width * cv.width;
+            var my = (e.clientY - rect.top) / rect.height * cv.height;
+            var scale = cv.width / 1024, best = null, bestD = 400;
+            rpFrameDots.forEach(function(d) {
+                var dx = d[1] * scale - mx, dy = d[2] * scale - my;
+                var dist = dx * dx + dy * dy;
+                if (dist < bestD) { bestD = dist; best = d; }
+            });
+            if (!best) { tip.style.display = 'none'; return; }
+            var pl = rpData.players[best[0]];
+            tip.textContent = pl.name + ' · ' + (best[3] > 0 ? best[3] + ' HP' : 'tot') +
+                              (pl.side ? ' · ' + pl.side : '');
+            tip.style.display = 'block';
+            tip.style.left = (e.clientX - rect.left + 12) + 'px';
+            tip.style.top = (e.clientY - rect.top - 22) + 'px';
+        });
+        cv.addEventListener('mouseleave', function() { tip.style.display = 'none'; });
+    }
+
     var sk = document.getElementById('rp-seek');
     if (sk) sk.addEventListener('input', function() {
         rpFrame = parseInt(this.value, 10);
