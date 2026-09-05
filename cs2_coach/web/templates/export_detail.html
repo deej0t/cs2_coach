@@ -542,6 +542,9 @@
                 <option value="1" selected>1×</option>
                 <option value="2">2×</option>
             </select>
+            <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;user-select:none;">
+                <input type="checkbox" id="rp-util" checked style="accent-color:var(--color-accent);"> {{ _('Utility') }}
+            </label>
             <input type="range" id="rp-seek" min="0" value="0" style="flex:1;min-width:140px;accent-color:var(--color-accent);">
             <span id="rp-time" style="font-size:11px;color:var(--color-neutral-500);min-width:52px;"></span>
             <button class="rn-close" onclick="closeReplay()">&times;</button>
@@ -555,7 +558,8 @@
             <span style="color:#4ade80;">●</span> {{ _('du') }}
             <span style="color:#60a5fa;">●</span> {{ _('Team') }}
             <span style="color:#f87171;">●</span> {{ _('Gegner') }}
-            — {{ _('blass = tot') }}
+            — {{ _('blass = tot') }}.
+            {{ _('Granaten erscheinen zum Zuendzeitpunkt und verschwinden, wenn sie auslaufen; der Rand zeigt, wer sie geworfen hat. Die Radien sind Naeherungen.') }}
         </p>
     </div>
     {% endif %}
@@ -1002,6 +1006,16 @@ var rpData = null, rpFrame = 0, rpTimer = null, rpImg = null, rpPlaying = false;
 
 // Farben nach Team. Ohne diese Unterscheidung waren beide Mannschaften
 // gleich eingefaerbt und das Replay damit nicht zu lesen.
+var rpUtilOn = true;
+
+// Fuellung nach Granatentyp; der Rand traegt die Teamfarbe.
+var RP_UTIL_STYLE = {
+    smoke:   { fill: '#cbd5e1', alpha: 0.40 },
+    molotov: { fill: '#fb923c', alpha: 0.35 },
+    flash:   { fill: '#fef08a', alpha: 0.55 },
+    he:      { fill: '#f87171', alpha: 0.45 }
+};
+
 var RP_TEAM_COLORS = {
     self:    '#4ade80',
     mate:    '#60a5fa',
@@ -1077,13 +1091,30 @@ function drawReplay() {
     var frame = rpData.frames[rpFrame];
     if (!frame) return;
 
-    // Kills der letzten Sekunde als Linie einblenden
-    var window_ = 64;
-    rpData.kills.forEach(function(k) {
-        if (k.tick > frame.t || frame.t - k.tick > window_) return;
-        ctx.strokeStyle = 'rgba(248,113,113,0.55)';
-        ctx.lineWidth = 1.5;
-    });
+    // Granaten zuerst, damit die Spieler darueber liegen. Angezeigt wird
+    // der Zeitraum zwischen Zuendung und Ende - ein Smoke steht rund 18
+    // Sekunden, ein Molotov brennt etwa sieben.
+    if (rpUtilOn) {
+        (rpData.utility || []).forEach(function(u) {
+            if (frame.t < u.t || frame.t > u.end) return;
+            var style = RP_UTIL_STYLE[u.type];
+            if (!style) return;
+            var cx = u.x * scale, cy = u.y * scale, rr = Math.max(u.r * scale, 3);
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+            if (style.fill) {
+                ctx.globalAlpha = style.alpha;
+                ctx.fillStyle = style.fill;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+            // Rand in Teamfarbe: eigene und gegnerische Utility trennen
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = RP_TEAM_COLORS[u.team] || '#9ca3af';
+            ctx.stroke();
+        });
+    }
 
     frame.p.forEach(function(e) {
         var pi = e[0], x = e[1], y = e[2], hp = e[3];
@@ -1108,6 +1139,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pb) pb.addEventListener('click', togglePlay);
     var sp = document.getElementById('rp-speed');
     if (sp) sp.addEventListener('change', function() { if (rpPlaying) startReplay(); });
+    var ub = document.getElementById('rp-util');
+    if (ub) ub.addEventListener('change', function() { rpUtilOn = this.checked; drawReplay(); });
     var sk = document.getElementById('rp-seek');
     if (sk) sk.addEventListener('input', function() {
         rpFrame = parseInt(this.value, 10);

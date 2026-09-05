@@ -2802,6 +2802,89 @@ _INGAME_T = 2
 _INGAME_CT = 3
 
 
+# Detonations-Events je Granatentyp, mit dem passenden Ende-Event.
+# Flash und HE wirken schlagartig und haben keines - dort wird eine kurze
+# Anzeigedauer gesetzt, damit sie im Replay ueberhaupt sichtbar sind.
+_UTIL_EVENTS = {
+    "smoke":   ("smokegrenade_detonate", "smokegrenade_expired", 18.0, 144.0),
+    "molotov": ("inferno_startburn", "inferno_expire", 7.0, 150.0),
+    "flash":   ("flashbang_detonate", None, 0.4, 60.0),
+    "he":      ("hegrenade_detonate", None, 0.4, 80.0),
+}
+
+
+def _round_utility(parser, start: int, end: int, map_key: str,
+                   sides: dict, target_id: str) -> list[dict]:
+    """Granaten einer Runde mit Wirkzeitraum und Radius.
+
+    Die Ende-Events tragen dieselbe entityid wie die Zuendung, aber Steam
+    verwendet die Kennungen im Match wieder. Zugeordnet wird deshalb das
+    naechste Ende NACH der Zuendung, und zusaetzlich am Rundenende
+    abgeschnitten - sonst entstehen Wirkzeiten von vielen Minuten.
+
+    Die Radien sind Naeherungen: der tatsaechliche Wirkbereich haengt an
+    der Geometrie und laesst sich aus den Events nicht ablesen.
+    """
+    from collections import defaultdict
+
+    scale = MAP_RADAR_DATA.get(map_key, {}).get("scale", 5.0)
+    out = []
+
+    for util_type, (start_ev, end_ev, default_s, radius_u) in _UTIL_EVENTS.items():
+        try:
+            starts = parser.parse_event(start_ev)
+        except Exception:
+            continue
+        if starts is None or len(starts) == 0:
+            continue
+
+        ends = defaultdict(list)
+        if end_ev:
+            try:
+                edf = parser.parse_event(end_ev)
+                for _, r in edf.iterrows():
+                    ends[int(r.get("entityid", -1))].append(int(r.get("tick", 0)))
+                for k in ends:
+                    ends[k].sort()
+            except Exception:
+                pass
+
+        for _, r in starts.iterrows():
+            tick = int(r.get("tick", 0))
+            if not (start <= tick <= end):
+                continue
+            pos = game_to_radar(float(r.get("x", 0)), float(r.get("y", 0)), map_key)
+            if not pos:
+                continue
+
+            later = [e for e in ends.get(int(r.get("entityid", -1)), []) if e > tick]
+            end_tick = later[0] if later else tick + int(default_s * _CS2_TICKRATE)
+            end_tick = min(end_tick, end)
+
+            sid = str(r.get("user_steamid", ""))
+            own = sides.get(target_id)
+            side = sides.get(sid)
+            if side is None or own is None:
+                team = "unknown"
+            elif sid == target_id:
+                team = "self"
+            else:
+                team = "mate" if side == own else "enemy"
+
+            out.append({
+                "type": util_type,
+                "t": tick,
+                "end": end_tick,
+                "x": round(pos[0], 1),
+                "y": round(pos[1], 1),
+                "r": round(radius_u / scale, 1),
+                "team": team,
+            })
+
+    out.sort(key=lambda u: u["t"])
+    return out
+
+
 def _replay_player(sid: str, names: dict, sides: dict, target_id: str) -> dict:
     """Ein Spieler fuer das Replay, inklusive Team-Zuordnung.
 
@@ -2923,8 +3006,11 @@ def build_round_replay(demo_path: str, round_num: int, target_id: str = "",
     except Exception:
         pass
 
+    utility = _round_utility(parser, start, end, map_key, sides, str(target_id))         if map_key else []
+
     return {
         "round": round_num,
+        "utility": utility,
         "start_tick": start,
         "end_tick": end,
         "fps": REPLAY_FPS,

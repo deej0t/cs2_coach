@@ -220,3 +220,110 @@ def test_spectator_team_num_is_ignored(fake):
     r = build_round_replay("x.dem", 1, "A", "ancient")
     by = {p["steamid"]: p["team"] for p in r["players"]}
     assert by["A"] == "self" and by["S"] == "unknown"
+
+
+# ── Granaten im Replay ──────────────────────────────────────────────────
+
+class UtilParser(FakeParser):
+    """Erweitert den Fake um Granaten-Events."""
+
+    def __init__(self, *a, utils=None, **kw):
+        super().__init__(*a, **kw)
+        self._utils = utils or {}
+
+    def parse_event(self, name, **kw):
+        if name in self._utils:
+            return pd.DataFrame(self._utils[name],
+                                columns=["tick", "entityid", "user_steamid", "x", "y"])
+        if name in ("smokegrenade_detonate", "smokegrenade_expired",
+                    "inferno_startburn", "inferno_expire",
+                    "flashbang_detonate", "hegrenade_detonate"):
+            return pd.DataFrame(columns=["tick", "entityid", "user_steamid", "x", "y"])
+        return super().parse_event(name, **kw)
+
+
+def util_row(tick, eid, sid, x=-2453.0, y=1664.0):
+    return [tick, eid, sid, x, y]
+
+
+def replay_with_utils(fake, utils, teams=None):
+    fake["parser"] = UtilParser(
+        ends=[2000], freezes=[100],
+        ticks_df=ticks_frame(100, 2000, 8, ["A", "B"], teams=teams or {"A": 2, "B": 3}),
+        utils=utils)
+    return build_round_replay("x.dem", 1, "A", "ancient")
+
+
+def test_smoke_duration_comes_from_the_expire_event(fake):
+    """Die echte Dauer steht in den Daten und muss nicht geraten werden."""
+    r = replay_with_utils(fake, {
+        "smokegrenade_detonate": [util_row(500, 7, "A")],
+        "smokegrenade_expired": [util_row(500 + 64 * 18, 7, "A")],
+    })
+    u = r["utility"][0]
+    assert u["type"] == "smoke"
+    assert (u["end"] - u["t"]) / 64 == pytest.approx(18.0)
+
+
+def test_reused_entity_id_takes_the_next_end(fake):
+    """Regression: entityids werden im Match wiederverwendet.
+
+    Ohne die Einschraenkung auf spaetere Ticks entstanden negative und
+    2000-Sekunden-Dauern, weil ein fruehes Ende zugeordnet wurde.
+    """
+    r = replay_with_utils(fake, {
+        "smokegrenade_detonate": [util_row(1000, 7, "A")],
+        "smokegrenade_expired": [util_row(200, 7, "A"), util_row(1500, 7, "A")],
+    })
+    assert r["utility"][0]["end"] == 1500
+
+
+def test_end_is_clamped_to_round_end(fake):
+    """Ein Smoke darf nicht ueber das Rundenende hinaus stehen."""
+    r = replay_with_utils(fake, {
+        "smokegrenade_detonate": [util_row(1900, 7, "A")],
+        "smokegrenade_expired": [util_row(99999, 7, "A")],
+    })
+    assert r["utility"][0]["end"] == 2000
+
+
+def test_flash_without_expire_gets_a_short_duration(fake):
+    """Flash und HE haben kein Ende-Event, muessen aber sichtbar sein."""
+    r = replay_with_utils(fake, {"flashbang_detonate": [util_row(500, 3, "A")]})
+    u = r["utility"][0]
+    assert u["type"] == "flash"
+    assert 0 < (u["end"] - u["t"]) < 64, "kurz, aber nicht null"
+
+
+def test_utility_outside_the_round_is_dropped(fake):
+    r = replay_with_utils(fake, {
+        "hegrenade_detonate": [util_row(50, 1, "A"), util_row(500, 2, "A"),
+                               util_row(5000, 3, "A")]})
+    assert [u["t"] for u in r["utility"]] == [500]
+
+
+def test_utility_carries_thrower_team(fake):
+    """Eigene und gegnerische Granaten muessen unterscheidbar sein."""
+    r = replay_with_utils(fake, {
+        "smokegrenade_detonate": [util_row(500, 1, "A"), util_row(600, 2, "B")],
+        "smokegrenade_expired": [],
+    })
+    by = {u["t"]: u["team"] for u in r["utility"]}
+    assert by == {500: "self", 600: "enemy"}
+
+
+def test_utility_is_sorted_by_time(fake):
+    r = replay_with_utils(fake, {
+        "hegrenade_detonate": [util_row(900, 1, "A")],
+        "flashbang_detonate": [util_row(300, 2, "A")],
+        "smokegrenade_detonate": [util_row(600, 3, "A")],
+    })
+    ticks = [u["t"] for u in r["utility"]]
+    assert ticks == sorted(ticks)
+
+
+def test_utility_coordinates_are_radar_space(fake):
+    r = replay_with_utils(fake, {"smokegrenade_detonate": [util_row(500, 1, "A")]})
+    u = r["utility"][0]
+    assert 0 <= u["x"] <= 1024 and 0 <= u["y"] <= 1024
+    assert u["r"] > 0, "Radius wird in Radareinheiten umgerechnet"
