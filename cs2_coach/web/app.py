@@ -2808,8 +2808,11 @@ _INGAME_CT = 3
 _UTIL_EVENTS = {
     "smoke":   ("smokegrenade_detonate", "smokegrenade_expired", 18.0, 144.0),
     "molotov": ("inferno_startburn", "inferno_expire", 7.0, 150.0),
-    "flash":   ("flashbang_detonate", None, 0.4, 60.0),
-    "he":      ("hegrenade_detonate", None, 0.4, 80.0),
+    # Flash und HE wirken schlagartig. Bei 8 Bildern pro Sekunde waeren
+    # 0.4s nur drei Frames und damit leicht zu uebersehen - sie bleiben
+    # daher etwas laenger als Markierung stehen.
+    "flash":   ("flashbang_detonate", None, 1.2, 60.0),
+    "he":      ("hegrenade_detonate", None, 1.2, 80.0),
 }
 
 

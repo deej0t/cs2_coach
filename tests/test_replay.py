@@ -287,12 +287,19 @@ def test_end_is_clamped_to_round_end(fake):
     assert r["utility"][0]["end"] == 2000
 
 
-def test_flash_without_expire_gets_a_short_duration(fake):
-    """Flash und HE haben kein Ende-Event, muessen aber sichtbar sein."""
+def test_flash_without_expire_stays_visible_long_enough(fake):
+    """Flash und HE haben kein Ende-Event.
+
+    Sie wirken schlagartig, muessen im Replay aber lange genug stehen, um
+    wahrgenommen zu werden: bei 8 Bildern pro Sekunde waeren 0.4 Sekunden
+    nur drei Frames.
+    """
     r = replay_with_utils(fake, {"flashbang_detonate": [util_row(500, 3, "A")]})
     u = r["utility"][0]
     assert u["type"] == "flash"
-    assert 0 < (u["end"] - u["t"]) < 64, "kurz, aber nicht null"
+    frames_visible = (u["end"] - u["t"]) / 64 * 8
+    assert frames_visible >= 8, f"nur {frames_visible:.0f} Frames sichtbar"
+    assert (u["end"] - u["t"]) / 64 <= 2.0, "aber kein Dauerzustand"
 
 
 def test_utility_outside_the_round_is_dropped(fake):

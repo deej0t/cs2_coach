@@ -559,7 +559,8 @@
             <span style="color:#60a5fa;">●</span> {{ _('Team') }}
             <span style="color:#f87171;">●</span> {{ _('Gegner') }}
             — {{ _('blass = tot') }}.
-            {{ _('Granaten erscheinen zum Zuendzeitpunkt und verschwinden, wenn sie auslaufen; der Rand zeigt, wer sie geworfen hat. Die Radien sind Naeherungen.') }}
+            {{ _('Granaten') }}: ☁ Smoke · 🔥 {{ _('Feuer') }} · ⚡ Flash · 💥 HE —
+            {{ _('sie erscheinen zum Zuendzeitpunkt und verschwinden, wenn sie auslaufen. Der Punkt unter dem Symbol zeigt in Teamfarbe, wer geworfen hat. Flaechen bei Smoke und Feuer sind Naeherungen.') }}
         </p>
     </div>
     {% endif %}
@@ -1008,12 +1009,14 @@ var rpData = null, rpFrame = 0, rpTimer = null, rpImg = null, rpPlaying = false;
 // gleich eingefaerbt und das Replay damit nicht zu lesen.
 var rpUtilOn = true;
 
-// Fuellung nach Granatentyp; der Rand traegt die Teamfarbe.
+// Symbol und Flaeche getrennt: die Flaeche zeigt, was Raum einnimmt
+// (Smoke, Feuer), das Symbol den Typ. Vier aehnlich gefaerbte Kreise
+// liessen sich auf der Karte nicht auseinanderhalten.
 var RP_UTIL_STYLE = {
-    smoke:   { fill: '#cbd5e1', alpha: 0.40 },
-    molotov: { fill: '#fb923c', alpha: 0.35 },
-    flash:   { fill: '#fef08a', alpha: 0.55 },
-    he:      { fill: '#f87171', alpha: 0.45 }
+    smoke:   { icon: '☁', fill: '#cbd5e1', alpha: 0.38, area: true },
+    molotov: { icon: '🔥', fill: '#fb923c', alpha: 0.34, area: true },
+    flash:   { icon: '⚡', fill: '#fef08a', alpha: 0.30, area: false },
+    he:      { icon: '💥', fill: '#f87171', alpha: 0.30, area: false }
 };
 
 var RP_TEAM_COLORS = {
@@ -1100,19 +1103,48 @@ function drawReplay() {
             var style = RP_UTIL_STYLE[u.type];
             if (!style) return;
             var cx = u.x * scale, cy = u.y * scale, rr = Math.max(u.r * scale, 3);
+            var teamColor = RP_TEAM_COLORS[u.team] || '#9ca3af';
 
-            ctx.beginPath();
-            ctx.arc(cx, cy, rr, 0, Math.PI * 2);
-            if (style.fill) {
+            // Flaeche nur fuer Smoke und Feuer - die decken wirklich
+            // Raum ab. Flash und HE wirken punktuell.
+            if (style.area) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, rr, 0, Math.PI * 2);
                 ctx.globalAlpha = style.alpha;
                 ctx.fillStyle = style.fill;
                 ctx.fill();
                 ctx.globalAlpha = 1;
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = teamColor;
+                ctx.stroke();
+            } else {
+                // Kurzer Blitz: Ring, der mit der Zeit verblasst
+                var age = (frame.t - u.t) / Math.max(u.end - u.t, 1);
+                ctx.beginPath();
+                ctx.arc(cx, cy, rr * (0.6 + age * 0.8), 0, Math.PI * 2);
+                ctx.globalAlpha = Math.max(1 - age, 0.25);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = style.fill;
+                ctx.stroke();
+                ctx.globalAlpha = 1;
             }
-            // Rand in Teamfarbe: eigene und gegnerische Utility trennen
-            ctx.lineWidth = 1.5;
-            ctx.strokeStyle = RP_TEAM_COLORS[u.team] || '#9ca3af';
-            ctx.stroke();
+
+            // Symbol mittig, mit dunklem Rand fuer Lesbarkeit auf hellen
+            // Kartenbereichen
+            ctx.font = '15px system-ui, "Segoe UI Emoji", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+            ctx.strokeText(style.icon, cx, cy);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(style.icon, cx, cy);
+
+            // Kleiner Punkt in Teamfarbe unter dem Symbol
+            ctx.beginPath();
+            ctx.arc(cx, cy + 11, 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = teamColor;
+            ctx.fill();
         });
     }
 
