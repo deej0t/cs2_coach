@@ -550,7 +550,12 @@
             <canvas id="rp-canvas" width="600" height="600" style="width:100%;border-radius:var(--radius-md);background:var(--color-bg);"></canvas>
         </div>
         <p style="font-size:11px;color:var(--color-neutral-600);margin-top:var(--space-2);">
-            {{ _('Rekonstruktion aus Positionsdaten, kein Spielvideo. Gruen = du, blau = Team, rot = Gegner, blass = tot.') }}
+            <span id="rp-legend"></span>
+            {{ _('Rekonstruktion aus Positionsdaten, kein Spielvideo.') }}
+            <span style="color:#4ade80;">●</span> {{ _('du') }}
+            <span style="color:#60a5fa;">●</span> {{ _('Team') }}
+            <span style="color:#f87171;">●</span> {{ _('Gegner') }}
+            — {{ _('blass = tot') }}
         </p>
     </div>
     {% endif %}
@@ -995,6 +1000,15 @@ function switchPlayer(steamId) {
 // sichtbar sind.
 var rpData = null, rpFrame = 0, rpTimer = null, rpImg = null, rpPlaying = false;
 
+// Farben nach Team. Ohne diese Unterscheidung waren beide Mannschaften
+// gleich eingefaerbt und das Replay damit nicht zu lesen.
+var RP_TEAM_COLORS = {
+    self:    '#4ade80',
+    mate:    '#60a5fa',
+    enemy:   '#f87171',
+    unknown: '#9ca3af'
+};
+
 function closeReplay() {
     if (rpTimer) { clearInterval(rpTimer); rpTimer = null; }
     rpPlaying = false;
@@ -1014,7 +1028,9 @@ function playRound(round) {
             if (!res.ok) { title.textContent = 'Runde ' + round + ' — ' + (res.j.error || 'Fehler'); return; }
             rpData = res.j;
             rpFrame = 0;
-            title.textContent = 'Runde ' + round + ' (' + rpData.duration_s + 's)';
+            var me = (rpData.players || []).filter(function(p) { return p.is_target; })[0];
+            title.textContent = 'Runde ' + round + ' (' + rpData.duration_s + 's)' +
+                                (me && me.side ? ' — du auf ' + me.side : '');
             var seek = document.getElementById('rp-seek');
             seek.max = rpData.frames.length - 1;
             seek.value = 0;
@@ -1077,7 +1093,7 @@ function drawReplay() {
         ctx.globalAlpha = alive ? 1 : 0.28;
         ctx.beginPath();
         ctx.arc(x * scale, y * scale, pl.is_target ? 6 : 4.5, 0, Math.PI * 2);
-        ctx.fillStyle = pl.is_target ? '#4ade80' : '#60a5fa';
+        ctx.fillStyle = RP_TEAM_COLORS[pl.team] || '#9ca3af';
         ctx.fill();
         if (pl.is_target) { ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke(); }
         ctx.globalAlpha = 1;

@@ -57,14 +57,19 @@ def fake(monkeypatch):
     return holder
 
 
-def ticks_frame(start, end, step, sids, x=-2953.0, y=2164.0, health=100):
-    """Positionen im Koordinatenraum von Ancient (pos_x -2953, pos_y 2164)."""
+def ticks_frame(start, end, step, sids, x=-2953.0, y=2164.0, health=100,
+                teams=None):
+    """Positionen im Koordinatenraum von Ancient (pos_x -2953, pos_y 2164).
+
+    ``teams`` ordnet SteamIDs ein team_num zu (2 = T, 3 = CT).
+    """
+    teams = teams or {}
     rows = []
     for t in range(start, end, step):
         for i, sid in enumerate(sids):
             rows.append({"tick": t, "steamid": sid,
                          "X": x + 500 + i * 10, "Y": y - 500 - i * 10,
-                         "health": health})
+                         "health": health, "team_num": teams.get(sid)})
     return pd.DataFrame(rows)
 
 
@@ -154,3 +159,64 @@ def test_players_are_referenced_by_index(fake):
         for entry in fr["p"]:
             assert isinstance(entry[0], int)
             assert 0 <= entry[0] < len(r["players"])
+
+
+# ── Team-Zuordnung ──────────────────────────────────────────────────────
+
+def test_teammates_and_enemies_are_separated(fake):
+    """Regression: ohne team_num waren beide Mannschaften gleich eingefaerbt."""
+    fake["parser"] = FakeParser(
+        ends=[1000], freezes=[100],
+        ticks_df=ticks_frame(100, 1000, 8, ["A", "B", "C"],
+                             teams={"A": 2, "B": 2, "C": 3}))
+
+    r = build_round_replay("x.dem", 1, "A", "ancient")
+    by = {p["steamid"]: p["team"] for p in r["players"]}
+    assert by == {"A": "self", "B": "mate", "C": "enemy"}
+
+
+def test_side_is_reported_per_player(fake):
+    fake["parser"] = FakeParser(
+        ends=[1000], freezes=[100],
+        ticks_df=ticks_frame(100, 1000, 8, ["A", "C"], teams={"A": 3, "C": 2}))
+
+    r = build_round_replay("x.dem", 1, "A", "ancient")
+    by = {p["steamid"]: p["side"] for p in r["players"]}
+    assert by == {"A": "CT", "C": "T"}
+
+
+def test_team_follows_the_half_swap(fake):
+    """Nach dem Seitenwechsel bleibt dasselbe Team das eigene.
+
+    team_num kommt aus den Tickdaten der jeweiligen Runde, daher braucht
+    es keine eigene Seitenlogik.
+    """
+    fake["parser"] = FakeParser(
+        ends=[1000], freezes=[100],
+        ticks_df=ticks_frame(100, 1000, 8, ["A", "B", "C"],
+                             teams={"A": 3, "B": 3, "C": 2}))
+
+    r = build_round_replay("x.dem", 1, "A", "ancient")
+    by = {p["steamid"]: p["team"] for p in r["players"]}
+    assert by == {"A": "self", "B": "mate", "C": "enemy"}
+
+
+def test_missing_team_num_is_marked_unknown(fake):
+    """Lieber "unbekannt" als eine geratene Zuordnung."""
+    fake["parser"] = FakeParser(
+        ends=[1000], freezes=[100],
+        ticks_df=ticks_frame(100, 1000, 8, ["A", "B"], teams={}))
+
+    r = build_round_replay("x.dem", 1, "A", "ancient")
+    assert {p["team"] for p in r["players"]} == {"unknown"}
+
+
+def test_spectator_team_num_is_ignored(fake):
+    """team_num ausserhalb von 2 und 3 ist keine Seite."""
+    fake["parser"] = FakeParser(
+        ends=[1000], freezes=[100],
+        ticks_df=ticks_frame(100, 1000, 8, ["A", "S"], teams={"A": 2, "S": 1}))
+
+    r = build_round_replay("x.dem", 1, "A", "ancient")
+    by = {p["steamid"]: p["team"] for p in r["players"]}
+    assert by["A"] == "self" and by["S"] == "unknown"

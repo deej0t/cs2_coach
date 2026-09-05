@@ -2797,6 +2797,36 @@ REPLAY_FPS = 8
 _CS2_TICKRATE = 64
 
 
+# In-Game team_num aus den Tickdaten (wie in parser.py)
+_INGAME_T = 2
+_INGAME_CT = 3
+
+
+def _replay_player(sid: str, names: dict, sides: dict, target_id: str) -> dict:
+    """Ein Spieler fuer das Replay, inklusive Team-Zuordnung.
+
+    Mitspieler und Gegner werden ueber team_num zum Rundenzeitpunkt
+    unterschieden. Ohne das waren im Replay beide Teams gleich eingefaerbt
+    und die Darstellung damit nutzlos.
+    """
+    own_side = sides.get(target_id)
+    side = sides.get(sid)
+    is_target = sid == target_id
+    if side is None or own_side is None:
+        team = "unknown"
+    elif is_target:
+        team = "self"
+    else:
+        team = "mate" if side == own_side else "enemy"
+    return {
+        "steamid": sid,
+        "name": names.get(sid, "?"),
+        "is_target": is_target,
+        "side": {_INGAME_T: "T", _INGAME_CT: "CT"}.get(side, ""),
+        "team": team,
+    }
+
+
 def build_round_replay(demo_path: str, round_num: int, target_id: str = "",
                        map_key: str = "") -> dict:
     """Positionen aller Spieler fuer eine einzelne Runde.
@@ -2831,7 +2861,11 @@ def build_round_replay(demo_path: str, round_num: int, target_id: str = "",
     step = max(_CS2_TICKRATE // REPLAY_FPS, 1)
     ticks = list(range(start, end, step))
     try:
-        df = parser.parse_ticks(["X", "Y", "health"], ticks=ticks)
+        # team_num kommt aus denselben Ticks und kostet daher nichts extra.
+        # 2 = T, 3 = CT zum jeweiligen Zeitpunkt - damit ist der
+        # Seitenwechsel zur Halbzeit automatisch beruecksichtigt und es
+        # braucht keine eigene Seitenzuordnung.
+        df = parser.parse_ticks(["X", "Y", "health", "team_num"], ticks=ticks)
     except Exception as e:
         return {"error": f"Tickdaten nicht lesbar: {e}"}
 
@@ -2847,11 +2881,20 @@ def build_round_replay(demo_path: str, round_num: int, target_id: str = "",
     players: list[str] = []
     pidx: dict[str, int] = {}
     frames: dict[int, list] = {}
+    sides: dict[str, int] = {}   # steamid -> team_num innerhalb der Runde
     for _, row in df.iterrows():
         sid = str(row.get("steamid", ""))
         if sid not in pidx:
             pidx[sid] = len(players)
             players.append(sid)
+        tn = row.get("team_num")
+        if sid not in sides and tn is not None:
+            try:
+                tn = int(tn)
+            except (TypeError, ValueError):
+                tn = 0
+            if tn in (_INGAME_T, _INGAME_CT):
+                sides[sid] = tn
         x, y = row.get("X"), row.get("Y")
         if x is None or y is None:
             continue
@@ -2886,8 +2929,8 @@ def build_round_replay(demo_path: str, round_num: int, target_id: str = "",
         "end_tick": end,
         "fps": REPLAY_FPS,
         "duration_s": round((end - start) / _CS2_TICKRATE, 1),
-        "players": [{"steamid": sid, "name": names.get(sid, "?"),
-                     "is_target": sid == str(target_id)} for sid in players],
+        "players": [_replay_player(sid, names, sides, str(target_id))
+                    for sid in players],
         "frames": [{"t": t, "p": frames[t]} for t in sorted(frames)],
         "kills": kills,
     }
