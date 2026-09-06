@@ -296,6 +296,12 @@ def fetch_all_new_codes(
 _SESSION_FILE = Path(__file__).resolve().parent.parent / ".steam_session"
 
 # Regex to extract demo download URLs — broad pattern catches URLs anywhere in text
+# Wie weit zurueck der Zeitcursor verfolgt wird. Valve haelt Demos nur
+# rund zwei Wochen vor, weiter zurueck zu blaettern bringt nichts.
+_GCPD_MAX_PAGES = 12
+# Leere Seiten in Folge, nach denen ein Modus als durchsucht gilt.
+_GCPD_MAX_EMPTY_PAGES = 6
+
 _GCPD_DEMO_URL_RE = re.compile(
     r'(https?://replay\d+\.valve\.net/730/(\d+)_\d+\.dem\.bz2)'
 )
@@ -713,7 +719,17 @@ def fetch_gcpd_demo_urls(
         List of dicts: {url, match_id, tab}
     """
     if tabs is None:
-        tabs = ["matchhistorypremier", "matchhistorycompetitive", "matchhistorywingman"]
+        # "matchhistorycompetitive" ist die alte CS:GO-Historie
+        # ("Wettkampfspiele") und bleibt bei CS2-Spielern leer. Der
+        # aktuelle Wettkampfmodus liegt unter "matchhistorycompetitivepermap"
+        # ("Gewertete Wettkampfspiele") - ohne diesen Tab wurden
+        # Wettkampf-Demos nie gefunden.
+        tabs = [
+            "matchhistorypremier",
+            "matchhistorycompetitivepermap",
+            "matchhistorycompetitive",
+            "matchhistorywingman",
+        ]
 
     def _log(msg: str):
         if on_status:
@@ -766,8 +782,15 @@ def fetch_gcpd_demo_urls(
                 cont_token = cont_match.group(1)
                 _log(f"GCPD Token gefunden, lade Daten via AJAX...")
 
-                # AJAX calls to load match data (initial + pagination, up to 5 pages)
-                for page in range(5):
+                # Das continue_token ist ein globaler Zeitcursor, kein
+                # Zaehler je Tab: alle Tabs starten mit demselben Wert und
+                # ruecken um denselben Schritt weiter. Eine leere Seite
+                # heisst deshalb nur "in diesem Zeitfenster kein Match
+                # dieses Modus" - nicht "keine Matches mehr". Frueher
+                # brach die Schleife dort ab und fand bei Modi, die man
+                # seltener spielt, nie etwas.
+                empty_pages = 0
+                for page in range(_GCPD_MAX_PAGES):
                     ajax_url = (
                         f"{gcpd_base}"
                         f"?tab={tab}"
@@ -804,13 +827,13 @@ def fetch_gcpd_demo_urls(
 
                                 # Update continue_token from JSON response
                                 new_token = json_data.get("continue_token", "")
-                                if new_token and str(new_token) != cont_token:
-                                    cont_token = str(new_token)
-                                else:
-                                    break  # No new token — done
+                                if not new_token or str(new_token) == cont_token:
+                                    break  # Cursor bewegt sich nicht mehr
+                                cont_token = str(new_token)
 
-                                if page_count == 0:
-                                    break  # No new URLs — done
+                                empty_pages = 0 if page_count else empty_pages + 1
+                                if empty_pages >= _GCPD_MAX_EMPTY_PAGES:
+                                    break  # laenger nichts mehr in diesem Modus
 
                                 time.sleep(0.5)
                                 continue
@@ -833,9 +856,11 @@ def fetch_gcpd_demo_urls(
 
                         if new_token and new_token != cont_token:
                             cont_token = new_token
-                        elif page_count == 0:
-                            # No new URLs and no new token — done with this tab
-                            break
+                            empty_pages = 0 if page_count else empty_pages + 1
+                            if empty_pages >= _GCPD_MAX_EMPTY_PAGES:
+                                break
+                        else:
+                            break  # Cursor bewegt sich nicht mehr
 
                         time.sleep(0.5)
                     except Exception as e:
