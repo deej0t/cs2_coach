@@ -25,6 +25,7 @@ from ..obsidian import export_match
 from ..maps import MAP_RADAR_DATA, game_to_radar
 from .. import findings as findings_mod
 from .. import chat_store
+from ..export_version import export_status
 from . import auth
 from ..ai_chat import (
     build_player_context, stream_gemini, stream_ollama, check_ollama_status,
@@ -2618,6 +2619,10 @@ def _get_exports(cfg: dict) -> list[dict]:
                 "spray_kills": _spray_count(player.get("spray_control", {}), "spray"),
                 "target_player": player.get("steam_id", ""),
                 "player_stats_map": player_stats_map,
+                # Stand der Datei, nicht des Matches: welche Auswertungen
+                # fehlen und ob die Zahlen noch der aktuellen Rechnung
+                # entsprechen. Siehe export_version.py.
+                "version": export_status(data),
             })
         except (json.JSONDecodeError, KeyError):
             continue

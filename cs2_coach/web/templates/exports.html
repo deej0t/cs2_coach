@@ -7,6 +7,30 @@
 
 {% if exports %}
 
+{# Stand der Export-Dateien. Getrennt gemeldet, weil beides
+   unterschiedlich dringend ist: fehlende Auswertungen sind ein
+   Komfortproblem, falsch gerechnete Zahlen ein Richtigkeitsproblem. #}
+{% set stale = exports|selectattr('version.needs_reanalysis')|list %}
+{% set incomplete = exports|rejectattr('version.needs_reanalysis')|selectattr('version.missing')|list %}
+{% if stale or incomplete %}
+<div class="card" style="margin-bottom: 16px; border-left: 2px solid var(--color-{{ 'red' if stale else 'yellow' }});">
+    {% if stale %}
+    <div style="margin-bottom: {{ '8px' if incomplete else '0' }};">
+        <strong>{{ stale|length }}</strong> {{ _('Exports wurden mit einer aelteren Rechnung erzeugt und zeigen falsche Zahlen.') }}
+        <span style="color: var(--color-neutral-500);">{{ stale[0].version.unreliable|join('; ') }}.</span>
+        {{ _('Eine Neuanalyse der Demo korrigiert sie.') }}
+    </div>
+    {% endif %}
+    {% if incomplete %}
+    <div>
+        <strong>{{ incomplete|length }}</strong> {{ _('Exports fehlen neuere Auswertungen') }}
+        <span style="color: var(--color-neutral-500);">({{ incomplete[0].version.missing|join(', ') }}).</span>
+        {{ _('Die angezeigten Zahlen stimmen; eine Neuanalyse ergaenzt die fehlenden Ansichten.') }}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- Filter Bar -->
 <div class="filter-bar">
     <button class="filter-btn active" data-filter="all">{{ _('Alle') }}</button>
@@ -53,7 +77,9 @@
     <tbody>
         {% for e in exports %}
         <tr data-result="{{ e.result }}" data-map="{{ e.map }}" data-date="{{ e.datetime or e.date }}" data-kd="{{ e.kd }}" data-adr="{{ e.adr }}" data-kast="{{ e.kast }}" data-rating="{{ e.rating }}" data-score="{{ e.score }}" data-players='{{ e.player_stats_map | tojson }}' data-target="{{ e.target_player }}">
-            <td style="color: var(--color-neutral-500); white-space: nowrap;">{{ e.datetime or e.date }}</td>
+            <td style="color: var(--color-neutral-500); white-space: nowrap;">{{ e.datetime or e.date }}{% if e.version.is_outdated %}
+                <abbr title="{% if e.version.needs_reanalysis %}{{ _('Veraltete Rechnung') }}: {{ e.version.unreliable|join('; ') }}{% else %}{{ _('Fehlt') }}: {{ e.version.missing|join(', ') }}{% endif %}" style="color: var(--color-{{ 'red' if e.version.needs_reanalysis else 'yellow' }}); cursor: help; margin-left: 4px;">•</abbr>
+            {% endif %}</td>
             <td>{{ e.map }}</td>
             <td>{{ e.score }}</td>
             <td>

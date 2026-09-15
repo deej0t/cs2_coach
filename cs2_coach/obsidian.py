@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from .export_version import version_fields
 from .parser import MatchResult, PlayerStats
 
 
@@ -106,6 +107,9 @@ def _build_export_json(result: MatchResult, coach_report: str) -> dict:
         scoreboard.append(_player_to_json(p, p.steam_id == s.steam_id))
 
     return {
+        # Muss als erstes stehen: ein Leser soll die Version finden, ohne
+        # die ganze Datei zu kennen.
+        **version_fields(),
         "match": {
             "date": result.match_date,
             "datetime": result.match_datetime,
