@@ -145,3 +145,43 @@ def version_fields() -> dict:
         "schema_version": SCHEMA_VERSION,
         "metrics_version": METRICS_VERSION,
     }
+
+
+def demo_status(export_dir) -> dict[str, dict]:
+    """Je Demo-Datei der Stand ihrer Exporte, fuer Stapellaeufe.
+
+    Zu einer Demo koennen mehrere Exporte gehoeren - je analysiertem
+    Spieler einer. Eine Demo gilt nur dann als aktuell, wenn *alle* ihre
+    Exporte es sind; andernfalls lohnt der erneute Lauf.
+
+    Zu beachten: eine Neuanalyse erzeugt nur den Export des konfigurierten
+    Spielers neu. Exporte, die fuer einen Mitspieler erstellt wurden,
+    bleiben auf ihrem Stand, bis sie gezielt neu erzeugt werden.
+    """
+    from pathlib import Path
+    import json
+
+    export_dir = Path(export_dir)
+    if not export_dir.exists():
+        return {}
+
+    by_demo: dict[str, dict] = {}
+    for f in sorted(export_dir.glob("*_coach.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        demo = (data.get("match") or {}).get("demo_file") or ""
+        if not demo:
+            continue
+        st = export_status(data)
+        entry = by_demo.setdefault(demo, {
+            "exports": 0, "outdated": 0, "needs_reanalysis": False,
+        })
+        entry["exports"] += 1
+        entry["outdated"] += bool(st["is_outdated"])
+        entry["needs_reanalysis"] |= st["needs_reanalysis"]
+
+    for entry in by_demo.values():
+        entry["is_current"] = entry["outdated"] == 0
+    return by_demo

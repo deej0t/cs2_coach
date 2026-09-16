@@ -8,9 +8,12 @@ Nutzer 63 Mal durch eine Neuanalyse, die nichts aendert.
 
 from __future__ import annotations
 
+import json
+
 from cs2_coach.export_version import (
     METRICS_VERSION,
     SCHEMA_VERSION,
+    demo_status,
     export_status,
     export_versions,
     version_fields,
@@ -97,3 +100,43 @@ def test_neuer_export_traegt_die_version():
     """Ein frisch gebauter Export darf sich nie selbst als veraltet melden."""
     st = export_status({**version_fields(), **make(utility=True, tick=True)})
     assert st["is_outdated"] is False
+
+
+# ── Stapellauf: welche Demo braucht einen erneuten Durchgang ─────────
+
+def write_export(d, name, demo_file, **kw):
+    data = make(**kw)
+    data["match"] = {"demo_file": demo_file}
+    (d / f"{name}_coach.json").write_text(
+        json.dumps(data), encoding="utf-8")
+
+
+def test_demo_status_trennt_aktuell_von_veraltet(tmp_path):
+    write_export(tmp_path, "alt", "a.dem")
+    write_export(tmp_path, "neu", "b.dem", utility=True, tick=True)
+    st = demo_status(tmp_path)
+    assert st["a.dem"]["is_current"] is False
+    assert st["b.dem"]["is_current"] is True
+
+
+def test_demo_mit_mehreren_exporten_ist_nur_ganz_aktuell(tmp_path):
+    """Ein veralteter Export je Spieler genuegt, die Demo neu zu lesen."""
+    write_export(tmp_path, "spieler1", "a.dem", utility=True, tick=True)
+    write_export(tmp_path, "spieler2", "a.dem")
+    st = demo_status(tmp_path)
+    assert st["a.dem"]["exports"] == 2
+    assert st["a.dem"]["outdated"] == 1
+    assert st["a.dem"]["is_current"] is False
+
+
+def test_demo_status_uebergeht_unbrauchbare_dateien(tmp_path):
+    """Kaputtes JSON und Exporte ohne demo_file duerfen nicht stoppen."""
+    write_export(tmp_path, "gut", "a.dem", utility=True, tick=True)
+    (tmp_path / "kaputt_coach.json").write_text("{nicht json", encoding="utf-8")
+    (tmp_path / "namenlos_coach.json").write_text(
+        json.dumps({"match": {}}), encoding="utf-8")
+    assert set(demo_status(tmp_path)) == {"a.dem"}
+
+
+def test_demo_status_ohne_verzeichnis(tmp_path):
+    assert demo_status(tmp_path / "gibtsnicht") == {}

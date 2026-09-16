@@ -15,6 +15,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .coach import generate_report
+from .export_version import demo_status
 from .graph import index_vault
 from .obsidian import export_match
 from .parser import parse_demo, MatchResult
@@ -147,9 +148,18 @@ def analyze(ctx, demo_path, player, steamid, no_export, raw, raw_out, raw_stdout
 @click.argument("demo_dir", type=click.Path(exists=True))
 @click.option("--player", "-p", default=None, help="Steam-Name des Spielers")
 @click.option("--steamid", "-s", default=None, help="SteamID64 des Spielers")
+@click.option("--only-outdated", is_flag=True,
+              help="Nur Demos, deren Export veraltet ist oder fehlt")
 @click.pass_context
-def batch(ctx, demo_dir, player, steamid):
-    """Analysiere alle .dem-Dateien in einem Ordner und exportiere Raw-JSON."""
+def batch(ctx, demo_dir, player, steamid, only_outdated):
+    """Analysiere alle .dem-Dateien in einem Ordner und exportiere Raw-JSON.
+
+    Mit --only-outdated werden Demos uebersprungen, deren Export bereits
+    dem aktuellen Stand entspricht (siehe export_version.py). Das ist der
+    Weg, nach einer Metrikkorrektur oder einem neuen Feld nur das
+    nachzuziehen, was es wirklich braucht - eine vollstaendige Neuanalyse
+    kostet rund sieben Sekunden je Demo.
+    """
     cfg = ctx.obj["config"]
     player_name = player or cfg.get("player_name", "")
     steam_id = steamid or cfg.get("steam_id", "")
@@ -163,14 +173,29 @@ def batch(ctx, demo_dir, player, steamid):
         console.print(f"[red]Keine .dem-Dateien gefunden in: {demo_dir}[/red]")
         return
 
+    out_dir = Path(vault_path) / subfolder / "exports" if vault_path else Path(".")
+
+    skipped = 0
+    if only_outdated:
+        status = demo_status(out_dir)
+        total = len(dem_files)
+        dem_files = [d for d in dem_files
+                     if not status.get(d.name, {}).get("is_current")]
+        skipped = total - len(dem_files)
+        if not dem_files:
+            console.print(
+                f"[green]Alle {total} Demos sind bereits auf dem aktuellen "
+                f"Stand — nichts zu tun.[/green]")
+            return
+
     console.print(Panel(
         f"[bold cyan]CS2 Coach — Batch-Analyse[/bold cyan]\n"
         f"Ordner: {demo_dir}\n"
-        f"Demos: {len(dem_files)}",
+        f"Demos: {len(dem_files)}"
+        + (f"  [dim]({skipped} aktuell, uebersprungen)[/dim]" if skipped else ""),
         border_style="cyan",
     ))
 
-    out_dir = Path(vault_path) / subfolder / "exports" if vault_path else Path(".")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     results_summary = []
