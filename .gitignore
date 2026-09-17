@@ -47,6 +47,9 @@ graphify-out/
 # Temp JSON exports
 *.json
 !config.yaml.example
+# Das Manifest des Test-Fixtures gehoert ins Repository - ohne es sind die
+# danebenliegenden Parquet-Dateien nicht zuzuordnen.
+!tests/fixtures/**/*.json
 
 # Claude
 .claudian/
