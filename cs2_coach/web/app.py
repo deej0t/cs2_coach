@@ -26,6 +26,7 @@ from ..maps import MAP_RADAR_DATA, game_to_radar
 from .. import findings as findings_mod
 from .. import chat_store
 from ..export_version import export_status
+from ..utility_analysis import throw_relevance
 from . import auth
 from ..ai_chat import (
     build_player_context, stream_gemini, stream_ollama, check_ollama_status,
@@ -9017,11 +9018,16 @@ def _build_utility_analysis(cfg: dict) -> dict:
                                      "wins": 0, "losses": 0, "ratings": []})
     side_util = {"ct": {"total": 0, "rounds": 0}, "t": {"total": 0, "rounds": 0}}
 
+    raw_exports = []
+
     for f in sorted(export_dir.glob("*_coach.json")):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
+        # Fuer die Relevanz je Granatentyp wird das rohe Dict gebraucht
+        # (utility_positions), nicht die hier aggregierten Zaehler.
+        raw_exports.append(data)
         match = data.get("match", {})
         player = data.get("player", {})
         util = player.get("utility", {})
@@ -9257,6 +9263,7 @@ def _build_utility_analysis(cfg: dict) -> dict:
 
     return {
         "has_data": True,
+        "throw_relevance": throw_relevance(raw_exports),
         "total_matches": total_matches,
         "total_grenades": total_grenades,
         "total_rounds": total_rounds_all,

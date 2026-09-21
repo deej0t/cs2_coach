@@ -16,6 +16,8 @@ cs2_coach/
   coach.py        (980) prose report generation
   practice.py     (990) CS2 practice-server cfg generator (5 modes + server/warmup)
   findings.py     (600) machine-readable findings, baselines, relevance
+  utility_analysis.py (120) throw relevance per grenade type
+  export_version.py   (190) schema/metrics versioning of exports
   obsidian.py     (600) Markdown + JSON export into the vault
   sharecode.py   (1040) Steam API / GCPD / local demo discovery + download
   cli.py          (620) click CLI: analyze, batch, graph, setup, web
@@ -64,6 +66,10 @@ Each of these was wrong once and was fixed against measured demo data. Do not re
 - `build_baselines()` computes the user's personal p10–p90 distribution and flags rules that fire in >90% or <5% of matches as non-discriminating.
 - `build_relevance()` reports Cohen's d **with a 95% confidence interval** and a verdict (robustly positive/negative, proven irrelevant, undecided). Never present an effect size as fact — at ~58 matches most are undecided. For undecided cases it also computes how many matches would settle the question.
 - Windows are aggregated by **median**, not mean; one 21-0 match otherwise fakes a collapse.
+- `utility_analysis.throw_relevance()` breaks utility down **by grenade type, per round** (not per match — a 13:5 has 18 rounds, a 13:11 has 24, so per-match partly measures round count). It reuses `findings.py`'s `_effect_ci` / `_verdict_for` / `_matches_needed`; never reimplement those.
+- Measured 2026-09-21 over 30 wins / 32 losses: HE d=0.80 [0.28…1.32] and total d=0.76 [0.24…1.28] are **robustly positive**; smokes are flat (d=0.12) and thrown equally in wins and losses. Flashes and molotovs point the same way but stay undecided. So the advice is not "throw more utility" but "your smokes are reliable, the aggressive utility is missing in bad games".
+- **Utility crossed from undecided to robust** as the sample grew: 0.69 [0.16…1.22] at 58 matches, 0.77 [0.25…1.29] at 62. Re-read the verdict rather than quoting an older number.
+- The effect-size table lives in `_partials/relevance_table.html` and is used by `/coaching` and `/utility`. Keep it shared — a page that drops the confidence interval reads like a statement of fact.
 
 ## Export Schema
 - The export JSON is compact and grows over time: `kill_positions` (with tick), `utility_positions` `{t, x, y, r}`, crosshair buckets, `median_degrees`. **Older exports lack newer fields** — read defensively and tell the user a re-analysis fills them in.

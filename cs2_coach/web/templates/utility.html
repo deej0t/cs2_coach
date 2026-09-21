@@ -127,6 +127,18 @@
     </div>
 </div>
 
+<!-- ── Relevanz je Granatentyp ── -->
+{% set rel = util.throw_relevance %}
+{% if rel and rel.rows %}
+{% with rel_rows = rel.rows,
+        rel_kicker = _('Zusammenhang mit deinen Ergebnissen'),
+        rel_title = _('Welche Utility trennt deine Siege von deinen Niederlagen?'),
+        rel_intro = _('Wuerfe je Runde, nicht je Match — sonst misst die Zahl zu einem guten Teil die Rundenanzahl. Effektstaerke mit 95%-Bereich, ermittelt aus') + ' ' + rel.wins|string + ' ' + _('Siegen und') + ' ' + rel.losses|string + ' ' + _('Niederlagen.'),
+        rel_footnote = _('Auch die Rundenquote ist nicht voellig verhaltensrein: wer frueh stirbt, wirft weniger. Der Zusammenhang ist schwaecher zirkulaer als bei Survival oder K/D, aber nicht frei davon.') %}
+{% include '_partials/relevance_table.html' %}
+{% endwith %}
+{% endif %}
+
 <!-- ── Wurf-Karte ── -->
 {% if umap.has_data %}
 <div class="card elev-sm" style="margin-bottom:var(--space-5);">
