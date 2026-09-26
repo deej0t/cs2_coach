@@ -293,7 +293,37 @@ def fetch_all_new_codes(
 # Steam Web Login & GCPD Demo Download
 # ---------------------------------------------------------------------------
 
-_SESSION_FILE = Path(__file__).resolve().parent.parent / ".steam_session"
+#: Alter Ablageort, nur noch fuer die Uebernahme bestehender Anmeldungen.
+_LEGACY_SESSION_FILE = Path(__file__).resolve().parent.parent / ".steam_session"
+
+
+def _session_file() -> Path:
+    """Wo die Steam-Sitzung liegt: neben der Konfiguration.
+
+    Frueher lag sie neben dem Quellcode - im Container also unter /app und
+    damit in dessen Schreibschicht. Die verwirft Docker bei jedem
+    Neuerstellen des Containers, weshalb jede Stack-Aenderung die Anmeldung
+    mitgenommen hat. Neben der Config liegt sie auf einem Volume und
+    ueberlebt.
+
+    Gleiche Herleitung wie beim .secret_key in web/auth.py.
+    """
+    env = os.environ.get("CS2COACH_CONFIG", "").strip()
+    base = Path(env).parent if env else Path(__file__).resolve().parent.parent
+    return base / ".steam_session"
+
+
+def _migrate_legacy_session() -> None:
+    """Bestehende Anmeldung einmalig an den neuen Ort umziehen."""
+    new = _session_file()
+    if new.exists() or not _LEGACY_SESSION_FILE.exists():
+        return
+    try:
+        new.parent.mkdir(parents=True, exist_ok=True)
+        new.write_bytes(_LEGACY_SESSION_FILE.read_bytes())
+        _LEGACY_SESSION_FILE.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 # Regex to extract demo download URLs — broad pattern catches URLs anywhere in text
 # Wie weit zurueck der Zeitcursor verfolgt wird. Valve haelt Demos nur
@@ -639,10 +669,88 @@ def _finalize_steam_login(
 def _save_session(session: "requests.Session") -> None:
     """Persist session cookies to disk."""
     try:
-        with open(_SESSION_FILE, "wb") as f:
+        path = _session_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
             pickle.dump(session.cookies, f)
     except OSError:
         pass
+
+
+# Steam erwartet fuer den Erneuerungs-Endpunkt einen Browser. Ohne Origin,
+# Referer und X-Requested-With antwortet er mit HTTP 403.
+_BROWSER_HEADERS = {
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/130.0 Safari/537.36"),
+    "Origin": _STEAM_COMMUNITY,
+    "Referer": _STEAM_COMMUNITY + "/",
+    "X-Requested-With": "XMLHttpRequest",
+}
+
+
+def _token_expiry(cookies, name: str = "steamLoginSecure") -> int:
+    """Ablaufzeitpunkt (Unix) des JWT in einem Steam-Cookie, 0 wenn unlesbar."""
+    import base64
+    import urllib.parse
+
+    for c in cookies:
+        if c.name != name:
+            continue
+        value = urllib.parse.unquote(c.value)
+        jwt = value.split("||")[1] if "||" in value else value
+        try:
+            part = jwt.split(".")[1]
+            part += "=" * (-len(part) % 4)
+            return int(_json.loads(base64.urlsafe_b64decode(part))["exp"])
+        except Exception:
+            return 0
+    return 0
+
+
+def refresh_steam_session(session: "requests.Session") -> bool:
+    """Neuen Zugriffstoken aus dem gespeicherten Refresh-Token erzeugen.
+
+    Steam gibt zwei Token aus: der Zugriffstoken in steamLoginSecure gilt
+    genau 24 Stunden, der Refresh-Token in steamRefresh_steam rund 210 Tage
+    (gemessen am 26.09.2026: aud=["web","renew","derive"]). Bisher hat
+    load_steam_session() beim abgelaufenen Zugriffstoken die gesamte
+    Sitzung geloescht - und damit ein Sieben-Monats-Merkmal weggeworfen,
+    weil ein Ein-Tages-Merkmal abgelaufen war. Genau deshalb musste man
+    sich taeglich neu anmelden.
+
+    Der Ablauf entspricht dem des Browsers und ist gegen die echte API
+    geprueft: /jwt/ajaxrefresh liefert nonce und auth, ein POST auf die
+    genannte login_url setzt den frischen steamLoginSecure-Cookie.
+
+    Returns True, wenn danach ein gueltiger Zugriffstoken vorliegt.
+    """
+    sid = next((c.value for c in session.cookies if c.name == "sessionid"), "")
+    if not sid:
+        return False
+
+    try:
+        resp = session.post(
+            "https://login.steampowered.com/jwt/ajaxrefresh",
+            data={"redir": _STEAM_COMMUNITY + "/", "sessionid": sid},
+            headers=_BROWSER_HEADERS, timeout=15,
+        )
+        data = resp.json() if resp.status_code == 200 else {}
+        if not data.get("success"):
+            return False
+
+        before = _token_expiry(session.cookies)
+        token = session.post(
+            data["login_url"],
+            data={"nonce": data["nonce"], "auth": data["auth"],
+                  "steamID": data["steamID"], "redir": data.get("redir", "/")},
+            headers=_BROWSER_HEADERS, timeout=15,
+        )
+        if token.status_code != 200 or token.json().get("result") != 1:
+            return False
+        # Nur melden, wenn wirklich ein neuerer Token im Jar liegt.
+        return _token_expiry(session.cookies) > before
+    except Exception:
+        return False
 
 
 def load_steam_session() -> "requests.Session | None":
@@ -652,11 +760,13 @@ def load_steam_session() -> "requests.Session | None":
     except ImportError:
         return None
 
-    if not _SESSION_FILE.exists():
+    _migrate_legacy_session()
+    path = _session_file()
+    if not path.exists():
         return None
 
     try:
-        with open(_SESSION_FILE, "rb") as f:
+        with open(path, "rb") as f:
             cookies = pickle.load(f)
     except (OSError, pickle.UnpicklingError, EOFError):
         return None
@@ -665,30 +775,69 @@ def load_steam_session() -> "requests.Session | None":
     session.cookies = cookies
     session.headers["User-Agent"] = "Mozilla/5.0 CS2Coach/1.0"
 
-    # Quick validation: check if session is still alive
-    try:
-        resp = session.get(
-            "https://steamcommunity.com/my",
-            allow_redirects=False,
-            timeout=10,
-        )
-        # If redirected to login page, session is expired
+    def _alive() -> bool:
+        resp = session.get(_STEAM_COMMUNITY + "/my",
+                           allow_redirects=False, timeout=10)
         if resp.status_code == 302:
-            location = resp.headers.get("Location", "")
-            if "login" in location.lower():
-                clear_steam_session()
-                return None
-        return session
+            return "login" not in resp.headers.get("Location", "").lower()
+        return True
+
+    try:
+        if _alive():
+            return session
+
+        # Abgelaufener Zugriffstoken ist kein Grund, die Anmeldung
+        # wegzuwerfen - der Refresh-Token daneben gilt Monate laenger.
+        if refresh_steam_session(session) and _alive():
+            _save_session(session)
+            return session
+
+        clear_steam_session()
+        return None
     except Exception:
+        # Netzproblem: die Sitzung koennte gueltig sein, also nichts loeschen.
         return None
 
 
 def clear_steam_session() -> None:
     """Remove stored Steam session."""
+    for path in (_session_file(), _LEGACY_SESSION_FILE):
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def steam_session_status() -> dict:
+    """Stand der gespeicherten Anmeldung, ohne sie zu erneuern.
+
+    Fuer die Einstellungsseite: sie soll zeigen koennen, bis wann die
+    Anmeldung traegt, statt nur "angemeldet ja/nein".
+    """
+    _migrate_legacy_session()
+    path = _session_file()
+    if not path.exists():
+        return {"logged_in": False, "path": str(path)}
+
     try:
-        _SESSION_FILE.unlink(missing_ok=True)
-    except OSError:
-        pass
+        with open(path, "rb") as f:
+            cookies = pickle.load(f)
+    except (OSError, pickle.UnpicklingError, EOFError):
+        return {"logged_in": False, "path": str(path)}
+
+    now = int(time.time())
+    access = _token_expiry(cookies)
+    refresh = _token_expiry(cookies, "steamRefresh_steam")
+    return {
+        "logged_in": refresh > now,
+        "path": str(path),
+        "access_expires": access,
+        "refresh_expires": refresh,
+        # Der Zugriffstoken haelt nur einen Tag und wird bei Bedarf
+        # automatisch erneuert; entscheidend ist der Refresh-Token.
+        "days_left": round((refresh - now) / 86400, 1) if refresh else 0,
+        "access_hours_left": round((access - now) / 3600, 1) if access else 0,
+    }
 
 
 def is_steam_logged_in() -> bool:

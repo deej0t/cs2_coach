@@ -560,7 +560,11 @@ function checkSteamStatus() {
             badge.style.color = '#4ade80';
             openBtn.style.display = 'none';
             logoutBtn.style.display = '';
-            info.textContent = 'Demos werden automatisch heruntergeladen';
+            // Der Zugriffstoken gilt nur 24h und wird automatisch erneuert.
+            // Massgeblich ist der Refresh-Token; seine Restlaufzeit sagt,
+            // bis wann die Anmeldung ohne Zutun traegt.
+            info.textContent = 'Demos werden automatisch heruntergeladen'
+                + (d.days_left ? ' — Anmeldung gilt noch ' + d.days_left + ' Tage' : '');
             section.style.borderLeftColor = '#4ade80';
         } else {
             badge.textContent = 'Nicht eingeloggt';

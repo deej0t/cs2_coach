@@ -1405,9 +1405,21 @@ def create_app() -> Flask:
 
     @app.route("/api/steam-status")
     def steam_status_api():
-        """Check if Steam session is active."""
-        from ..sharecode import is_steam_logged_in
-        return jsonify({"logged_in": is_steam_logged_in(), "username": cfg.get("steam_username", "")})
+        """Check if Steam session is active.
+
+        is_steam_logged_in() laedt die Sitzung und erneuert dabei bei Bedarf
+        den Zugriffstoken; steam_session_status() liest nur die Datei und
+        liefert die Laufzeiten fuer die Anzeige.
+        """
+        from ..sharecode import is_steam_logged_in, steam_session_status
+        logged_in = is_steam_logged_in()
+        st = steam_session_status()
+        return jsonify({
+            "logged_in": logged_in,
+            "username": cfg.get("steam_username", ""),
+            "days_left": st.get("days_left", 0),
+            "access_hours_left": st.get("access_hours_left", 0),
+        })
 
     @app.route("/api/steam-gcpd-debug")
     def steam_gcpd_debug():
