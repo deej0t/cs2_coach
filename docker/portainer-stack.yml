@@ -20,7 +20,12 @@ services:
       # Auto-Update Intervall in Sekunden (default: 21600 = 6h, 0 = aus)
       - CS2COACH_UPDATE_INTERVAL=21600
     volumes:
+      # Config, Vault-Exports, CFGs — klein, darf auf dem Cache liegen
       - /mnt/user/appdata/cs2-coach/data:/data
+      # Demos getrennt auf dem Array: eine Demo ist 40-330 MB, 60 Matches
+      # belegen rund 14 GB. Unter appdata (Cache-only) laeuft die SSD voll.
+      # Der Share cs2-demos sollte in Unraid auf "Use cache: No" stehen.
+      - /mnt/user/cs2-demos:/data/demos
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
       interval: 30s

@@ -81,15 +81,56 @@ Einstellungen koennen im Web-UI unter **Einstellungen** geaendert werden.
 
 ### Demos einspielen
 
-Demos muessen in `/data/demos` liegen. Optionen:
+Demos muessen im Container unter `/data/demos` liegen. Optionen:
 
-1. **Manuell kopieren:** Demos nach `/mnt/user/appdata/cs2-coach/demos/` kopieren
-2. **Share mounten:** In docker-compose.yml den Demo-Ordner direkt mounten:
-   ```yaml
-   volumes:
-     - /mnt/user/path/to/demos:/data/demos:ro
+1. **Share mounten (empfohlen):** einen eigenen Array-Share auf `/data/demos`
+   legen — siehe naechster Abschnitt.
+2. **Auto-Sync:** Steam-Zugangsdaten in den Einstellungen hinterlegen, dann
+   laedt die App die Demos selbst herunter.
+3. **Manuell kopieren:** Dateien in den gemounteten Demo-Ordner legen.
+
+Den Mount **nicht** `:ro` setzen. Der Auto-Download und die
+`.dem.info`-Sidecars (sie tragen das echte Match-Datum) brauchen
+Schreibrechte.
+
+### Demos gehoeren aufs Array, nicht auf den Cache
+
+Eine CS2-Demo ist 40 bis 330 MB gross, im Schnitt rund 220 MB. 60 Matches
+belegen damit etwa **14 GB**. Liegt der Demo-Ordner unter `appdata` — auf
+Unraid ueblicherweise ein Cache-only-Share — laeuft die SSD voll.
+
+Die Demos werden nur beim Analysieren und fuer das 2D-Replay gelesen, also
+selten und sequenziell. Die Geschwindigkeit des Arrays genuegt dafuer
+vollkommen; ein Parse-Durchgang dauert rund sieben Sekunden und ist
+CPU-gebunden, nicht I/O-gebunden.
+
+**Einrichtung:**
+
+1. In Unraid einen Share `cs2-demos` anlegen, **Use cache: No** (nur Array).
+2. Container stoppen.
+3. Vorhandene Demos verschieben — `.dem` *und* `.dem.info`:
+   ```bash
+   mkdir -p /mnt/user/cs2-demos
+   mv /mnt/user/appdata/cs2-coach/data/demos/* /mnt/user/cs2-demos/
    ```
-3. **Auto-Sync:** Steam-Credentials in den Einstellungen hinterlegen fuer automatischen Download
+   Quelle und Ziel beide ueber `/mnt/user/...` ansprechen. `/mnt/user` und
+   `/mnt/diskN` in einem Befehl zu mischen ist auf Unraid gefaehrlich.
+   14 GB von der SSD aufs Array brauchen einige Minuten.
+4. Im Container-Template den zweiten Pfad eintragen:
+   `/mnt/user/cs2-demos` → `/data/demos`
+5. Container starten.
+
+**An der Konfiguration der App aendert sich nichts.** `demo_folder` zeigt
+weiterhin auf `/data/demos`; nur was dahinterliegt, ist ein anderer
+Datentraeger. Die Exporte verweisen ausserdem nur auf den *Dateinamen* der
+Demo (`match.demo_file`), nicht auf einen Pfad — die Zuordnung bleibt
+erhalten.
+
+**Kontrolle nach dem Umzug:** in den Einstellungen die Demo-Erkennung
+aufrufen, oder auf der Export-Detailseite eines alten Matches ein
+2D-Replay starten. Findet die App die Demos nicht, ist der Ordner leer
+oder falsch gemountet — Analyse und Replay scheitern dann still, ohne
+Fehlermeldung.
 
 ## Ports
 
@@ -101,11 +142,15 @@ Demos muessen in `/data/demos` liegen. Optionen:
 
 ## Volumes
 
-| Volume | Pfad im Container | Beschreibung |
-|--------|-------------------|-------------|
-| cs2-coach-data | /data | Config, Demos, Vault, Uploads |
-| cs2-coach-cfg | /data/cfg | Practice Configs (geteilt mit CS2 Server) |
-| cs2-server-data | /home/steam/cs2-dedicated | CS2 Server-Daten (~35 GB) |
+| Volume | Pfad im Container | Groesse | Ablage |
+|--------|-------------------|---------|--------|
+| cs2-coach-data | /data | wenige MB | Cache (appdata) |
+| cs2-coach-demos | /data/demos | ~220 MB je Match | **Array** (eigener Share) |
+| cs2-coach-cfg | /data/cfg | wenige KB | Cache (appdata) |
+| cs2-server-data | /home/steam/cs2-dedicated | ~35 GB | Array |
+
+Nur `/data` und `/data/cfg` sind klein genug fuer den Cache. Demos und
+CS2-Server-Daten gehoeren aufs Array.
 
 ## CS2 Server verbinden
 

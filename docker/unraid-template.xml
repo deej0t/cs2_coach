@@ -25,7 +25,8 @@ Features:&#xD;
   <DateInstalled/>
   <Description>CS2 Coach - Analysiert deine Demos und macht dich besser.</Description>
   <Config Name="Web UI Port" Target="5000" Default="5000" Mode="tcp" Description="Web Interface Port" Type="Port" Display="always" Required="true" Mask="false">5000</Config>
-  <Config Name="Daten" Target="/data" Default="/mnt/user/appdata/cs2-coach" Mode="rw" Description="Config, Demos, Vault-Exports und generierte CFGs" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/cs2-coach</Config>
+  <Config Name="Daten" Target="/data" Default="/mnt/user/appdata/cs2-coach" Mode="rw" Description="Config, Vault-Exports und generierte CFGs. Klein (wenige MB) — gehoert auf den Cache." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/cs2-coach</Config>
+  <Config Name="Demos" Target="/data/demos" Default="/mnt/user/cs2-demos" Mode="rw" Description="Ordner fuer die .dem-Dateien. Eine Demo ist 40-330 MB gross, 60 Matches belegen rund 14 GB — daher ein eigener Share auf dem Array und NICHT unter appdata. Die Demos werden nur beim Analysieren und fuer das 2D-Replay gelesen, die Geschwindigkeit des Arrays genuegt dafuer." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/cs2-demos</Config>
   <Config Name="Config Pfad" Target="CS2COACH_CONFIG" Default="/data/config.yaml" Mode="" Description="Pfad zur config.yaml im Container" Type="Variable" Display="advanced" Required="false" Mask="false">/data/config.yaml</Config>
   <Config Name="Zeitzone" Target="TZ" Default="Europe/Berlin" Mode="" Description="Zeitzone" Type="Variable" Display="always" Required="false" Mask="false">Europe/Berlin</Config>
 </Container>

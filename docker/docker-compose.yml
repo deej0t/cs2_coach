@@ -29,12 +29,15 @@ services:
       - PYTHONUNBUFFERED=1
       - TZ=Europe/Berlin
     volumes:
-      # Persistent data — config, demos, vault exports
+      # Persistent data — config, vault exports
       - cs2-coach-data:/data
       # Practice configs — shared with CS2 server
       - cs2-coach-cfg:/data/cfg
-      # Optional: direkt auf Unraid-Share zugreifen
-      # - /mnt/user/appdata/cs2-coach/demos:/data/demos
+      # Demos getrennt halten: eine Demo ist 40-330 MB, 60 Matches belegen
+      # rund 14 GB. Auf Unraid gehoert das auf einen Array-Share und nicht
+      # unter appdata, das ueblicherweise Cache-only ist.
+      - ${DEMO_PATH:-cs2-coach-demos}:/data/demos
+      # Optional: Vault direkt auf einen Unraid-Share legen
       # - /mnt/user/appdata/cs2-coach/vault:/data/vault
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
@@ -95,6 +98,10 @@ volumes:
   cs2-coach-data:
     driver: local
   cs2-coach-cfg:
+    driver: local
+  # Nur Rueckfall, wenn DEMO_PATH nicht gesetzt ist. Auf Unraid stattdessen
+  # DEMO_PATH=/mnt/user/cs2-demos setzen.
+  cs2-coach-demos:
     driver: local
   cs2-server-data:
     driver: local
