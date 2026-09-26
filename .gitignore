@@ -53,3 +53,6 @@ graphify-out/
 
 # Claude
 .claudian/
+
+# Generierte Practice-CFGs (enthalten die Positionsdaten des Nutzers)
+docker/cfg/coach/
