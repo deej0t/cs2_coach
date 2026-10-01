@@ -16,6 +16,7 @@ cs2_coach/
   coach.py        (980) prose report generation
   practice.py     (990) CS2 practice-server cfg generator (5 modes + server/warmup)
   findings.py     (600) machine-readable findings, baselines, relevance
+  evidence.py     (190) effect size + CI for any two-group comparison
   utility_analysis.py (120) throw relevance per grenade type
   export_version.py   (190) schema/metrics versioning of exports
   obsidian.py     (600) Markdown + JSON export into the vault
@@ -52,7 +53,7 @@ docker/                 compose, portainer stack, unraid template
 - `PlayerStats.team` stores the starting side as "T" or "CT" (resolved by `_assign_starting_sides`)
 - Side derivation compares attacker and victim *within the same event* and is therefore swap-invariant — do not "fix" it for players without a kill in half 1.
 - Radar conversion happens server-side via `maps.game_to_radar()`. Never duplicate that transform in JavaScript.
-- **Matchmaking demos contain no voice.** `DemoParser.parse_voice()` returned an empty list for all 150 demos checked on 2026-10-01 (65 from the local replays folder, 85 GCPD downloads on the server). Caveat: there was no demo *with* voice to confirm that `parse_voice()` detects it.
+- **Valve matchmaking demos (`match730_*`) contain no voice.** `DemoParser.parse_voice()` returned an empty list for all 150 demos checked on 2026-10-01 (65 local, 85 on the server — all `match730_*`). This is about who recorded the match, not about CS2 demos in general: **FACEIT demos usually do contain voice** (per the SwiftDemoUI Pro README, which plays the stored `VoiceData`). No tool can recover voice that was never recorded. Caveat: no demo *with* voice was available to confirm that `parse_voice()` detects it.
 
 ## Metrics — hard-won corrections
 Each of these was wrong once and was fixed against measured demo data. Do not regress them.
@@ -65,12 +66,17 @@ Each of these was wrong once and was fixed against measured demo data. Do not re
 - When a metric changes, **existing exports keep the old values** and must be re-analyzed. Say so in the UI where it matters.
 
 ## Findings, Baselines, Relevance (`findings.py`)
+- **All statistics live in `evidence.py`**: `compare_groups()` (means, Cohen's d) and `compare_rates()` (proportions, Cohen's h), both returning a `Comparison` with CI and verdict. `findings.py` re-exports the old private names (`_effect_ci` etc.) for compatibility. Pass `comparisons=k` when the group was picked as the best/worst of k candidates (Bonferroni) — picking the best of seven weekdays always finds one.
+- **No page may give advice from a raw mean difference with a fixed threshold.** Tilt, sessions, pistol, momentum and calendar all did ("Tilt-Effekt erkannt" at delta > 0.08, "bester Tag" from 5 matches, "schlechteste Uhrzeit" from 2, "Pause nach dem 3. Match" from 2 late games). They now state the measurement and only advise when the comparison is solid. "No difference measured" is not "stable" — that needs `no_difference`.
+- `/momentum` takes its tilt verdict from `_build_tilt_analysis()`; it used to compute its own with fixed thresholds that could contradict `/tilt`.
 - Findings are derived from the already-exported player JSON, not from the report prose — so they apply retroactively to all exports without re-parsing a demo. They are deliberately **not** persisted: thresholds live in one place and changes take effect across the whole history.
 - `training_priorities()` is the **single source** for training goals on both the dashboard and `/coaching`. It excludes outcome-driven metrics (survival, K/D, ADR, KAST — they rise simply by winning the round) and rules without discriminatory power.
 - `build_baselines()` computes the user's personal p10–p90 distribution and flags rules that fire in >90% or <5% of matches as non-discriminating.
 - `build_relevance()` reports Cohen's d **with a 95% confidence interval** and a verdict (robustly positive/negative, proven irrelevant, undecided). Never present an effect size as fact — at ~58 matches most are undecided. For undecided cases it also computes how many matches would settle the question.
 - Windows are aggregated by **median**, not mean; one 21-0 match otherwise fakes a collapse.
-- `utility_analysis.throw_relevance()` breaks utility down **by grenade type, per round** (not per match — a 13:5 has 18 rounds, a 13:11 has 24, so per-match partly measures round count). It reuses `findings.py`'s `_effect_ci` / `_verdict_for` / `_matches_needed`; never reimplement those.
+- **Match order: sort export files with `obsidian.export_sort_key`, never by plain filename.** Names are `<date>_<map>_<score>_<HHMM>_coach.json`, so a plain sort orders a day by map and score: 35 of 62 consecutive pairs were wrong, and the shown "slight tilt effect" (delta 0.06) came entirely from that (correct order: -0.01). `_get_exports()` returns **newest first** — anything that walks a session forward must re-sort ascending (`_build_sessions` had tilt and warm-up swapped for 8 sessions).
+- Tilt compares only the next match **in the same session** (same date, like `/sessions`); the match three days later says nothing about tilt. Draws count as neither win nor loss.
+- `utility_analysis.throw_relevance()` breaks utility down **by grenade type, per round** (not per match — a 13:5 has 18 rounds, a 13:11 has 24, so per-match partly measures round count). It uses `evidence.compare_groups()` like everything else; never reimplement the statistics.
 - Measured 2026-09-21 over 30 wins / 32 losses: HE d=0.80 [0.28…1.32] and total d=0.76 [0.24…1.28] are **robustly positive**; smokes are flat (d=0.12) and thrown equally in wins and losses. Flashes and molotovs point the same way but stay undecided. So the advice is not "throw more utility" but "your smokes are reliable, the aggressive utility is missing in bad games".
 - **Utility crossed from undecided to robust** as the sample grew: 0.69 [0.16…1.22] at 58 matches, 0.77 [0.25…1.29] at 62. Re-read the verdict rather than quoting an older number.
 - The effect-size table lives in `_partials/relevance_table.html` and is used by `/coaching` and `/utility`. Keep it shared — a page that drops the confidence interval reads like a statement of fact.

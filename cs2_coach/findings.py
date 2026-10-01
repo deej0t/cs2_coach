@@ -14,7 +14,6 @@ alle vorhandenen Exports, ohne eine einzige Demo neu zu parsen.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import math
 from statistics import median
 
 # Schweregrade, absteigend nach Dringlichkeit
@@ -415,17 +414,21 @@ def build_baselines(matches: list[dict]) -> dict[str, Baseline]:
 
 # ── Zusammenhang mit dem Spielausgang ───────────────────────────────────
 
-MIN_MATCHES_PER_OUTCOME = 8
-
-
-# Ab dieser Effektstaerke gilt ein Zusammenhang als praktisch bedeutsam
-# (Cohens Konvention fuer "klein").
-MEANINGFUL_EFFECT = 0.2
-
-SOLID_POSITIVE = "solid_positive"
-SOLID_NEGATIVE = "solid_negative"
-SOLID_NEGLIGIBLE = "solid_negligible"
-UNDECIDED = "undecided"
+# Die Statistik selbst liegt in evidence.py, damit alle Seiten denselben
+# Massstab verwenden. Die bisherigen Namen bleiben als Aliase bestehen.
+from .evidence import (  # noqa: E402
+    MEANINGFUL_EFFECT,
+    MIN_PER_GROUP as MIN_MATCHES_PER_OUTCOME,
+    SOLID_NEGATIVE,
+    SOLID_NEGLIGIBLE,
+    SOLID_POSITIVE,
+    UNDECIDED,
+    compare_groups,
+    effect_ci as _effect_ci,
+    matches_needed as _matches_needed,
+    stdev as _stdev,
+    verdict_for as _verdict_for,
+)
 
 
 @dataclass
@@ -467,38 +470,6 @@ class Relevance:
         return self.verdict != UNDECIDED
 
 
-def _effect_ci(d: float, n1: int, n2: int) -> tuple[float, float]:
-    """95-Prozent-Bereich fuer Cohens d (Hedges/Olkin-Naeherung)."""
-    if n1 < 2 or n2 < 2:
-        return (d, d)
-    se = math.sqrt((n1 + n2) / (n1 * n2) + d * d / (2 * (n1 + n2)))
-    return (round(d - 1.96 * se, 2), round(d + 1.96 * se, 2))
-
-
-def _verdict_for(lo: float, hi: float) -> str:
-    if lo > MEANINGFUL_EFFECT:
-        return SOLID_POSITIVE
-    if hi < -MEANINGFUL_EFFECT:
-        return SOLID_NEGATIVE
-    if lo > -MEANINGFUL_EFFECT and hi < MEANINGFUL_EFFECT:
-        return SOLID_NEGLIGIBLE
-    return UNDECIDED
-
-
-def _matches_needed(d: float) -> int:
-    """Wie viele Matches insgesamt, bis der Bereich die Schwelle verlaesst?
-
-    Null, wenn der Effekt so klein ist, dass auch beliebig viele Matches
-    keine bedeutsame Aussage ergeben wuerden.
-    """
-    a = abs(d)
-    if a <= MEANINGFUL_EFFECT:
-        return 0
-    se_needed = (a - MEANINGFUL_EFFECT) / 1.96
-    per_group = (2 + a * a / 2) / (se_needed ** 2)
-    return math.ceil(per_group * 2)
-
-
 def build_relevance(matches: list[dict]) -> list[Relevance]:
     """Effektstaerke je Metrik zwischen Siegen und Niederlagen.
 
@@ -521,36 +492,21 @@ def build_relevance(matches: list[dict]) -> list[Relevance]:
 
     out: list[Relevance] = []
     for key, w in wins.items():
-        l = losses.get(key, [])
-        if len(w) < MIN_MATCHES_PER_OUTCOME or len(l) < MIN_MATCHES_PER_OUTCOME:
-            continue
         rule = RULES_BY_KEY[key]
-        mw, ml = sum(w) / len(w), sum(l) / len(l)
-        pooled = _stdev(w + l)
-        effect = (mw - ml) / pooled if pooled else 0.0
-        if rule.lower_is_better:
-            effect = -effect
-        effect = round(effect, 2)
-        lo, hi = _effect_ci(effect, len(w), len(l))
-        verdict = _verdict_for(lo, hi)
+        c = compare_groups(w, losses.get(key, []),
+                           higher_is_better=not rule.lower_is_better)
+        if c is None:
+            continue
         out.append(Relevance(
             key=key, label=rule.label, unit=rule.unit,
-            mean_win=round(mw, 2), mean_loss=round(ml, 2),
-            effect=effect, outcome_driven=rule.outcome_driven,
-            ci_low=lo, ci_high=hi, verdict=verdict,
-            matches_needed=(_matches_needed(effect)
-                            if verdict == UNDECIDED else 0),
+            mean_win=c.mean_a, mean_loss=c.mean_b,
+            effect=c.effect, outcome_driven=rule.outcome_driven,
+            ci_low=c.ci_low, ci_high=c.ci_high, verdict=c.verdict,
+            matches_needed=c.n_needed,
         ))
 
     out.sort(key=lambda r: -abs(r.effect))
     return out
-
-
-def _stdev(vals: list[float]) -> float:
-    if len(vals) < 2:
-        return 0.0
-    m = sum(vals) / len(vals)
-    return (sum((v - m) ** 2 for v in vals) / len(vals)) ** 0.5
 
 
 # ── Trainings-Prioritaeten ──────────────────────────────────────────────

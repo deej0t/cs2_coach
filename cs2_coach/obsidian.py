@@ -42,6 +42,27 @@ def export_match(result: MatchResult, coach_report: str, vault_path: str,
     return md_path, json_filename
 
 
+def export_sort_key(path) -> tuple[str, str, str]:
+    """Sortierschluessel fuer Export-Dateien in Spielreihenfolge.
+
+    Der Dateiname lautet <Datum>_<Map>_<Score>_<HHMM>_coach.json. Nach dem
+    Namen sortiert landen die Matches eines Tages deshalb nach Map und
+    Score geordnet, nicht nach Uhrzeit. Am 09.07.2026 ergab das die Folge
+    22:07, 21:36, 20:51, 22:41 - und ueber den ganzen Bestand waren 35 von
+    62 aufeinanderfolgenden Paaren falsch. Jede Auswertung, die "das Match
+    davor" betrachtet (Tilt, Serien, Momentum), rechnete damit auf einer
+    vertauschten Reihenfolge.
+
+    Datum und Uhrzeit werden von aussen gelesen (erstes und letztes Feld),
+    damit ein Unterstrich im Map-Namen nichts verschiebt.
+    """
+    name = getattr(path, "name", str(path))
+    stem = name[:-len("_coach.json")] if name.endswith("_coach.json") else name
+    parts = stem.split("_")
+    time = parts[-1] if len(parts) > 1 and parts[-1].isdigit() else ""
+    return (parts[0], time, name)
+
+
 def _compact_kill_positions(positions: list[dict], target_id: str) -> list[dict]:
     """Filter kill positions to target player's kills/deaths, compact format."""
     compact = []

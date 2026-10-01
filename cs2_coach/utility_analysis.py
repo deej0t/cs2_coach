@@ -20,15 +20,8 @@ Tatsache.
 
 from __future__ import annotations
 
-from .findings import (
-    MIN_MATCHES_PER_OUTCOME,
-    Relevance,
-    UNDECIDED,
-    _effect_ci,
-    _matches_needed,
-    _stdev,
-    _verdict_for,
-)
+from .evidence import compare_groups
+from .findings import Relevance
 
 #: Kuerzel im Export -> Anzeigename. Siehe _compact_utility_positions().
 GRENADE_TYPES = {
@@ -90,26 +83,21 @@ def throw_relevance(exports: list[dict]) -> dict:
 
     out: list[Relevance] = []
     for key in list(GRENADE_TYPES) + ["total"]:
-        w, l = wins.get(key, []), losses.get(key, [])
-        if len(w) < MIN_MATCHES_PER_OUTCOME or len(l) < MIN_MATCHES_PER_OUTCOME:
+        c = compare_groups(wins.get(key, []), losses.get(key, []))
+        if c is None:
             continue
-        mw, ml = sum(w) / len(w), sum(l) / len(l)
-        pooled = _stdev(w + l)
-        effect = round((mw - ml) / pooled, 2) if pooled else 0.0
-        lo, hi = _effect_ci(effect, len(w), len(l))
-        verdict = _verdict_for(lo, hi)
         out.append(Relevance(
             key=f"util_{key}",
             label=GRENADE_TYPES.get(key, "Gesamt"),
             unit="/Runde",
-            mean_win=round(mw, 2),
-            mean_loss=round(ml, 2),
-            effect=effect,
+            mean_win=c.mean_a,
+            mean_loss=c.mean_b,
+            effect=c.effect,
             # Nicht ergebnisgetrieben im Sinne von findings.py, aber siehe
             # den Vorbehalt im Modul-Docstring.
             outcome_driven=False,
-            ci_low=lo, ci_high=hi, verdict=verdict,
-            matches_needed=_matches_needed(effect) if verdict == UNDECIDED else 0,
+            ci_low=c.ci_low, ci_high=c.ci_high, verdict=c.verdict,
+            matches_needed=c.n_needed,
         ))
 
     out.sort(key=lambda r: -abs(r.effect))

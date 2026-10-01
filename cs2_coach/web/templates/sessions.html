@@ -116,14 +116,10 @@
             <i data-lucide="battery-low" style="width:16px;height:16px;color:#fbbf24;"></i>
             {{ _('Ermuedung & Session-Laenge') }}
         </div>
-        {% if insights.fatigue_drop %}
-        <div class="si-insight" style="border-left-color:#f87171;">
-            <strong>{{ _('Ermuedung erkannt!') }}</strong> {{ insights.fatigue_drop.recommendation }}
-            <br><span style="font-size:12px;">Spiel 1–2: Rating {{ insights.fatigue_drop.early_avg }} → Spiel 4+: Rating {{ insights.fatigue_drop.late_avg }} (−{{ insights.fatigue_drop.drop }})</span>
-        </div>
-        {% elif insights.fatigue_curve|length > 2 %}
-        <div class="si-insight" style="border-left-color:#4ade80;">
-            <strong>{{ _('Keine Ermuedung erkannt.') }}</strong> {{ _('Dein Rating bleibt ueber die Session stabil.') }}
+        {% if insights.fatigue %}
+        {% set fs = insights.fatigue.state %}
+        <div class="si-insight" style="border-left-color:{% if fs == 'fatigue' %}#f87171{% elif fs in ('stable', 'warmup') %}#4ade80{% else %}#fbbf24{% endif %};">
+            {{ insights.fatigue.text }}
         </div>
         {% endif %}
         {% if insights.fatigue_curve %}

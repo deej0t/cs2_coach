@@ -110,35 +110,35 @@
 {% else %}
 
 <!-- Currently tilted warning -->
-{% if t.currently_tilted %}
-<div class="tl-tilted-banner">
-    <h3><i data-lucide="alert-triangle" style="width:20px;height:20px;vertical-align:middle;margin-right:6px;"></i> {{ _('Tilt erkannt!') }}</h3>
-    <p>{{ _('Deine letzten 5 Matches zeigen einen Abwaertstrend. Mach eine Pause oder spiele Deathmatch zum Reset.') }}</p>
-</div>
-{% endif %}
+{# Frueher: Banner "Tilt erkannt!" ab 3 Niederlagen in den letzten 5
+   Matches. Das passiert bei einer Siegquote um 50 % auch durch Zufall
+   regelmaessig; aus 5 Matches laesst sich Tilt nicht erkennen. Der
+   Hinweis steht jetzt nuechtern bei den Tipps unten. #}
 
-<!-- Mental Resilience Score -->
-<div class="tl-resilience {% if t.resilience >= 65 %}tl-res-high{% elif t.resilience >= 40 %}tl-res-mid{% else %}tl-res-low{% endif %}">
-    <div class="tl-res-ring">
-        <svg viewBox="0 0 90 90" style="transform:rotate(-90deg);">
-            <circle cx="45" cy="45" r="38" fill="none" stroke="rgba(233,233,237,0.1)" stroke-width="6"/>
-            <circle cx="45" cy="45" r="38" fill="none"
-                stroke="{% if t.resilience >= 65 %}#4ade80{% elif t.resilience >= 40 %}#fbbf24{% else %}#f87171{% endif %}"
-                stroke-width="6" stroke-linecap="round"
-                stroke-dasharray="{{ (t.resilience / 100 * 238.76) | round(1) }} 238.76"/>
-        </svg>
-        <div class="tl-res-ring-val {% if t.resilience >= 65 %}win{% elif t.resilience < 40 %}loss{% endif %}">{{ t.resilience }}</div>
-    </div>
+<!-- Mentale Resilienz -->
+{# Frueher eine Punktzahl 0-100 mit Urteil darunter. Sie sank schon durch
+   die Zahl gespielter Matches und stuetzte sich auf eine Differenz, die
+   nicht von Rauschen zu unterscheiden war. Jetzt zeigt der Block allein
+   das Ergebnis des Vergleichs. #}
+{% set rs = t.resilience.state %}
+<div class="tl-resilience {% if rs in ('stable', 'strong') %}tl-res-high{% elif rs == 'tilt' %}tl-res-low{% else %}tl-res-mid{% endif %}">
     <div class="tl-res-info">
-        <h3>{{ _('Mentale Resilienz') }}</h3>
-        <p>
-            {% if t.resilience >= 65 %}
-                {{ _('Du bleibst auch nach Niederlagen stabil. Starke mentale Verfassung!') }}
-            {% elif t.resilience >= 40 %}
-                {{ _('Leichte Performance-Schwankungen nach Niederlagen. Raum fuer Verbesserung.') }}
-            {% else %}
-                {{ _('Niederlagen beeinflussen deine Performance stark. Arbeite an deiner mentalen Staerke.') }}
-            {% endif %}
+        <h3>{{ _('Mentale Resilienz') }}
+            <span class="tag" style="margin-left:6px;vertical-align:middle;
+                {% if rs in ('stable', 'strong') %}border-color:var(--color-green);color:var(--color-green);
+                {% elif rs == 'tilt' %}border-color:var(--color-red);color:var(--color-red);
+                {% else %}border-color:var(--color-yellow);color:var(--color-yellow);{% endif %}">
+                {% if rs == 'stable' %}{{ _('belegt stabil') }}
+                {% elif rs == 'strong' %}{{ _('nach Niederlagen besser') }}
+                {% elif rs == 'tilt' %}{{ _('belastbarer Tilt-Effekt') }}
+                {% elif rs == 'too_few' %}{{ _('zu wenige Daten') }}
+                {% else %}{{ _('noch offen') }}{% endif %}
+            </span>
+        </h3>
+        <p>{{ t.resilience.text }}</p>
+        <p style="font-size:11px;color:var(--color-neutral-600);margin-top:4px;">
+            {{ _('Verglichen wird nur das naechste Match derselben Session.') }}
+            {{ t.pairs.post_loss }} {{ _('nach Niederlagen') }}, {{ t.pairs.post_win }} {{ _('nach Siegen') }}.
         </p>
     </div>
 </div>
@@ -155,11 +155,13 @@
     </div>
     <div class="tl-cmp-vs">
         <span>{{ _('Delta') }}</span>
-        <div class="tl-cmp-delta {% if t.rating_tilt_delta > 0.05 %}loss{% elif t.rating_tilt_delta <= 0.02 %}win{% endif %}">
+        {# Rot oder gruen nur bei belastbarem Urteil, sonst neutral. Gruppe A
+           ist "nach Niederlage": solid_negative heisst also Tilt. #}
+        <div class="tl-cmp-delta {% if t.rating_verdict == 'solid_negative' %}loss{% elif t.rating_verdict in ('solid_positive', 'solid_negligible') %}win{% endif %}">
             {% if t.rating_tilt_delta > 0 %}+{% endif %}{{ t.rating_tilt_delta }}
         </div>
         <span style="font-size:10px;">Rating</span>
-        <div style="margin-top:6px; font-size:14px; font-weight:600; {% if t.adr_tilt_delta > 5 %}color:#f87171;{% endif %}">
+        <div style="margin-top:6px; font-size:14px; font-weight:600; {% if t.adr_verdict == 'solid_negative' %}color:#f87171;{% endif %}">
             {% if t.adr_tilt_delta > 0 %}+{% endif %}{{ t.adr_tilt_delta }}
         </div>
         <span style="font-size:10px;">ADR</span>

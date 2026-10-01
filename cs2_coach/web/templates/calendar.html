@@ -246,8 +246,11 @@
             {% endfor %}
         </div>
         <div style="margin-top:var(--space-3);font-size:12px;color:var(--color-neutral-400);">
-            {% if cal.best_weekday and cal.best_weekday.matches > 0 %}
+            {# Nur benannt, wenn sich der Tag belastbar vom Rest abhebt. #}
+            {% if cal.best_weekday %}
             {{ _('Bester Tag') }}: <strong style="color:var(--color-green);">{{ cal.best_weekday.day }}</strong> ({{ cal.best_weekday.avg_rating }} Rating, {{ cal.best_weekday.matches }} Matches)
+            {% else %}
+            {{ _('Kein Wochentag hebt sich belastbar ab.') }}
             {% endif %}
         </div>
     </div>
@@ -278,6 +281,9 @@
             {% endif %}
             {% if cal.worst_hour %}
             &nbsp;|&nbsp; {{ _('Schlechteste') }}: <strong style="color:var(--color-red);">{{ cal.worst_hour.label }}</strong> ({{ cal.worst_hour.avg_rating }})
+            {% endif %}
+            {% if not cal.best_hour and not cal.worst_hour %}
+            {{ _('Keine Uhrzeit hebt sich belastbar ab.') }}
             {% endif %}
         </div>
         {% else %}

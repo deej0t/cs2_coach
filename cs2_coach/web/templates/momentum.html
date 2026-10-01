@@ -144,15 +144,13 @@
 </div>
 
 <!-- Mental resilience insight -->
-{% if mom.after_loss_avg > 0 and mom.after_win_avg > 0 %}
+{# Dasselbe Urteil wie auf /tilt (ein Vergleich mit Vertrauensbereich).
+   Frueher stand hier eine eigene Einstufung mit festen Schwellen auf dem
+   Mittelwert: "Tilt-Tendenz erkannt" ab einem Rating unter 0.85. #}
+{% if tilt_res %}
 <div class="mo-insight">
-    {% if mom.after_loss_avg >= mom.after_win_avg %}
-        <strong>{{ _('Stark mental!') }}</strong> {{ _('Dein Rating nach Niederlagen') }} ({{ mom.after_loss_avg }}) {{ _('ist gleich oder besser als nach Siegen') }} ({{ mom.after_win_avg }}). {{ _('Du laesst dich nicht von Niederlagen runterziehen.') }}
-    {% elif mom.after_loss_avg < 0.85 %}
-        <strong>{{ _('Tilt-Tendenz erkannt.') }}</strong> {{ _('Dein Rating nach Niederlagen') }} ({{ mom.after_loss_avg }}) {{ _('ist deutlich niedriger als nach Siegen') }} ({{ mom.after_win_avg }}). {{ _('Nimm dir nach einer Niederlage eine kurze Pause.') }}
-    {% else %}
-        <strong>{{ _('Solide Mentalitaet.') }}</strong> {{ _('Dein Rating nach Niederlagen') }} ({{ mom.after_loss_avg }}) {{ _('ist leicht unter dem nach Siegen') }} ({{ mom.after_win_avg }}). {{ _('Normal und gesund.') }}
-    {% endif %}
+    {{ tilt_res.text }}
+    <a href="{{ url_for('tilt') }}" style="margin-left:4px;">{{ _('Details') }}</a>
 </div>
 {% endif %}
 

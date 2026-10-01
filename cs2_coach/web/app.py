@@ -21,9 +21,10 @@ from demoparser2 import DemoParser
 
 from ..parser import parse_demo, MatchResult
 from ..coach import generate_report
-from ..obsidian import export_match
+from ..obsidian import export_match, export_sort_key
 from ..maps import MAP_RADAR_DATA, game_to_radar
 from .. import findings as findings_mod
+from ..evidence import MIN_PER_GROUP, compare_groups, compare_rates
 from .. import chat_store
 from ..export_version import export_status
 from ..utility_analysis import throw_relevance
@@ -320,7 +321,7 @@ def create_app() -> Flask:
         edir = Path(vault) / sub / "exports"
         if not edir.exists():
             return ""
-        for f in sorted(edir.glob("*_coach.json"), reverse=True):
+        for f in sorted(edir.glob("*_coach.json"), key=export_sort_key, reverse=True):
             try:
                 d = json.loads(f.read_text(encoding="utf-8"))
                 sid = d.get("player", {}).get("steam_id", "")
@@ -1809,7 +1810,12 @@ def create_app() -> Flask:
     @app.route("/momentum")
     def momentum():
         mom_data = _build_momentum(cfg)
-        return render_template("momentum.html", mom=mom_data, config=cfg)
+        # Das Urteil "nach Niederlagen schlechter?" kommt aus derselben
+        # Rechnung wie auf /tilt. Vorher hatte momentum.html eine eigene
+        # Variante mit festen Schwellen, die der Tilt-Seite widersprechen
+        # konnte.
+        tilt_res = _build_tilt_analysis(cfg).get("resilience")
+        return render_template("momentum.html", mom=mom_data, tilt_res=tilt_res, config=cfg)
 
     @app.route("/teammates")
     def teammates():
@@ -2503,7 +2509,7 @@ def _load_match_findings(cfg: dict) -> list[dict]:
         return []
 
     matches = []
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -2560,7 +2566,7 @@ def _get_exports(cfg: dict) -> list[dict]:
         return []
 
     exports = []
-    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key, reverse=True):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
             match = data.get("match", {})
@@ -3086,7 +3092,7 @@ def _build_utility_map_data(cfg: dict) -> dict:
     maps: dict[str, dict] = {}
     matches_without_data = 0
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -3151,7 +3157,7 @@ def _build_viewer_data(cfg: dict) -> dict:
     maps_data: dict[str, dict] = {}  # map -> {dots, matches}
     match_index: list[dict] = []  # list of matches for filter UI
 
-    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key, reverse=True):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -3328,7 +3334,7 @@ def _build_opponent_stats(cfg: dict) -> list[dict]:
         "results": [],
     })
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
@@ -3404,7 +3410,7 @@ def _build_opponent_strength(cfg: dict) -> dict:
     }
     match_details = []
 
-    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key, reverse=True):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -3705,7 +3711,7 @@ def _build_weapon_stats(cfg: dict) -> list[dict]:
     stats = defaultdict(lambda: {"kills": 0, "deaths": 0, "hs": 0, "matches": 0})
     match_weapons: dict[str, set] = defaultdict(set)
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
@@ -3965,7 +3971,11 @@ def _build_sessions(exports: list[dict]) -> list[dict]:
 
     sessions = []
     for date in sorted(by_date.keys(), reverse=True):
-        matches = by_date[date]
+        # Innerhalb der Session in Spielreihenfolge. _get_exports() liefert
+        # neueste zuerst; ohne Umsortieren war die "erste Haelfte" die
+        # spaetere, und "Tilt erkannt" und "Warmup-Effekt" waren vertauscht.
+        matches = sorted(by_date[date],
+                         key=lambda m: m.get("datetime", m.get("date", "")))
         n = len(matches)
 
         wins = sum(1 for m in matches if m.get("result") == "Sieg")
@@ -4151,18 +4161,32 @@ def _build_session_insights(exports: list[dict]) -> dict:
     # Detect fatigue: compare game 1-2 avg with game 4+ avg
     early_games = [r for p, rs in pos_ratings.items() if p <= 2 for r in rs]
     late_games = [r for p, rs in pos_ratings.items() if p >= 4 for r in rs]
-    fatigue_drop = None
-    if early_games and late_games:
-        early_avg = sum(early_games) / len(early_games)
-        late_avg = sum(late_games) / len(late_games)
-        drop = early_avg - late_avg
-        if drop > 0.05:
-            fatigue_drop = {
-                "early_avg": round(early_avg, 2),
-                "late_avg": round(late_avg, 2),
-                "drop": round(drop, 2),
-                "recommendation": f"Nach 3 Spielen sinkt dein Rating um {drop:.2f} — nimm dir eine Pause nach dem 3. Match",
-            }
+    # Frueher reichte eine Differenz ueber 0.05, um "Ermuedung erkannt -
+    # Pause nach dem 3. Match" zu empfehlen, und alles darunter hiess
+    # "Keine Ermuedung, dein Rating bleibt stabil". Beides ohne Blick
+    # darauf, ob die Differenz von Rauschen zu unterscheiden ist.
+    # A = Spiel 1-2, B = Spiel 4+; "A belastbar besser" heisst Ermuedung.
+    fc = compare_groups(early_games, late_games)
+    if fc is None:
+        fatigue = {"state": "too_few", "text":
+                   f"Zu wenige Matches fuer eine Aussage: {len(early_games)} als Spiel 1-2, "
+                   f"{len(late_games)} als Spiel 4+ einer Session (mindestens {MIN_PER_GROUP} je Gruppe)."}
+    elif fc.a_better:
+        fatigue = {"state": "fatigue", "text":
+                   f"Ab dem 4. Spiel einer Session spielst du belastbar schlechter: Rating "
+                   f"{fc.mean_b} statt {fc.mean_a} ({fc.note()}). Nach dem 3. Match eine Pause einlegen."}
+    elif fc.b_better:
+        fatigue = {"state": "warmup", "text":
+                   f"Ab dem 4. Spiel spielst du belastbar besser: Rating {fc.mean_b} statt "
+                   f"{fc.mean_a} ({fc.note()}). Du brauchst offenbar Anlaufzeit."}
+    elif fc.no_difference:
+        fatigue = {"state": "stable", "text":
+                   f"Belegt stabil: kein nennenswerter Unterschied zwischen Spiel 1-2 und "
+                   f"Spiel 4+ ({fc.note()})."}
+    else:
+        fatigue = {"state": "open", "text":
+                   f"Noch offen. Spiel 1-2: Rating {fc.mean_a}, Spiel 4+: {fc.mean_b} - "
+                   f"{fc.note()}. Weder Ermuedung noch Stabilitaet sind damit belegt."}
 
     # Optimal session length
     session_lengths: dict[int, list[float]] = {}
@@ -4193,7 +4217,7 @@ def _build_session_insights(exports: list[dict]) -> dict:
         "worst_time": worst_time,
         "hourly": hourly,
         "fatigue_curve": fatigue_curve,
-        "fatigue_drop": fatigue_drop,
+        "fatigue": fatigue,
         "length_stats": length_stats,
         "optimal_length": optimal_length,
     }
@@ -4832,7 +4856,7 @@ def _build_economy_iq(exports: list[dict], cfg: dict) -> dict:
     if not export_dir or not export_dir.exists():
         return {"has_data": False}
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -5457,7 +5481,7 @@ def _build_achievements(exports: list[dict], cfg: dict) -> dict:
     export_dir = Path(vault_path) / sub / "exports" if vault_path else None
     full_exports = []
     if export_dir and export_dir.exists():
-        for f in sorted(export_dir.glob("*_coach.json")):
+        for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
             try:
                 full_exports.append(json.loads(f.read_text(encoding="utf-8")))
             except Exception:
@@ -5775,7 +5799,7 @@ def _build_highlights(cfg: dict) -> dict:
     all_matches = []
     totals = {"hero": 0, "impact": 0, "invisible": 0, "survivor": 0, "entry": 0, "eco_hero": 0, "total_rounds": 0}
 
-    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key, reverse=True):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -6422,7 +6446,7 @@ def _build_nemesis(cfg: dict) -> dict:
     agg: dict[str, dict] = {}
     match_count = 0
 
-    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key, reverse=True):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -6540,7 +6564,7 @@ def _build_scout_data(cfg: dict) -> dict:
     agg: dict[str, dict] = {}
     match_count = 0
 
-    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key, reverse=True):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -6782,7 +6806,7 @@ def _build_death_analysis(cfg: dict) -> dict:
     }
     cat_examples: dict[str, list] = {k: [] for k in cat_counts}
 
-    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key, reverse=True):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -7097,7 +7121,7 @@ def _build_momentum(cfg: dict) -> dict:
         return {"has_data": False}
 
     matches = []
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -7294,7 +7318,7 @@ def _build_teammates(cfg: dict) -> dict:
     my_stats: dict[str, list] = {}  # my rating when playing with this teammate
     match_count = 0
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -7372,7 +7396,7 @@ def _build_teammates(cfg: dict) -> dict:
     match_teammate_map: dict[int, set[str]] = {}  # match_idx -> set of teammate sids
     _seen_files: set[str] = set()
     _midx = 0
-    for f in sorted((Path(vault_path) / sub / "exports").glob("*_coach.json")):
+    for f in sorted((Path(vault_path) / sub / "exports").glob("*_coach.json"), key=export_sort_key):
         if f.name in _seen_files:
             continue
         _seen_files.add(f.name)
@@ -7494,7 +7518,7 @@ def _build_team_analysis(cfg: dict) -> dict:
     # Per-match: collect teammates + result
     match_squads: list[dict] = []  # {teammates: set, result, map, date, my_rating, team_rating}
 
-    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key, reverse=True):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -7701,7 +7725,7 @@ def _build_leaderboard(cfg: dict) -> dict:
     agg: dict[str, dict] = {}
     self_sids: set[str] = set()
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -7803,7 +7827,7 @@ def _build_h2h(cfg: dict, vs_sid: str) -> dict:
 
     # First pass: collect all players for the dropdown
     all_players: dict[str, dict] = {}
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -7831,7 +7855,7 @@ def _build_h2h(cfg: dict, vs_sid: str) -> dict:
     them["multikills"] = {"2k": 0, "3k": 0, "4k": 0, "5k": 0}
     shared_matches = []
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -7950,7 +7974,7 @@ def _build_clutch_analysis(cfg: dict) -> dict:
     by_side = {"CT": {"attempts": 0, "wins": 0}, "T": {"attempts": 0, "wins": 0}}
     clutch_rounds = []
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -8056,7 +8080,7 @@ def _build_mechanics(cfg: dict) -> dict:
     if not export_dir or not export_dir.exists():
         return {"has_data": False}
 
-    files = sorted(export_dir.glob("*_coach.json"))
+    files = sorted(export_dir.glob("*_coach.json"), key=export_sort_key)
     if not files:
         return {"has_data": False}
 
@@ -8277,7 +8301,7 @@ def _build_round_timeline(cfg: dict) -> dict:
     if not export_dir or not export_dir.exists():
         return {"has_data": False}
 
-    files = sorted(export_dir.glob("*_coach.json"))
+    files = sorted(export_dir.glob("*_coach.json"), key=export_sort_key)
     if not files:
         return {"has_data": False}
 
@@ -8560,7 +8584,7 @@ def _build_zone_analysis(cfg: dict) -> dict:
     total_positions = 0
     maps_seen: set[str] = set()
 
-    for f in sorted(export_dir.glob("*_coach.json"), reverse=True):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key, reverse=True):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -8724,7 +8748,7 @@ def _build_motor_skills(cfg: dict) -> dict:
 
     entries = []  # chronological match entries with motor skill values
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -8874,7 +8898,7 @@ def _build_bookmarks(cfg: dict) -> dict:
 
     all_bookmarks = []
 
-    for f in sorted(export_dir.glob("*_coach.json"), reverse=True)[:30]:
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key, reverse=True)[:30]:
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -9032,7 +9056,7 @@ def _build_utility_analysis(cfg: dict) -> dict:
 
     raw_exports = []
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
@@ -9313,7 +9337,7 @@ def _build_calendar_data(cfg: dict) -> dict:
         return {"has_data": False}
 
     exports = []
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -9434,8 +9458,47 @@ def _build_calendar_data(cfg: dict) -> dict:
         else:
             weekday_stats.append({"day": weekday_names[dow], "matches": 0, "win_rate": 0, "avg_rating": 0})
 
-    best_weekday = max(weekday_stats, key=lambda w: w["avg_rating"]) if weekday_stats else None
-    worst_weekday = min((w for w in weekday_stats if w["matches"] >= 2), key=lambda w: w["avg_rating"], default=None)
+    def _standout(groups: dict) -> tuple:
+        """Hebt sich die beste bzw. schlechteste Gruppe belastbar ab?
+
+        Frueher war "bester Tag" schlicht der hoechste Mittelwert - auch bei
+        einem einzigen Match, und "beste Uhrzeit" ab zwei. Wer aus sieben
+        Wochentagen oder vielen Stunden den besten heraussucht, findet
+        immer einen. Verglichen wird daher die Gruppe gegen alle uebrigen
+        Matches, nur Gruppen ab MIN_PER_GROUP Matches kommen in Frage, und
+        der Vertrauensbereich wird um die Zahl der Kandidaten verbreitert.
+        Liefert (bester, Vergleich, schlechtester, Vergleich, Kandidaten).
+        """
+        eligible = {g: v for g, v in groups.items() if len(v) >= MIN_PER_GROUP}
+        if len(eligible) < 2:
+            return None, None, None, None, len(eligible)
+
+        def mean(g):
+            return sum(eligible[g]) / len(eligible[g])
+
+        best, worst = max(eligible, key=mean), min(eligible, key=mean)
+
+        def vs_rest(g):
+            rest = [r for o, v in groups.items() if o != g for r in v]
+            return compare_groups(groups[g], rest, comparisons=len(eligible))
+
+        bc, wc = vs_rest(best), vs_rest(worst)
+        return (best if bc and bc.a_better else None, bc,
+                worst if wc and wc.b_better else None, wc, len(eligible))
+
+    def _with_note(stats, key, value, cmp):
+        if value is None:
+            return None
+        row = dict(next(x for x in stats if x[key] == value))
+        row["note"] = cmp.note()
+        return row
+
+    wd_groups = {weekday_names[dow]: [e["rating"] for e in exports
+                                      if e["date"] and datetime.strptime(e["date"], "%Y-%m-%d").weekday() == dow]
+                 for dow in range(7)}
+    wd_best, wd_bc, wd_worst, wd_wc, wd_candidates = _standout(wd_groups)
+    best_weekday = _with_note(weekday_stats, "day", wd_best, wd_bc)
+    worst_weekday = _with_note(weekday_stats, "day", wd_worst, wd_wc)
 
     # ── Hour-of-day analysis ──
     hour_stats = []
@@ -9449,9 +9512,10 @@ def _build_calendar_data(cfg: dict) -> dict:
         else:
             hour_stats.append({"hour": h, "label": f"{h:02d}:00", "matches": 0, "win_rate": 0, "avg_rating": 0})
 
-    active_hours = [h for h in hour_stats if h["matches"] >= 2]
-    best_hour = max(active_hours, key=lambda h: h["avg_rating"]) if active_hours else None
-    worst_hour = min(active_hours, key=lambda h: h["avg_rating"]) if active_hours else None
+    hr_groups = {h: [e["rating"] for e in exports if e["hour"] == h] for h in range(24)}
+    hr_best, hr_bc, hr_worst, hr_wc, hr_candidates = _standout(hr_groups)
+    best_hour = _with_note(hour_stats, "hour", hr_best, hr_bc)
+    worst_hour = _with_note(hour_stats, "hour", hr_worst, hr_wc)
 
     # ── Monthly breakdown ──
     monthly: dict[str, list[dict]] = {}
@@ -9496,20 +9560,35 @@ def _build_calendar_data(cfg: dict) -> dict:
 
     # ── Insights ──
     insights = []
-    if best_weekday and worst_weekday and best_weekday["day"] != worst_weekday["day"]:
+    if best_weekday:
         insights.append({
             "type": "success", "icon": "calendar-check",
-            "text": f"Bester Tag: {best_weekday['day']} (Rating {best_weekday['avg_rating']}, {best_weekday['win_rate']}% WR) — schlechtester: {worst_weekday['day']} ({worst_weekday['avg_rating']})"
+            "text": f"Bester Tag: {best_weekday['day']} (Rating {best_weekday['avg_rating']}, {best_weekday['matches']} Matches, {best_weekday['note']})"
+        })
+    if worst_weekday:
+        insights.append({
+            "type": "warning", "icon": "calendar-x",
+            "text": f"Schwaechster Tag: {worst_weekday['day']} (Rating {worst_weekday['avg_rating']}, {worst_weekday['matches']} Matches, {worst_weekday['note']})"
+        })
+    if not best_weekday and not worst_weekday:
+        insights.append({
+            "type": "info", "icon": "calendar",
+            "text": f"Kein Wochentag hebt sich belastbar ab ({wd_candidates} Tage mit mindestens {MIN_PER_GROUP} Matches)."
         })
     if best_hour:
         insights.append({
             "type": "info", "icon": "clock",
-            "text": f"Beste Uhrzeit: {best_hour['label']} Uhr (Rating {best_hour['avg_rating']}, {best_hour['matches']} Matches)"
+            "text": f"Beste Uhrzeit: {best_hour['label']} Uhr (Rating {best_hour['avg_rating']}, {best_hour['matches']} Matches, {best_hour['note']})"
         })
-    if worst_hour and best_hour and worst_hour["hour"] != best_hour["hour"]:
+    if worst_hour:
         insights.append({
             "type": "warning", "icon": "clock",
-            "text": f"Schlechteste Uhrzeit: {worst_hour['label']} Uhr (Rating {worst_hour['avg_rating']}, {worst_hour['matches']} Matches)"
+            "text": f"Schwaechste Uhrzeit: {worst_hour['label']} Uhr (Rating {worst_hour['avg_rating']}, {worst_hour['matches']} Matches, {worst_hour['note']})"
+        })
+    if not best_hour and not worst_hour:
+        insights.append({
+            "type": "info", "icon": "clock",
+            "text": f"Keine Uhrzeit hebt sich belastbar ab ({hr_candidates} Stunden mit mindestens {MIN_PER_GROUP} Matches)."
         })
     if longest_streak >= 3:
         insights.append({
@@ -9578,7 +9657,7 @@ def _build_duel_analysis(cfg: dict) -> dict:
     match_duels: list[dict] = []
     match_count = 0
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -9843,7 +9922,7 @@ def _build_side_analysis(cfg: dict) -> dict:
     match_trend: list[dict] = []
     match_count = 0
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -10071,7 +10150,7 @@ def _build_pistol_analysis(cfg: dict) -> dict:
     match_trend: list[dict] = []
     conversion_data: list[dict] = []  # pistol win → half win tracking
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -10272,10 +10351,17 @@ def _build_pistol_analysis(cfg: dict) -> dict:
     elif wr < 40:
         tips.append({"type": "warning", "text": f"Pistol-WR nur {wr}% — trainiere USP/Glock-Aim und Pistol-Setups."})
 
-    if ct_wr - t_wr > 15:
-        tips.append({"type": "info", "text": f"CT-Pistol deutlich staerker ({ct_wr}%) als T ({t_wr}%) — T-Execs und Glock-Rushes ueberarbeiten."})
-    elif t_wr - ct_wr > 15:
-        tips.append({"type": "info", "text": f"T-Pistol deutlich staerker ({t_wr}%) als CT ({ct_wr}%) — CT-Setup und USP-Aim ueberarbeiten."})
+    # CT gegen T als Vergleich zweier Quoten. Frueher genuegten 15
+    # Prozentpunkte Abstand fuer "deutlich staerker" - bei rund 30
+    # Pistolrunden je Seite liegt das noch im Rauschen.
+    side_cmp = compare_rates(totals["ct_won"], totals["ct_rounds"],
+                             totals["t_won"], totals["t_rounds"])
+    if side_cmp and side_cmp.a_better:
+        tips.append({"type": "info", "text": f"CT-Pistol belastbar staerker ({ct_wr}%) als T ({t_wr}%) — T-Execs und Glock-Rushes ueberarbeiten. ({side_cmp.note('Runden')})"})
+    elif side_cmp and side_cmp.b_better:
+        tips.append({"type": "info", "text": f"T-Pistol belastbar staerker ({t_wr}%) als CT ({ct_wr}%) — CT-Setup und USP-Aim ueberarbeiten. ({side_cmp.note('Runden')})"})
+    elif side_cmp and abs(ct_wr - t_wr) > 15:
+        tips.append({"type": "info", "text": f"CT {ct_wr}% gegen T {t_wr}% in Pistolrunden — {side_cmp.note('Runden')}. Ob eine Seite wirklich schwaecher ist, laesst sich daraus noch nicht sagen."})
 
     if opening_wr >= 60:
         tips.append({"type": "positive", "text": f"Opening-Duell-WR {opening_wr}% in Pistolrunden — aggressive Picks zahlen sich aus."})
@@ -10321,7 +10407,7 @@ def _build_tilt_analysis(cfg: dict) -> dict:
         return {"has_data": False}
 
     matches: list[dict] = []
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -10378,6 +10464,12 @@ def _build_tilt_analysis(cfg: dict) -> dict:
     for i in range(1, len(matches)):
         prev = matches[i - 1]
         curr = matches[i]
+        # Tilt ist ein Effekt innerhalb einer Session. Das naechste Match
+        # drei Tage spaeter sagt darueber nichts - es zaehlt nur, wenn es
+        # am selben Tag gespielt wurde (Session-Grenze wie auf /sessions).
+        # Unentschieden ist weder Sieg noch Niederlage und zaehlt nicht.
+        if curr["date"] != prev["date"] or prev["result"] not in ("Sieg", "Niederlage"):
+            continue
         if prev["won"]:
             post_win_ratings.append(curr["rating"])
             post_win_adr.append(curr["adr"])
@@ -10386,6 +10478,12 @@ def _build_tilt_analysis(cfg: dict) -> dict:
             post_loss_ratings.append(curr["rating"])
             post_loss_adr.append(curr["adr"])
             post_loss_util.append(curr["utility_per_round"])
+
+    # Gruppe A = nach Niederlage, B = nach Sieg. "B belastbar besser"
+    # heisst also: nach Niederlagen spielst du belastbar schlechter.
+    rating_cmp = compare_groups(post_loss_ratings, post_win_ratings)
+    adr_cmp = compare_groups(post_loss_adr, post_win_adr)
+    util_cmp = compare_groups(post_loss_util, post_win_util)
 
     def _avg(lst):
         return round(sum(lst) / len(lst), 2) if lst else 0
@@ -10451,26 +10549,50 @@ def _build_tilt_analysis(cfg: dict) -> dict:
                     "maps": [m["map"] for m in ep_matches],
                     "avg_rating": _avg(ep_ratings),
                     "rating_trend": round(ep_ratings[-1] - ep_ratings[0], 2),
+                    "end_index": i - 1,
                 })
         else:
             i += 1
 
-    # ── Comeback ability: performance in match right after a tilt episode ──
-    comeback_ratings = []
-    for ep in tilt_episodes:
-        # Find the match right after this episode ends
-        for j, m in enumerate(matches):
-            if m["date"] == ep["end_date"]:
-                if j + 1 < len(matches):
-                    comeback_ratings.append(matches[j + 1]["rating"])
-                break
+    # ── Comeback: das Match direkt nach einer Episode ──
+    # Frueher ueber m["date"] == end_date gesucht. Das vergleicht nur den
+    # Tag und traf damit das erste Match des Tages, nicht das Ende der
+    # Episode.
+    comeback_idx = [ep["end_index"] + 1 for ep in tilt_episodes
+                    if ep["end_index"] + 1 < len(matches)]
+    comeback_ratings = [matches[j]["rating"] for j in comeback_idx]
     comeback_avg = _avg(comeback_ratings) if comeback_ratings else 0
+    others = [m["rating"] for j, m in enumerate(matches) if j not in set(comeback_idx)]
+    comeback_cmp = compare_groups(comeback_ratings, others)
 
-    # ── Mental resilience score (0-100) ──
-    # Higher = more resilient (less performance drop after losses)
-    tilt_magnitude = abs(rating_tilt_delta) * 50  # 0.10 delta = 5 points
-    episode_penalty = len(tilt_episodes) * 5
-    resilience = max(0, min(100, round(80 - tilt_magnitude - episode_penalty)))
+    # ── Mentale Resilienz ──
+    # Frueher eine Punktzahl 80 - |delta|*50 - 5 je Episode. Die Episoden-
+    # zahl waechst mit der Zahl der gespielten Matches, die Punktzahl sank
+    # also schon durch Spielen - und das Urteil darunter ("arbeite an
+    # deiner mentalen Staerke") stand auf einer Differenz, die nicht von
+    # Rauschen zu unterscheiden war. Jetzt entscheidet allein der Vergleich.
+    if rating_cmp is None:
+        resilience = {"state": "too_few", "text":
+                      f"Zu wenige Paare fuer eine Aussage: {len(post_loss_ratings)} Matches nach "
+                      f"Niederlagen, {len(post_win_ratings)} nach Siegen am selben Tag "
+                      f"(mindestens {MIN_PER_GROUP} je Gruppe noetig)."}
+    elif rating_cmp.b_better:
+        resilience = {"state": "tilt", "text":
+                      f"Nach Niederlagen spielst du belastbar schlechter: Rating "
+                      f"{rating_cmp.mean_a} statt {rating_cmp.mean_b} ({rating_cmp.note()})."}
+    elif rating_cmp.a_better:
+        resilience = {"state": "strong", "text":
+                      f"Nach Niederlagen spielst du belastbar besser: Rating "
+                      f"{rating_cmp.mean_a} statt {rating_cmp.mean_b} ({rating_cmp.note()})."}
+    elif rating_cmp.no_difference:
+        resilience = {"state": "stable", "text":
+                      f"Belegt stabil: Niederlagen veraendern dein naechstes Match nicht "
+                      f"nennenswert ({rating_cmp.note()})."}
+    else:
+        resilience = {"state": "open", "text":
+                      f"Noch offen. Nach Niederlagen Rating {rating_cmp.mean_a}, nach Siegen "
+                      f"{rating_cmp.mean_b} - {rating_cmp.note()}. Weder Tilt noch Stabilitaet "
+                      f"sind damit belegt."}
 
     # ── Current form: is the player currently tilted? ──
     last_5 = matches[-5:] if len(matches) >= 5 else matches
@@ -10479,46 +10601,65 @@ def _build_tilt_analysis(cfg: dict) -> dict:
     currently_tilted = recent_losses >= 3 and recent_rating < overall_rating - 0.05
 
     # ── Coaching tips ──
+    # Ein Ratschlag steht nur, wenn der Vergleich ihn traegt. Ist er
+    # unentschieden, wird der Messwert genannt, aber nichts daraus
+    # abgeleitet.
     tips = []
-    if rating_tilt_delta > 0.08:
-        tips.append({"type": "warning", "icon": "brain",
-                     "text": f"Tilt-Effekt erkannt: Nach Niederlagen faellt dein Rating um {rating_tilt_delta} "
-                             f"(von Ø {avg_rating_post_win} auf Ø {avg_rating_post_loss}). Mach nach einer Niederlage eine kurze Pause."})
-    elif rating_tilt_delta > 0.03:
-        tips.append({"type": "info", "icon": "brain",
-                     "text": f"Leichter Tilt-Effekt: Rating nach Sieg Ø {avg_rating_post_win} vs. nach Niederlage Ø {avg_rating_post_loss} (Δ {rating_tilt_delta})."})
-    else:
-        tips.append({"type": "positive", "icon": "shield",
-                     "text": f"Mental stark: Kaum Performance-Unterschied nach Sieg vs. Niederlage (Δ {rating_tilt_delta}). Gute mentale Stabilitaet!"})
+    tips.append({
+        "type": {"tilt": "warning", "strong": "positive", "stable": "positive"}.get(
+            resilience["state"], "info"),
+        "icon": "brain",
+        "text": resilience["text"] + (
+            " Mach nach einer Niederlage eine kurze Pause." if resilience["state"] == "tilt" else ""),
+    })
 
     if tilt_episodes:
-        tips.append({"type": "warning", "icon": "alert-triangle",
-                     "text": f"{len(tilt_episodes)} Tilt-Episode(n) erkannt (3+ Niederlagen in Folge). "
-                             f"Durchschnittliches Rating waehrend Tilt: {_avg([e['avg_rating'] for e in tilt_episodes])}."})
+        tips.append({"type": "info", "icon": "alert-triangle",
+                     "text": f"{len(tilt_episodes)} Serie(n) mit 3+ Niederlagen in Folge, "
+                             f"Rating darin im Schnitt {_avg([e['avg_rating'] for e in tilt_episodes])}. "
+                             f"Wie oft solche Serien vorkommen, haengt vor allem an deiner Siegquote "
+                             f"und der Zahl der Matches."})
 
-    if adr_tilt_delta > 10:
+    if adr_cmp and adr_cmp.b_better:
         tips.append({"type": "warning", "icon": "target",
-                     "text": f"ADR sinkt nach Niederlagen um {adr_tilt_delta} — du wirst passiver wenn es schlecht laeuft. Bleib aktiv!"})
+                     "text": f"ADR nach Niederlagen belastbar niedriger: {adr_cmp.mean_a} statt "
+                             f"{adr_cmp.mean_b} ({adr_cmp.note()}). Du wirst passiver, wenn es schlecht laeuft."})
 
-    if avg_util_post_loss < avg_util_post_win * 0.8 and avg_util_post_win > 1.0:
-        tips.append({"type": "info", "icon": "flame",
-                     "text": f"Utility-Nutzung sinkt nach Niederlagen ({avg_util_post_loss}/R vs. {avg_util_post_win}/R). Vergiss nicht Utility zu werfen auch wenn es schlecht laeuft."})
+    if util_cmp and util_cmp.b_better:
+        tips.append({"type": "warning", "icon": "flame",
+                     "text": f"Utility nach Niederlagen belastbar seltener: {util_cmp.mean_a}/R statt "
+                             f"{util_cmp.mean_b}/R ({util_cmp.note()}). Utility auch dann werfen, "
+                             f"wenn es schlecht laeuft."})
 
     if currently_tilted:
-        tips.append({"type": "warning", "icon": "pause-circle",
-                     "text": "Aktuell auf Tilt: Letzte 5 Matches zeigen Abwaertstrend. Mach eine Pause oder spiele Deathmatch zum Reset."})
+        tips.append({"type": "info", "icon": "pause-circle",
+                     "text": f"Letzte {len(last_5)} Matches: {recent_losses} Niederlagen, Rating "
+                             f"{recent_rating} gegen deinen Schnitt {overall_rating}. Aus {len(last_5)} "
+                             f"Matches laesst sich nicht sagen, ob das Tilt oder normale Schwankung ist. "
+                             f"Wenn du dich frustriert fuehlst, hilft eine Pause trotzdem."})
 
     if longest_win:
         tips.append({"type": "positive", "icon": "trending-up",
-                     "text": f"Laengste Siegesserie: {longest_win['length']} Siege in Folge — du kannst Momentum aufbauen!"})
+                     "text": f"Laengste Siegesserie: {longest_win['length']} Siege in Folge."})
 
-    if comeback_avg > 0:
-        if comeback_avg >= overall_rating:
-            tips.append({"type": "positive", "icon": "rotate-ccw",
-                         "text": f"Gute Comeback-Faehigkeit: Nach Tilt-Phasen spielst du im Schnitt Rating {comeback_avg} (Ø {overall_rating})."})
-        else:
+    if comeback_ratings:
+        if comeback_cmp is None:
             tips.append({"type": "info", "icon": "rotate-ccw",
-                         "text": f"Comeback nach Tilt: Rating {comeback_avg} (unter Gesamtschnitt {overall_rating}). Laenger pausieren nach Abwaertsspiralen."})
+                         "text": f"Nach Niederlagenserien: Rating {comeback_avg} (Schnitt {overall_rating}). "
+                                 f"Bei {len(comeback_ratings)} Matches zu wenig fuer eine Aussage."})
+        elif comeback_cmp.undecided:
+            tips.append({"type": "info", "icon": "rotate-ccw",
+                         "text": f"Nach Niederlagenserien: Rating {comeback_avg} (sonst "
+                                 f"{comeback_cmp.mean_b}), {comeback_cmp.note()}."})
+        elif comeback_cmp.a_better:
+            tips.append({"type": "positive", "icon": "rotate-ccw",
+                         "text": f"Nach Niederlagenserien spielst du belastbar besser: {comeback_avg} "
+                                 f"statt {comeback_cmp.mean_b} ({comeback_cmp.note()})."})
+        elif comeback_cmp.b_better:
+            tips.append({"type": "warning", "icon": "rotate-ccw",
+                         "text": f"Nach Niederlagenserien spielst du belastbar schlechter: {comeback_avg} "
+                                 f"statt {comeback_cmp.mean_b} ({comeback_cmp.note()}). "
+                                 f"Nach einer Serie laenger pausieren."})
 
     # Mental reset tips
     mental_tips = [
@@ -10540,6 +10681,11 @@ def _build_tilt_analysis(cfg: dict) -> dict:
         "post_loss": {"rating": avg_rating_post_loss, "adr": avg_adr_post_loss, "utility": avg_util_post_loss},
         "rating_tilt_delta": rating_tilt_delta,
         "adr_tilt_delta": adr_tilt_delta,
+        # Urteil des Vergleichs nach Niederlage gegen nach Sieg. Die Farben
+        # im Template haengen daran, nicht an festen Schwellen auf dem Delta.
+        "rating_verdict": rating_cmp.verdict if rating_cmp else None,
+        "adr_verdict": adr_cmp.verdict if adr_cmp else None,
+        "pairs": {"post_win": len(post_win_ratings), "post_loss": len(post_loss_ratings)},
         "longest_win": {"length": longest_win["length"],
                         "start": matches[longest_win["start"]]["date"],
                         "end": matches[longest_win["end"]]["date"]} if longest_win else None,
@@ -10581,7 +10727,7 @@ def _build_role_detection(cfg: dict) -> dict:
     }
     per_match_roles: list[dict] = []  # per-match role scores for trend
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
@@ -10867,7 +11013,7 @@ def _build_opponent_prediction(cfg: dict) -> dict:
     opp_agg: dict[str, dict] = {}
     my_match_count = 0
 
-    for f in sorted(export_dir.glob("*_coach.json")):
+    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
