@@ -1,8 +1,8 @@
 # CS2 Coach — Docker / Unraid
 
-Zwei Services:
-- **cs2-coach** — Web-UI fuer Demo-Analyse, KI-Coaching, Practice-Config-Generator
-- **cs2-practice** — CS2 Dedicated Server mit den generierten Practice-Configs (optional)
+Ein Service: **cs2-coach** — Web-UI fuer Demo-Analyse, KI-Coaching und
+Practice-Config-Generator. Die Practice-Configs laufen im eigenen CS2-Client,
+siehe [Practice-Configs nutzen](#practice-configs-nutzen).
 
 ## Quick Start (Portainer auf Unraid)
 
@@ -23,8 +23,6 @@ docker build -t cs2-coach:latest .
 3. **Web editor** > Inhalt von `docker/portainer-stack.yml` einfuegen
 4. **Deploy the stack**
 5. Oeffne http://UNRAID-IP:5000
-
-Den CS2 Practice Server Block kann man auskommentieren wenn man nur die Web-UI braucht.
 
 ### 2b. Portainer — Einzelner Container (nur Web-UI)
 
@@ -137,8 +135,6 @@ Fehlermeldung.
 | Port | Protokoll | Service | Funktion |
 |------|-----------|---------|----------|
 | 5000 | TCP | cs2-coach | Web-UI |
-| 27015 | TCP/UDP | cs2-practice | CS2 Game Server |
-| 27020 | TCP | cs2-practice | RCON |
 
 ## Volumes
 
@@ -147,20 +143,27 @@ Fehlermeldung.
 | cs2-coach-data | /data | wenige MB | Cache (appdata) |
 | cs2-coach-demos | /data/demos | ~220 MB je Match | **Array** (eigener Share) |
 | cs2-coach-cfg | /data/cfg | wenige KB | Cache (appdata) |
-| cs2-server-data | /home/steam/cs2-dedicated | ~35 GB | Array |
 
-Nur `/data` und `/data/cfg` sind klein genug fuer den Cache. Demos und
-CS2-Server-Daten gehoeren aufs Array.
+Nur `/data` und `/data/cfg` sind klein genug fuer den Cache. Die Demos
+gehoeren aufs Array.
 
-## CS2 Server verbinden
+## Practice-Configs nutzen
+
+Die Configs laufen im eigenen CS2-Client, auf einer Offline-Map mit Bots.
+Ein Server ist dafuer nicht noetig.
+
+1. Auf der Practice-Seite **Configs speichern**. Im Container landen sie
+   unter `/data/cfg/coach/`, auf Unraid also unter
+   `/mnt/user/appdata/cs2-coach/data/cfg/coach/`.
+2. Den Ordner `coach` in den cfg-Ordner der eigenen CS2-Installation
+   kopieren: `...\Counter-Strike Global Offensive\game\csgo\cfg\coach\`.
+3. In der CS2-Konsole eine Map starten und die Config ausfuehren:
 
 ```
-# In CS2 Konsole:
-connect UNRAID-IP:27015
-
-# Practice starten:
-exec coach/practice           // Menue mit allen Modi
+map de_mirage
 exec coach/practice_mirage    // Prefire Mirage
+
+exec coach/practice           // Menue mit allen Modi
 exec coach/retake_dust2       // Retake Dust2
 exec coach/spray_inferno      // Spray-Transfer Inferno
 exec coach/challenge_nuke     // Challenge Nuke
@@ -168,22 +171,33 @@ exec coach/utility            // Granaten-Training
 exec coach/warmup             // Warmup
 ```
 
-## RCON
+### Warum es keinen Dedicated Server mehr gibt
 
-Standard-Passwort: `coach2024` (in docker-compose.yml aendern!)
+Bis Oktober 2026 enthielt der Stack einen optionalen Dienst `cs2-practice`
+(`joedwards32/cs2`). Auf Unraid hat er nie funktioniert und dabei viel
+Platz auf dem Cache verbraucht:
 
-```
-rcon_password coach2024
-rcon changelevel de_mirage
-rcon exec coach/practice_mirage
-```
+- Der Mount fuer die Serverdaten gehoerte root, der Container laeuft als
+  1000:1000. SteamCMD konnte dort nicht schreiben und hat CS2 deshalb an
+  seinem Standardort **innerhalb des Containers** installiert: 69 GB in
+  der Schreibschicht, also in `docker.img` auf dem Cache.
+- Gestartet wird der Server aber aus dem leeren Mount, deshalb kam
+  `./cs2.sh: No such file or directory` und Exit 1.
+- Mit `restart: unless-stopped` startete er 1139 Mal neu.
+
+Nach dem Entfernen von Container und Build-Cache und einem `fstrim` auf
+`docker.img` fiel der Cache von 85 % auf 59 % Belegung.
+
+Fuer das Training mit Bots wird der Server nicht gebraucht, die Configs
+laufen lokal. Wer ihn trotzdem wieder einrichten will, muss zwei Dinge
+beachten: der Server-Mount muss fuer UID 1000 beschreibbar sein, und er
+muss auf dem Array liegen statt unter `appdata`.
 
 ## Ressourcen
 
 | Service | CPU | RAM | Disk |
 |---------|-----|-----|------|
 | cs2-coach | ~0.5 Cores | ~200 MB | ~100 MB |
-| cs2-practice | ~2 Cores | ~4 GB | ~35 GB |
 
 ## Troubleshooting
 
@@ -197,7 +211,3 @@ docker-compose logs cs2-coach
 rm /mnt/user/appdata/cs2-coach/config.yaml
 docker-compose restart cs2-coach
 ```
-
-### CS2 Server Download-Schleife
-Der CS2 Server braucht ~8 GB RAM beim ersten Download (SteamCMD verify).
-Memory-Limit in docker-compose.yml auf mindestens 8G setzen.

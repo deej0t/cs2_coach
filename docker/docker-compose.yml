@@ -1,13 +1,14 @@
 # CS2 Coach — Docker Compose fuer Unraid
 #
-# Services:
-#   cs2-coach   — Web-UI fuer Demo-Analyse, KI-Coaching, Practice-Config-Generator
-#   cs2-practice — CS2 Dedicated Server mit Practice-Configs (optional)
+# Service:
+#   cs2-coach — Web-UI fuer Demo-Analyse, KI-Coaching, Practice-Config-Generator
+#
+# Die Practice-Configs laufen im eigenen CS2-Client (siehe docker/README.md).
+# Einen Dedicated Server gibt es hier bewusst nicht mehr.
 #
 # Setup:
-#   1. docker-compose up -d cs2-coach         (nur Web-UI)
-#   2. docker-compose up -d                    (Web-UI + CS2 Server)
-#   3. Oeffne http://<UNRAID-IP>:5000
+#   1. docker-compose up -d
+#   2. Oeffne http://<UNRAID-IP>:5000
 #
 # Unraid Community Apps:
 #   Alternativ als einzelner Container ueber Unraid Docker UI installierbar.
@@ -31,7 +32,7 @@ services:
     volumes:
       # Persistent data — config, vault exports
       - cs2-coach-data:/data
-      # Practice configs — shared with CS2 server
+      # Generierte Practice-Configs
       - cs2-coach-cfg:/data/cfg
       # Demos getrennt halten: eine Demo ist 40-330 MB, 60 Matches belegen
       # rund 14 GB. Auf Unraid gehoert das auf einen Array-Share und nicht
@@ -46,54 +47,6 @@ services:
       start_period: 15s
       retries: 3
 
-  # ── CS2 Practice Server (optional) ──
-  cs2-practice:
-    image: joedwards32/cs2:latest
-    container_name: cs2-practice
-    restart: unless-stopped
-    depends_on:
-      cs2-coach:
-        condition: service_healthy
-    ports:
-      - "27015:27015/tcp"   # Game server
-      - "27015:27015/udp"   # Game server (UDP)
-      - "27020:27020/tcp"   # RCON
-    environment:
-      # ── Server Identity ──
-      CS2_SERVERNAME: "CS2 Coach Practice Server"
-      CS2_PORT: 27015
-      CS2_RCON_PORT: 27020
-      CS2_RCONPW: "coach2024"
-      CS2_PW: ""
-
-      # ── Game Settings ──
-      CS2_GAMETYPE: 0        # Classic
-      CS2_GAMEMODE: 1        # Casual (no competitive cooldowns)
-      CS2_MAPGROUP: "mg_active"
-      CS2_STARTMAP: "de_mirage"
-      CS2_MAXPLAYERS: 12
-      CS2_LAN: 1             # LAN only
-
-      # ── Bot Settings ──
-      CS2_BOT_QUOTA: 5
-      CS2_BOT_DIFFICULTY: 3
-
-      # ── Auto-Update ──
-      STEAMUSER: ""
-      STEAMPASS: ""
-      CS2_ADDITIONAL_ARGS: "+sv_lan 1"
-
-    volumes:
-      # Practice configs from cs2-coach (shared volume)
-      - cs2-coach-cfg:/home/steam/cs2-dedicated/game/csgo/cfg/coach:ro
-      # Persistent server data
-      - cs2-server-data:/home/steam/cs2-dedicated
-
-    deploy:
-      resources:
-        limits:
-          memory: 8G
-
 volumes:
   cs2-coach-data:
     driver: local
@@ -102,6 +55,4 @@ volumes:
   # Nur Rueckfall, wenn DEMO_PATH nicht gesetzt ist. Auf Unraid stattdessen
   # DEMO_PATH=/mnt/user/cs2-demos setzen.
   cs2-coach-demos:
-    driver: local
-  cs2-server-data:
     driver: local

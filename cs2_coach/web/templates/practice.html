@@ -242,15 +242,24 @@
     </form>
 </div>
 
-<!-- ═══════════ Connect ═══════════ -->
+<!-- ═══════════ Training starten ═══════════ -->
+{# Frueher stand hier ein fest verdrahtetes "connect <IP>:27015" auf einen
+   Dedicated Server. Den gibt es nicht mehr - er hat auf Unraid nie
+   funktioniert (siehe docker/README.md). Die Configs laufen im eigenen
+   Client auf einer Offline-Map. Map-Wechsel und exec bleiben zwei
+   Schritte: ein exec direkt hinter "map" liefe, bevor die Map geladen ist. #}
+{% set first_map = (pdata.maps[0].name|lower) if pdata.maps else 'mirage' %}
 <div class="pr-connect-box">
     <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">
-        <i data-lucide="terminal" style="width:14px;height:14px;vertical-align:middle;"></i> Quick Connect (Docker/LAN)
+        <i data-lucide="terminal" style="width:14px;height:14px;vertical-align:middle;"></i> Training starten (CS2-Konsole)
     </div>
-    <div class="pr-connect-cmd" onclick="navigator.clipboard.writeText('connect 192.168.188.71:27015')" title="Kopieren">
-        connect 192.168.188.71:27015
+    <div class="pr-connect-cmd" onclick="navigator.clipboard.writeText('map de_{{ first_map }}')" title="Kopieren">
+        map de_{{ first_map }}
     </div>
-    <span style="font-size: 11px; color: var(--color-neutral-500); margin-left: 8px;">Klick zum Kopieren</span>
+    <div class="pr-connect-cmd" style="margin-top:6px;" onclick="navigator.clipboard.writeText('exec coach/practice_{{ first_map }}')" title="Kopieren">
+        exec coach/practice_{{ first_map }}
+    </div>
+    <span style="font-size: 11px; color: var(--color-neutral-500); margin-left: 8px;">Klick zum Kopieren — erst die Map laden, dann die Config ausfuehren</span>
 </div>
 
 <!-- ═══════════ Per-Map Cards with Mode Tabs ═══════════ -->

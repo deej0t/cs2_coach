@@ -38,6 +38,9 @@ docker/                 compose, portainer stack, unraid template
 - `CS2COACH_PASSWORD` (env, plaintext, hashed at startup) takes precedence over `auth.password_hash` in config.yaml. No password set = auth fully inactive.
 - `CS2COACH_SECRET_KEY`, else `.secret_key` next to the config, created with `O_CREAT|O_EXCL` so parallel gunicorn workers share one key.
 - Docker: `CS2COACH_UPDATE_INTERVAL` (auto-update, 0 disables), `CS2COACH_BRANCH`. Volumes under `/data` (`demos`, `vault`, `cfg`).
+- **There is no dedicated CS2 server anymore** (removed 2026-10-01). The practice configs run in the player's own client on an offline map (`map de_x`, then `exec coach/...`). The old `cs2-practice` service (`joedwards32/cs2`) never worked on Unraid: its mount was root-owned, the container runs as 1000:1000, so SteamCMD installed CS2 into the container's *writable layer* instead — 69 GB inside `docker.img` on the cache, restarted 1139 times. Do not re-add it casually; if ever needed, the mount must be writable by UID 1000 and live on the array.
+- **Measuring a container's disk use means its writable layer too** (`docker ps -a --size`), not just its bind mounts. The mount above read 0 bytes while the container held 73.6 GB.
+- Space freed inside `docker.img` only returns to the cache after `fstrim /var/lib/docker` (the loop device supports discard).
 
 ## Key Architecture
 - `demoparser2` for CS2 demo parsing
@@ -49,6 +52,7 @@ docker/                 compose, portainer stack, unraid template
 - `PlayerStats.team` stores the starting side as "T" or "CT" (resolved by `_assign_starting_sides`)
 - Side derivation compares attacker and victim *within the same event* and is therefore swap-invariant — do not "fix" it for players without a kill in half 1.
 - Radar conversion happens server-side via `maps.game_to_radar()`. Never duplicate that transform in JavaScript.
+- **Matchmaking demos contain no voice.** `DemoParser.parse_voice()` returned an empty list for all 150 demos checked on 2026-10-01 (65 from the local replays folder, 85 GCPD downloads on the server). Caveat: there was no demo *with* voice to confirm that `parse_voice()` detects it.
 
 ## Metrics — hard-won corrections
 Each of these was wrong once and was fixed against measured demo data. Do not regress them.
