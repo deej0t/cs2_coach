@@ -20,10 +20,13 @@ RUN git clone -b "$CS2COACH_BRANCH" \
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
-# Entrypoint (copy, runs before app code exists on updates)
-RUN cp docker-entrypoint.sh /usr/local/bin/ && chmod +x /usr/local/bin/docker-entrypoint.sh
-# Update script (symlink so git pull updates it in-place)
-RUN ln -sf /app/docker-update.sh /usr/local/bin/docker-update.sh && chmod +x docker-update.sh
+# Entrypoint und Update-Skript laufen direkt aus /app, damit git pull sie
+# aktualisiert. Frueher wurde der Entrypoint hierher kopiert; ein Container
+# startete dann fuer immer mit dem Stand vom Bau des Images - auf dem
+# Server ein Stand ohne Auto-Update-Schleife. Das Ausfuehrbar-Bit steht in
+# git; ein chmod hier machte den Baum schmutzig und blockierte git pull.
+# Der Symlink bleibt fuer den manuellen Aufruf "docker exec ... docker-update.sh".
+RUN ln -sf /app/docker-update.sh /usr/local/bin/docker-update.sh
 
 # Create directories for mounted volumes
 RUN mkdir -p /data/demos /data/vault /data/cfg
@@ -38,7 +41,7 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/')" || exit 1
 
-ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
 # Production server via gunicorn
 CMD ["gunicorn", \

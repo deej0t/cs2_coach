@@ -17,6 +17,11 @@ services:
   cs2-coach:
     build: .
     container_name: cs2-coach
+    # Entrypoint aus /app statt der Kopie im Image: Images, die vor dem
+    # 13.10.2026 gebaut wurden, enthalten einen eingefrorenen Entrypoint
+    # ohne Auto-Update-Schleife. So ist der Stack vom Alter des Images
+    # unabhaengig.
+    entrypoint: ["/app/docker-entrypoint.sh"]
     restart: unless-stopped
     ports:
       - "5000:5000"
