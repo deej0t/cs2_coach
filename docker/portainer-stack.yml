@@ -10,11 +10,11 @@ services:
   cs2-coach:
     image: cs2-coach:latest
     container_name: cs2-coach
-    # Entrypoint aus /app statt der Kopie im Image: Images, die vor dem
-    # 13.10.2026 gebaut wurden, enthalten einen eingefrorenen Entrypoint
-    # ohne Auto-Update-Schleife. So ist der Stack vom Alter des Images
-    # unabhaengig.
-    entrypoint: ["/app/docker-entrypoint.sh"]
+    # Kein "entrypoint:" setzen. Compose verwirft damit das CMD des Images,
+    # Gunicorn startet nicht, und der Container laeuft in eine
+    # Neustart-Schleife (so am 13.10.2026 auf dem Server passiert).
+    # Der richtige Entrypoint steckt im Image; ein Image von vor dem
+    # 13.10.2026 muss neu gebaut werden (siehe docker/README.md).
     restart: unless-stopped
     ports:
       - "5001:5000"

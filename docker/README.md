@@ -53,12 +53,32 @@ docker run -d \
 
 ### Image aktualisieren
 
+Im laufenden Betrieb ist das nicht noetig: der Container holt neuen Code
+selbst (erste Pruefung 5 Minuten nach dem Start, danach alle 6 Stunden).
+
+Neu bauen muss man nur, **wenn das Image vor dem 13.10.2026 gebaut wurde.**
+Solche Images starten mit einer beim Bauen kopierten, alten Fassung des
+Entrypoints ohne Update-Schleife - das Auto-Update laeuft dann nie. Pruefen:
+
 ```bash
-cd /mnt/user/appdata/cs2-coach
-git pull
-docker build -t cs2-coach:latest .
-# In Portainer: Container stoppen > Recreate
+docker logs cs2-coach 2>&1 | grep "Auto-Update aktiv"   # leer = altes Image
 ```
+
+Neu bauen, direkt aus GitHub:
+
+```bash
+docker build --no-cache -t cs2-coach:latest "https://github.com/deej0t/cs2_coach.git#main"
+# danach den Container neu erstellen (Portainer: Recreate)
+```
+
+Wichtig: Ein neu erstellter Container startet mit dem Code **aus dem Image**,
+nicht mit dem, den das Auto-Update zuletzt geholt hatte (`/app` liegt nicht
+auf einem Volume). Mit einem aktuellen Image ist das unkritisch, weil die
+Update-Schleife ihn nach 5 Minuten nachzieht.
+
+Im Stack **kein `entrypoint:` setzen**: Compose verwirft damit das `CMD` des
+Images, Gunicorn startet nicht, und der Container laeuft in eine
+Neustart-Schleife.
 
 ## Konfiguration
 
