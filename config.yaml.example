@@ -10,7 +10,7 @@ discord_webhook: ''
 gemini_api_key: ''
 language: de
 obsidian_vault_path: ''
-ollama_url: http://192.168.188.71:11434
+ollama_url: http://localhost:11434
 player_name: ''
 steam_api_key: ''
 steam_id: ''
@@ -18,6 +18,14 @@ steam_id: ''
 # Wird benoetigt um Demos direkt von Valve-Servern herunterzuladen.
 # Session-Cookies werden lokal gespeichert, Passwort wird NICHT dauerhaft gespeichert.
 steam_username: ''
+
+# Systemstatus (optional)
+# Adresse, unter der die WebUI aufgerufen wird. Der Systemstatus prueft sie
+# von aussen; der Docker-Healthcheck fragt nur innerhalb des Containers und
+# sieht eine falsche Portzuordnung nicht.
+public_url: ''
+# Eigener Webhook nur fuer Statusmeldungen. Leer = discord_webhook verwenden.
+health_webhook: ''
 
 # Passwortschutz fuer die Web-UI (optional)
 # Ist kein Passwort gesetzt, ist die App ohne Anmeldung erreichbar.

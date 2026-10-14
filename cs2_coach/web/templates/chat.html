@@ -72,7 +72,7 @@
                 {% endif %}
             {% else %}
                 <span class="ch-status offline"><span class="ch-status-dot"></span> Ollama Offline</span>
-                <span class="ch-provider">{{ config.get('ollama_url', 'http://192.168.188.71:11434') }}</span>
+                <span class="ch-provider">{{ config.get('ollama_url', 'http://localhost:11434') }}</span>
             {% endif %}
         {% else %}
             <span class="ch-status online"><span class="ch-status-dot"></span> Gemini</span>

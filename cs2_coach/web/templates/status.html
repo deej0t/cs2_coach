@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Systemstatus{% endblock %}
+
+{% block content %}
+<h2>{{ _('Systemstatus') }}</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    {{ _('Prueft, ob CS2 Coach tatsaechlich funktioniert. Der Container prueft das alle 30 Minuten selbst und meldet sich per Discord, sobald sich etwas aendert.') }}
+</p>
+
+{% set colors = {'ok': 'var(--color-green)', 'warn': 'var(--color-yellow)', 'fail': 'var(--color-red)', 'skip': 'var(--color-neutral-600)'} %}
+{% set labels = {'ok': _('in Ordnung'), 'warn': _('Warnung'), 'fail': _('Fehler'), 'skip': _('nicht geprueft')} %}
+
+<div class="card elev-sm" style="margin-bottom: var(--space-5);">
+    <table class="table"><tbody>
+        {% for c in checks %}
+        <tr>
+            <td style="width: 190px; font-weight: 600;">{{ c.label }}</td>
+            <td style="width: 120px;">
+                <span class="tag" style="border-color: {{ colors[c.state] }}; color: {{ colors[c.state] }};">{{ labels[c.state] }}</span>
+            </td>
+            <td style="color: var(--color-neutral-400);">{{ c.message }}</td>
+        </tr>
+        {% endfor %}
+    </tbody></table>
+</div>
+
+<div class="card elev-sm">
+    <span class="card-kicker">{{ _('Benachrichtigung') }}</span>
+    {% if webhook_set %}
+    <p style="font-size: 13px; margin: var(--space-2) 0 0;">{{ _('Discord-Webhook ist eingetragen. Neue und behobene Probleme werden gemeldet, unveraenderte nicht erneut.') }}</p>
+    {% else %}
+    <p style="font-size: 13px; margin: var(--space-2) 0 0; color: var(--color-yellow);">
+        {{ _('Kein Discord-Webhook eingetragen - Probleme erscheinen nur hier.') }}
+        <a href="{{ url_for('settings') }}">{{ _('In den Einstellungen eintragen') }}</a>
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

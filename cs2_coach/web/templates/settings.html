@@ -41,7 +41,12 @@
         <div class="field">
             <label>{{ _('Discord Webhook URL') }}</label>
             <input type="text" name="discord_webhook" value="{{ config.get('discord_webhook', '') }}" placeholder="https://discord.com/api/webhooks/..." class="input">
-            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Optional: Match-Ergebnisse automatisch in Discord posten.') }}</div>
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Optional: Match-Ergebnisse automatisch in Discord posten. Ueber denselben Webhook meldet der Systemstatus Probleme.') }}</div>
+        </div>
+        <div class="field">
+            <label>{{ _('Oeffentliche Adresse der WebUI') }}</label>
+            <input type="text" name="public_url" value="{{ config.get('public_url', '') }}" placeholder="https://cs2-coach.example.com" class="input">
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Optional: Die Adresse, unter der du die WebUI aufrufst. Der Systemstatus prueft sie von aussen - der Docker-Healthcheck sieht eine falsche Portzuordnung nicht.') }}</div>
         </div>
         <div class="field">
             <label>{{ _('Steam Web API Key') }}</label>
@@ -64,7 +69,7 @@
         </div>
         <div class="field">
             <label>{{ _('Ollama Server URL') }}</label>
-            <input type="text" name="ollama_url" value="{{ config.get('ollama_url', 'http://192.168.188.71:11434') }}" placeholder="http://192.168.188.71:11434" class="input">
+            <input type="text" name="ollama_url" value="{{ config.get('ollama_url', 'http://localhost:11434') }}" placeholder="http://localhost:11434" class="input">
             <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Adresse deines Ollama-Servers (z.B. auf Unraid). Standard-Port: 11434.') }}</div>
         </div>
         <div class="field">

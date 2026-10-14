@@ -58,6 +58,45 @@ def cli(ctx, config):
     """CS2 Coach — Demo-Analyse mit Obsidian-Integration."""
     ctx.ensure_object(dict)
     ctx.obj["config"] = load_config(config)
+    ctx.obj["config_path"] = Path(config) if config else _default_config_path()
+
+
+@cli.command()
+@click.option("--notify", is_flag=True,
+              help="Bei Zustandsaenderung eine Discord-Nachricht senden")
+@click.pass_context
+def health(ctx, notify):
+    """Systemstatus pruefen (WebUI, Auto-Update, Steam, Speicher, Demos).
+
+    Mit --notify fuer den regelmaessigen Lauf im Container: gibt nur eine
+    Zeile aus und meldet sich bei Discord nur, wenn sich etwas aendert.
+    Exit-Code 1, wenn eine Pruefung fehlschlaegt.
+    """
+    from .health import FAIL, notify as send, run_checks
+
+    cfg = ctx.obj["config"]
+    config_path = ctx.obj["config_path"]
+    checks = run_checks(cfg, config_path)
+
+    if notify:
+        webhook = cfg.get("health_webhook") or cfg.get("discord_webhook", "")
+        sent = send(checks, webhook, config_path.parent / ".health_state.json")
+        bad = [c for c in checks if c.state in ("warn", "fail")]
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{stamp}] Systemstatus: "
+              + (", ".join(f"{c.label}={c.state}" for c in bad) or "alles ok")
+              + (" - Discord benachrichtigt" if sent else ""))
+    else:
+        table = Table(title="Systemstatus", border_style="cyan")
+        table.add_column("Pruefung")
+        table.add_column("Status")
+        table.add_column("Details")
+        colors = {"ok": "green", "warn": "yellow", "fail": "red", "skip": "dim"}
+        for c in checks:
+            table.add_row(c.label, f"[{colors[c.state]}]{c.state}[/]", c.message)
+        console.print(table)
+
+    sys.exit(1 if any(c.state == FAIL for c in checks) else 0)
 
 
 @cli.command()

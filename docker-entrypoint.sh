@@ -72,4 +72,20 @@ if [ "$UPDATE_INTERVAL" -gt 0 ] 2>/dev/null; then
     done) &
 fi
 
+# Systemstatus (Standard: alle 30 Minuten, 0 = deaktiviert).
+#
+# Eigene Schleife, nicht Teil der Update-Schleife: haengt diese, muss die
+# Pruefung "letzte Update-Pruefung zu alt" trotzdem laufen - sonst meldet
+# genau der Fehler, den sie finden soll, nie etwas. Discord bekommt nur
+# Zustandsaenderungen, nicht jeden Lauf.
+HEALTH_INTERVAL="${CS2COACH_HEALTH_INTERVAL:-1800}"
+if [ "$HEALTH_INTERVAL" -gt 0 ] 2>/dev/null; then
+    echo "Systemstatus aktiv: erste Pruefung in 600s, dann alle ${HEALTH_INTERVAL}s"
+    (sleep 600
+     while true; do
+        (cd /app && python -m cs2_coach health --notify) || true
+        sleep "$HEALTH_INTERVAL"
+    done) &
+fi
+
 exec "$@"

@@ -193,7 +193,7 @@ def stream_gemini(
 def stream_ollama(
     messages: list[dict],
     context: str,
-    ollama_url: str = "http://192.168.188.71:11434",
+    ollama_url: str = "http://localhost:11434",
     model: str = "llama3.1:8b",
 ) -> Generator[str, None, None]:
     """Stream a response from Ollama API.
@@ -295,7 +295,7 @@ def call_gemini(
 def call_ollama(
     prompt: str,
     context: str,
-    ollama_url: str = "http://192.168.188.71:11434",
+    ollama_url: str = "http://localhost:11434",
     model: str = "llama3.1:8b",
 ) -> str:
     """Non-streaming Ollama call. Returns full response text."""
@@ -409,7 +409,7 @@ def build_practice_context(maps_data: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def check_ollama_status(ollama_url: str = "http://192.168.188.71:11434") -> dict:
+def check_ollama_status(ollama_url: str = "http://localhost:11434") -> dict:
     """Check if Ollama is running and list available models."""
     url = f"{ollama_url.rstrip('/')}/api/tags"
     try:

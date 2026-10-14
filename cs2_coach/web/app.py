@@ -1718,7 +1718,7 @@ def create_app() -> Flask:
                 model = cfg.get("ai_model", "") or "gemini-2.0-flash"
                 raw = call_gemini(prompt, context, api_key, model)
             else:
-                ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
+                ollama_url = cfg.get("ollama_url", "http://localhost:11434")
                 model = cfg.get("ai_model", "") or "llama3.1:8b"
                 raw = call_ollama(prompt, context, ollama_url, model)
 
@@ -1892,6 +1892,15 @@ def create_app() -> Flask:
         return Response(text, mimetype="text/plain",
                         headers={"Content-Disposition": "attachment; filename=cs2_inventar.txt"})
 
+    @app.route("/status")
+    def status():
+        from .. import health
+        current = load_config()
+        return render_template(
+            "status.html", checks=health.run_checks(current, CONFIG_PATH),
+            webhook_set=bool(current.get("health_webhook") or current.get("discord_webhook")),
+            config=current)
+
     @app.route("/settings")
     def settings():
         # Always reload config from disk
@@ -1932,12 +1941,13 @@ def create_app() -> Flask:
             "demo_folder": request.form.get("demo_folder", "").strip(),
             "language": request.form.get("language", "de").strip(),
             "discord_webhook": request.form.get("discord_webhook", "").strip(),
+            "public_url": request.form.get("public_url", cfg.get("public_url", "")).strip(),
             "steam_api_key": request.form.get("steam_api_key", "").strip(),
             "cs2_auth_token": request.form.get("cs2_auth_token", "").strip(),
             "last_sharecode": cfg.get("last_sharecode", ""),
             "ai_provider": request.form.get("ai_provider", cfg.get("ai_provider", "ollama")).strip(),
             "gemini_api_key": request.form.get("gemini_api_key", cfg.get("gemini_api_key", "")).strip(),
-            "ollama_url": request.form.get("ollama_url", cfg.get("ollama_url", "http://192.168.188.71:11434")).strip(),
+            "ollama_url": request.form.get("ollama_url", cfg.get("ollama_url", "http://localhost:11434")).strip(),
             "ai_model": request.form.get("ai_model", cfg.get("ai_model", "")).strip(),
         })
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -2147,7 +2157,7 @@ def create_app() -> Flask:
     @app.route("/chat")
     def chat():
         provider = cfg.get("ai_provider", "ollama")
-        ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
+        ollama_url = cfg.get("ollama_url", "http://localhost:11434")
         ollama_status = check_ollama_status(ollama_url) if provider == "ollama" else {"online": False, "models": []}
         return render_template("chat.html", config=cfg,
                                ollama_status=ollama_status,
@@ -2204,7 +2214,7 @@ def create_app() -> Flask:
                     for chunk in stream_gemini(messages, context, api_key, model):
                         yield f"data: {json.dumps({'text': chunk})}\n\n"
                 else:
-                    ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
+                    ollama_url = cfg.get("ollama_url", "http://localhost:11434")
                     model = cfg.get("ai_model", "")
                     if not model:
                         status = check_ollama_status(ollama_url)
@@ -2278,7 +2288,7 @@ def create_app() -> Flask:
                     for chunk in stream_gemini(messages, context, api_key, model):
                         yield f"data: {json.dumps({'text': chunk})}\n\n"
                 else:
-                    ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
+                    ollama_url = cfg.get("ollama_url", "http://localhost:11434")
                     model = cfg.get("ai_model", "")
                     if not model:
                         # Auto-detect first available model
@@ -2361,7 +2371,7 @@ Regeln:
                     for chunk in stream_gemini(messages, "", api_key, model):
                         yield f"data: {json.dumps({'text': chunk})}\n\n"
                 else:
-                    ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
+                    ollama_url = cfg.get("ollama_url", "http://localhost:11434")
                     model = cfg.get("ai_model", "")
                     if not model:
                         status = check_ollama_status(ollama_url)
@@ -2432,7 +2442,7 @@ Regeln:
                     for chunk in stream_gemini(messages, "", api_key, model):
                         yield f"data: {json.dumps({'text': chunk})}\n\n"
                 else:
-                    ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
+                    ollama_url = cfg.get("ollama_url", "http://localhost:11434")
                     model = cfg.get("ai_model", "")
                     if not model:
                         status = check_ollama_status(ollama_url)
@@ -2484,7 +2494,7 @@ Regeln:
 
     @app.route("/api/ollama-status")
     def api_ollama_status():
-        ollama_url = cfg.get("ollama_url", "http://192.168.188.71:11434")
+        ollama_url = cfg.get("ollama_url", "http://localhost:11434")
         status = check_ollama_status(ollama_url)
         return jsonify(status)
 
