@@ -21,7 +21,7 @@ from demoparser2 import DemoParser
 
 from ..parser import parse_demo, MatchResult
 from ..coach import generate_report
-from ..obsidian import export_match, export_sort_key
+from ..obsidian import export_match, export_sort_key, is_own_player
 from ..maps import MAP_RADAR_DATA, game_to_radar
 from .. import findings as findings_mod
 from ..evidence import MIN_PER_GROUP, compare_groups, compare_rates
@@ -436,12 +436,21 @@ def create_app() -> Flask:
             subfolder = cfg.get("coach_subfolder", "CS2-Coach")
             obsidian_path = None
             json_filename = None
-            if vault_path:
+            # Die Analyse eines Mitspielers ist eine Ansicht, kein Teil der
+            # eigenen Historie: sie wuerde den eigenen Export zum selben
+            # Match ueberschreiben (gleicher Dateiname) und seine Zahlen als
+            # eigenes Match-Ergebnis nach Discord schicken.
+            own = is_own_player(result.player_stats, cfg)
+            if vault_path and own:
                 md_path, json_filename = export_match(result, report, vault_path, subfolder)
                 obsidian_path = str(md_path)
 
-            # Discord webhook (path-based route)
-            _post_discord(cfg.get("discord_webhook", ""), result, cfg)
+            if own:
+                # Discord webhook (path-based route)
+                _post_discord(cfg.get("discord_webhook", ""), result, cfg)
+            else:
+                flash(f"Analyse fuer {result.player_stats.name} - wird nicht gespeichert, "
+                      f"damit sie deine eigene Auswertung dieses Matches nicht ueberschreibt.", "info")
 
             if json_filename:
                 return redirect(url_for("view_export", filename=json_filename))

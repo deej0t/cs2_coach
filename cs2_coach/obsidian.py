@@ -42,6 +42,27 @@ def export_match(result: MatchResult, coach_report: str, vault_path: str,
     return md_path, json_filename
 
 
+def is_own_player(stats, cfg: dict) -> bool:
+    """Gehoert die Analyse dem konfigurierten Spieler?
+
+    Nur dessen Analysen duerfen in den Vault. Der Dateiname eines Exports
+    nennt Datum, Map, Score und Uhrzeit, aber nicht den Spieler - die
+    Analyse eines Mitspielers ueber den Knopf "Analysieren" hat deshalb den
+    eigenen Export zum selben Match ueberschrieben. Auf dem Server standen
+    so in zwei Matches die Werte eines Mitspielers in der eigenen
+    Auswertung (Rating 0.50 statt 1.08 und 0.64 statt 0.78).
+
+    Die Steam-ID entscheidet, wenn sie konfiguriert ist; der Name dient nur
+    als Rueckfall, weil sich Steam-Namen aendern (aus "deej0ttv" wurde
+    "deej0t").
+    """
+    own_id = str(cfg.get("steam_id") or "").strip()
+    if own_id:
+        return str(getattr(stats, "steam_id", "")) == own_id
+    own_name = str(cfg.get("player_name") or "").strip().lower()
+    return bool(own_name) and own_name in str(getattr(stats, "name", "")).lower()
+
+
 def export_sort_key(path) -> tuple[str, str, str]:
     """Sortierschluessel fuer Export-Dateien in Spielreihenfolge.
 
