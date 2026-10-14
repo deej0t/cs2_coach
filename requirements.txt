@@ -1,5 +1,4 @@
 demoparser2>=0.25.0
-graphifyy>=0.9.0
 pyyaml>=6.0
 rich>=13.0
 click>=8.1

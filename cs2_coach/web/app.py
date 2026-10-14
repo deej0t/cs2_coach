@@ -2059,47 +2059,6 @@ def create_app() -> Flask:
         flash(f"Komplett-Reset: {removed} Dateien + __pycache__ geloescht.", "success")
         return redirect(url_for("settings"))
 
-    @app.route("/graph")
-    def graph():
-        vault_path = cfg.get("obsidian_vault_path", "")
-        subfolder = cfg.get("coach_subfolder", "CS2-Coach")
-        graph_data: dict = {"has_data": False}
-        if vault_path:
-            graph_dir = Path(vault_path) / subfolder / "_graph"
-            analysis_file = graph_dir / "Graph-Analyse.md"
-            json_file = graph_dir / "cs2_graph.json"
-            if analysis_file.exists():
-                graph_data["has_data"] = True
-                graph_data["analysis_md"] = analysis_file.read_text(encoding="utf-8")
-            if json_file.exists():
-                try:
-                    gdata = json.loads(json_file.read_text(encoding="utf-8"))
-                    graph_data["nodes"] = len(gdata.get("nodes", []))
-                    graph_data["edges"] = len(gdata.get("edges", gdata.get("links", [])))
-                    graph_data["top_nodes"] = sorted(
-                        gdata.get("nodes", []),
-                        key=lambda n: n.get("degree", n.get("size", 0)),
-                        reverse=True,
-                    )[:15]
-                except Exception:
-                    pass
-        return render_template("graph.html", graph=graph_data, config=cfg)
-
-    @app.route("/graph/rebuild", methods=["POST"])
-    def graph_rebuild():
-        vault_path = cfg.get("obsidian_vault_path", "")
-        subfolder = cfg.get("coach_subfolder", "CS2-Coach")
-        if not vault_path:
-            flash("Vault-Pfad nicht konfiguriert.", "error")
-            return redirect(url_for("graph"))
-        try:
-            from ..graph import index_vault
-            stats = index_vault(vault_path, subfolder)
-            flash(f"Graph neu gebaut: {stats['nodes']} Knoten, {stats['edges']} Kanten, {stats['clusters']} Cluster", "success")
-        except Exception as exc:
-            flash(f"Graph-Fehler: {exc}", "error")
-        return redirect(url_for("graph"))
-
     @app.route("/zones")
     def zones():
         zone_data = _build_zone_analysis(cfg)

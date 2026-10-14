@@ -1,8 +1,9 @@
 # CS2 Coach - Claude Code Guidelines
 
-## Token Optimization
-- Always use `graphify` (PyPI: `graphifyy`, import: `import graphify`) for Obsidian vault indexing and graph operations to save tokens.
-- graphify is for **exploring the vault**, not for app runtime. The only runtime use is `cs2_coach/graph.py` (knowledge-graph export of the coach folder).
+## Working efficiently (tokens)
+- **No graphify.** The in-app knowledge graph was removed on 2026-10-14. It was added in the belief that it would save Claude Code tokens, but Claude Code never reads the app's output; it had also produced an empty graph since the first commit (`.gitignore` excludes `CS2-Coach/*.md`, and graphify honors that). `graphify-out/` in the repo root is a stale index from 2026-08-30 - do not rely on it.
+- What actually keeps sessions cheap: search with `grep`, then read only the line ranges you need. Never read `web/app.py` whole (11,000+ lines).
+- This file is loaded into every session (~6,000 tokens). Add rules and gotchas here; put long measurement narratives into commit messages, where `git log` finds them.
 
 ## Project Language
 - The UI and coach reports are in German. Code comments and variable names are in English (newer modules also carry German docstrings — both are fine).
@@ -22,7 +23,7 @@ cs2_coach/
   health.py       (300) system status checks + Discord alert on state change
   obsidian.py     (600) Markdown + JSON export into the vault
   sharecode.py   (1040) Steam API / GCPD / local demo discovery + download
-  cli.py          (620) click CLI: analyze, batch, graph, setup, web
+  cli.py          (620) click CLI: analyze, batch, health, setup, web
   ai_chat.py      (420) Gemini + Ollama streaming backends
   chat_store.py   (165) chat sessions persisted in the vault
   web/app.py    (11000) Flask app, ~97 routes

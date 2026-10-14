@@ -16,7 +16,6 @@ from rich.table import Table
 
 from .coach import generate_report
 from .export_version import demo_status
-from .graph import index_vault
 from .obsidian import export_match
 from .parser import parse_demo, MatchResult
 
@@ -338,72 +337,6 @@ def batch(ctx, demo_dir, player, steamid, only_outdated):
         console.print(f"[yellow]{len(errors)} Fehler:[/yellow]")
         for name, err in errors:
             console.print(f"  {name}: {err}")
-
-    # Graphify Indexierung
-    if vault_path:
-        console.print("\n[bold]Graphify-Indexierung...[/bold]")
-        try:
-            stats = index_vault(vault_path, subfolder)
-            console.print(
-                f"[bold green]OK[/bold green] Graph: "
-                f"{stats['nodes']} Knoten, {stats['edges']} Kanten, "
-                f"{stats['clusters']} Cluster"
-            )
-        except Exception as e:
-            console.print(f"[yellow]Graphify: {e}[/yellow]")
-
-
-@cli.command()
-@click.pass_context
-def graph(ctx):
-    """Indexiere den CS2-Coach-Vault als Wissensgraph mit Graphify."""
-    cfg = ctx.obj["config"]
-    vault_path = cfg.get("obsidian_vault_path", "")
-    subfolder = cfg.get("coach_subfolder", "CS2-Coach")
-
-    if not vault_path:
-        console.print("[red]Kein Obsidian-Vault-Pfad konfiguriert![/red]")
-        return
-
-    console.print(Panel(
-        "[bold cyan]CS2 Coach — Graphify Indexierung[/bold cyan]\n"
-        f"Vault: {vault_path}/{subfolder}",
-        border_style="cyan",
-    ))
-
-    with console.status("[bold green]Vault wird indexiert..."):
-        try:
-            stats = index_vault(vault_path, subfolder)
-        except FileNotFoundError as e:
-            console.print(f"[red]{e}[/red]")
-            console.print("Führe zuerst eine Demo-Analyse durch, um den Coach-Ordner zu erstellen.")
-            return
-
-    table = Table(title="Graph-Statistiken", border_style="green")
-    table.add_column("Metrik", style="cyan")
-    table.add_column("Wert", style="white")
-    table.add_row("Dateien indexiert", str(stats["files"]))
-    table.add_row("Knoten", str(stats["nodes"]))
-    table.add_row("Kanten", str(stats["edges"]))
-    table.add_row("Cluster", str(stats["clusters"]))
-    console.print(table)
-
-    analysis = stats.get("analysis", {})
-    if analysis.get("god_nodes"):
-        console.print("\n[bold]Zentrale Konzepte:[/bold]")
-        for node in analysis["god_nodes"]:
-            name = node.get("label", node.get("node", node.get("name", "?")))
-            degree = node.get("degree", "?")
-            console.print(f"  [cyan]{name}[/cyan] ({degree} Verbindungen)")
-
-    console.print(
-        f"\n[bold green]OK[/bold green] Graph exportiert nach "
-        f"{vault_path}/{subfolder}/_graph/"
-    )
-    console.print("  - cs2_graph.json (Daten)")
-    console.print("  - cs2_graph.html (Visualisierung)")
-    console.print("  - cs2_graph.canvas (Obsidian Canvas)")
-    console.print("  - Graph-Analyse.md (Zusammenfassung)")
 
 
 @cli.command()

@@ -43,12 +43,6 @@ python -m cs2_coach analyze demo.dem --steamid "76561198xxxxx"
 python -m cs2_coach analyze demo.dem --no-export
 ```
 
-### Wissensgraph indexieren (Graphify)
-
-```bash
-python -m cs2_coach graph
-```
-
 ### Setup prüfen
 
 ```bash
@@ -78,13 +72,4 @@ CS2-Coach/
     └── ...
 ```
 
-Alle Notizen sind über Wikilinks (`[[...]]`) vernetzt und bilden einen Wissensgraphen in Obsidian.
-
-## Graphify-Integration
-
-Nach mehreren Analysen kannst du mit `python -m cs2_coach graph` den gesamten Vault als Wissensgraph indexieren. Das erzeugt:
-
-- `_graph/cs2_graph.json` — Graph-Daten
-- `_graph/cs2_graph.html` — Interaktive Visualisierung
-- `_graph/cs2_graph.canvas` — Obsidian Canvas
-- `_graph/Graph-Analyse.md` — Zentrale Konzepte & Cluster-Analyse
+Alle Notizen sind über Wikilinks (`[[...]]`) vernetzt und bilden einen Wissensgraphen - sichtbar in Obsidians eigener Graph-Ansicht.
