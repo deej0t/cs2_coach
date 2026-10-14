@@ -144,10 +144,14 @@ def check_disk(paths: dict[str, Path], usage=shutil.disk_usage) -> list[Check]:
             dev = os.stat(path).st_dev
         except OSError:
             continue
-        if dev in seen:
-            continue
-        seen.add(dev)
         u = usage(path)
+        # Die Geraetenummer allein reicht nicht: auf Unraid laufen Cache und
+        # Array beide ueber shfs und haben dieselbe (auf dem Server: 47 fuer
+        # /data und /data/demos). Erst die Groesse trennt sie.
+        key = (dev, u.total)
+        if key in seen:
+            continue
+        seen.add(key)
         pct = u.used / u.total * 100 if u.total else 0
         free_gb = u.free / 1e9
         state = FAIL if pct >= DISK_FAIL else WARN if pct >= DISK_WARN else OK

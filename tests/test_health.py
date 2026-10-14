@@ -118,6 +118,15 @@ def test_voller_cache_wird_gemeldet(tmp_path):
     assert c.state == H.FAIL
 
 
+def test_cache_und_array_trotz_gleicher_geraetenummer_getrennt(tmp_path):
+    """Unraid: /data und /data/demos haben beide st_dev 47 (shfs)."""
+    a, b = tmp_path / "cache", tmp_path / "array"
+    a.mkdir(), b.mkdir()
+    sizes = {str(a): Usage(466, 274, 192), str(b): Usage(51000, 32000, 19000)}
+    checks = H.check_disk({"Cache": a, "Array": b}, usage=lambda p: sizes[str(p)])
+    assert [c.label for c in checks] == ["Speicher Cache", "Speicher Array"]
+
+
 def test_gleicher_datentraeger_nur_einmal(tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
     a.mkdir(), b.mkdir()
