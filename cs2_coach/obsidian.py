@@ -116,6 +116,9 @@ def _compact_utility_positions(positions: list[dict], target_id: str) -> list[di
             "x": round(float(up.get("x", 0)), 1),
             "y": round(float(up.get("y", 0)), 1),
             "r": int(up.get("round", 0)),
+            # Tick und Sekunden seit Rundenstart (Ende der Freeze-Time)
+            "tk": int(up.get("tick", 0)),
+            "s": up.get("seconds"),
         })
     return compact
 
@@ -223,6 +226,9 @@ def _player_to_json(p: PlayerStats, is_target: bool,
             "smokes": p.smokes_thrown,
             "he": p.he_thrown,
             "molotovs": p.molotovs_thrown,
+            # Schaden am Gegner, ohne Teamschaden, auf Rest-HP gedeckelt
+            "he_damage": p.he_damage,
+            "fire_damage": p.fire_damage,
         }
         if p.flash_enemies_blinded or p.flash_teammates_blinded:
             d["flash_effectiveness"] = {

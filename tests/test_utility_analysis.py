@@ -97,3 +97,47 @@ def test_matches_needed_nur_bei_unentschieden():
             assert r.matches_needed >= 0
         else:
             assert r.matches_needed == 0
+
+
+# ── HE-Wirkung (Schema 4) ────────────────────────────────────────────
+
+def he_export(result="Sieg", rounds=20, he_damage=100, fire=0, he_seconds=(10.0, 20.0)):
+    ups = [{"t": "h", "x": 0, "y": 0, "r": 1, "tk": 1, "s": s} for s in he_seconds]
+    return {"match": {"result": result, "total_rounds": rounds},
+            "player": {"utility": {"he_damage": he_damage, "fire_damage": fire}},
+            "utility_positions": ups}
+
+
+def test_alte_exporte_ohne_schaden_werden_uebersprungen():
+    """Kein Schadensfeld heisst unbekannt, nicht 'jede HE ging daneben'."""
+    from cs2_coach.utility_analysis import he_effectiveness
+    old = {"match": {"result": "Sieg", "total_rounds": 20},
+           "player": {"utility": {}}, "utility_positions": [{"t": "h", "r": 1}]}
+    out = he_effectiveness([old] * 10)
+    assert out["matches_skipped"] == 10 and out["rows"] == []
+
+
+def test_schaden_pro_he_trennt_treffen_von_menge():
+    from cs2_coach.utility_analysis import _he_values
+    v = _he_values(he_export(he_damage=90, he_seconds=(5.0, 12.0, 30.0)))
+    assert v["dmg_per_he"] == 30
+    assert v["he_dmg_round"] == 4.5
+    assert v["he_second"] == 12.0          # Median der Wurfzeitpunkte
+
+
+def test_ohne_he_kein_schaden_pro_he():
+    from cs2_coach.utility_analysis import _he_values
+    v2 = he_export(he_damage=0, he_seconds=())
+    v2["utility_positions"] = [{"t": "s", "s": 3.0}]
+    v = _he_values(v2)
+    assert "dmg_per_he" not in v and "he_second" not in v
+    assert v["he_dmg_round"] == 0
+
+
+def test_treffsichere_he_in_siegen_ist_belastbar():
+    from cs2_coach.findings import SOLID_POSITIVE
+    from cs2_coach.utility_analysis import he_effectiveness
+    ex = ([he_export("Sieg", he_damage=d) for d in (120, 140, 130, 150, 125, 135, 145, 128, 138, 132)]
+          + [he_export("Niederlage", he_damage=d) for d in (20, 30, 25, 35, 15, 28, 22, 32, 18, 26)])
+    rows = {r.key: r for r in he_effectiveness(ex)["rows"]}
+    assert rows["he_dmg_per_he"].verdict == SOLID_POSITIVE

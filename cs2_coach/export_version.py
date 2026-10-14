@@ -37,7 +37,7 @@ from __future__ import annotations
 
 # ── Aktueller Stand ──────────────────────────────────────────────────
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 METRICS_VERSION = 1
 
 
@@ -48,6 +48,7 @@ SCHEMA_FEATURES = {
     1: "Crosshair-Verteilung und Median-Winkel",
     2: "Detonationsorte der eigenen Granaten (Utility-Karte)",
     3: "Ticks an den Kill-Positionen (Sprung in die Demo, 2D-Replay)",
+    4: "HE- und Feuerschaden sowie Wurfzeitpunkt der Granaten",
 }
 
 #: Was die jeweilige Metrik-Version korrigiert hat. Fehlt sie, sind die
@@ -74,6 +75,9 @@ def _detect_schema_version(data: dict) -> int:
     Geprueft wird jeweils das Feld, das die Version eingefuehrt hat,
     von neu nach alt.
     """
+    utility = data.get("utility_positions") or []
+    if any("s" in up for up in utility):
+        return 4
     kills = data.get("kill_positions") or []
     if any("tk" in kp for kp in kills):
         return 3

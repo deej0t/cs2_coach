@@ -20,7 +20,7 @@ from cs2_coach.export_version import (
 )
 
 
-def make(*, median=True, utility=False, tick=False, **extra) -> dict:
+def make(*, median=True, utility=False, tick=False, seconds=False, **extra) -> dict:
     """Export-Fragment mit genau den Feldern, die die Version ausmachen."""
     kp = {"t": "k", "x": 1.0, "y": 2.0, "r": 1}
     if tick:
@@ -33,6 +33,8 @@ def make(*, median=True, utility=False, tick=False, **extra) -> dict:
         data["player"]["crosshair_placement"]["median_degrees"] = 4.1
     if utility:
         data["utility_positions"] = [{"t": "s", "x": 1.0, "y": 2.0, "r": 1}]
+        if seconds:
+            data["utility_positions"][0].update({"tk": 4321, "s": 8.5})
     data.update(extra)
     return data
 
@@ -44,6 +46,7 @@ def test_erschliesst_schema_aus_den_feldern():
     assert export_versions(make())[0] == 1
     assert export_versions(make(utility=True))[0] == 2
     assert export_versions(make(utility=True, tick=True))[0] == 3
+    assert export_versions(make(utility=True, tick=True, seconds=True))[0] == 4
 
 
 def test_median_degrees_belegt_die_metrik_korrekturen():
@@ -67,7 +70,7 @@ def test_eingetragene_version_schlaegt_die_ableitung():
 # ── Bewertung ────────────────────────────────────────────────────────
 
 def test_aktueller_export_ist_nicht_veraltet():
-    st = export_status(make(utility=True, tick=True))
+    st = export_status(make(utility=True, tick=True, seconds=True))
     assert st["is_outdated"] is False
     assert st["needs_reanalysis"] is False
     assert st["missing"] == []
@@ -79,7 +82,7 @@ def test_fehlende_felder_sind_kein_richtigkeitsproblem():
     st = export_status(make())
     assert st["is_outdated"] is True
     assert st["needs_reanalysis"] is False
-    assert len(st["missing"]) == 2
+    assert len(st["missing"]) == 3
     assert st["unreliable"] == []
 
 
@@ -98,7 +101,7 @@ def test_version_fields_entspricht_dem_aktuellen_stand():
 
 def test_neuer_export_traegt_die_version():
     """Ein frisch gebauter Export darf sich nie selbst als veraltet melden."""
-    st = export_status({**version_fields(), **make(utility=True, tick=True)})
+    st = export_status({**version_fields(), **make(utility=True, tick=True, seconds=True)})
     assert st["is_outdated"] is False
 
 
@@ -113,7 +116,7 @@ def write_export(d, name, demo_file, **kw):
 
 def test_demo_status_trennt_aktuell_von_veraltet(tmp_path):
     write_export(tmp_path, "alt", "a.dem")
-    write_export(tmp_path, "neu", "b.dem", utility=True, tick=True)
+    write_export(tmp_path, "neu", "b.dem", utility=True, tick=True, seconds=True)
     st = demo_status(tmp_path)
     assert st["a.dem"]["is_current"] is False
     assert st["b.dem"]["is_current"] is True
@@ -121,7 +124,7 @@ def test_demo_status_trennt_aktuell_von_veraltet(tmp_path):
 
 def test_demo_mit_mehreren_exporten_ist_nur_ganz_aktuell(tmp_path):
     """Ein veralteter Export je Spieler genuegt, die Demo neu zu lesen."""
-    write_export(tmp_path, "spieler1", "a.dem", utility=True, tick=True)
+    write_export(tmp_path, "spieler1", "a.dem", utility=True, tick=True, seconds=True)
     write_export(tmp_path, "spieler2", "a.dem")
     st = demo_status(tmp_path)
     assert st["a.dem"]["exports"] == 2
@@ -131,7 +134,7 @@ def test_demo_mit_mehreren_exporten_ist_nur_ganz_aktuell(tmp_path):
 
 def test_demo_status_uebergeht_unbrauchbare_dateien(tmp_path):
     """Kaputtes JSON und Exporte ohne demo_file duerfen nicht stoppen."""
-    write_export(tmp_path, "gut", "a.dem", utility=True, tick=True)
+    write_export(tmp_path, "gut", "a.dem", utility=True, tick=True, seconds=True)
     (tmp_path / "kaputt_coach.json").write_text("{nicht json", encoding="utf-8")
     (tmp_path / "namenlos_coach.json").write_text(
         json.dumps({"match": {}}), encoding="utf-8")

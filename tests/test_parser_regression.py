@@ -134,3 +134,20 @@ def test_positionen_vollstaendig(result):
     assert len(result.kill_positions) == 37
     assert len(result.utility_positions) == 72
     assert all("tick" in kp for kp in result.kill_positions)
+
+
+def test_granatenschaden_und_wurfzeitpunkt(player, result):
+    """Schema 4: HE- und Feuerschaden am Gegner, Sekunden seit Rundenstart.
+
+    In diesem Match trafen die drei eigenen HE niemanden; das Feuer machte
+    18 Schaden. Der Gesamtschaden (ADR) bleibt davon unberuehrt.
+    """
+    assert player.he_thrown == 3
+    assert player.he_damage == 0
+    assert player.fire_damage == 18
+    assert player.damage == 1041
+    own_he = [(u["round"], u["seconds"]) for u in result.utility_positions
+              if u["type"] == "he" and u["player_id"] == player.steam_id]
+    assert own_he == [(2, 17.2), (5, 8.5), (7, 9.1)]
+    assert all(u["seconds"] is not None and u["seconds"] >= 0
+               for u in result.utility_positions)

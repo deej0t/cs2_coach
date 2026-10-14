@@ -108,3 +108,81 @@ def throw_relevance(exports: list[dict]) -> dict:
         "wins": len(wins.get("total", [])),
         "losses": len(losses.get("total", [])),
     }
+
+
+# ── Wirkung statt Menge (Schema 4) ──────────────────────────────────────
+
+def _he_values(export: dict) -> dict[str, float] | None:
+    """HE-Kennzahlen eines Matches; None, wenn der Export sie nicht kennt.
+
+    Erst ab Schema 4 tragen Exporte Granatenschaden und Wurfzeitpunkt.
+    Fehlt das, wird das Match uebersprungen statt als "null Schaden"
+    gezaehlt - sonst saehe jedes alte Match wie lauter Fehlwuerfe aus.
+    """
+    ups = export.get("utility_positions") or []
+    util = (export.get("player") or {}).get("utility") or {}
+    rounds = (export.get("match") or {}).get("total_rounds") or 0
+    if rounds <= 0 or "he_damage" not in util or not any("s" in u for u in ups):
+        return None
+
+    he = [u for u in ups if u.get("t") == "h"]
+    out = {
+        "he_dmg_round": util["he_damage"] / rounds,
+        "fire_dmg_round": util.get("fire_damage", 0) / rounds,
+    }
+    if he:
+        out["dmg_per_he"] = util["he_damage"] / len(he)
+        times = sorted(u["s"] for u in he if u.get("s") is not None)
+        if times:
+            out["he_second"] = times[len(times) // 2]
+    return out
+
+
+#: Schluessel -> (Anzeigename, Einheit)
+HE_METRICS = {
+    "dmg_per_he": ("Schaden pro HE", " pro HE"),
+    "he_dmg_round": ("HE-Schaden", "/Runde"),
+    "fire_dmg_round": ("Feuerschaden", "/Runde"),
+    "he_second": ("HE-Zeitpunkt", " s"),
+}
+
+
+def he_effectiveness(exports: list[dict]) -> dict:
+    """Trifft die HE, und wann wird sie geworfen - Siege gegen Niederlagen?
+
+    Die Anzahl der HE trennt Siege belastbar von Niederlagen (d=0.80). Das
+    sagt aber nicht, ob der Rat "wirf mehr HE" oder "triff mit deinen HE"
+    lauten muss. "Schaden pro HE" beantwortet das: ist er in Siegen
+    hoeher, kommt es auf das Treffen an, nicht auf die Menge.
+
+    Beim Zeitpunkt gibt es kein besser oder schlechter; ein positiver Wert
+    heisst nur, dass in Siegen spaeter in der Runde geworfen wird.
+    """
+    wins: dict[str, list[float]] = {}
+    losses: dict[str, list[float]] = {}
+    used = skipped = 0
+    for export in exports:
+        result = (export.get("match") or {}).get("result", "")
+        if result not in ("Sieg", "Niederlage"):
+            continue
+        values = _he_values(export)
+        if values is None:
+            skipped += 1
+            continue
+        used += 1
+        target = wins if result == "Sieg" else losses
+        for key, value in values.items():
+            target.setdefault(key, []).append(value)
+
+    rows: list[Relevance] = []
+    for key, (label, unit) in HE_METRICS.items():
+        c = compare_groups(wins.get(key, []), losses.get(key, []))
+        if c is None:
+            continue
+        rows.append(Relevance(
+            key=f"he_{key}", label=label, unit=unit,
+            mean_win=c.mean_a, mean_loss=c.mean_b, effect=c.effect,
+            outcome_driven=False, ci_low=c.ci_low, ci_high=c.ci_high,
+            verdict=c.verdict, matches_needed=c.n_needed,
+        ))
+    return {"rows": rows, "matches_used": used, "matches_skipped": skipped}

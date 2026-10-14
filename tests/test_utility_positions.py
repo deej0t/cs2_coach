@@ -61,9 +61,12 @@ def test_empty_input_is_survivable():
 
 
 def test_entry_stays_compact():
-    """Nur vier Felder - der Export waechst sonst unnoetig."""
+    """Nur diese Felder - der Export waechst sonst unnoetig.
+
+    tk und s (Sekunden seit Rundenstart) kamen mit Schema 4 dazu.
+    """
     out = _compact_utility_positions([up("smoke", "A")], "A")
-    assert set(out[0]) == {"t", "x", "y", "r"}
+    assert set(out[0]) == {"t", "x", "y", "r", "tk", "s"}
 
 
 # ── Aggregation ueber alle Matches ──────────────────────────────────────

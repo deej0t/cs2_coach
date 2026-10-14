@@ -51,6 +51,10 @@ class PlayerStats:
     smokes_thrown: int = 0
     he_thrown: int = 0
     molotovs_thrown: int = 0
+    # Schaden durch HE und Feuer, auf die Rest-HP gedeckelt wie der ADR.
+    # Erst damit laesst sich sagen, ob Granaten treffen oder nur fliegen.
+    he_damage: int = 0
+    fire_damage: int = 0
     flash_enemies_blinded: int = 0
     flash_teammates_blinded: int = 0
     flash_avg_enemy_duration: float = 0.0
@@ -513,7 +517,7 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
 
     # 10b) Kill Positions for 2D Map
     kill_positions = _extract_kill_positions(parser, player_lookup, round_ticks)
-    utility_positions = _extract_utility_positions(parser, round_ticks)
+    utility_positions = _extract_utility_positions(parser, round_ticks, freeze_ticks)
 
     # 11) Per-Round-Analyse: KAST, Survival, Multi-Kills, CT/T-Split, Death-Timing
     if kills_df is not None and rounds_df is not None:
@@ -702,6 +706,18 @@ def _process_damage(hurt_df, round_ticks, player_lookup):
             continue
 
         player_lookup[attacker_id].damage += actual
+        weapon = str(dmg.get("weapon", "")).lower()
+        # Fuer Granaten zaehlt nur Schaden am Gegner - eine HE in die eigenen
+        # Leute ist kein guter Wurf. Gleiche Startseite heisst gleiches Team,
+        # beide wechseln zur selben Zeit. Der ADR bleibt davon unberuehrt.
+        a_side = player_lookup[attacker_id].team
+        v_side = player_lookup[victim_id].team if victim_id in player_lookup else ""
+        if a_side in ("T", "CT") and a_side == v_side:
+            continue
+        if weapon == "hegrenade":
+            player_lookup[attacker_id].he_damage += actual
+        elif weapon in ("inferno", "molotov", "incgrenade"):
+            player_lookup[attacker_id].fire_damage += actual
 
 
 def _process_kills(kills_df, round_ticks, player_lookup, round_first_kill):
@@ -1407,8 +1423,15 @@ def _extract_kill_positions(
 
 def _extract_utility_positions(
     parser: DemoParser, round_ticks: list[int],
+    freeze_ticks: list[int] | None = None,
 ) -> list[dict]:
-    """Extract grenade detonation XY positions for map visualization."""
+    """Detonationsorte der Granaten, mit Tick und Sekunden seit Rundenstart.
+
+    Rundenstart ist das Ende der Freeze-Time. Der Zeitpunkt zeigt, ob
+    Utility vor einem Gefecht vorbereitet oder erst spaet geworfen wird.
+    """
+    import bisect
+    starts = sorted(freeze_ticks or [])
     event_map = {
         "flashbang_detonate": "flash",
         "smokegrenade_detonate": "smoke",
@@ -1429,8 +1452,12 @@ def _extract_utility_positions(
                 continue
             tick = int(row.get("tick", 0))
             round_num = _tick_to_round(tick, round_ticks) + 1
+            i = bisect.bisect_right(starts, tick) - 1
+            seconds = round((tick - starts[i]) / _TICKRATE, 1) if i >= 0 else None
             positions.append({
                 "type": util_type,
+                "tick": tick,
+                "seconds": seconds,
                 "player_name": str(row.get("user_name", "?")),
                 "player_id": str(row.get("user_steamid", "")),
                 "x": x,

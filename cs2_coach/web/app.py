@@ -27,7 +27,7 @@ from .. import findings as findings_mod
 from ..evidence import MIN_PER_GROUP, compare_groups, compare_rates
 from .. import chat_store
 from ..export_version import export_status
-from ..utility_analysis import throw_relevance
+from ..utility_analysis import he_effectiveness, throw_relevance
 from . import auth
 from ..ai_chat import (
     build_player_context, stream_gemini, stream_ollama, check_ollama_status,
@@ -9269,6 +9269,7 @@ def _build_utility_analysis(cfg: dict) -> dict:
     return {
         "has_data": True,
         "throw_relevance": throw_relevance(raw_exports),
+        "he_effect": he_effectiveness(raw_exports),
         "total_matches": total_matches,
         "total_grenades": total_grenades,
         "total_rounds": total_rounds_all,

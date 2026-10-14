@@ -139,6 +139,18 @@
 {% endwith %}
 {% endif %}
 
+<!-- ── HE: Wirkung statt Menge ── -->
+{% set he = util.he_effect %}
+{% if he and he.rows %}
+{% with rel_rows = he.rows,
+        rel_kicker = _('HE-Granaten'),
+        rel_title = _('Treffen deine HE - und wann wirfst du sie?'),
+        rel_intro = _('Je Match, Siege gegen Niederlagen. Schaden zaehlt nur am Gegner und ist auf die Rest-HP gedeckelt. Ist "Schaden pro HE" in Siegen belastbar hoeher, kommt es aufs Treffen an, nicht auf die Menge. Beim Zeitpunkt heisst ein positiver Wert nur: in Siegen spaeter in der Runde geworfen.') + ' ' + he.matches_used|string + ' ' + _('Matches ausgewertet.'),
+        rel_footnote = (he.matches_skipped|string + ' ' + _('aeltere Matches ohne diese Daten - eine Neuanalyse ergaenzt sie.')) if he.matches_skipped else '' %}
+{% include '_partials/relevance_table.html' %}
+{% endwith %}
+{% endif %}
+
 <!-- ── Wurf-Karte ── -->
 {% if umap.has_data %}
 <div class="card elev-sm" style="margin-bottom:var(--space-5);">
