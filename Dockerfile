@@ -14,6 +14,11 @@ WORKDIR /app
 
 # Clone repository
 ARG CS2COACH_BRANCH=main
+# Ohne diese Zeile cacht Docker den Clone-Schritt: ein Neubau am
+# 2026-10-16 lieferte still den Stand von vor zwei Commits. ADD laedt den
+# Branch-Stand bei jedem Build und invalidiert den Cache, sobald er sich
+# aendert.
+ADD https://api.github.com/repos/deej0t/cs2_coach/git/refs/heads/${CS2COACH_BRANCH} /tmp/branch-head.json
 RUN git clone -b "$CS2COACH_BRANCH" \
     https://github.com/deej0t/cs2_coach.git .
 
