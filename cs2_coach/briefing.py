@@ -187,8 +187,48 @@ def _chunks(text: str, size: int = 1900) -> list[str]:
     return [c[:size] for c in out]
 
 
+def _channels(cfg: dict, config_path: Path, post, telegram_post, log) -> list:
+    """(Name, Versandfunktion) je eingerichtetem Kanal."""
+    out = []
+    webhook = cfg.get("briefing_webhook") or cfg.get("discord_webhook") or ""
+    if webhook:
+        def discord(text):
+            nonlocal post
+            if post is None:
+                import requests
+                post = requests.post
+            for part in _chunks(text):
+                try:
+                    r = post(webhook, json={"content": part}, timeout=15)
+                except Exception as e:  # noqa: BLE001 - naechster Durchlauf versucht es erneut
+                    log(f"Discord nicht erreichbar: {e}")
+                    return False
+                if getattr(r, "status_code", 204) >= 400:
+                    log(f"Discord lehnt ab: HTTP {r.status_code}")
+                    return False
+            return True
+        out.append(("discord", discord))
+
+    token = (cfg.get("telegram_bot_token") or "").strip()
+    if token:
+        from . import telegram
+        chat = telegram.find_chat_id(token, config_path)
+        if not chat:
+            # Kein Fehler, der einen erneuten Versuch rechtfertigt - sonst
+            # liefe alle 15 Minuten die KI, bis der Nutzer /start schickt.
+            log("Telegram: noch keine Nachricht an den Bot - bitte dem Bot einmal /start schicken.")
+        else:
+            def tg(text):
+                ok = telegram.send(token, chat, text, post=telegram_post)
+                if not ok:
+                    log("Telegram lehnt ab oder ist nicht erreichbar.")
+                return ok
+            out.append(("telegram", tg))
+    return out
+
+
 def run(cfg: dict, config_path: Path, send: bool = False, force: bool = False,
-        now: datetime | None = None, log=print, post=None) -> str | None:
+        now: datetime | None = None, log=print, post=None, telegram_post=None) -> str | None:
     """Briefing erzeugen; mit send=True an Discord und in den Vault.
 
     Hoechstens einmal am Tag (ausser force), damit ein Neustart des
@@ -235,16 +275,23 @@ def run(cfg: dict, config_path: Path, send: bool = False, force: bool = False,
             f"<details><summary>Fakten</summary>\n\n```\n{facts}\n```\n</details>\n",
             encoding="utf-8")
 
-    webhook = cfg.get("briefing_webhook") or cfg.get("discord_webhook") or ""
-    if webhook:
-        if post is None:
-            import requests
-            post = requests.post
-        for part in _chunks(text):
-            r = post(webhook, json={"content": part}, timeout=15)
-            if getattr(r, "status_code", 204) >= 400:
-                log(f"Discord lehnt ab: HTTP {r.status_code}")
-                return None
+    # Jeder Kanal wird einzeln als erledigt vermerkt: schlaegt Telegram
+    # fehl, darf der naechste Versuch Discord nicht ein zweites Mal bedienen.
+    sent = state.setdefault("sent", {})
+    if sent.get("_day") != today or force:
+        sent.clear()
+        sent["_day"] = today
+    failed = False
+    for name, deliver in _channels(cfg, Path(config_path), post, telegram_post, log):
+        if sent.get(name):
+            continue
+        if deliver(text):
+            sent[name] = True
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+        else:
+            failed = True
+    if failed:
+        return None
 
     state.update(last_sent=today, last_match=newest)
     state_path.write_text(json.dumps(state), encoding="utf-8")

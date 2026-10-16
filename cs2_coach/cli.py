@@ -117,7 +117,28 @@ def sync(ctx):
 
 
 @cli.command()
-@click.option("--send", is_flag=True, help="An Discord und in den Vault schicken")
+@click.pass_context
+def telegram(ctx):
+    """Telegram-Bot pruefen: Chat finden und eine Testnachricht schicken."""
+    from . import telegram as tg
+
+    token = (ctx.obj["config"].get("telegram_bot_token") or "").strip()
+    if not token:
+        console.print("[red]Kein telegram_bot_token in den Einstellungen.[/red]")
+        raise SystemExit(1)
+    chat = tg.find_chat_id(token, ctx.obj["config_path"])
+    if not chat:
+        console.print("[yellow]Noch keine Nachricht an den Bot gefunden. "
+                      "Schick ihm in Telegram /start und versuch es erneut.[/yellow]")
+        raise SystemExit(1)
+    ok = tg.send(token, chat, "**CS2 Coach** - Telegram ist eingerichtet. "
+                 "Das taegliche Briefing kommt ab jetzt auch hierher.")
+    console.print("[green]Testnachricht gesendet.[/green]" if ok else "[red]Versand fehlgeschlagen.[/red]")
+    raise SystemExit(0 if ok else 1)
+
+
+@cli.command()
+@click.option("--send", is_flag=True, help="An Discord/Telegram und in den Vault schicken")
 @click.option("--force", is_flag=True, help="Auch wenn heute schon verschickt")
 @click.pass_context
 def briefing(ctx, send, force):

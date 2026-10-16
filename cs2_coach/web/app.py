@@ -1950,6 +1950,7 @@ def create_app() -> Flask:
             "demo_folder": request.form.get("demo_folder", "").strip(),
             "language": request.form.get("language", "de").strip(),
             "discord_webhook": request.form.get("discord_webhook", "").strip(),
+            "telegram_bot_token": request.form.get("telegram_bot_token", cfg.get("telegram_bot_token", "")).strip(),
             "public_url": request.form.get("public_url", cfg.get("public_url", "")).strip(),
             "steam_api_key": request.form.get("steam_api_key", "").strip(),
             "cs2_auth_token": request.form.get("cs2_auth_token", "").strip(),

@@ -44,6 +44,11 @@
             <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Optional: Match-Ergebnisse automatisch in Discord posten. Ueber denselben Webhook meldet der Systemstatus Probleme.') }}</div>
         </div>
         <div class="field">
+            <label>{{ _('Telegram Bot-Token') }}</label>
+            <input type="text" name="telegram_bot_token" value="{{ config.get('telegram_bot_token', '') }}" placeholder="123456789:AA..." class="input" autocomplete="off">
+            <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Optional: Das taegliche Briefing zusaetzlich per Telegram. Bot bei @BotFather anlegen (/newbot), Token hier eintragen und dem Bot einmal /start schicken - den Chat findet die App selbst.') }}</div>
+        </div>
+        <div class="field">
             <label>{{ _('Oeffentliche Adresse der WebUI') }}</label>
             <input type="text" name="public_url" value="{{ config.get('public_url', '') }}" placeholder="https://cs2-coach.example.com" class="input">
             <div style="font-size:11px;color:var(--color-neutral-600);margin-top:2px;">{{ _('Optional: Die Adresse, unter der du die WebUI aufrufst. Der Systemstatus prueft sie von aussen - der Docker-Healthcheck sieht eine falsche Portzuordnung nicht.') }}</div>
