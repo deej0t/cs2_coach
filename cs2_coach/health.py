@@ -160,6 +160,27 @@ def check_disk(paths: dict[str, Path], usage=shutil.disk_usage) -> list[Check]:
     return out
 
 
+def check_writable(folder: Path) -> Check:
+    """Kann im Config-Ordner eine neue Datei angelegt werden?
+
+    Die Belegung allein reicht nicht: Unraid verweigert neue Dateien schon,
+    wenn der Cache unter das "Minimum free space" der Freigabe faellt. Am
+    2026-10-16 waren 32 GB frei (94 %), appdata verlangte 48,8 GB - jeder
+    Container bekam "No space left on device", die Belegungspruefung sah
+    nur eine Warnung. Ein echter Schreibversuch sieht, was die Container sehen.
+    """
+    label = "Schreibzugriff"
+    probe = Path(folder) / f".write_probe_{os.getpid()}"
+    try:
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as e:
+        return Check("writable", label, FAIL,
+                     f"Kann in {folder} keine Datei anlegen: {e.strerror or e}. "
+                     f"Bei Unraid: Cache unter dem Mindest-Freiplatz der Freigabe?")
+    return Check("writable", label, OK, f"{folder} beschreibbar.")
+
+
 def check_demos(cfg: dict) -> Check:
     """Ist zu jedem Export die Demo auffindbar?
 
@@ -225,7 +246,8 @@ def _export_dir(cfg: dict) -> Path | None:
 
 
 def run_checks(cfg: dict, config_path: Path) -> list[Check]:
-    checks = [check_public_url(cfg), check_updates(), check_steam()]
+    checks = [check_public_url(cfg), check_updates(), check_steam(),
+              check_writable(Path(config_path).parent)]
     checks += check_disk({
         "Config/Vault": Path(config_path).parent,
         "Demos": Path(cfg["demo_folder"]) if cfg.get("demo_folder") else None,

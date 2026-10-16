@@ -216,3 +216,16 @@ def test_sync_without_demo_folder_does_nothing(monkeypatch):
 def test_health_empty_demo_folder_is_not_the_working_directory():
     # Path("") ist "." - eine fehlende Einstellung galt als vorhandener Ordner.
     assert health.check_demos({"demo_folder": ""}).state == health.FAIL
+
+
+def test_each_goal_gets_its_own_exercise_on_the_main_map(tmp_path):
+    # Am 2026-10-16 schlug die KI fuer Accuracy "Lineups" vor, weil es
+    # keine Zieluebung gab. Jetzt steht die Uebung fest beim Ziel.
+    plan = _plan(tmp_path)
+    plan["goals"].append(training.Goal(key="accuracy", label="Accuracy", unit="%",
+                                       higher_is_better=True, target=24.4, why="x"))
+    facts, _ = briefing.build_facts(_history(), plan, "")
+    he = facts.split("- HE pro Runde")[1].split("\n- ")[0]
+    acc = facts.split("- Accuracy")[1]
+    assert "exec coach/utility" in he and "map de_mirage" in he
+    assert "exec coach/spray_mirage" in acc and "utility" not in acc

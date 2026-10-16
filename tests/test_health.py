@@ -219,3 +219,19 @@ def test_ohne_webhook_wird_nichts_gespeichert(tmp_path):
     state = tmp_path / "state.json"
     assert H.notify(_checks(web=H.FAIL), "", state) is None
     assert not state.exists()
+
+
+def test_schreibzugriff_ok(tmp_path):
+    assert H.check_writable(tmp_path).state == H.OK
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_schreibzugriff_voll_ist_fehler(tmp_path, monkeypatch):
+    # So sah es am 2026-10-16 aus: 32 GB frei, appdata verlangte 48,8 GB.
+    import errno
+
+    def full(self, *a, **k):
+        raise OSError(errno.ENOSPC, "No space left on device")
+    monkeypatch.setattr(Path, "write_text", full)
+    c = H.check_writable(tmp_path)
+    assert c.state == H.FAIL and "No space left" in c.message

@@ -32,13 +32,39 @@ Regeln, ohne Ausnahme:
 - Verwende ausschliesslich Zahlen, die in den FAKTEN stehen. Rechne nichts aus, runde nicht um, erfinde keine Werte.
 - Steht bei einem Vergleich "noch offen" oder "zu wenige Matches", schreibe genau das. Behaupte keinen Fortschritt und keinen Rueckschritt, den die Fakten nicht als belastbar ausweisen.
 - Nenne keine Ursachen, die nicht in den Fakten stehen.
-- Konkrete Uebungen nur aus der Liste UEBUNGEN in den Fakten.
+- Uebungen: je Ziel genau die Uebung, die in den FAKTEN bei diesem Ziel steht. Keine anderen.
 
 Aufbau (Discord-Markdown, hoechstens 1500 Zeichen):
 **Heute trainieren** - je Trainingsziel: Zielwert und Wert der letzten Matches nennen, dazu die passende Uebung. 2-3 Stichpunkte.
 **Wann** - ein Satz: was vor der ersten Partie, was waehrend der Matches
 **Fortschritt** - je Ziel ein Satz, dazu die Siegquote
 **Matches** - die Match-Liste aus den FAKTEN in einem Satz zusammenfassen, mit deren Ueberschrift ("neu seit dem letzten Briefing" oder "letzte Matches"). Nur wenn die Liste "Keine" sagt, schreiben, dass keine dazugekommen sind."""
+
+
+#: Uebung je Ziel. Fest zugeordnet statt der KI ueberlassen: am 2026-10-16
+#: waehlte sie fuer Accuracy "10 Minuten Lineups", weil die Liste keine
+#: Zieluebung enthielt. {map} ist die zuletzt meistgespielte Map.
+_UTILITY = ("offline `map de_{map}`, `exec coach/utility`, Wurfpositionen ueben; "
+            "im Match in jeder Kaufrunde vor dem ersten Kontakt eine werfen")
+EXERCISES = {
+    "util_h": _UTILITY, "util_m": _UTILITY, "util_f": _UTILITY, "util_s": _UTILITY,
+    "utility": _UTILITY,
+    "accuracy": ("vor der ersten Partie offline `map de_{map}`, `exec coach/warmup` "
+                 "(bewegliche Bots), danach `exec coach/spray_{map}` (Spray-Transfer)"),
+    "crosshair_placement": ("offline `map de_{map}`, `exec coach/practice_{map}` - Prefire auf "
+                            "die Stellen, an denen du am haeufigsten stirbst, Fadenkreuz auf Kopfhoehe"),
+    "counter_strafe": ("offline `map de_{map}`, `exec coach/warmup` - vor jedem Schuss "
+                       "Gegenrichtung tippen, erst im Stand schiessen"),
+}
+_DEFAULT_EXERCISE = "vor der ersten Partie offline `map de_{map}`, `exec coach/warmup`"
+
+
+def _main_map(exports: list[dict]) -> str:
+    """Meistgespielte Map der letzten zehn Matches, ohne "de_"."""
+    names = [((e.get("match") or {}).get("map") or "").lower().removeprefix("de_")
+             for e in exports[-10:]]
+    names = [n for n in names if n]
+    return max(set(names), key=names.count) if names else "mirage"
 
 
 def _num(x) -> str:
@@ -61,6 +87,7 @@ def build_facts(exports: list[dict], plan: dict, last_match: str) -> tuple[str, 
         new = exports[-3:]
         title = "Letzte Matches (erstes Briefing):"
 
+    main_map = _main_map(exports)
     lines = ["FAKTEN", "", "Trainingsziele (Zielwert = was der Spieler in seinen Siegen tut):"]
     if not plan["goals"]:
         lines.append("- Keine offenen Trainingsziele.")
@@ -68,6 +95,7 @@ def build_facts(exports: list[dict], plan: dict, last_match: str) -> tuple[str, 
         per = f" - etwa eine pro {_num(round(1 / g.target, 1))} Runden" if g.unit == "/Runde" and g.target else ""
         lines.append(f"- {g.label}: Zielwert {_num(g.target)}{g.unit}{per}. "
                      f"Letzte {RECENT} Matches: {_num(g.recent)}{g.unit}. Grund: {g.why}")
+        lines.append("  Uebung: " + EXERCISES.get(g.key, _DEFAULT_EXERCISE).format(map=main_map))
         if g.change:
             c = g.change
             verdict = {"solid_positive": "belastbar besser", "solid_negative": "belastbar schlechter",
@@ -97,12 +125,6 @@ def build_facts(exports: list[dict], plan: dict, last_match: str) -> tuple[str, 
     if not new:
         lines.append("- Keine. Valve stellt Demos mit 2-3 Tagen Verzoegerung bereit.")
 
-    lines += ["", "UEBUNGEN (nur diese vorschlagen):",
-              "- Utility-Training offline: in der CS2-Konsole `map de_<map>`, dann `exec coach/utility` "
-              "(Configs erzeugt die Practice-Seite).",
-              "- Im Match: in jeder Kaufrunde vor dem ersten Kontakt eine HE oder Molotov auf eine "
-              "typische Gegnerposition werfen.",
-              "- Vor der ersten Partie des Tages 10 Minuten Lineups der geplanten Map."]
     return "\n".join(lines), newest
 
 
