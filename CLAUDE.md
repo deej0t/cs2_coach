@@ -23,7 +23,8 @@ cs2_coach/
   health.py       (300) system status checks + Discord alert on state change
   training.py     (160) training goals with start date + progress (before/after)
   sync.py          (50) GCPD demo download without the web UI (`cs2-coach sync`)
-  briefing.py     (290) daily AI training briefing -> Discord/Telegram + vault note
+  briefing.py     (290) daily training briefing: facts, AI intro, sending -> Discord/Telegram + vault
+  briefing_view.py (230) fixed briefing layout (goals per match, bars, exercises, progress)
   telegram.py     (110) Telegram bot sending, chat id auto-discovery
   obsidian.py     (600) Markdown + JSON export into the vault
   sharecode.py   (1040) Steam API / GCPD / local demo discovery + download
@@ -116,7 +117,7 @@ Each of these was wrong once and was fixed against measured demo data. Do not re
 ## Daily Briefing (`training.py`, `briefing.py`, `sync.py`)
 - The container loop (`CS2COACH_BRIEFING_HOUR`, default 17, empty = off) runs `cs2-coach sync` once a day (GCPD download + `batch --only-outdated`), then `briefing --send` every 15 min from that hour on. `.briefing_state.json` next to the config makes sending **at most once per day** and is written only after a successful post, so a failed post is retried on the next pass. Webhook: `briefing_webhook`, else `discord_webhook`. Note goes to `CS2-Coach/Briefings/YYYY-MM-DD.md`.
 - **Telegram** (`telegram_bot_token` in settings): the user only creates a bot and sends it /start; the chat id comes from `getUpdates` and is kept in `.telegram_chat.json` - **not** in config.yaml, because `settings_save()` writes the web app's in-memory cfg back and would drop it. Text goes out as HTML (Discord `**`/`` ` `` converted). Each channel is marked sent separately in `.briefing_state.json` (`sent`), so a failed Telegram retry never reposts to Discord. A missing chat is logged, not retried - a retry re-runs the AI every 15 min.
-- **The AI computes nothing.** It gets finished facts with verdicts; an answer with more than two numbers not present in the facts is discarded and the bare facts are sent instead. Same on AI errors. Gemini answered 503 twice in a row on 2026-10-16 and fine a minute later, hence retries after 30 s and 120 s.
+- **Layout is fixed, the AI only writes a 1-2 sentence intro** (`briefing_view.render()`). The first AI-written briefing repeated exercises, showed rates like "0.44/Runde" nobody can count in a match, and changed shape daily. Goals are shown per match (rate x median rounds of the last 10 matches) with a bar for distance to target - a measurement, not a verdict; only the progress section judges, with `evidence.py` verdicts. Exercises are grouped by time (before the first match / in the match) and de-duplicated. The intro is discarded if it contains any number not in the facts or exceeds `MAX_INTRO`; the briefing then goes out without it. Gemini answered 503 twice in a row on 2026-10-16 and fine a minute later, hence retries after 30 s and 120 s.
 - Goals come from robust findings only (grenade types with `SOLID_POSITIVE` throw relevance, plus `training_priorities()`); target = median/mean of the player's own wins. Each goal gets a start date **once**, stored in `.training_state.json`; progress compares matches since the start against before with `evidence.py`, and only from `MIN_AFTER` = 8 matches on. Never reset the start dates - that would make the comparison impossible.
 - `training_priorities()` skips `RESOLVED` tracks - a resolved finding used to show up as a training goal.
 - `Path("")` is `"."` (the working directory): check the **raw** config string before building a path (`demo_folder`, vault). A missing demo folder used to pass the health check.

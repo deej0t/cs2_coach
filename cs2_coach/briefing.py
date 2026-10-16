@@ -1,7 +1,10 @@
 """Taegliches Trainings-Briefing: was, wie, wann - und ob es wirkt.
 
-Ablauf: Fakten berechnen (training.py, evidence.py), die KI formuliert
-daraus einen Plan, Versand an Discord und als Notiz in den Vault.
+Ablauf: Fakten berechnen (training.py, evidence.py), Darstellung mit
+fester Struktur (briefing_view.py), Versand an Discord/Telegram und als
+Notiz in den Vault. Die KI schreibt seit 2026-10-16 nur noch ein, zwei
+einleitende Saetze ohne Zahlen; vorher formulierte sie das ganze Briefing
+und es sah jeden Tag anders aus.
 
 Die KI rechnet nichts. Sie bekommt fertige Zahlen samt Urteil und darf
 nur diese verwenden. Das ist kein Detail: dieses Projekt hat mehrfach
@@ -11,9 +14,9 @@ genau das wieder tun. Deshalb:
 
 - Der Systemprompt verbietet Zahlen und Ursachen, die nicht in den Fakten
   stehen, und verlangt "noch offen", wo das Urteil offen ist.
-- Enthaelt die Antwort mehr als zwei Zahlen, die in den Fakten nicht
-  vorkommen, wird sie verworfen und die Fakten werden ohne KI-Text
-  geschickt. Ebenso bei Fehlern der KI-Schnittstelle (call_gemini und
+- Enthaelt die Einleitung eine Zahl, die in den Fakten nicht vorkommt,
+  oder ist sie zu lang, wird sie verworfen; das Briefing geht dann ohne
+  Einleitung raus. Ebenso bei Fehlern der KI-Schnittstelle (call_gemini und
   call_ollama geben dann "**Fehler:** ..." zurueck, statt zu werfen).
 """
 
@@ -24,39 +27,19 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from .training import RECENT, current_plan
+from .briefing_view import render
+from .training import RECENT, _when, current_plan
 
-SYSTEM = """Du bist ein CS2-Trainer und schreibst ein kurzes taegliches Briefing auf Deutsch fuer einen einzelnen Spieler.
+SYSTEM = """Du bist ein CS2-Trainer. Schreibe die Einleitung fuer das heutige Trainings-Briefing eines einzelnen Spielers.
 
-Regeln, ohne Ausnahme:
-- Verwende ausschliesslich Zahlen, die in den FAKTEN stehen. Rechne nichts aus, runde nicht um, erfinde keine Werte.
-- Steht bei einem Vergleich "noch offen" oder "zu wenige Matches", schreibe genau das. Behaupte keinen Fortschritt und keinen Rueckschritt, den die Fakten nicht als belastbar ausweisen.
-- Nenne keine Ursachen, die nicht in den Fakten stehen.
-- Uebungen: je Ziel genau die Uebung, die in den FAKTEN bei diesem Ziel steht. Keine anderen.
+- Deutsch, per du, persoenlich und motivierend, 1-2 kurze Saetze, hoechstens 220 Zeichen.
+- Sag, worauf er heute den Fokus legen soll - nur Ziele, die in den FAKTEN stehen.
+- Keine Zahlen. Keine Ursachen, die nicht in den FAKTEN stehen. Behaupte keinen Fortschritt, wenn dort "noch offen" oder "zu wenige Matches" steht.
+- Kein Markdown, keine Ueberschrift, keine Aufzaehlung, keine Begruessungsformel wie "Hallo"."""
 
-Aufbau (Discord-Markdown, hoechstens 1500 Zeichen):
-**Heute trainieren** - je Trainingsziel: Zielwert und Wert der letzten Matches nennen, dazu die passende Uebung. 2-3 Stichpunkte.
-**Wann** - ein Satz: was vor der ersten Partie, was waehrend der Matches
-**Fortschritt** - je Ziel ein Satz, dazu die Siegquote
-**Matches** - die Match-Liste aus den FAKTEN in einem Satz zusammenfassen, mit deren Ueberschrift ("neu seit dem letzten Briefing" oder "letzte Matches"). Nur wenn die Liste "Keine" sagt, schreiben, dass keine dazugekommen sind."""
-
-
-#: Uebung je Ziel. Fest zugeordnet statt der KI ueberlassen: am 2026-10-16
-#: waehlte sie fuer Accuracy "10 Minuten Lineups", weil die Liste keine
-#: Zieluebung enthielt. {map} ist die zuletzt meistgespielte Map.
-_UTILITY = ("offline `map de_{map}`, `exec coach/utility`, Wurfpositionen ueben; "
-            "im Match in jeder Kaufrunde vor dem ersten Kontakt eine werfen")
-EXERCISES = {
-    "util_h": _UTILITY, "util_m": _UTILITY, "util_f": _UTILITY, "util_s": _UTILITY,
-    "utility": _UTILITY,
-    "accuracy": ("vor der ersten Partie offline `map de_{map}`, `exec coach/warmup` "
-                 "(bewegliche Bots), danach `exec coach/spray_{map}` (Spray-Transfer)"),
-    "crosshair_placement": ("offline `map de_{map}`, `exec coach/practice_{map}` - Prefire auf "
-                            "die Stellen, an denen du am haeufigsten stirbst, Fadenkreuz auf Kopfhoehe"),
-    "counter_strafe": ("offline `map de_{map}`, `exec coach/warmup` - vor jedem Schuss "
-                       "Gegenrichtung tippen, erst im Stand schiessen"),
-}
-_DEFAULT_EXERCISE = "vor der ersten Partie offline `map de_{map}`, `exec coach/warmup`"
+#: Laengste akzeptierte Einleitung. Laengere Antworten halten sich nicht
+#: an die Vorgabe und werden verworfen.
+MAX_INTRO = 400
 
 
 def _main_map(exports: list[dict]) -> str:
@@ -87,7 +70,6 @@ def build_facts(exports: list[dict], plan: dict, last_match: str) -> tuple[str, 
         new = exports[-3:]
         title = "Letzte Matches (erstes Briefing):"
 
-    main_map = _main_map(exports)
     lines = ["FAKTEN", "", "Trainingsziele (Zielwert = was der Spieler in seinen Siegen tut):"]
     if not plan["goals"]:
         lines.append("- Keine offenen Trainingsziele.")
@@ -95,7 +77,6 @@ def build_facts(exports: list[dict], plan: dict, last_match: str) -> tuple[str, 
         per = f" - etwa eine pro {_num(round(1 / g.target, 1))} Runden" if g.unit == "/Runde" and g.target else ""
         lines.append(f"- {g.label}: Zielwert {_num(g.target)}{g.unit}{per}. "
                      f"Letzte {RECENT} Matches: {_num(g.recent)}{g.unit}. Grund: {g.why}")
-        lines.append("  Uebung: " + EXERCISES.get(g.key, _DEFAULT_EXERCISE).format(map=main_map))
         if g.change:
             c = g.change
             verdict = {"solid_positive": "belastbar besser", "solid_negative": "belastbar schlechter",
@@ -151,7 +132,7 @@ def ask_ai(cfg: dict, facts: str, log=print, sleep=None) -> str | None:
     from .ai_chat import call_gemini, call_ollama
 
     sleep = sleep or time.sleep
-    prompt = facts + "\n\nSchreibe das Briefing fuer heute."
+    prompt = facts + "\n\nSchreibe die Einleitung fuer heute."
     text = ""
     for wait in (0, *RETRY_WAITS):
         if wait:
@@ -168,8 +149,12 @@ def ask_ai(cfg: dict, facts: str, log=print, sleep=None) -> str | None:
     if not text or text.startswith("**Fehler"):
         log(f"KI nicht verfuegbar: {(text or 'leere Antwort')[:120]}")
         return None
+    text = text.strip()
+    if len(text) > MAX_INTRO:
+        log(f"KI-Text verworfen, zu lang ({len(text)} Zeichen).")
+        return None
     unknown = _unknown_numbers(text, facts)
-    if len(unknown) > 2:
+    if unknown:
         log(f"KI-Text verworfen, Zahlen ohne Grundlage: {unknown[:6]}")
         return None
     return text.strip()
@@ -259,10 +244,13 @@ def run(cfg: dict, config_path: Path, send: bool = False, force: bool = False,
     plan = current_plan(exports, Path(config_path).parent / ".training_state.json",
                         now.strftime("%Y-%m-%d %H:%M"))
     facts, newest = build_facts(exports, plan, state.get("last_match", ""))
-    ai = ask_ai(cfg, facts, log=log)
-    header = f"**CS2 Coach – Briefing {now.strftime('%d.%m.%Y')}**"
-    body = ai if ai else ("_KI nicht verfuegbar, hier die Fakten:_\n\n" + facts)
-    text = header + "\n\n" + body
+    intro = ask_ai(cfg, facts, log=log)
+    last = state.get("last_match", "")
+    ordered = sorted(exports, key=_when)
+    new = [e for e in ordered if _when(e) > last] if last else ordered[-3:]
+    text = render(plan, ordered, new, first=not last, now=now, main_map=_main_map(ordered),
+                  intro=intro, link=(cfg.get("public_url") or "").strip())
+    body = text
 
     if not send:
         return text

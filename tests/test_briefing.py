@@ -134,7 +134,7 @@ class _Resp:
         self.status_code = code
 
 
-def _setup(tmp_path, monkeypatch, ai="**Heute trainieren** HE"):
+def _setup(tmp_path, monkeypatch, ai="Heute zaehlt jede Granate."):
     exports = tmp_path / "vault" / "CS2-Coach" / "exports"
     exports.mkdir(parents=True)
     for i, e in enumerate(_history()):
@@ -151,7 +151,7 @@ def test_sends_once_per_day_and_writes_note(tmp_path, monkeypatch):
     now = datetime(2026, 10, 16, 17, 5)
 
     text = briefing.run(cfg, config, send=True, now=now, log=lambda m: None, post=post)
-    assert text and "Briefing 16.10.2026" in sent[0] and "**Heute trainieren** HE" in sent[0]
+    assert text and "Freitag, 16.10." in sent[0] and "Heute zaehlt jede Granate." in sent[0]
     note = tmp_path / "vault" / "CS2-Coach" / "Briefings" / "2026-10-16.md"
     assert "tags: [cs2-briefing]" in note.read_text(encoding="utf-8")
 
@@ -177,7 +177,8 @@ def test_failed_post_is_retried_later(tmp_path, monkeypatch):
 def test_without_ai_the_facts_are_sent(tmp_path, monkeypatch):
     cfg, config = _setup(tmp_path, monkeypatch, ai=None)
     text = briefing.run(cfg, config, send=False, now=datetime(2026, 10, 16), log=lambda m: None)
-    assert "KI nicht verfuegbar" in text and "HE pro Runde: Zielwert" in text
+    # Ohne KI fehlt nur die Einleitung; Ziele, Uebungen und Matches stehen da.
+    assert "HE-Granaten" in text and "exec coach/utility" in text and "Letzte Matches" in text
 
 
 def test_chunks_respect_discord_limit():
@@ -220,12 +221,46 @@ def test_health_empty_demo_folder_is_not_the_working_directory():
 
 def test_each_goal_gets_its_own_exercise_on_the_main_map(tmp_path):
     # Am 2026-10-16 schlug die KI fuer Accuracy "Lineups" vor, weil es
-    # keine Zieluebung gab. Jetzt steht die Uebung fest beim Ziel.
+    # keine Zieluebung gab. Jetzt haengt die Uebung fest am Ziel - und
+    # dieselbe Uebung erscheint fuer zwei Granatenziele nur einmal.
+    from cs2_coach.briefing_view import render
     plan = _plan(tmp_path)
+    plan["goals"].append(training.Goal(key="util_m", label="Molotovs pro Runde", unit="/Runde",
+                                       higher_is_better=True, target=0.38, why="x", recent=0.3))
     plan["goals"].append(training.Goal(key="accuracy", label="Accuracy", unit="%",
-                                       higher_is_better=True, target=24.4, why="x"))
-    facts, _ = briefing.build_facts(_history(), plan, "")
-    he = facts.split("- HE pro Runde")[1].split("\n- ")[0]
-    acc = facts.split("- Accuracy")[1]
-    assert "exec coach/utility" in he and "map de_mirage" in he
-    assert "exec coach/spray_mirage" in acc and "utility" not in acc
+                                       higher_is_better=True, target=24.4, why="x", recent=22.6))
+    text = render(plan, _history(), [], first=False, now=datetime(2026, 10, 16), main_map="mirage")
+    assert text.count("exec coach/utility") == 1
+    assert "Wurfpositionen für HE und Molotov" in text
+    assert "exec coach/spray_mirage" in text and "map de_mirage" in text
+    assert "Keine neuen" in text
+
+
+def test_goal_is_shown_per_match_with_distance_bar():
+    from cs2_coach.briefing_view import render
+    g = training.Goal(key="util_h", label="HE pro Runde", unit="/Runde", higher_is_better=True,
+                      target=0.5, why="x", recent=0.25, loss=0.3)
+    text = render({"goals": [g], "win_change": None}, _history(), [], first=False,
+                  now=datetime(2026, 10, 16), main_map="mirage")
+    # 20 Runden je Match: 0,5 -> 10, 0,25 -> 5, also halb erreicht.
+    assert "Ziel ~10 pro Match (etwa jede 2. Runde)" in text
+    assert "▰▰▰▰▰▱▱▱▱▱ zuletzt ~5 (50 %)" in text
+    assert "Siegen ~10, in Niederlagen ~6" in text
+
+
+def test_progress_shows_verdict_not_raw_difference():
+    from cs2_coach.briefing_view import render
+    g = training.Goal(key="accuracy", label="Accuracy", unit="%", higher_is_better=True,
+                      target=24.4, why="x", recent=25.0,
+                      change={"mean_a": 25.0, "mean_b": 22.0, "verdict": "undecided"})
+    text = render({"goals": [g], "win_change": None}, _history(), [], first=False,
+                  now=datetime(2026, 10, 16), main_map="mirage")
+    assert "22 → 25 % · ⏳ noch offen" in text
+
+
+def test_intro_with_numbers_is_rejected(monkeypatch):
+    # Die Einleitung darf keine Zahlen enthalten, die nicht in den Fakten stehen.
+    monkeypatch.setattr("cs2_coach.ai_chat.call_gemini", lambda *a, **k: "Heute 17 HE werfen!")
+    assert briefing.ask_ai(_cfg(), "Zielwert 0.44", log=lambda m: None, sleep=lambda s: None) is None
+    monkeypatch.setattr("cs2_coach.ai_chat.call_gemini", lambda *a, **k: "x" * (briefing.MAX_INTRO + 1))
+    assert briefing.ask_ai(_cfg(), "Zielwert 0.44", log=lambda m: None, sleep=lambda s: None) is None

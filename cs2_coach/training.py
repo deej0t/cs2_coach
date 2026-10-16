@@ -48,6 +48,7 @@ class Goal:
     matches_since: int = 0
     change: dict | None = None    # Kennzahl seit Start gegen vorher
     note: str = ""
+    loss: float | None = None     # Mittel bzw. Median in Niederlagen, zur Einordnung
     values: list = field(default_factory=list, repr=False)
 
 
@@ -78,7 +79,7 @@ def _candidate_goals(exports: list[dict]) -> list[Goal]:
             continue
         goals.append(Goal(
             key=r.key, label=f"{GRENADE_TYPES[typ]} pro Runde", unit="/Runde",
-            higher_is_better=True, target=r.mean_win,
+            higher_is_better=True, target=r.mean_win, loss=r.mean_loss,
             why=(f"In Siegen {r.mean_win} pro Runde, in Niederlagen {r.mean_loss} "
                  f"(belastbar, d={r.effect} [{r.ci_low} … {r.ci_high}])."),
         ))
@@ -96,11 +97,14 @@ def _candidate_goals(exports: list[dict]) -> list[Goal]:
                 for v in [_value(e, t.key)] if v is not None]
         if not wins:
             continue
+        losses = sorted(v for e in exports if (e.get("match") or {}).get("result") == "Niederlage"
+                        for v in [_value(e, t.key)] if v is not None)
         goals.append(Goal(
             key=t.key, label=t.label, unit=t.unit,
             higher_is_better=not (rule and rule.lower_is_better),
             target=round(sorted(wins)[len(wins) // 2], 2),
-            why=f"Offener Befund ({t.status}), {t.issue_count} von {t.total_matches} Matches auffaellig.",
+            loss=round(losses[len(losses) // 2], 2) if losses else None,
+            why=f"In {t.issue_count} von {t.total_matches} Matches auffaellig.",
         ))
     return goals
 
