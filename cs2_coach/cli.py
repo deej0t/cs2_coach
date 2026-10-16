@@ -99,6 +99,41 @@ def health(ctx, notify):
 
 
 @cli.command()
+@click.pass_context
+def sync(ctx):
+    """Neue Demos von Valve laden und alles Unausgewertete analysieren.
+
+    Ohne WebUI, fuer den taeglichen Lauf im Container. Valve haelt
+    Download-Links nur kurz vor; ohne regelmaessigen Sync gehen Demos
+    endgueltig verloren.
+    """
+    from .sync import download_new_demos
+
+    cfg = ctx.obj["config"]
+    download_new_demos(cfg, log=lambda m: console.print(f"  {m}"))
+    folder = (cfg.get("demo_folder") or "").strip()
+    if folder and Path(folder).is_dir():
+        ctx.invoke(batch, demo_dir=folder, player=None, steamid=None, only_outdated=True)
+
+
+@cli.command()
+@click.option("--send", is_flag=True, help="An Discord und in den Vault schicken")
+@click.option("--force", is_flag=True, help="Auch wenn heute schon verschickt")
+@click.pass_context
+def briefing(ctx, send, force):
+    """Taegliches Trainings-Briefing: was, wie, wann und Fortschritt.
+
+    Ohne --send wird es nur angezeigt.
+    """
+    from .briefing import run
+
+    text = run(ctx.obj["config"], ctx.obj["config_path"], send=send, force=force,
+               log=lambda m: console.print(f"[dim]{m}[/dim]"))
+    if text:
+        console.print(text)
+
+
+@cli.command()
 @click.argument("demo_path", type=click.Path(exists=True))
 @click.option("--player", "-p", default=None, help="Steam-Name des Spielers")
 @click.option("--steamid", "-s", default=None, help="SteamID64 des Spielers")

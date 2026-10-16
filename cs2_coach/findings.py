@@ -537,6 +537,11 @@ def training_priorities(matches: list[dict], limit: int = 2) -> list[Track]:
             continue
         if t.issue_count == 0:
             continue
+        # Ein erledigter Befund ist kein Trainingsziel. Er wurde bisher nur
+        # ans Ende sortiert; bei zwei Plaetzen landete so "Accuracy
+        # (erledigt)" auf Platz zwei.
+        if t.status == RESOLVED:
+            continue
         b = baselines.get(t.key)
         if b is not None and b.is_uninformative:
             continue

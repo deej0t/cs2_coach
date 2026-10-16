@@ -26,6 +26,9 @@ steam_username: ''
 public_url: ''
 # Eigener Webhook nur fuer Statusmeldungen. Leer = discord_webhook verwenden.
 health_webhook: ''
+# Taegliches Trainings-Briefing (Container: ab CS2COACH_BRIEFING_HOUR, Standard 17 Uhr).
+# Eigener Webhook dafuer, leer = discord_webhook. Text von der KI (ai_provider).
+briefing_webhook: ''
 
 # Passwortschutz fuer die Web-UI (optional)
 # Ist kein Passwort gesetzt, ist die App ohne Anmeldung erreichbar.

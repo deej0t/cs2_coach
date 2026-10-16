@@ -88,4 +88,31 @@ if [ "$HEALTH_INTERVAL" -gt 0 ] 2>/dev/null; then
     done) &
 fi
 
+# Taegliches Briefing (Standard: ab 17 Uhr, vor dem Abend; leer = aus).
+#
+# Erst neue Demos holen und auswerten, dann das Briefing schicken - sonst
+# fasst es jeden Tag dieselben Daten zusammen. Valve haelt Download-Links
+# nur kurz vor, der taegliche Sync rettet also auch Demos.
+# "briefing --send" verschickt hoechstens einmal am Tag (.briefing_state.json
+# neben der Config) und wird nach einem Fehlschlag beim naechsten Durchlauf
+# erneut versucht; ein Neustart des Containers schickt nichts doppelt.
+BRIEFING_HOUR="${CS2COACH_BRIEFING_HOUR-17}"
+if [ -n "$BRIEFING_HOUR" ] && [ "$BRIEFING_HOUR" -ge 0 ] 2>/dev/null; then
+    echo "Briefing aktiv: taeglich ab ${BRIEFING_HOUR} Uhr"
+    (sleep 900
+     synced=""
+     while true; do
+        today=$(date +%F)
+        hour=$(date +%H); hour=${hour#0}
+        if [ "$hour" -ge "$BRIEFING_HOUR" ]; then
+            if [ "$synced" != "$today" ]; then
+                (cd /app && python -m cs2_coach sync) || true
+                synced="$today"
+            fi
+            (cd /app && python -m cs2_coach briefing --send) || true
+        fi
+        sleep 900
+    done) &
+fi
+
 exec "$@"

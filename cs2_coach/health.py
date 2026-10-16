@@ -170,8 +170,11 @@ def check_demos(cfg: dict) -> Check:
     from .export_version import demo_status
 
     label = "Demos"
-    folder = Path(cfg.get("demo_folder") or "")
-    if not str(folder) or not folder.is_dir():
+    raw = (cfg.get("demo_folder") or "").strip()
+    folder = Path(raw)
+    # Rohwert pruefen: Path("") ist ".", also das Arbeitsverzeichnis -
+    # eine fehlende Einstellung galt so als vorhandener Ordner.
+    if not raw or not folder.is_dir():
         return Check("demos", label, FAIL, f"Demo-Ordner nicht gefunden: {folder}")
     export_dir = _export_dir(cfg)
     known = demo_status(export_dir) if export_dir else {}
@@ -225,7 +228,7 @@ def run_checks(cfg: dict, config_path: Path) -> list[Check]:
     checks = [check_public_url(cfg), check_updates(), check_steam()]
     checks += check_disk({
         "Config/Vault": Path(config_path).parent,
-        "Demos": Path(cfg.get("demo_folder") or ""),
+        "Demos": Path(cfg["demo_folder"]) if cfg.get("demo_folder") else None,
     })
     checks += [check_demos(cfg), check_exports(cfg)]
     return checks

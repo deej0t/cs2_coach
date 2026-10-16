@@ -21,9 +21,12 @@ cs2_coach/
   utility_analysis.py (120) throw relevance per grenade type
   export_version.py   (190) schema/metrics versioning of exports
   health.py       (300) system status checks + Discord alert on state change
+  training.py     (160) training goals with start date + progress (before/after)
+  sync.py          (50) GCPD demo download without the web UI (`cs2-coach sync`)
+  briefing.py     (230) daily AI training briefing -> Discord + vault note
   obsidian.py     (600) Markdown + JSON export into the vault
   sharecode.py   (1040) Steam API / GCPD / local demo discovery + download
-  cli.py          (620) click CLI: analyze, batch, health, setup, web
+  cli.py          (650) click CLI: analyze, batch, briefing, health, setup, sync, web
   ai_chat.py      (420) Gemini + Ollama streaming backends
   chat_store.py   (165) chat sessions persisted in the vault
   web/app.py    (11000) Flask app, ~97 routes
@@ -106,6 +109,13 @@ Each of these was wrong once and was fixed against measured demo data. Do not re
 - Team colors come from `parse_ticks` `team_num` (2=T, 3=CT) in the same ticks read for positions — per round, so the half-time swap is handled automatically. Players without usable `team_num` render grey as "unknown", never guessed.
 - Grenades appear at detonation and disappear when they expire. `smokegrenade_expired` / `inferno_expire` carry the same `entityid` as the ignition, but **Steam reuses entity ids within a match** — always take the *next* end after the ignition and clamp at round end. Flash and HE have no end event and get a short fixed display time.
 - Player labels are shortened to 9 chars (letters, digits, `.`, `-`, space); if nothing survives filtering, fall back to the original name.
+
+## Daily Briefing (`training.py`, `briefing.py`, `sync.py`)
+- The container loop (`CS2COACH_BRIEFING_HOUR`, default 17, empty = off) runs `cs2-coach sync` once a day (GCPD download + `batch --only-outdated`), then `briefing --send` every 15 min from that hour on. `.briefing_state.json` next to the config makes sending **at most once per day** and is written only after a successful post, so a failed post is retried on the next pass. Webhook: `briefing_webhook`, else `discord_webhook`. Note goes to `CS2-Coach/Briefings/YYYY-MM-DD.md`.
+- **The AI computes nothing.** It gets finished facts with verdicts; an answer with more than two numbers not present in the facts is discarded and the bare facts are sent instead. Same on AI errors. Gemini answered 503 twice in a row on 2026-10-16 and fine a minute later, hence retries after 30 s and 120 s.
+- Goals come from robust findings only (grenade types with `SOLID_POSITIVE` throw relevance, plus `training_priorities()`); target = median/mean of the player's own wins. Each goal gets a start date **once**, stored in `.training_state.json`; progress compares matches since the start against before with `evidence.py`, and only from `MIN_AFTER` = 8 matches on. Never reset the start dates - that would make the comparison impossible.
+- `training_priorities()` skips `RESOLVED` tracks - a resolved finding used to show up as a training goal.
+- `Path("")` is `"."` (the working directory): check the **raw** config string before building a path (`demo_folder`, vault). A missing demo folder used to pass the health check.
 
 ## Auto-Sync & Demo Download (`cs2_coach/sharecode.py`)
 - **Three independent sources**: Steam API (share codes), GCPD (Valve download), local replays folder

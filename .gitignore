@@ -56,3 +56,10 @@ graphify-out/
 
 # Generierte Practice-CFGs (enthalten die Positionsdaten des Nutzers)
 docker/cfg/coach/
+
+# Zustandsdateien neben der Config (Systemstatus, Trainingsziele, Briefing)
+.health_state.json
+.training_state.json
+.briefing_state.json
+# Taegliche Briefings im Vault
+CS2-Coach/Briefings/
