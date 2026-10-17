@@ -403,6 +403,7 @@
         <div class="sidebar-group">
             <div class="sidebar-group-label">Coaching</div>
             <a href="{{ url_for('briefing') }}"    data-page="briefing"><i data-lucide="clipboard-list"></i> Briefing</a>
+            <a href="{{ url_for('daily.page') }}"  data-page="daily"><i data-lucide="send"></i> {{ _('Tages-Briefing') }}</a>
             <a href="{{ url_for('warmup') }}"      data-page="warmup"><i data-lucide="timer"></i> Warm-up</a>
             <a href="{{ url_for('highlights') }}"  data-page="highlights"><i data-lucide="sparkles"></i> Highlights</a>
             <a href="{{ url_for('habits') }}"      data-page="habits"><i data-lucide="activity"></i> Habits</a>

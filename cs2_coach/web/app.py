@@ -1910,6 +1910,9 @@ def create_app() -> Flask:
             webhook_set=bool(current.get("health_webhook") or current.get("discord_webhook")),
             config=current)
 
+    from .daily_briefing import create_blueprint as _daily_bp
+    app.register_blueprint(_daily_bp(load_config, lambda: CONFIG_PATH))
+
     @app.route("/settings")
     def settings():
         # Always reload config from disk

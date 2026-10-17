@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Tages-Briefing{% endblock %}
+
+{% block content %}
+<h2>{{ _('Tages-Briefing') }}</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    {% if hour %}{{ _('Kommt jeden Tag automatisch ab') }} {{ hour }} {{ _('Uhr') }}{% if channels %} {{ _('per') }} {{ channels|join(' und ') }}{% endif %}.
+    {% else %}{{ _('Der automatische Versand ist ausgeschaltet (CS2COACH_BRIEFING_HOUR leer).') }}{% endif %}
+    {{ _('Hier kannst du es jederzeit von Hand ausloesen.') }}
+</p>
+
+<div class="card elev-sm" style="margin-bottom: var(--space-5);">
+    <span class="card-kicker">{{ _('Jetzt senden') }}</span>
+    {% if running %}
+    <p style="font-size: 13px; margin: var(--space-2) 0 0; color: var(--color-yellow);">
+        {{ _('Wird gerade erstellt und verschickt ... die Seite aktualisiert sich selbst.') }}
+    </p>
+    {% elif channels %}
+    <form method="post" action="{{ url_for('daily.send') }}" style="margin-top: var(--space-3);">
+        <button type="submit" class="btn btn-primary"><i data-lucide="send"></i> {{ _('Briefing jetzt senden') }}</button>
+    </form>
+    <p style="font-size: 12px; color: var(--color-neutral-500); margin: var(--space-2) 0 0;">
+        {{ _('Mit aktuellen Daten und KI-Einleitung an') }} {{ channels|join(' und ') }}.
+        {{ _('Gilt als Briefing des Tages - das automatische entfaellt dann heute.') }}
+    </p>
+    {% else %}
+    <p style="font-size: 13px; margin: var(--space-2) 0 0; color: var(--color-yellow);">
+        {{ _('Weder Discord noch Telegram eingerichtet.') }}
+        <a href="{{ url_for('settings') }}">{{ _('In den Einstellungen eintragen') }}</a>
+    </p>
+    {% endif %}
+    {% if last %}
+    <p style="font-size: 12px; margin: var(--space-3) 0 0; color: {{ 'var(--color-green)' if last.ok else 'var(--color-red)' }};">
+        {{ _('Letzter Versand von Hand') }}: {{ last.finished }} — {{ _('verschickt') if last.ok else _('fehlgeschlagen') }}
+    </p>
+    {% if not last.ok and last.log %}
+    <pre style="font-size: 11px; margin-top: var(--space-2); white-space: pre-wrap;">{{ last.log|join('\n') }}</pre>
+    {% endif %}
+    {% endif %}
+    {% if last_sent %}
+    <p style="font-size: 12px; margin: var(--space-2) 0 0; color: var(--color-neutral-500);">{{ _('Zuletzt verschickt am') }} {{ last_sent }}.</p>
+    {% endif %}
+</div>
+
+<div class="card elev-sm">
+    <span class="card-kicker">{{ _('Vorschau mit aktuellen Daten') }}</span>
+    <p style="font-size: 12px; color: var(--color-neutral-500); margin: var(--space-2) 0 var(--space-3);">
+        {{ _('Ohne die KI-Einleitung - die entsteht erst beim Versand.') }}
+    </p>
+    <div style="font-size: 14px; line-height: 1.6;">{{ preview }}</div>
+</div>
+{% endblock %}
+
+{% block scripts %}{% if running %}<script>setTimeout(function () { location.reload(); }, 10000);</script>{% endif %}{% endblock %}

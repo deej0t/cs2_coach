@@ -33,6 +33,7 @@ cs2_coach/
   chat_store.py   (165) chat sessions persisted in the vault
   web/app.py    (11000) Flask app, ~97 routes
   web/auth.py     (160) optional password protection
+  web/daily_briefing.py (130) /daily: briefing preview + "send now" (blueprint, not in app.py)
   web/i18n.py     (830) translations
   web/templates/        Jinja2 (Nocturne design system), _partials/ for shared blocks
 tests/                  pytest, ~14 files — run with `pytest` (config in pytest.ini)
@@ -119,6 +120,7 @@ Each of these was wrong once and was fixed against measured demo data. Do not re
 - **Telegram** (`telegram_bot_token` in settings): the user only creates a bot and sends it /start; the chat id comes from `getUpdates` and is kept in `.telegram_chat.json` - **not** in config.yaml, because `settings_save()` writes the web app's in-memory cfg back and would drop it. Text goes out as HTML (Discord `**`/`` ` `` converted). Each channel is marked sent separately in `.briefing_state.json` (`sent`), so a failed Telegram retry never reposts to Discord. A missing chat is logged, not retried - a retry re-runs the AI every 15 min.
 - **Layout is fixed, the AI only writes a 1-2 sentence intro** (`briefing_view.render()`). The first AI-written briefing repeated exercises, showed rates like "0.44/Runde" nobody can count in a match, and changed shape daily. Goals are shown per match (rate x median rounds of the last 10 matches) with a bar for distance to target - a measurement, not a verdict; only the progress section judges, with `evidence.py` verdicts. Exercises are grouped by time (before the first match / in the match) and de-duplicated. The intro is discarded if it contains any number not in the facts or exceeds `MAX_INTRO`; the briefing then goes out without it. Gemini answered 503 twice in a row on 2026-10-16 and fine a minute later, hence retries after 30 s and 120 s.
 - Goals come from robust findings only (grenade types with `SOLID_POSITIVE` throw relevance, plus `training_priorities()`); target = median/mean of the player's own wins. Each goal gets a start date **once**, stored in `.training_state.json`; progress compares matches since the start against before with `evidence.py`, and only from `MIN_AFTER` = 8 matches on. Never reset the start dates - that would make the comparison impossible.
+- **Manual trigger**: `/daily` ("Tages-Briefing"; `/briefing` is the older per-map pre-match page) shows a preview without AI (`run(use_ai=False)`, instant) and a send button. Sending runs `run(send=True, force=True)` in a background thread - the AI can take 2.5 min, gunicorn kills requests after 120 s. An `O_EXCL` lock file `.briefing_running` next to the config blocks double clicks across workers (stale after 10 min); the result goes to `.briefing_manual.json`. A manual send counts as the day's briefing, so the automatic one is skipped that day.
 - `training_priorities()` skips `RESOLVED` tracks - a resolved finding used to show up as a training goal.
 - `Path("")` is `"."` (the working directory): check the **raw** config string before building a path (`demo_folder`, vault). A missing demo folder used to pass the health check.
 

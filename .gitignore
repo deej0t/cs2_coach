@@ -62,5 +62,7 @@ docker/cfg/coach/
 .training_state.json
 .briefing_state.json
 .telegram_chat.json
+.briefing_running
+.briefing_manual.json
 # Taegliche Briefings im Vault
 CS2-Coach/Briefings/

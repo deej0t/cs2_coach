@@ -213,7 +213,8 @@ def _channels(cfg: dict, config_path: Path, post, telegram_post, log) -> list:
 
 
 def run(cfg: dict, config_path: Path, send: bool = False, force: bool = False,
-        now: datetime | None = None, log=print, post=None, telegram_post=None) -> str | None:
+        now: datetime | None = None, log=print, post=None, telegram_post=None,
+        use_ai: bool = True) -> str | None:
     """Briefing erzeugen; mit send=True an Discord und in den Vault.
 
     Hoechstens einmal am Tag (ausser force), damit ein Neustart des
@@ -244,7 +245,9 @@ def run(cfg: dict, config_path: Path, send: bool = False, force: bool = False,
     plan = current_plan(exports, Path(config_path).parent / ".training_state.json",
                         now.strftime("%Y-%m-%d %H:%M"))
     facts, newest = build_facts(exports, plan, state.get("last_match", ""))
-    intro = ask_ai(cfg, facts, log=log)
+    # Ohne KI fuer die Vorschau in der WebUI: die KI braucht mit
+    # Wiederholungen bis zu zweieinhalb Minuten.
+    intro = ask_ai(cfg, facts, log=log) if use_ai else None
     last = state.get("last_match", "")
     ordered = sorted(exports, key=_when)
     new = [e for e in ordered if _when(e) > last] if last else ordered[-3:]
