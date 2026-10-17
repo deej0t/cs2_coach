@@ -1,0 +1,18 @@
+# Einmaliger Probealarm: schlaegt absichtlich fehl, damit sich pruefen
+# laesst, ob die Fehler-E-Mail von GitHub ankommt. Wird nach dem ersten
+# Lauf wieder entfernt.
+name: Alarmtest (einmalig)
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::error title=Probealarm::Das ist nur ein Test. So sieht die Mail aus, wenn CS2 Coach nicht erreichbar ist."
+          exit 1

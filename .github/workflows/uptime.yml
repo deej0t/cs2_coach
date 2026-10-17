@@ -1,0 +1,42 @@
+# Alarm von aussen, wenn die WebUI nicht erreichbar ist.
+#
+# Der Systemstatus (health.py) laeuft auf dem Server selbst und kann
+# dessen Ausfall nicht melden: am 2026-10-16 war der Server rund vier
+# Stunden weg, ohne dass eine Meldung kam. Dieser Lauf prueft alle 30
+# Minuten von GitHub aus. Schlaegt er fehl, schickt GitHub dem Konto, das
+# den Zeitplan zuletzt geaendert hat, eine E-Mail ("Run failed").
+#
+# Bewusst ohne Geheimnisse (das Repository ist oeffentlich): kein Token,
+# kein Webhook - nur die oeffentliche Adresse.
+#
+# Erfasst Server aus, Container aus, falsche Portzuordnung und
+# Cloudflare-Tunnel weg. 302 (Weiterleitung zum Login) gilt als erreichbar.
+# Drei Versuche im Abstand von einer Minute, damit ein kurzer Aussetzer
+# keinen Alarm ausloest.
+name: Erreichbarkeit
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  webui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: WebUI von aussen pruefen
+        env:
+          URL: https://cs2-coach.deej0t.eu/
+        run: |
+          code=000
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$URL" || true)
+            echo "Versuch $i: HTTP $code"
+            if [ "$code" -ge 200 ] 2>/dev/null && [ "$code" -lt 400 ]; then exit 0; fi
+            [ "$i" -lt 3 ] && sleep 60
+          done
+          echo "::error title=CS2 Coach nicht erreichbar::$URL antwortet mit HTTP $code - Server aus, Container gestoppt oder Cloudflare-Tunnel weg?"
+          exit 1
