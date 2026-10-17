@@ -160,6 +160,68 @@ def check_disk(paths: dict[str, Path], usage=shutil.disk_usage) -> list[Check]:
     return out
 
 
+def _nut_vars(host: str, port: int, ups: str, timeout: float = 5) -> dict[str, str]:
+    """Variablen einer USV ueber das NUT-Protokoll (LIST VAR). Wirft bei Fehlern."""
+    import socket
+
+    with socket.create_connection((host, port), timeout=timeout) as s:
+        s.sendall(f"LIST VAR {ups}\n".encode())
+        data = b""
+        while b"END LIST VAR" not in data and not data.startswith(b"ERR"):
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+    text = data.decode(errors="replace")
+    if text.startswith("ERR"):
+        raise RuntimeError(text.split("\n")[0].strip())
+    out = {}
+    for line in text.splitlines():
+        parts = line.split(" ", 3)
+        if len(parts) == 4 and parts[0] == "VAR":
+            out[parts[2]] = parts[3].strip('"')
+    return out
+
+
+def check_ups(cfg: dict, read=_nut_vars) -> Check:
+    """Liefert die USV Daten, und laeuft sie am Netz?
+
+    Am 2026-10-14 brach die USB-Verbindung zur USV ab; drei Tage lang
+    meldete NUT nur "Data stale", unbemerkt. Bei einem Stromausfall waere
+    der Server nicht sauber heruntergefahren. Fragt den NUT-Dienst des
+    Hosts direkt ab (ups_host in der Config, z. B. "192.168.188.71").
+    """
+    label = "USV"
+    raw = (cfg.get("ups_host") or "").strip()
+    if not raw:
+        return Check("ups", label, SKIP, "Keine USV eingetragen (ups_host).")
+    host, _, port = raw.partition(":")
+    ups = (cfg.get("ups_name") or "ups").strip()
+    try:
+        v = read(host, int(port or 3493), ups)
+    except RuntimeError as e:
+        # "ERR DATA-STALE": der Dienst laeuft, bekommt aber nichts von der USV.
+        return Check("ups", label, FAIL,
+                     f"USV liefert keine Daten ({e}) - USB-Verbindung pruefen. "
+                     f"Bei Stromausfall wuerde der Server nicht sauber herunterfahren.")
+    except OSError as e:
+        return Check("ups", label, WARN, f"USV-Dienst auf {raw} nicht erreichbar: {e}")
+
+    status = v.get("ups.status", "").split()
+    charge, runtime, load = v.get("battery.charge"), v.get("battery.runtime"), v.get("ups.load")
+    info = ", ".join(x for x in (
+        f"Akku {charge} %" if charge else "",
+        f"Laufzeit {int(runtime) // 60} Min" if runtime and runtime.isdigit() else "",
+        f"Last {load} %" if load else "") if x)
+    if "OB" in status or "LB" in status:
+        return Check("ups", label, FAIL, f"USV laeuft auf Akku ({' '.join(status)}): {info}")
+    if "RB" in status:
+        return Check("ups", label, WARN, f"USV meldet: Akku ersetzen. {info}")
+    if "OL" in status:
+        return Check("ups", label, OK, f"Am Netz, {info}.")
+    return Check("ups", label, WARN, f"Unbekannter USV-Status '{' '.join(status)}'. {info}")
+
+
 def check_writable(folder: Path) -> Check:
     """Kann im Config-Ordner eine neue Datei angelegt werden?
 
@@ -247,7 +309,7 @@ def _export_dir(cfg: dict) -> Path | None:
 
 def run_checks(cfg: dict, config_path: Path) -> list[Check]:
     checks = [check_public_url(cfg), check_updates(), check_steam(),
-              check_writable(Path(config_path).parent)]
+              check_writable(Path(config_path).parent), check_ups(cfg)]
     checks += check_disk({
         "Config/Vault": Path(config_path).parent,
         "Demos": Path(cfg["demo_folder"]) if cfg.get("demo_folder") else None,

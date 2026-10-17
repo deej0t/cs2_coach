@@ -146,10 +146,18 @@ def briefing(ctx, send, force):
 
     Ohne --send wird es nur angezeigt.
     """
-    from .briefing import run
+    from .briefing import ALREADY_SENT, run
 
-    text = run(ctx.obj["config"], ctx.obj["config_path"], send=send, force=force,
-               log=lambda m: console.print(f"[dim]{m}[/dim]"))
+    # Die Container-Schleife ruft "briefing --send" alle 15 Minuten auf;
+    # "schon verschickt" stand so rund 30-mal am Tag im Log und verdeckte
+    # echte Meldungen. Nur bei einem Aufruf von Hand (Terminal) anzeigen.
+    interactive = sys.stdout.isatty()
+
+    def log(m):
+        if m != ALREADY_SENT or interactive:
+            console.print(f"[dim]{m}[/dim]")
+
+    text = run(ctx.obj["config"], ctx.obj["config_path"], send=send, force=force, log=log)
     if text:
         console.print(text)
 

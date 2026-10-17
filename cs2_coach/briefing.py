@@ -41,6 +41,8 @@ SYSTEM = """Du bist ein CS2-Trainer. Schreibe die Einleitung fuer das heutige Tr
 #: an die Vorgabe und werden verworfen.
 MAX_INTRO = 400
 
+ALREADY_SENT = "Briefing fuer heute wurde schon verschickt."
+
 
 def _main_map(exports: list[dict]) -> str:
     """Meistgespielte Map der letzten zehn Matches, ohne "de_"."""
@@ -228,7 +230,7 @@ def run(cfg: dict, config_path: Path, send: bool = False, force: bool = False,
     except (OSError, ValueError):
         state = {}
     if send and not force and state.get("last_sent") == today:
-        log("Briefing fuer heute wurde schon verschickt.")
+        log(ALREADY_SENT)
         return None
 
     # Rohwert pruefen: Path("") ist ".", also das Arbeitsverzeichnis.

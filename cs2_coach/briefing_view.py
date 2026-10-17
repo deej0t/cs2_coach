@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from statistics import median
 
-from .training import MIN_AFTER
+from .training import MIN_AFTER, _value
 
 _DAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 _SHORT_DAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
@@ -156,7 +156,30 @@ def _progress(goals, win_change: dict | None, rounds: int) -> list[str]:
 _RESULT = {"Sieg": "✅", "Niederlage": "❌"}
 
 
-def _match_line(e: dict) -> str:
+def _goal_check(e: dict, g) -> tuple[str, bool] | None:
+    """Zielabgleich fuer ein Match: (Text, erreicht) oder None, wenn unbekannt.
+
+    Granatenziele werden auf die Rundenzahl dieses Matches umgerechnet -
+    ein 13:3 hat 16 Runden, ein 15:15 hat 30; ein fester Wert pro Match
+    wuerde lange Matches bevorzugen.
+    """
+    icon, _name = _GOALS.get(g.key, ("📌", g.label))
+    value = _value(e, g.key)
+    if value is None:
+        return None
+    done = value >= g.target if g.higher_is_better else value <= g.target
+    if g.unit == "/Runde":
+        rounds = (e.get("match") or {}).get("total_rounds") or 0
+        if not rounds:
+            return None
+        text = f"{icon} {round(value * rounds)}/{round(g.target * rounds)}"
+    else:
+        unit = " %" if g.unit == "%" else g.unit
+        text = f"{icon} {de(value)}{unit} (Ziel {de(g.target)}{unit})"
+    return f"{text} {'✅' if done else '✗'}", done
+
+
+def _match_line(e: dict, goals=()) -> str:
     m, p = e.get("match") or {}, e.get("player") or {}
     when = _when(e)
     try:
@@ -165,17 +188,28 @@ def _match_line(e: dict) -> str:
         day = f"{_SHORT_DAYS[d.weekday()]} {d.strftime('%d.%m.')}"
     except ValueError:
         day = when[:10]
-    util = e.get("utility_positions") or []
-    he = sum(1 for u in util if u.get("t") == "h")
-    mo = sum(1 for u in util if u.get("t") == "m")
     parts = [f"{_RESULT.get(m.get('result'), '➖')} {day} **{m.get('map')} {m.get('score_own')}:{m.get('score_enemy')}**"]
     if p.get("rating") is not None:
         parts.append(f"Rating {float(p['rating']):.2f}".replace(".", ","))
     if p.get("adr") is not None:
         parts.append(f"ADR {de(float(p['adr']), 0)}")
+    line = " · ".join(parts)
+
+    checks = [c for c in (_goal_check(e, g) for g in goals) if c]
+    if checks:
+        return line + "\n      " + "  ".join(t for t, _ in checks)
     if "utility_positions" in e:
-        parts.append(f"{he} HE, {mo} Molotovs")
-    return " · ".join(parts)
+        util = e["utility_positions"] or []
+        he = sum(1 for u in util if u.get("t") == "h")
+        mo = sum(1 for u in util if u.get("t") == "m")
+        line += f" · {he} HE, {mo} Molotovs"
+    return line
+
+
+def _goal_summary(matches: list[dict], goals) -> str:
+    """'Ziele erreicht: 5 von 9' ueber die gezeigten Matches."""
+    results = [c[1] for e in matches for g in goals for c in [_goal_check(e, g)] if c]
+    return f"Ziele erreicht: {sum(results)} von {len(results)}" if results else ""
 
 
 # ── Gesamt ───────────────────────────────────────────────────────────
@@ -211,7 +245,10 @@ def render(plan: dict, exports: list[dict], new: list[dict], first: bool, now,
 
     title = "**🗓️ Letzte Matches**" if first else "**🗓️ Neue Matches**"
     if new:
-        out.append("\n".join([title] + [_match_line(e) for e in new[-8:]]))
+        shown = new[-8:]
+        summary = _goal_summary(shown, goals)
+        head = f"{title} · {summary}" if summary else title
+        out.append("\n".join([head] + [_match_line(e, goals) for e in shown]))
     else:
         out.append(f"{title}\nKeine neuen. Valve stellt Demos mit 2-3 Tagen Verzögerung bereit.")
 

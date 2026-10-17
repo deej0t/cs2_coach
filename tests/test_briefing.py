@@ -264,3 +264,48 @@ def test_intro_with_numbers_is_rejected(monkeypatch):
     assert briefing.ask_ai(_cfg(), "Zielwert 0.44", log=lambda m: None, sleep=lambda s: None) is None
     monkeypatch.setattr("cs2_coach.ai_chat.call_gemini", lambda *a, **k: "x" * (briefing.MAX_INTRO + 1))
     assert briefing.ask_ai(_cfg(), "Zielwert 0.44", log=lambda m: None, sleep=lambda s: None) is None
+
+
+def test_each_match_is_checked_against_the_goal_for_its_own_round_count():
+    # 10 HE in 30 Runden (15:15) sind weniger als das Ziel jede 2. Runde,
+    # 10 HE in 18 Runden sind mehr. Ein fester Wert pro Match haette beide
+    # gleich bewertet.
+    from cs2_coach.briefing_view import render
+    g = training.Goal(key="util_h", label="HE pro Runde", unit="/Runde", higher_is_better=True,
+                      target=0.5, why="x", recent=0.4)
+    long_match = _export(1, False, 10, day="2026-10", rounds=30)
+    short_match = _export(2, True, 10, day="2026-10", rounds=18)
+    text = render({"goals": [g], "win_change": None}, _history(), [long_match, short_match],
+                  first=False, now=datetime(2026, 10, 16), main_map="mirage")
+    assert "💣 10/15 ✗" in text
+    assert "💣 10/9 ✅" in text
+    assert "Ziele erreicht: 1 von 2" in text
+
+
+def test_match_without_goal_data_falls_back_to_counts():
+    from cs2_coach.briefing_view import _match_line
+    e = _export(1, True, 4)
+    assert "4 HE, 0 Molotovs" in _match_line(e, goals=())
+    old = dict(e)
+    old.pop("utility_positions")
+    g = training.Goal(key="util_h", label="HE", unit="/Runde", higher_is_better=True, target=0.5, why="x")
+    # Aelterer Export ohne Wurfdaten: kein Abgleich, kein falsches "✗".
+    line = _match_line(old, goals=[g])
+    assert "\n" not in line and "💣" not in line
+
+
+def test_loop_log_has_no_already_sent_noise(tmp_path, monkeypatch):
+    # Die Container-Schleife ruft "briefing --send" alle 15 Minuten auf;
+    # "schon verschickt" fuellte das Log. Ohne Terminal: keine Meldung.
+    from click.testing import CliRunner
+
+    from cs2_coach.cli import cli
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("obsidian_vault_path: ''\n", encoding="utf-8")
+    (tmp_path / ".briefing_state.json").write_text(
+        json.dumps({"last_sent": datetime.now().strftime("%Y-%m-%d")}), encoding="utf-8")
+    monkeypatch.setenv("CS2COACH_CONFIG", str(cfg))
+    result = CliRunner().invoke(cli, ["briefing", "--send"])
+    assert result.exit_code == 0, result.output
+    assert briefing.ALREADY_SENT not in result.output

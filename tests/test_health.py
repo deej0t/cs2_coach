@@ -235,3 +235,53 @@ def test_schreibzugriff_voll_ist_fehler(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "write_text", full)
     c = H.check_writable(tmp_path)
     assert c.state == H.FAIL and "No space left" in c.message
+
+
+# ── USV ──────────────────────────────────────────────────────────────
+
+def _fake_nut(reply: bytes):
+    """Kleiner NUT-Dienst auf einem freien Port, der eine feste Antwort gibt."""
+    import socket
+    import threading
+
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+
+    def serve():
+        conn, _ = srv.accept()
+        conn.recv(1024)
+        conn.sendall(reply)
+        conn.close()
+        srv.close()
+    threading.Thread(target=serve, daemon=True).start()
+    return srv.getsockname()[1]
+
+
+def test_usv_am_netz():
+    port = _fake_nut(b'BEGIN LIST VAR ups\nVAR ups battery.charge "100"\nVAR ups battery.runtime "231"\n'
+                     b'VAR ups ups.load "42"\nVAR ups ups.status "OL"\nEND LIST VAR ups\n')
+    c = H.check_ups({"ups_host": f"127.0.0.1:{port}"})
+    assert c.state == H.OK and "Akku 100 %" in c.message and "Laufzeit 3 Min" in c.message
+
+
+def test_usv_ohne_daten_ist_fehler():
+    # So sah es vom 14. bis 16.10. aus: Dienst laeuft, USB-Verbindung weg.
+    port = _fake_nut(b"ERR DATA-STALE\n")
+    c = H.check_ups({"ups_host": f"127.0.0.1:{port}"})
+    assert c.state == H.FAIL and "DATA-STALE" in c.message
+
+
+def test_usv_auf_akku_ist_fehler():
+    c = H.check_ups({"ups_host": "x"}, read=lambda h, p, u: {"ups.status": "OB DISCHRG", "battery.charge": "80"})
+    assert c.state == H.FAIL and "Akku" in c.message
+
+
+def test_usv_nicht_eingetragen_wird_uebersprungen():
+    assert H.check_ups({}).state == H.SKIP
+
+
+def test_usv_dienst_nicht_erreichbar_ist_warnung():
+    def refuse(h, p, u):
+        raise ConnectionRefusedError("refused")
+    assert H.check_ups({"ups_host": "x"}, read=refuse).state == H.WARN
