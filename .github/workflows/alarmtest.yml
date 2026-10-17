@@ -1,11 +1,13 @@
-# Einmaliger Probealarm: schlaegt absichtlich fehl, damit sich pruefen
-# laesst, ob die Fehler-E-Mail von GitHub ankommt. Wird nach dem ersten
-# Lauf wieder entfernt.
-name: Alarmtest (einmalig)
+# Probealarm von Hand: schlaegt absichtlich fehl, damit sich pruefen
+# laesst, ob die Fehler-E-Mail von GitHub ankommt.
+# Ausloesen: Actions -> "Alarmtest" -> "Run workflow".
+#
+# Zuerst lief er zeitgesteuert alle 5 Minuten - nach dem Einschalten von
+# Actions haette er alle 5 Minuten eine Fehler-Mail ausgeloest.
+name: Alarmtest
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 permissions: {}
 
