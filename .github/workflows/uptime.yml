@@ -16,8 +16,11 @@
 name: Erreichbarkeit
 
 on:
-  schedule:
-    - cron: "7,37 * * * *"
+  # Zeitplan abgeschaltet (2026-10-17): Cloudflare beantwortet Anfragen aus
+  # GitHubs Rechenzentren mit HTTP 403 (Bot-Schutz) - der erste Lauf meldete
+  # einen Ausfall, waehrend der Server seit drei Stunden lief. Ausserdem lief
+  # in vier Stunden nur einer von acht geplanten Laeufen. Ersetzt durch den
+  # Heartbeat aus health.py (der Server meldet sich, statt geprueft zu werden).
   workflow_dispatch:
 
 permissions: {}
