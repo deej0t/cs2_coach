@@ -29,6 +29,9 @@ health_webhook: ''
 # USV im Systemstatus: Adresse des NUT-Dienstes (Unraid: IP des Servers,
 # Port 3493). Leer = keine Pruefung. ups_name nur, wenn die USV nicht "ups" heisst.
 ups_host: ''
+# Lebenszeichen an healthchecks.io (Ping-Adresse eines Checks, Intervall 30 Min).
+# Bleibt es aus, alarmiert der Dienst; bei einem Fehler im Systemstatus sofort.
+heartbeat_url: ''
 # Taegliches Trainings-Briefing (Container: ab CS2COACH_BRIEFING_HOUR, Standard 17 Uhr).
 # Eigener Webhook dafuer, leer = discord_webhook. Text von der KI (ai_provider).
 briefing_webhook: ''

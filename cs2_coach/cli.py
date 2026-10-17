@@ -71,7 +71,7 @@ def health(ctx, notify):
     Zeile aus und meldet sich bei Discord nur, wenn sich etwas aendert.
     Exit-Code 1, wenn eine Pruefung fehlschlaegt.
     """
-    from .health import FAIL, notify as send, run_checks
+    from .health import FAIL, heartbeat, notify as send, run_checks
 
     cfg = ctx.obj["config"]
     config_path = ctx.obj["config_path"]
@@ -80,11 +80,13 @@ def health(ctx, notify):
     if notify:
         webhook = cfg.get("health_webhook") or cfg.get("discord_webhook", "")
         sent = send(checks, webhook, config_path.parent / ".health_state.json")
+        beat = heartbeat(checks, cfg.get("heartbeat_url", ""))
         bad = [c for c in checks if c.state in ("warn", "fail")]
         stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{stamp}] Systemstatus: "
               + (", ".join(f"{c.label}={c.state}" for c in bad) or "alles ok")
-              + (" - Discord benachrichtigt" if sent else ""))
+              + (" - Discord benachrichtigt" if sent else "")
+              + (f" - Heartbeat {beat}" if beat else ""))
     else:
         table = Table(title="Systemstatus", border_style="cyan")
         table.add_column("Pruefung")

@@ -369,5 +369,33 @@ def notify(checks: list[Check], webhook: str, state_path: Path, post=None) -> st
     return text
 
 
+def heartbeat(checks: list[Check], url: str, post=None) -> str | None:
+    """Lebenszeichen an einen Waechterdienst (healthchecks.io).
+
+    Umgekehrt zur Erreichbarkeitspruefung von aussen: der Server meldet
+    sich, statt geprueft zu werden. Bleibt die Meldung aus (Server,
+    Container oder Internet weg), alarmiert der Dienst. Eine Pruefung von
+    GitHub aus scheiterte am 2026-10-17, weil Cloudflare Anfragen aus
+    Rechenzentren mit HTTP 403 abweist.
+
+    Bei einem Fehler (fail) geht die Meldung an <url>/fail - dann kommt
+    der Alarm sofort, nicht erst nach dem ausbleibenden Lebenszeichen.
+    Warnungen loesen keinen Alarm aus. Gibt "ok", "fail" oder None zurueck.
+    """
+    url = (url or "").strip().rstrip("/")
+    if not url:
+        return None
+    failed = [c for c in checks if c.state == FAIL]
+    body = "\n".join(f"{c.label}: {c.state} - {c.message}" for c in checks)
+    if post is None:
+        import requests
+        post = requests.post
+    try:
+        post(url + ("/fail" if failed else ""), data=body.encode("utf-8"), timeout=15)
+    except Exception:  # noqa: BLE001 - kein Lebenszeichen = der Dienst meldet es ohnehin
+        return None
+    return "fail" if failed else "ok"
+
+
 def as_dicts(checks: list[Check]) -> list[dict]:
     return [asdict(c) for c in checks]

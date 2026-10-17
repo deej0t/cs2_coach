@@ -285,3 +285,32 @@ def test_usv_dienst_nicht_erreichbar_ist_warnung():
     def refuse(h, p, u):
         raise ConnectionRefusedError("refused")
     assert H.check_ups({"ups_host": "x"}, read=refuse).state == H.WARN
+
+
+# ── Heartbeat ────────────────────────────────────────────────────────
+
+def _states(*states):
+    return [H.Check(f"k{i}", f"Pruefung {i}", s, "msg") for i, s in enumerate(states)]
+
+
+def test_heartbeat_ok_und_warnung_melden_lebenszeichen():
+    calls = []
+    post = lambda url, data, timeout: calls.append(url)  # noqa: E731
+    assert H.heartbeat(_states(H.OK, H.WARN, H.SKIP), "https://hc-ping.com/abc/", post=post) == "ok"
+    assert calls == ["https://hc-ping.com/abc"]
+
+
+def test_heartbeat_fehler_alarmiert_sofort():
+    calls = []
+    post = lambda url, data, timeout: calls.append((url, data))  # noqa: E731
+    assert H.heartbeat(_states(H.OK, H.FAIL), "https://hc-ping.com/abc", post=post) == "fail"
+    assert calls[0][0] == "https://hc-ping.com/abc/fail"
+    assert "Pruefung 1: fail" in calls[0][1].decode("utf-8")
+
+
+def test_heartbeat_ohne_adresse_oder_bei_netzfehler():
+    assert H.heartbeat(_states(H.OK), "") is None
+
+    def down(*a, **k):
+        raise ConnectionError("offline")
+    assert H.heartbeat(_states(H.OK), "https://hc-ping.com/abc", post=down) is None
