@@ -1,0 +1,3 @@
+# nut-waechter: startet NUT neu, wenn die USV laenger als 5 Minuten keine Daten liefert.
+# Skript und Hintergrund: /boot/config/custom/nut-waechter.sh
+*/2 * * * * bash /boot/config/custom/nut-waechter.sh >/dev/null 2>&1
