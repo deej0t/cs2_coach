@@ -22,7 +22,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 # Endpoints reachable without a session. "static" is required so the login
 # page can load its own CSS; "share_card" keeps match share links public.
-PUBLIC_ENDPOINTS = {"login", "static", "share_card"}
+# "server.*": the server leaderboard is for everyone who plays there, and the
+# CS2 server posts its log without a session (secret token in the URL instead).
+PUBLIC_ENDPOINTS = {"login", "static", "share_card", "server.page", "server.ingest"}
 
 # Brute-force throttle: after MAX_ATTEMPTS failures from one remote address,
 # further attempts are refused for LOCKOUT_SECONDS.

@@ -23,6 +23,7 @@ cs2_coach/
   health.py       (300) system status checks + Discord alert on state change
   training.py     (160) training goals with start date + progress (before/after)
   sync.py          (50) GCPD demo download without the web UI (`cs2-coach sync`)
+  server_stats.py (550) server leaderboard from the CS2 server's HTTP log (Elo, records, H2H)
   briefing.py     (290) daily training briefing: facts, AI intro, sending -> Discord/Telegram + vault
   briefing_view.py (230) fixed briefing layout (goals per match, bars, exercises, progress)
   telegram.py     (110) Telegram bot sending, chat id auto-discovery
@@ -34,6 +35,7 @@ cs2_coach/
   web/app.py    (11000) Flask app, ~97 routes
   web/auth.py     (160) optional password protection
   web/daily_briefing.py (130) /daily: briefing preview + "send now" (blueprint, not in app.py)
+  web/server_board.py    (50) /server (public leaderboard) + /api/serverlog/<token> (log ingest)
   web/i18n.py     (830) translations
   web/templates/        Jinja2 (Nocturne design system), _partials/ for shared blocks
 tests/                  pytest, ~14 files — run with `pytest` (config in pytest.ini)
@@ -47,7 +49,8 @@ docker/                 compose, portainer stack, unraid template
 - `CS2COACH_PASSWORD` (env, plaintext, hashed at startup) takes precedence over `auth.password_hash` in config.yaml. No password set = auth fully inactive.
 - `CS2COACH_SECRET_KEY`, else `.secret_key` next to the config, created with `O_CREAT|O_EXCL` so parallel gunicorn workers share one key.
 - Docker: `CS2COACH_UPDATE_INTERVAL` (auto-update, 0 disables), `CS2COACH_BRANCH`. Volumes under `/data` (`demos`, `vault`, `cfg`).
-- **There is no dedicated CS2 server anymore** (removed 2026-10-01). The practice configs run in the player's own client on an offline map (`map de_x`, then `exec coach/...`). The old `cs2-practice` service (`joedwards32/cs2`) never worked on Unraid: its mount was root-owned, the container runs as 1000:1000, so SteamCMD installed CS2 into the container's *writable layer* instead — 69 GB inside `docker.img` on the cache, restarted 1139 times. Do not re-add it casually; if ever needed, the mount must be writable by UID 1000 and live on the array.
+- **CS2 warmup server** (since 2026-10-29): Unraid container `CS2`, image `ghcr.io/ich777/steamcmd:cs2` (UID 99, not part of the cs2-coach stack), game files bind-mounted from `/mnt/cache/appdata/cs2` (69 GB, writable layer only ~66 MB - verify with `docker ps -a --size`). Port 27015 tcp+udp, public `91.184.163.134:27015`. Any mode is played (warmup). Config: `game/csgo/cfg/server.cfg`. RCON from the LAN works (`-usercon`). The practice configs (`practice.py`) still target the player's own client on an offline map.
+- The *previous* server `cs2-practice` (`joedwards32/cs2`, removed 2026-10-01) never worked: its mount was root-owned, the container ran as 1000:1000, so SteamCMD installed CS2 into the container's *writable layer* - 69 GB inside `docker.img`, restarted 1139 times. Any game-server container needs a bind mount writable by its UID.
 - **Measuring a container's disk use means its writable layer too** (`docker ps -a --size`), not just its bind mounts. The mount above read 0 bytes while the container held 73.6 GB.
 - Space freed inside `docker.img` only returns to the cache after `fstrim /var/lib/docker` (the loop device supports discard). Unraid's nightly TRIM (02:00) does include `/var/lib/docker`; the user also runs an extra `docker-img-trim` job. Nightly container auto-updates (`ca.update.applications`, 00:00) write and free ~70 GB/day inside `docker.img`, so it grows between trims — that is expected, not a leak.
 - **`RUN git clone` in the Dockerfile used to be cached**: a rebuild on 2026-10-16 silently produced two-commits-old code. An `ADD` of the GitHub branch ref now busts the cache; still verify with `docker run --rm --entrypoint sh cs2-coach:latest -c "cd /app && git log --oneline -1"`.
@@ -117,6 +120,13 @@ Each of these was wrong once and was fixed against measured demo data. Do not re
 - Team colors come from `parse_ticks` `team_num` (2=T, 3=CT) in the same ticks read for positions — per round, so the half-time swap is handled automatically. Players without usable `team_num` render grey as "unknown", never guessed.
 - Grenades appear at detonation and disappear when they expire. `smokegrenade_expired` / `inferno_expire` carry the same `entityid` as the ignition, but **Steam reuses entity ids within a match** — always take the *next* end after the ignition and clamp at round end. Flash and HE have no end event and get a short fixed display time.
 - Player labels are shortened to 9 chars (letters, digits, `.`, `-`, space); if nothing survives filtering, fall back to the original name.
+
+## Server Leaderboard (`server_stats.py`, `web/server_board.py`)
+- Source is the CS2 server's **HTTP log** (`logaddress_add_http`), not demos: every mode logs, the coach parser is round-based, and GOTV would need recording per map. Measured 2026-10-29: plain-text lines `MM/DD/YYYY - HH:MM:SS.mmm - <event>`, headers `X-Server-Instance-Token` (new per server start), `X-LogBytes-BeginOffset` (continues per instance, also across a new destination), `X-Game-Map`. CS2 sends the next batch only after the previous was answered.
+- Each batch is appended raw to `server_logs/YYYY-MM-DD.log` next to the config, prefixed `#batch <instance> <offset> <map>`; resent batches are dropped *when reading*. Stats are recomputed from the raw lines on every request (cached on size+mtime) and never stored, like findings.
+- `/server` and the ingest are **public** (`auth.PUBLIC_ENDPOINTS`): everyone who plays may look; the server cannot log in. The ingest is guarded by a token in the URL (`.serverlog_token` next to the config, O_EXCL like `.secret_key`, not in config.yaml). The `server.cfg` lines with the token are shown on `/server` only when logged in.
+- Ranking is a **duel Elo** (each human kill = won duel, K=8, start 1000): mode-agnostic and rewards beating stronger players. Below `MIN_DUELS` (30) a player is listed as "vorlaeufig" without rank. Bots, suicides and world damage never count for Elo or K/D (bot kills have their own column); same-team kills *do* count, because in FFA deathmatch everyone shares a team and the log does not say which mode is running.
+- Point CS2 at the coach's **LAN** address (`http://192.168.188.71:5001/...`), not the public URL - Cloudflare's bot protection already blocked GitHub's checks.
 
 ## Daily Briefing (`training.py`, `briefing.py`, `sync.py`)
 - The container loop (`CS2COACH_BRIEFING_HOUR`, default 17, empty = off) runs `cs2-coach sync` once a day (GCPD download + `batch --only-outdated`), then `briefing --send` every 15 min from that hour on. `.briefing_state.json` next to the config makes sending **at most once per day** and is written only after a successful post, so a failed post is retried on the next pass. Webhook: `briefing_webhook`, else `discord_webhook`. Note goes to `CS2-Coach/Briefings/YYYY-MM-DD.md`.

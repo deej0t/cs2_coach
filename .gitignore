@@ -64,5 +64,8 @@ docker/cfg/coach/
 .telegram_chat.json
 .briefing_running
 .briefing_manual.json
+# Server-Bestenliste: Empfangs-Token und Rohlogs des CS2-Servers
+.serverlog_token
+server_logs/
 # Taegliche Briefings im Vault
 CS2-Coach/Briefings/

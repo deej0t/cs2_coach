@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CS2 Server — Bestenliste</title>
+{#- Eigenstaendige Seite wie share.html: sie ist oeffentlich, Besucher ohne
+    Login sollen nicht die Navigation des Coaches sehen. -#}
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+        --bg: #12131a; --surface: #1a1b26; --border: #2a2b3a;
+        --text: #e0e0ea; --muted: #6b6e82; --accent: #9184d9;
+        --green: #4ade80; --red: #f87171; --yellow: #fbbf24;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 14px; }
+    a { color: inherit; text-decoration: none; }
+    a:hover { color: var(--accent); }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+    .head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+    h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+    h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 28px 0 10px; font-weight: 600; }
+    .online { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .dot.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .online strong { color: var(--text); font-weight: 600; }
+    .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+    .tab { padding: 5px 14px; border-radius: 20px; font-size: 12px; border: 1px solid var(--border); color: var(--muted); }
+    .tab.active { border-color: var(--accent); color: var(--accent); background: rgba(145,132,217,0.1); font-weight: 600; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 4px 0; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: right; padding: 9px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; font-weight: 600; }
+    td { text-align: right; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); white-space: nowrap; }
+    th.l, td.l { text-align: left; }
+    tr:last-child td { border-bottom: none; }
+    tr.prov td { color: var(--muted); }
+    .rank { font-weight: 700; width: 36px; }
+    .r1 { color: #fbbf24; } .r2 { color: #cbd5e1; } .r3 { color: #d97706; }
+    .elo { font-weight: 700; font-size: 15px; color: var(--accent); }
+    .name { font-weight: 600; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+    .sub { font-size: 11px; color: var(--muted); }
+    .tag { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.05); color: var(--muted); margin-left: 6px; }
+    .records { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .rec { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .rec-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+    .rec-val { font-size: 22px; font-weight: 700; margin: 6px 0 2px; }
+    .rec-who { font-weight: 600; color: var(--accent); }
+    .h2h td.cell { text-align: center; min-width: 42px; }
+    .h2h th { text-align: center; }
+    .h2h .self { color: var(--border); }
+    .h2h .more { color: var(--green); font-weight: 600; }
+    .h2h .less { color: var(--red); }
+    .games { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+    .game { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; }
+    .game-head { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .game-map { font-weight: 700; }
+    .game table td { padding: 3px 0; border: none; font-size: 12px; }
+    .note { font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 10px; }
+    .empty { padding: 32px; text-align: center; color: var(--muted); line-height: 1.7; }
+    .setup { margin-top: 32px; border: 1px dashed var(--border); border-radius: 12px; padding: 16px; font-size: 13px; line-height: 1.6; }
+    .setup pre { background: var(--bg); border-radius: 8px; padding: 12px; margin: 10px 0; overflow-x: auto; font-size: 12px; }
+    .back { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="head">
+    <h1>Server-Bestenliste</h1>
+    <div class="online">
+        <span class="dot {% if board.online.active %}on{% endif %}"></span>
+        {% if board.online.active %}
+            {% if board.online.players %}<strong>{{ board.online.players|join(', ') }}</strong> spielt gerade{% else %}Server aktiv{% endif %}
+            {% if board.online.map %} auf <strong>{{ board.online.map }}</strong>{% endif %}
+        {% elif board.last_ts %}
+            Zuletzt gespielt {{ board.last_ts.strftime('%d.%m.%Y %H:%M') }}
+        {% else %}
+            Noch keine Daten
+        {% endif %}
+    </div>
+</div>
+
+{% if not board.has_data %}
+<div class="card"><div class="empty">
+    Noch keine Spiele aufgezeichnet.<br>
+    Sobald auf dem Server gespielt wird, erscheint hier die Rangliste.
+</div></div>
+{% else %}
+
+<div class="tabs">
+    {% for key, label in [('alle', 'Gesamt'), ('30', '30 Tage'), ('7', '7 Tage')] %}
+    <a class="tab {% if board.period == key %}active{% endif %}" href="?zeitraum={{ key }}">{{ label }}</a>
+    {% endfor %}
+</div>
+
+<div class="card">
+<table>
+    <thead><tr>
+        <th class="l">#</th><th class="l">Spieler</th><th>Elo</th><th>Duelle</th>
+        <th>K</th><th>D</th><th>K/D</th><th title="Anteil der Kills per Kopfschuss">HS-Kills</th>
+        <th title="Anteil aller Treffer, die den Kopf trafen">Kopftreffer</th>
+        <th>Assists</th><th>Bot-Kills</th><th title="Kills ohne zu sterben">Serie</th>
+        <th class="l">Waffe</th><th class="l">Nemesis</th>
+    </tr></thead>
+    <tbody>
+    {% for r in board.rows %}
+    <tr class="{% if not r.ranked %}prov{% endif %}">
+        <td class="l rank {% if r.rank and r.rank <= 3 %}r{{ r.rank }}{% endif %}">{{ r.rank or '–' }}</td>
+        <td class="l name"><a href="https://steamcommunity.com/profiles/{{ r.steam_id }}" target="_blank" rel="noopener">{{ r.name }}</a>
+            {% if not r.ranked %}<span class="tag" title="Weniger als {{ board.min_duels }} Duelle">vorläufig</span>{% endif %}</td>
+        <td class="elo">{{ r.elo }}</td>
+        <td>{{ r.duels }}</td>
+        <td>{{ r.kills }}</td>
+        <td>{{ r.deaths }}</td>
+        <td>{{ '%.2f'|format(r.kd) if r.kd is not none else ('∞' if r.kills else '–') }}</td>
+        <td>{{ '%.0f %%'|format(r.hs_kills * 100) if r.hs_kills is not none else '–' }}</td>
+        <td>{{ '%.0f %%'|format(r.head_hits * 100) if r.head_hits is not none else '–' }}<div class="sub">{{ r.hits }} Treffer</div></td>
+        <td>{{ r.assists }}</td>
+        <td>{{ r.bot_kills }}</td>
+        <td>{{ r.best_streak }}</td>
+        <td class="l">{{ r.weapon or '–' }}</td>
+        <td class="l">{% if r.nemesis %}{{ r.nemesis.name }} <span class="sub">({{ r.nemesis.count }}×)</span>{% else %}–{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<p class="note">
+    <strong>Elo:</strong> Jeder Kill gegen einen Menschen ist ein gewonnenes Duell; wer einen stärkeren Gegner erledigt,
+    gewinnt mehr Punkte. Alle starten bei 1000, egal in welchem Modus gespielt wird. Ab {{ board.min_duels }} Duellen
+    gibt es einen Platz, vorher steht der Spieler als <em>vorläufig</em> unten, weil ein paar Kills noch nichts über die Stärke sagen.
+    Bots, Selbstmorde und Fallschaden zählen nicht für die Elo.
+</p>
+
+{% if board.records %}
+<h2>Rekorde</h2>
+<div class="records">
+    {% for rec in board.records %}
+    <div class="rec">
+        <div class="rec-title">{{ rec.title }}</div>
+        <div class="rec-val">{{ rec.value }}</div>
+        <div><span class="rec-who">{{ rec.name }}</span> <span class="sub">{{ rec.where }}</span></div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if board.h2h.players|length >= 2 %}
+<h2>Kopf an Kopf</h2>
+<div class="card h2h">
+<table>
+    <thead><tr><th class="l">Kills von ↓ gegen →</th>
+        {% for p in board.h2h.players %}<th>{{ p.name[:10] }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for a in board.h2h.players %}{% set i = loop.index0 %}
+    <tr><td class="l name">{{ a.name }}</td>
+        {% for b in board.h2h.players %}{% set j = loop.index0 %}
+        {% if i == j %}<td class="cell self">·</td>
+        {% else %}{% set mine = board.h2h.kills[i][j] %}{% set theirs = board.h2h.kills[j][i] %}
+        <td class="cell {% if mine > theirs %}more{% elif mine < theirs %}less{% endif %}">{{ mine }}</td>
+        {% endif %}
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<p class="note">Grün: diese Zeile hat den Spieler der Spalte öfter erledigt als umgekehrt.</p>
+{% endif %}
+
+{% if board.games %}
+<h2>Letzte Spiele</h2>
+<div class="games">
+    {% for g in board.games %}
+    <div class="game">
+        <div class="game-head">
+            <span class="game-map">{{ g.map }}{% if g.score %} <span class="sub">{{ g.score }}</span>{% endif %}</span>
+            <span class="sub">{{ g.start.strftime('%d.%m. %H:%M') if g.start }}{% if g.minutes %} · {{ g.minutes }} min{% endif %}{% if g.mode %} · {{ g.mode }}{% endif %}</span>
+        </div>
+        <table>
+            {% for p in g.players[:6] %}
+            <tr><td class="l">{{ p.name }}</td><td>{{ p.kills }} : {{ p.deaths }}</td>
+                <td class="sub">{{ (p.hs * 100 // p.kills)|int if p.kills else 0 }} % HS</td></tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% endif %}
+
+{% if setup %}
+<div class="setup">
+    <strong>Einrichtung</strong> (nur für dich sichtbar, weil du angemeldet bist)<br>
+    Diese Zeilen gehören in die <code>server.cfg</code> des CS2-Servers (<code>game/csgo/cfg/server.cfg</code>).
+    Der Server schickt sein Log dann hierher. Laufen Server und Coach im selben Netz, nimm statt der öffentlichen
+    Adresse die LAN-Adresse des Coaches (z.&nbsp;B. <code>http://192.168.x.x:5001/…</code>); Cloudflares Bot-Schutz
+    kann Anfragen von Valves HTTP-Client sonst abweisen.
+    <pre>log on
+mp_logdetail 3
+logaddress_delall_http
+logaddress_add_http "{{ setup.url }}"</pre>
+    Die URL enthält einen geheimen Schlüssel: Wer ihn kennt, kann Daten in die Bestenliste schreiben.
+</div>
+{% endif %}
+{% if is_admin %}<p class="note"><a class="back" href="{{ url_for('index') }}">← zurück zum Coach</a></p>{% endif %}
+
+</div>
+</body>
+</html>
