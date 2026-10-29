@@ -198,3 +198,24 @@ def test_real_server_lines():
     assert sorted(e.weapon for e in ss.parse_lines(REAL.splitlines()).events if e.kind == "kill") == [
         "ak47", "knife", "usp_silencer"]
     assert board["online"] == {"active": True, "players": ["Gegner", "dj"], "map": "aim_multigame"}
+
+
+def test_reset_archives_instead_of_deleting(tmp_path):
+    cfg = tmp_path / "config.yaml"
+    ss.store_batch(cfg, {"X-Timestamp": "10/29/2026 - 23:38:45.796"}, kill(1, DJ, DA).encode())
+    assert ss.read_logs(cfg).events
+    assert ss.archive_logs(cfg, now=datetime(2026, 10, 30, 0, 5)) == 1
+    assert not ss.read_logs(cfg).events
+    assert (tmp_path / "server_logs" / "archiv" / "2026-10-30_000500" / "2026-10-29.log").exists()
+    assert ss.archive_logs(cfg) == 0
+
+
+def test_reset_needs_login(app_with_auth):
+    client, cfg = app_with_auth
+    ss.store_batch(cfg, {}, kill(1, DJ, DA).encode())
+    assert client.post("/server/reset").status_code in (302, 403)
+    assert ss.read_logs(cfg).events  # nichts archiviert
+    with client.session_transaction() as sess:
+        sess["authenticated"] = True
+    assert client.post("/server/reset").status_code == 302
+    assert not ss.read_logs(cfg).events

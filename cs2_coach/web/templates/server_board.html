@@ -203,6 +203,13 @@ mp_logdetail 3
 logaddress_delall_http
 logaddress_add_http "{{ setup.url }}"</pre>
     Die URL enthält einen geheimen Schlüssel: Wer ihn kennt, kann Daten in die Bestenliste schreiben.
+    <form method="post" action="{{ url_for('server.reset') }}" style="margin-top: 14px;"
+          onsubmit="return confirm('Bestenliste wirklich zurücksetzen? Alle bisherigen Spiele verschwinden aus der Wertung.');">
+        <button type="submit" style="padding: 6px 14px; border-radius: 8px; border: 1px solid var(--red); background: transparent; color: var(--red); cursor: pointer; font-size: 12px;">
+            Bestenliste zurücksetzen</button>
+        <span class="sub" style="margin-left: 8px;">Die bisherigen Daten werden nur archiviert (<code>server_logs/archiv/</code>), nicht gelöscht.</span>
+        {% if request.args.get('reset') %}<div style="color: var(--green); margin-top: 8px;">Zurückgesetzt – {{ request.args.get('reset') }} Logdatei(en) archiviert.</div>{% endif %}
+    </form>
 </div>
 {% endif %}
 {% if is_admin %}<p class="note"><a class="back" href="{{ url_for('index') }}">← zurück zum Coach</a></p>{% endif %}

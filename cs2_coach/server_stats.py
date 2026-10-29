@@ -335,6 +335,24 @@ def read_logs(config_path: Path) -> ServerLog:
 _CACHE: dict[str, tuple] = {}
 
 
+def archive_logs(config_path: Path, now: datetime | None = None) -> int:
+    """Bestenliste zuruecksetzen: Rohlogs nach ``archiv/<zeitpunkt>/`` verschieben.
+
+    Verschieben statt loeschen - ein versehentlicher Klick kostet so nichts,
+    und read_logs() liest nur die oberste Ebene. Gibt die Zahl der Dateien zurueck.
+    """
+    folder = log_dir(config_path)
+    files = sorted(folder.glob("*.log")) if folder.is_dir() else []
+    if not files:
+        return 0
+    target = folder / "archiv" / (now or datetime.now()).strftime("%Y-%m-%d_%H%M%S")
+    target.mkdir(parents=True, exist_ok=True)
+    for f in files:
+        f.rename(target / f.name)
+    _CACHE.pop(str(folder), None)
+    return len(files)
+
+
 # --------------------------------------------------------------------------
 # Auswertung
 # --------------------------------------------------------------------------

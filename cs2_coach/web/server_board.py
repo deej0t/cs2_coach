@@ -14,7 +14,7 @@ from __future__ import annotations
 import secrets
 from pathlib import Path
 
-from flask import Blueprint, abort, render_template, request, session
+from flask import Blueprint, abort, redirect, render_template, request, session, url_for
 
 from .. import server_stats
 from . import auth
@@ -35,6 +35,15 @@ def create_blueprint(config_path) -> Blueprint:
             url = f"{request.url_root}api/serverlog/{server_stats.load_or_create_token(path)}"
             setup = {"url": url}
         return render_template("server_board.html", board=board, setup=setup, is_admin=is_admin)
+
+    @bp.route("/server/reset", methods=["POST"])
+    def reset():
+        """Nicht in PUBLIC_ENDPOINTS - zusaetzlich hier geprueft, weil die Seite oeffentlich ist."""
+        path = Path(config_path())
+        if auth.is_enabled(path) and not session.get("authenticated"):
+            abort(403)
+        n = server_stats.archive_logs(path)
+        return redirect(url_for("server.page", reset=n))
 
     @bp.route("/api/serverlog/<token>", methods=["POST"])
     def ingest(token):
