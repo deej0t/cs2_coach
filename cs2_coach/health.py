@@ -300,6 +300,64 @@ def check_exports(cfg: dict) -> Check:
     return Check("exports", label, OK, f"{len(files)} Exporte, Zahlen aktuell{note}.")
 
 
+def _public_ip(get=None) -> str:
+    """Oeffentliche IPv4 laut Cloudflare (dieselbe Quelle wie der DDNS-Container)."""
+    if get is None:
+        import requests
+        get = requests.get
+    text = get("https://1.1.1.1/cdn-cgi/trace", timeout=10).text
+    return next((ln[3:].strip() for ln in text.splitlines() if ln.startswith("ip=")), "")
+
+
+def _a2s_name(host: str, port: int, timeout: float = 4) -> str:
+    """Servername per A2S_INFO (UDP) - genau der Weg, den Mitspieler nehmen."""
+    import socket
+    query = b"\xff\xff\xff\xffTSource Engine Query\x00"
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.settimeout(timeout)
+        s.sendto(query, (host, port))
+        data, _ = s.recvfrom(1400)
+        if data[4:5] == b"A":  # Challenge, seit 2020 Pflicht
+            s.sendto(query + data[5:9], (host, port))
+            data, _ = s.recvfrom(1400)
+    return data[6:].split(b"\x00")[0].decode("utf-8", errors="replace")
+
+
+def check_game_server(cfg: dict, resolve=None, public_ip=None, query=None) -> Check:
+    """Zeigt cs2.deej0t.eu auf die aktuelle IP, und antwortet der Server darueber?
+
+    Die Adresse haelt ein DDNS-Container aktuell (favonia/cloudflare-ddns).
+    Laeuft dessen Token ab oder steht er, merkt das sonst erst, wer nicht
+    mehr verbinden kann. Warnung statt Fehler: nach einem IP-Wechsel
+    brauchen DDNS und DNS-Cache zusammen bis zu zehn Minuten.
+    """
+    label = "CS2-Server"
+    address = (cfg.get("server_address") or "").strip()
+    if not address:
+        return Check("game_server", label, SKIP, "Keine Server-Adresse eingetragen (server_address).")
+    host, _, port = address.partition(":")
+    port = int(port or 27015)
+    import socket
+    resolve = resolve or socket.gethostbyname
+    try:
+        ip = resolve(host)
+    except OSError as e:
+        return Check("game_server", label, WARN, f"{host} laesst sich nicht aufloesen: {e}")
+    try:
+        current = (public_ip or _public_ip)()
+    except Exception:  # noqa: BLE001 - ohne Vergleichswert nur die Erreichbarkeit pruefen
+        current = ""
+    if current and ip != current:
+        return Check("game_server", label, WARN,
+                     f"{host} zeigt auf {ip}, die oeffentliche IP ist aber {current} - "
+                     "DDNS-Container (cloudflare-ddns) pruefen.")
+    try:
+        name = (query or _a2s_name)(host, port)
+    except OSError:
+        return Check("game_server", label, WARN, f"{address} ({ip}) antwortet nicht.")
+    return Check("game_server", label, OK, f"{address} ({ip}) antwortet: {name}")
+
+
 def _export_dir(cfg: dict) -> Path | None:
     vault = cfg.get("obsidian_vault_path") or ""
     if not vault:
@@ -309,7 +367,7 @@ def _export_dir(cfg: dict) -> Path | None:
 
 def run_checks(cfg: dict, config_path: Path) -> list[Check]:
     checks = [check_public_url(cfg), check_updates(), check_steam(),
-              check_writable(Path(config_path).parent), check_ups(cfg)]
+              check_writable(Path(config_path).parent), check_ups(cfg), check_game_server(cfg)]
     checks += check_disk({
         "Config/Vault": Path(config_path).parent,
         "Demos": Path(cfg["demo_folder"]) if cfg.get("demo_folder") else None,

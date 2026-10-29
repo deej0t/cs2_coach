@@ -314,3 +314,37 @@ def test_heartbeat_ohne_adresse_oder_bei_netzfehler():
     def down(*a, **k):
         raise ConnectionError("offline")
     assert H.heartbeat(_states(H.OK), "https://hc-ping.com/abc", post=down) is None
+
+
+# ── CS2-Server (DDNS + Erreichbarkeit) ───────────────────────────────
+
+def test_game_server_skipped_without_address():
+    from cs2_coach.health import check_game_server
+    assert check_game_server({}).state == "skip"
+
+
+def test_game_server_warns_when_ddns_is_stale():
+    """Nach einem IP-Wechsel zeigt der Name noch auf die alte IP - www.deej0t.eu war so ein Fall."""
+    from cs2_coach.health import check_game_server
+    c = check_game_server({"server_address": "cs2.deej0t.eu"}, resolve=lambda h: "91.184.172.121",
+                          public_ip=lambda: "91.184.163.134", query=lambda h, p: "x")
+    assert c.state == "warn" and "cloudflare-ddns" in c.message
+
+
+def test_game_server_warns_when_not_answering():
+    from cs2_coach.health import check_game_server
+
+    def silent(host, port):
+        raise TimeoutError("timed out")
+
+    c = check_game_server({"server_address": "cs2.deej0t.eu:27016"}, resolve=lambda h: "1.2.3.4",
+                          public_ip=lambda: "1.2.3.4", query=silent)
+    assert c.state == "warn" and "27016" in c.message
+
+
+def test_game_server_ok():
+    from cs2_coach.health import check_game_server
+    seen = []
+    c = check_game_server({"server_address": "cs2.deej0t.eu"}, resolve=lambda h: "1.2.3.4",
+                          public_ip=lambda: "1.2.3.4", query=lambda h, p: seen.append(p) or "Welcome")
+    assert c.state == "ok" and "Welcome" in c.message and seen == [27015]

@@ -42,6 +42,8 @@ telegram_bot_token: ''
 # Eigener CS2-Server (Seite /server): Chat-Befehle wie !top beantwortet der
 # Coach per RCON. Leer = keine Chat-Befehle. Port meist 27015.
 server_rcon_host: ''
+# Adresse fuer Mitspieler (Seite /server, Systemstatus prueft DNS + Erreichbarkeit).
+server_address: ''
 server_rcon_port: 27015
 server_rcon_password: ''
 # Spielende und "Spieler der Woche" nach Discord. Leer = discord_webhook.

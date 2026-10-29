@@ -81,6 +81,13 @@
     </div>
 </div>
 
+{% if connect %}
+<p class="note" style="margin: -8px 0 18px;">
+    Mitspielen: <a href="{{ connect.url }}" style="color: var(--accent); font-weight: 600;">Server beitreten</a>
+    oder in der Konsole <code>connect {{ connect.address }}</code>
+</p>
+{% endif %}
+
 {% if not board.has_data %}
 <div class="card"><div class="empty">
     Noch keine Spiele aufgezeichnet.<br>

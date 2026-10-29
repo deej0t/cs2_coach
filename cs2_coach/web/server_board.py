@@ -38,7 +38,14 @@ def create_blueprint(config_path, load_config=None) -> Blueprint:
         if is_admin:
             url = f"{request.url_root}api/serverlog/{server_stats.load_or_create_token(path)}"
             setup = {"url": url}
-        return render_template("server_board.html", board=board, setup=setup, is_admin=is_admin)
+        cfg = load_config() if load_config else {}
+        address = (cfg.get("server_address") or "").strip()
+        connect = None
+        if address:
+            connect = {"address": address,
+                       "url": f"steam://connect/{address if ':' in address else address + ':27015'}"}
+        return render_template("server_board.html", board=board, setup=setup, is_admin=is_admin,
+                               connect=connect)
 
     @bp.route("/server/reset", methods=["POST"])
     def reset():
