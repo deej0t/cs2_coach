@@ -99,14 +99,15 @@ def store_batch(config_path: Path, headers: Mapping, body: bytes, now: datetime 
     lines = [ln for ln in text.split("\n") if ln.strip() and not ln.startswith("#batch ")]
     if not lines:
         return 0
-    day = (now or datetime.now()).strftime("%Y-%m-%d")
-    stamp = _parse_ts(headers.get("X-Timestamp", ""))
-    if stamp:
-        day = stamp.strftime("%Y-%m-%d")
-    head = "#batch {} {} {}".format(
+    now = now or datetime.now()
+    # Empfangszeit statt Server-Uhr: der Server loggt in seiner eigenen
+    # Zeitzone (nach einem Neuerstellen ohne TZ in UTC, gemessen 30.10.2026).
+    day = now.strftime("%Y-%m-%d")
+    head = "#batch {} {} {} {}".format(
         _header_value(headers, "X-Server-Instance-Token"),
         _header_value(headers, "X-LogBytes-BeginOffset"),
         _header_value(headers, "X-Game-Map"),
+        now.strftime("%Y-%m-%dT%H:%M:%S"),
     )
     folder = log_dir(config_path)
     folder.mkdir(parents=True, exist_ok=True)
@@ -204,16 +205,45 @@ class ServerLog:
     last_map: str = ""
 
 
+def _batches(lines: Iterable[str]):
+    """Rohzeilen in (Kopf-Felder, Zeilen) gruppieren."""
+    head: list[str] = ["#batch"]
+    body: list[str] = []
+    for raw in lines:
+        raw = raw.rstrip("\n").replace("\x00", "")
+        if raw.startswith("#batch "):
+            if body:
+                yield head, body
+            head, body = raw.split(" "), []
+        elif raw:
+            body.append(raw)
+    if body:
+        yield head, body
+
+
+def _clock_shift(recv: datetime | None, first: datetime | None) -> timedelta:
+    """Abstand Server-Uhr -> Empfangszeit, auf Viertelstunden gerundet (= Zeitzone).
+
+    Die Rundung schluckt die Sekunden, die ein Stapel unterwegs ist.
+    """
+    if recv is None or first is None:
+        return timedelta(0)
+    return timedelta(minutes=15 * round((recv - first).total_seconds() / 900))
+
+
 def parse_lines(lines: Iterable[str]) -> ServerLog:
     """Rohzeilen (inkl. ``#batch``-Koepfen) in Ereignisse und Spiele zerlegen.
 
     Ein neues Spiel beginnt bei Serverneustart (neue Instanz), Mapwechsel
-    und Match_Start, und nach "Game Over". Doppelt gesendete Stapel
-    (gleiche Instanz + Offset) werden uebersprungen.
+    und Match_Start, und nach "Game Over". Doppelt gesendete Stapel werden
+    am Inhalt erkannt, nicht am Offset: nach einem Neustart kamen am
+    30.10.2026 zwei verschiedene Stapel mit Offset 0 (die server.cfg laeuft
+    beim Start zweimal und meldet den Empfaenger jedes Mal neu an).
+    Zeitstempel werden mit der Empfangszeit aus dem Kopf auf Ortszeit
+    gebracht.
     """
     out = ServerLog()
-    seen: set[tuple[str, str]] = set()
-    skip = False
+    seen: set[tuple] = set()
     instance = ""
     batch_map = ""
     game: Game | None = None
@@ -242,74 +272,78 @@ def parse_lines(lines: Iterable[str]) -> ServerLog:
             out.names[s64] = m.group(prefix + "name")
         return s64, False
 
-    for raw in lines:
-        raw = raw.rstrip("\n").replace("\x00", "")
-        if raw.startswith("#batch "):
-            parts = raw.split(" ")
-            key = (parts[1] if len(parts) > 1 else "-", parts[2] if len(parts) > 2 else "-")
-            skip = key in seen and key[1] != "-"
-            seen.add(key)
-            if not skip:
-                if key[0] != instance:
-                    instance = key[0]
-                    out.last_instance = instance
-                    game = None
-                batch_map = parts[3] if len(parts) > 3 and parts[3] != "-" else batch_map
-                out.last_map = batch_map
-            continue
-        if skip:
-            continue
-        m = _LINE.match(raw)
-        if not m:
-            continue
-        ts = _parse_ts(m.group(1))
-        if ts is None:
-            continue
-        msg = m.group(2)
-        out.last_ts = ts
+    for parts, body in _batches(lines):
+        token = parts[1] if len(parts) > 1 else "-"
+        key = (token, tuple(body))
+        if key in seen:
+            continue  # derselbe Stapel ein zweites Mal gesendet
+        seen.add(key)
+        if token != instance:
+            instance = token
+            out.last_instance = instance
+            game = None
+        if len(parts) > 3 and parts[3] != "-":
+            batch_map = out.last_map = parts[3]
+        try:
+            recv = datetime.fromisoformat(parts[4]) if len(parts) > 4 else None
+        except ValueError:
+            recv = None
+        shift = None
+        for raw in body:
+            m = _LINE.match(raw)
+            if not m:
+                continue
+            ts = _parse_ts(m.group(1))
+            if ts is None:
+                continue
+            if shift is None:
+                shift = _clock_shift(recv, ts)
+            ts += shift
+            msg = m.group(2)
+            out.last_ts = ts
 
-        if mm := (_MAP.match(msg) or _MATCH_START.match(msg)):
-            # "Loading map" und "Started map" folgen direkt aufeinander:
-            # ein Spiel ohne Ereignisse bekommt nur die Map, kein neues.
-            batch_map = out.last_map = mm.group("map")
-            if game is not None and game.start is None and not game.finished:
-                game.map = batch_map
-            else:
-                new_game(batch_map)
-            continue
-        if mm := _GAME_OVER.match(msg):
-            g = current(ts)
-            g.mode, g.map = mm.group("mode"), mm.group("map")
-            g.score = f"{mm.group('s1')}:{mm.group('s2')}"
-            g.finished = True
-            continue
+            if mm := (_MAP.match(msg) or _MATCH_START.match(msg)):
+                # "Loading map" und "Started map" folgen direkt aufeinander:
+                # ein Spiel ohne Ereignisse bekommt nur die Map, kein neues.
+                batch_map = out.last_map = mm.group("map")
+                if game is not None and game.start is None and not game.finished:
+                    game.map = batch_map
+                else:
+                    new_game(batch_map)
+                continue
+            if mm := _GAME_OVER.match(msg):
+                g = current(ts)
+                g.mode, g.map = mm.group("mode"), mm.group("map")
+                g.score = f"{mm.group('s1')}:{mm.group('s2')}"
+                g.finished = True
+                continue
 
-        if mm := _KILL.match(msg):
-            a, a_bot = who("a", mm)
-            v, v_bot = who("v", mm)
-            flags = (mm.group("flags") or "").split()
-            weapon = mm.group("weapon")
-            if weapon.startswith(("knife", "bayonet")):
-                weapon = "knife"  # Kill-Zeilen nennen den Skin ("knife_skeleton"), Treffer nur "knife"
-            out.events.append(Event(ts, "kill", current(ts).id, instance, a, v, a_bot, v_bot,
-                                    weapon, "headshot" in flags))
-        elif mm := _ATTACK.match(msg):
-            a, a_bot = who("a", mm)
-            v, v_bot = who("v", mm)
-            out.events.append(Event(ts, "hit", current(ts).id, instance, a, v, a_bot, v_bot,
-                                    mm.group("weapon"), hitgroup=mm.group("hitgroup")))
-        elif mm := _ASSIST.match(msg):
-            a, a_bot = who("a", mm)
-            v, v_bot = who("v", mm)
-            out.events.append(Event(ts, "assist", current(ts).id, instance, a, v, a_bot, v_bot))
-        elif mm := _ENTER.match(msg):
-            a, _ = who("a", mm)
-            if a:
-                out.events.append(Event(ts, "enter", game.id if game else 0, instance, a))
-        elif mm := _LEAVE.match(msg):
-            a, _ = who("a", mm)
-            if a:
-                out.events.append(Event(ts, "leave", game.id if game else 0, instance, a))
+            if mm := _KILL.match(msg):
+                a, a_bot = who("a", mm)
+                v, v_bot = who("v", mm)
+                flags = (mm.group("flags") or "").split()
+                weapon = mm.group("weapon")
+                if weapon.startswith(("knife", "bayonet")):
+                    weapon = "knife"  # Kill-Zeilen nennen den Skin ("knife_skeleton"), Treffer nur "knife"
+                out.events.append(Event(ts, "kill", current(ts).id, instance, a, v, a_bot, v_bot,
+                                        weapon, "headshot" in flags))
+            elif mm := _ATTACK.match(msg):
+                a, a_bot = who("a", mm)
+                v, v_bot = who("v", mm)
+                out.events.append(Event(ts, "hit", current(ts).id, instance, a, v, a_bot, v_bot,
+                                        mm.group("weapon"), hitgroup=mm.group("hitgroup")))
+            elif mm := _ASSIST.match(msg):
+                a, a_bot = who("a", mm)
+                v, v_bot = who("v", mm)
+                out.events.append(Event(ts, "assist", current(ts).id, instance, a, v, a_bot, v_bot))
+            elif mm := _ENTER.match(msg):
+                a, _ = who("a", mm)
+                if a:
+                    out.events.append(Event(ts, "enter", game.id if game else 0, instance, a))
+            elif mm := _LEAVE.match(msg):
+                a, _ = who("a", mm)
+                if a:
+                    out.events.append(Event(ts, "leave", game.id if game else 0, instance, a))
     return out
 
 
@@ -368,12 +402,18 @@ def _expected(ra: float, rb: float) -> float:
 PERIODS = {"alle": None, "30": 30, "7": 7}
 
 
-def build_board(log: ServerLog, period: str = "alle", now: datetime | None = None) -> dict:
-    """Bestenliste, Kopf-an-Kopf, Rekorde und letzte Spiele fuer einen Zeitraum."""
+def build_board(log: ServerLog, period: str = "alle", now: datetime | None = None,
+                since: datetime | None = None, until: datetime | None = None) -> dict:
+    """Bestenliste, Kopf-an-Kopf, Rekorde und letzte Spiele fuer einen Zeitraum.
+
+    ``since``/``until`` ueberschreiben ``period`` (z. B. fuer eine Kalenderwoche).
+    """
     now = now or datetime.now()
     days = PERIODS.get(period, None)
-    since = now - timedelta(days=days) if days else None
-    events = [e for e in log.events if since is None or e.ts >= since]
+    if since is None and days:
+        since = now - timedelta(days=days)
+    events = [e for e in log.events
+              if (since is None or e.ts >= since) and (until is None or e.ts < until)]
 
     stats: dict[str, dict] = defaultdict(lambda: {
         "kills": 0, "deaths": 0, "hs": 0, "assists": 0, "bot_kills": 0,

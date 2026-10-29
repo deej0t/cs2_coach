@@ -71,6 +71,20 @@ def test_resent_batch_is_counted_once():
     assert sum(e.kind == "kill" for e in log.events) == 2
 
 
+def test_same_offset_different_content_both_count():
+    """Gemessen nach dem Neustart am 30.10.: zwei verschiedene Stapel mit Offset 0."""
+    log = ss.parse_lines(["#batch neu 0 m", kill(1, DJ, DA), "#batch neu 0 m", kill(2, DA, DJ)])
+    assert sum(e.kind == "kill" for e in log.events) == 2
+
+
+def test_server_clock_in_utc_is_shifted_to_receive_time():
+    """Der Server loggte nach dem Neuerstellen in UTC: 23:13 statt 00:13."""
+    raw = "10/29/2026 - 23:13:18.000 - " + kill(0, DJ, DA).split(" - ", 2)[2]
+    log = ss.parse_lines(["#batch i 0 m 2026-10-30T00:13:19", raw])
+    assert log.events[0].ts == datetime(2026, 10, 30, 0, 13, 18)
+    assert ss.parse_lines(["#batch i 0 m", raw]).events[0].ts == datetime(2026, 10, 29, 23, 13, 18)
+
+
 def test_elo_rewards_beating_stronger_player():
     """Ein Kill gegen den Staerkeren bringt mehr als einer gegen den Schwaecheren."""
     lines = ["#batch i 0 m"] + [kill(s, DJ, DA) for s in range(20)]
@@ -127,8 +141,9 @@ def test_store_and_read_roundtrip(tmp_path):
     headers = {"X-Server-Instance-Token": "abc", "X-LogBytes-BeginOffset": "0",
                "X-Game-Map": "aim_multigame", "X-Timestamp": "10/29/2026 - 23:38:45.796"}
     body = (kill(1, DJ, DA) + "\n" + kill(2, DJ, DA) + "\n").encode()
-    assert ss.store_batch(cfg, headers, body) == 2
-    ss.store_batch(cfg, headers, body)  # Wiederholung desselben Stapels
+    now = datetime(2026, 10, 29, 23, 40)
+    assert ss.store_batch(cfg, headers, body, now=now) == 2
+    ss.store_batch(cfg, headers, body, now=now)  # Wiederholung desselben Stapels
     assert (tmp_path / "server_logs" / "2026-10-29.log").exists()
     log = ss.read_logs(cfg)
     assert sum(e.kind == "kill" for e in log.events) == 2
@@ -202,7 +217,7 @@ def test_real_server_lines():
 
 def test_reset_archives_instead_of_deleting(tmp_path):
     cfg = tmp_path / "config.yaml"
-    ss.store_batch(cfg, {"X-Timestamp": "10/29/2026 - 23:38:45.796"}, kill(1, DJ, DA).encode())
+    ss.store_batch(cfg, {}, kill(1, DJ, DA).encode(), now=datetime(2026, 10, 29, 23, 40))
     assert ss.read_logs(cfg).events
     assert ss.archive_logs(cfg, now=datetime(2026, 10, 30, 0, 5)) == 1
     assert not ss.read_logs(cfg).events

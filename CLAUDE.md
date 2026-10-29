@@ -23,7 +23,9 @@ cs2_coach/
   health.py       (300) system status checks + Discord alert on state change
   training.py     (160) training goals with start date + progress (before/after)
   sync.py          (50) GCPD demo download without the web UI (`cs2-coach sync`)
-  server_stats.py (550) server leaderboard from the CS2 server's HTTP log (Elo, records, H2H)
+  server_stats.py (600) server leaderboard from the CS2 server's HTTP log (Elo, records, H2H)
+  server_live.py  (350) in-game chat commands (!top, !rank ...) via RCON, Discord game end + player of the week
+  rcon.py          (60) minimal Source RCON client
   briefing.py     (290) daily training briefing: facts, AI intro, sending -> Discord/Telegram + vault
   briefing_view.py (230) fixed briefing layout (goals per match, bars, exercises, progress)
   telegram.py     (110) Telegram bot sending, chat id auto-discovery
@@ -123,10 +125,14 @@ Each of these was wrong once and was fixed against measured demo data. Do not re
 
 ## Server Leaderboard (`server_stats.py`, `web/server_board.py`)
 - Source is the CS2 server's **HTTP log** (`logaddress_add_http`), not demos: every mode logs, the coach parser is round-based, and GOTV would need recording per map. Measured 2026-10-29: plain-text lines `MM/DD/YYYY - HH:MM:SS.mmm - <event>`, headers `X-Server-Instance-Token` (new per server start), `X-LogBytes-BeginOffset` (continues per instance, also across a new destination), `X-Game-Map`. CS2 sends the next batch only after the previous was answered.
-- Each batch is appended raw to `server_logs/YYYY-MM-DD.log` next to the config, prefixed `#batch <instance> <offset> <map>`; resent batches are dropped *when reading*. Stats are recomputed from the raw lines on every request (cached on size+mtime) and never stored, like findings.
+- Each batch is appended raw to `server_logs/YYYY-MM-DD.log` (day = receive time) next to the config, prefixed `#batch <instance> <offset> <map> <received>`. Resent batches are dropped *when reading*, by **content**, not offset: after a restart on 2026-10-30 two *different* batches both had offset 0 (server.cfg runs twice at start and re-registers the receiver), and the instance token does change per start.
+- **The server's clock is not trusted.** After the container was recreated from the CLI its log ran in UTC (23:13 while local was 00:13). The parser shifts each batch by receive time minus first line, rounded to 15 min. **Recreate the CS2 container via the Unraid GUI ("Apply"), not `rebuild_container` from a shell**: the CLI path does not load `var.ini` and creates the container with `TZ=` and `HOST_HOSTNAME=` empty; it also leaves it stopped, because CS2 has no autostart (`/var/lib/docker/unraid-autostart`). Stats are recomputed from the raw lines on every request (cached on size+mtime) and never stored, like findings.
 - `/server` and the ingest are **public** (`auth.PUBLIC_ENDPOINTS`): everyone who plays may look; the server cannot log in. The ingest is guarded by a token in the URL (`.serverlog_token` next to the config, O_EXCL like `.secret_key`, not in config.yaml). The `server.cfg` lines with the token are shown on `/server` only when logged in.
 - Ranking is a **duel Elo** (each human kill = won duel, K=8, start 1000): mode-agnostic and rewards beating stronger players. Below `MIN_DUELS` (30) a player is listed as "vorlaeufig" without rank. Bots, suicides and world damage never count for Elo or K/D (bot kills have their own column); same-team kills *do* count, because in FFA deathmatch everyone shares a team and the log does not say which mode is running.
 - "Bestenliste zuruecksetzen" (`/server/reset`, login only) **moves** the raw logs to `server_logs/archiv/<timestamp>/` instead of deleting them; `read_logs()` reads the top level only.
+- **In-game commands** (`server_live.py`): `!top`, `!rank`/`!myrank`, `!session` (last 6 h), `!nemesis`, `!vs <name>`, `!help`. The coach sees chat lines in the log within a second and answers with `say` over RCON (`server_rcon_host/port/password` in config.yaml) - no Metamod/CounterStrikeSharp, which break on CS2 updates. Everything sent goes through `_safe()`: player names end up inside an RCON command, so `"`, `;` and control characters must never pass. Per-player cooldown 3 s.
+- Discord (`server_webhook`, else `discord_webhook`): a summary per finished game ("Game Over", >= 5 human kills) and "Spieler der Woche" (best Elo among players with >= 30 duels in the previous calendar week) with the first batch of a new week - no scheduler. Each message is sent once via an O_EXCL marker in `server_logs/.posted/`; a failed post removes its marker and is retried with the next batch.
+- `server.cfg` (persisted on the cache mount) sets `hostname`, logging, the log receiver and `rcon_password`; verified 2026-10-30 that it runs on server start.
 - Point CS2 at the coach's **LAN** address (`http://192.168.188.71:5001/...`), not the public URL - Cloudflare's bot protection already blocked GitHub's checks.
 
 ## Daily Briefing (`training.py`, `briefing.py`, `sync.py`)

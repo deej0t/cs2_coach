@@ -16,12 +16,16 @@ from pathlib import Path
 
 from flask import Blueprint, abort, redirect, render_template, request, session, url_for
 
-from .. import server_stats
+from .. import server_live, server_stats
 from . import auth
 
 
-def create_blueprint(config_path) -> Blueprint:
-    """config_path ist eine Funktion, damit Tests die Config austauschen koennen."""
+def create_blueprint(config_path, load_config=None) -> Blueprint:
+    """config_path ist eine Funktion, damit Tests die Config austauschen koennen.
+
+    load_config liefert die aktuelle Config (Webhook, RCON) fuer Chat-Befehle
+    und Discord-Meldungen; ohne sie wird nur gespeichert.
+    """
     bp = Blueprint("server", __name__)
 
     @bp.route("/server")
@@ -53,7 +57,13 @@ def create_blueprint(config_path) -> Blueprint:
             abort(403)
         if (request.content_length or 0) > server_stats.MAX_BATCH_BYTES:
             abort(413)
-        server_stats.store_batch(path, request.headers, request.get_data())
+        body = request.get_data()
+        server_stats.store_batch(path, request.headers, body)
+        if load_config is not None:
+            try:
+                server_live.on_batch(load_config(), path, body)
+            except Exception as e:  # noqa: BLE001 - der Empfang darf daran nie scheitern
+                print(f"[server_live] {e}", flush=True)
         return "", 200
 
     return bp

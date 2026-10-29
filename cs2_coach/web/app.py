@@ -1913,7 +1913,7 @@ def create_app() -> Flask:
     from .daily_briefing import create_blueprint as _daily_bp
     app.register_blueprint(_daily_bp(load_config, lambda: CONFIG_PATH))
     from .server_board import create_blueprint as _server_bp
-    app.register_blueprint(_server_bp(lambda: CONFIG_PATH))
+    app.register_blueprint(_server_bp(lambda: CONFIG_PATH, load_config))
 
     @app.route("/settings")
     def settings():
