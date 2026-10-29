@@ -69,3 +69,5 @@ docker/cfg/coach/
 server_logs/
 # Taegliche Briefings im Vault
 CS2-Coach/Briefings/
+.training_server.json
+.training_server.lock

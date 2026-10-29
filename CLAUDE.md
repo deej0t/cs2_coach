@@ -26,6 +26,7 @@ cs2_coach/
   server_stats.py (600) server leaderboard from the CS2 server's HTTP log (Elo, records, H2H)
   server_live.py  (350) in-game chat commands (!top, !rank ...) via RCON, Discord game end + player of the week
   rcon.py          (60) minimal Source RCON client
+  training_server.py (430) duel training on the server: replays your lost duels with a bot (!training <map>)
   briefing.py     (290) daily training briefing: facts, AI intro, sending -> Discord/Telegram + vault
   briefing_view.py (230) fixed briefing layout (goals per match, bars, exercises, progress)
   telegram.py     (110) Telegram bot sending, chat id auto-discovery
@@ -135,6 +136,11 @@ Each of these was wrong once and was fixed against measured demo data. Do not re
 - Discord (`server_webhook`, else `discord_webhook`): a summary per finished game ("Game Over", >= 5 human kills) and "Spieler der Woche" (best Elo among players with >= 30 duels in the previous calendar week) with the first batch of a new week - no scheduler. Each message is sent once via an O_EXCL marker in `server_logs/.posted/`; a failed post removes its marker and is retried with the next batch.
 - `server.cfg` (persisted on the cache mount) sets `hostname`, logging, the log receiver and `rcon_password`; verified 2026-10-30 that it runs on server start.
 - Point CS2 at the coach's **LAN** address (`http://192.168.188.71:5001/...`), not the public URL - Cloudflare's bot protection already blocked GitHub's checks.
+
+## Duel Training on the Server (`training_server.py`)
+- `!training <map>` (owner only: `steam_id` + `training_admins`, server must have no other human) replays every death from the exports (`kill_positions`, t="d", gun kills >= 150 units): at each `Round_Start` you are put at your death position, a bot with the killer's weapon at the killer's position; the bot stays frozen for a start delay, then its own AI pushes. `!skip` (`endround`), `!leichter`/`!schwerer`, `!stop`. Every 5 duels the level adapts (4+ wins: shorter delay, then `bot_difficulty` up; <= 1: easier). Maps only from `training_maps` (Premier/FACEIT pool) - exports do not record whether a match was Premier.
+- Measured 2026-10-30 on de_mirage, do not "simplify" back: **`setpos_player` does nothing to bots** (neither by id nor by name); **`ent_setpos <entindex>`** on the pawn (class `player`) works. Pawn indexes stay the same across rounds and deaths; they are mapped once: `ent_find player` while only the human exists, then again after the bot joins. `setang` only works for the issuing client; whether `ent_setang` turns a *human's* view is untested. `bot_loadout m4a1` arms bots from the next round on. Frozen bots (`bot_freeze 1`) do not shoot. A map change resets `sv_hibernate_when_empty` - hibernating servers run no game logic. After `changelevel` the log shows `Loading map`, never `Started map`; team switch lines have one field less than kill lines.
+- Driven by the HTTP log **synchronously** in the ingest (CS2 sends the next batch only after the answer), so a kill never overtakes its `Round_Start`. State in `.training_server.json` next to the config, guarded by an O_EXCL lock file. A disconnect of the human (after map load) stops the training and restores the server (`RESTORE` + `server_restore_command`), otherwise it would stay with `sv_cheats 1`.
 
 ## Daily Briefing (`training.py`, `briefing.py`, `sync.py`)
 - The container loop (`CS2COACH_BRIEFING_HOUR`, default 17, empty = off) runs `cs2-coach sync` once a day (GCPD download + `batch --only-outdated`), then `briefing --send` every 15 min from that hour on. `.briefing_state.json` next to the config makes sending **at most once per day** and is written only after a successful post, so a failed post is retried on the next pass. Webhook: `briefing_webhook`, else `discord_webhook`. Note goes to `CS2-Coach/Briefings/YYYY-MM-DD.md`.

@@ -40,7 +40,7 @@ SESSION_HOURS = 6
 _CHAT = re.compile(ss._player("a") + r' say(?:_team)? "(?P<text>.*)"$')
 _last_command: dict[str, float] = {}
 
-HELP = "Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !help"
+HELP = "Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !training (Besitzer) · !help"
 
 
 # --------------------------------------------------------------------------
@@ -201,19 +201,35 @@ def _say_commands(lines: list[str]) -> list[str]:
     return out
 
 
-def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, now=None) -> int:
-    """Chat-Befehle aus einem Stapel beantworten. Gibt die Zahl der Antworten zurueck."""
+def rcon_sender(cfg: dict):
+    """send(*befehle) -> Antworten, oder None ohne RCON-Zugang in der Config."""
     host = (cfg.get("server_rcon_host") or "").strip()
     password = cfg.get("server_rcon_password") or ""
+    if not host or not password:
+        return None
+    return lambda *c: rcon.command(host, cfg.get("server_rcon_port") or 27015, password, *c)
+
+
+def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, now=None) -> int:
+    """Chat-Befehle aus einem Stapel beantworten. Gibt die Zahl der Antworten zurueck."""
+    from .training_server import COMMANDS as TRAINING, Director
     commands = parse_commands(lines)
-    if not commands or not host or not password:
+    send = send or rcon_sender(cfg)
+    if not commands or send is None:
         return 0
-    send = send or (lambda *c: rcon.command(host, cfg.get("server_rcon_port") or 27015, password, *c))
-    log = ss.read_logs(config_path)
+    log = None
     sent = 0
     for sid, name, cmd, arg in commands:
         if time.monotonic() - _last_command.get(sid, -COOLDOWN) < COOLDOWN:
             continue
+        if cmd in TRAINING:
+            reply = Director(cfg, config_path, send).command(sid, name, cmd, arg)
+            _last_command[sid] = time.monotonic()
+            if reply:
+                send(*_say_commands(reply))
+                sent += 1
+            continue
+        log = log or ss.read_logs(config_path)
         reply = answer(cmd, arg, sid, name, log, cfg, now=now)
         if not reply:
             continue
@@ -329,6 +345,14 @@ def handle_posts(cfg: dict, config_path: Path, lines: list[str], post=None, now=
 def on_batch(cfg: dict, config_path: Path, body: bytes) -> None:
     """Nach dem Speichern eines Stapels im Hintergrund: Befehle beantworten, Meldungen senden."""
     lines = body.decode("utf-8", errors="replace").replace("\r", "").split("\n")
+    from .training_server import Director, is_active
+    if is_active(config_path) and (send := rcon_sender(cfg)):
+        # Synchron, nicht im Thread: CS2 schickt den naechsten Stapel erst nach
+        # der Antwort, so kommt "Kill" garantiert nach "Round_Start" an.
+        try:
+            Director(cfg, config_path, send).on_lines(lines)
+        except Exception as e:  # noqa: BLE001
+            print(f"[training] {e}", flush=True)
     has_command = any(" say" in ln and '"!' in ln for ln in lines)
     game_over = any("Game Over:" in ln for ln in lines)
     week_due = bool(_webhook(cfg)) and not _week_marked(config_path)

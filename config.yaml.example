@@ -46,6 +46,13 @@ server_rcon_host: ''
 server_address: ''
 server_rcon_port: 27015
 server_rcon_password: ''
+# Duell-Training (!training <map> im Chat, nur steam_id oben + training_admins).
+# Nur Maps aus dem Premier/FACEIT-Pool; leer = de_ancient, de_anubis, de_dust2,
+# de_inferno, de_mirage, de_nuke, de_overpass, de_train.
+training_maps: []
+training_admins: []
+# Befehl, der nach dem Training die normale Map zurueckholt (z. B. Workshop-Map).
+server_restore_command: ''
 # Spielende und "Spieler der Woche" nach Discord. Leer = discord_webhook.
 server_webhook: ''
 
