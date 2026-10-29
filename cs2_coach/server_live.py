@@ -194,7 +194,9 @@ def _say_commands(lines: list[str]) -> list[str]:
     for line in lines:
         text = _safe(f"{PREFIX} {line}")
         while text:
-            out.append(f'say "{text[:MAX_SAY]}"')
+            # Ohne Anfuehrungszeichen: CS2 zeigt sie sonst im Chat mit an
+            # (gemessen 30.10.2026). Sicher, weil _safe() ; und " entfernt hat.
+            out.append(f"say {text[:MAX_SAY]}")
             text = text[MAX_SAY:].strip()
     return out
 

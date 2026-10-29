@@ -44,8 +44,8 @@ def test_parse_commands_from_chat():
 
 def test_names_cannot_inject_rcon_commands():
     say = sl._say_commands(['Platz 1: x"; rcon_password hacked; quit // \n'])
-    assert say == ['say "[Coach] Platz 1: x rcon_password hacked quit //"']
-    assert all(c.count('"') == 2 and ";" not in c for c in say)
+    assert say == ["say [Coach] Platz 1: x rcon_password hacked quit //"]
+    assert all('"' not in c and ";" not in c for c in say)
 
 
 def test_long_answers_are_split():
@@ -79,7 +79,7 @@ def test_handle_commands_sends_via_rcon_with_cooldown(tmp_path):
     batch = [line(30, f'{DJ} say "!rank"'), line(31, f'{DJ} say "!top"')]
     sl._last_command.clear()
     assert sl.handle_commands(CFG, cfg_path, batch, send=lambda *c: sent.append(c), now=NOW) == 1
-    assert sent[0][0].startswith('say "[Coach] dj: vorläufig')
+    assert sent[0][0].startswith("say [Coach] dj: vorläufig")
     assert sl.handle_commands({}, cfg_path, batch, send=lambda *c: sent.append(c)) == 0  # ohne RCON
 
 
