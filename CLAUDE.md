@@ -26,7 +26,7 @@ cs2_coach/
   server_stats.py (600) server leaderboard from the CS2 server's HTTP log (Elo, records, H2H)
   server_live.py  (350) in-game chat commands (!top, !rank ...) via RCON, Discord game end + player of the week
   rcon.py          (60) minimal Source RCON client
-  training_server.py (430) duel training on the server: replays your lost duels with a bot (!training <map>)
+  training_server.py (460) duel training on the server: replays your lost duels with a bot (!training <map>)
   briefing.py     (290) daily training briefing: facts, AI intro, sending -> Discord/Telegram + vault
   briefing_view.py (230) fixed briefing layout (goals per match, bars, exercises, progress)
   telegram.py     (110) Telegram bot sending, chat id auto-discovery
