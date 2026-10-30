@@ -45,7 +45,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.6.1";
+    public override string ModuleVersion => "1.7.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -73,10 +73,12 @@ public class CoachTeleport : BasePlugin
     {
         RegisterListener<Listeners.OnTick>(OnTick);
         RegisterListener<Listeners.OnTick>(DrawCenter);
+        RegisterListener<Listeners.OnTick>(AimAssist);
         RegisterListener<Listeners.OnPlayerButtonsChanged>(OnButtons);
         RegisterEventHandler<EventRoundStart>((_, _) =>
         {
             _inFreeze = true;
+            _sawAt.Clear();
             return HookResult.Continue;
         });
         RegisterEventHandler<EventRoundFreezeEnd>((_, _) =>
@@ -303,19 +305,77 @@ public class CoachTeleport : BasePlugin
 
     // Dieselben Daten wie fuers Radar: m_entitySpottedState.m_bSpottedByMask eines
     // Spielers hat ein Bit fuer jeden Slot, der ihn gerade sieht.
-    private static bool SeesEnemy(CCSPlayerController bot)
+    private static bool SeesEnemy(CCSPlayerController bot) => SeenEnemy(bot) is not null;
+
+    private static CCSPlayerPawn? SeenEnemy(CCSPlayerController bot)
     {
         var slot = bot.Slot;
-        if (slot < 0 || slot >= 64) return false;
+        if (slot < 0 || slot >= 64) return null;
         foreach (var p in Utilities.GetPlayers())
         {
             if (p == bot || p.TeamNum == bot.TeamNum) continue;
             var pawn = p.PlayerPawn.Value;
             if (pawn is null || !pawn.IsValid || pawn.LifeState != (byte)LifeState_t.LIFE_ALIVE) continue;
             var mask = pawn.EntitySpottedState.SpottedByMask;
-            if ((mask[slot / 32] & (1u << (slot % 32))) != 0) return true;
+            if ((mask[slot / 32] & (1u << (slot % 32))) != 0) return pawn;
         }
-        return false;
+        return null;
+    }
+
+    // Zielhilfe fuer Bot-Stufe 4 und 5. Am 30.10. gewann der Spieler auch nach der
+    // Uebergabe an die KI beim ersten Sichtkontakt 19 von 20 Duellen auf
+    // bot_difficulty 3; der Bot traf nur zweimal zuerst. Die Valve-KI dreht sich
+    // zu langsam. Hier: nach ReactTicks liegt das Fadenkreuz auf dem Kopf (Augenhoehe
+    // aus ViewOffset, also auch geduckt richtig) und bleibt LockTicks dort.
+    // Geschossen wird weiter von der KI.
+    private readonly Dictionary<int, (int ReactTicks, int LockTicks)> _skills = new();
+    private readonly Dictionary<int, int> _sawAt = new();
+
+    private void AimAssist()
+    {
+        if (_skills.Count == 0) return;
+        foreach (var (userid, skill) in _skills.ToList())
+        {
+            if (_replays.ContainsKey(userid)) continue;  // laeuft noch seinen Weg
+            var bot = Utilities.GetPlayerFromUserid(userid);
+            var pawn = bot?.PlayerPawn.Value;
+            if (bot is null || !bot.IsValid || pawn is null || !pawn.IsValid
+                || pawn.LifeState != (byte)LifeState_t.LIFE_ALIVE || pawn.AbsOrigin is null) continue;
+            var target = SeenEnemy(bot);
+            var now = Server.TickCount;
+            if (target?.AbsOrigin is null)
+            {
+                _sawAt.Remove(userid);  // aus den Augen: naechster Sichtkontakt zaehlt neu
+                continue;
+            }
+            if (!_sawAt.TryGetValue(userid, out var saw)) _sawAt[userid] = saw = now;
+            var since = now - saw;
+            if (since < skill.ReactTicks || since >= skill.ReactTicks + skill.LockTicks) continue;
+            var from = pawn.AbsOrigin;
+            var eye = pawn.ViewOffset.Z;
+            var dx = target.AbsOrigin.X - from.X;
+            var dy = target.AbsOrigin.Y - from.Y;
+            var dz = target.AbsOrigin.Z + target.ViewOffset.Z - (from.Z + eye);
+            var yaw = (float)(Math.Atan2(dy, dx) * 180 / Math.PI);
+            var pitch = (float)(-Math.Atan2(dz, Math.Sqrt(dx * dx + dy * dy)) * 180 / Math.PI);
+            pawn.Teleport(null, new QAngle(pitch, yaw, 0), null);
+        }
+    }
+
+    [ConsoleCommand("coach_bot_skill", "Zielhilfe: <userid> <reaktion_ms> <halten_ms> (0 0 = aus)")]
+    [CommandHelper(minArgs: 3, usage: "<userid> <reaktion_ms> <halten_ms>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnBotSkill(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (!int.TryParse(info.GetArg(1), out var userid) || !int.TryParse(info.GetArg(2), out var react)
+            || !int.TryParse(info.GetArg(3), out var hold))
+        {
+            info.ReplyToCommand("coach_bot_skill: ungueltige Argumente");
+            return;
+        }
+        _sawAt.Remove(userid);
+        if (hold <= 0) _skills.Remove(userid);
+        else _skills[userid] = (Math.Max(0, react) * 64 / 1000, hold * 64 / 1000);
+        info.ReplyToCommand($"coach_bot_skill ok {userid}");
     }
 
     private static void FaceNearestEnemy(CCSPlayerController bot, CCSPlayerPawn pawn)

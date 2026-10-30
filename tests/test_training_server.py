@@ -195,9 +195,9 @@ def test_adaptive_level():
         d._result(state, "win")
     d._result(state, "loss")
     assert state["level"] == 2
-    state["level"] = 3
+    state["level"] = ts.MAX_LEVEL
     d._shift(state, 1)
-    assert state["level"] == 3  # Obergrenze
+    assert state["level"] == ts.MAX_LEVEL  # Obergrenze
     state["level"] = 0
     d._shift(state, -1)
     assert state["level"] == 0
@@ -639,3 +639,35 @@ def test_cache_is_in_the_pool(tmp_path):
     """Auf Wunsch des Spielers ("die Map Cache fehlt")."""
     export(tmp_path, "Cache")
     assert "de_cache" in ts.build_scenarios(tmp_path / "vault" / "CS2-Coach" / "exports")
+
+
+
+def test_levels_above_three_turn_on_aim_assist(env):
+    _, path, server, _, director = env
+    for level, expected in [(3, "coach_bot_skill 4 0 0"), (4, "coach_bot_skill 4 250 300"),
+                            (5, "coach_bot_skill 4 150 800")]:
+        server.sent.clear()
+        ts.save_state(path, running_state(level=level))
+        director().on_lines([line('World triggered "Round_Start"')])
+        assert expected in server.sent
+    assert ts._difficulty({"level": 5}) == "bot_difficulty 3"  # mehr kennt CS2 nicht
+
+
+def test_retake_command_uses_given_or_current_map(env, monkeypatch):
+    _, path, server, _, director = env
+    seen = []
+    monkeypatch.setattr(ts.Director, "_start", lambda self, sid, name, arg: seen.append(arg) or [])
+    director().command(OWNER, "dj", "retake", "mirage", 2)
+    assert seen == ["de_mirage retake"]
+    server.status = "loaded spawngroup(  1)  : SV:  [1: de_dust2 | main lump | mapload]"
+    director().command(OWNER, "dj", "halten", "", 2)
+    assert seen[-1] == "de_dust2 halten"
+
+
+def test_mode_command_on_aim_map_opens_map_menu(env):
+    _, path, server, _, director = env
+    server.status = "loaded spawngroup(  1)  : SV:  [1: aim_multigame | main lump | mapload]"
+    assert director().command(OWNER, "dj", "retake", "", 2) == []
+    import base64, json
+    m = json.loads(base64.b64decode(next(c for c in server.sent if c.startswith("coach_menu 2 ")).split()[2]))
+    assert m["title"] == "Retake: Map waehlen" and ["Mirage", "!training mirage retake"] in m["items"]

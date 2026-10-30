@@ -58,7 +58,14 @@ MIN_DISTANCE = 150  # naeher = Messer/Nahkampf-Zufall, kein Duell
 FREEZE_TIME = 3
 # bot_difficulty 0-3. Start bei 2: auf 1 gewann der Spieler am 30.10. 28 von 29 Duellen
 # (damals allerdings vor allem, weil der Bot auf seinem Weg nicht zielen konnte).
-START_LEVEL = 2
+START_LEVEL = 3
+MAX_LEVEL = 5
+# Stufe 4 und 5: Zielhilfe im Plugin (coach_bot_skill <uid> <reaktion_ms> <halten_ms>).
+# Auch mit der KI-Uebernahme beim ersten Sichtkontakt gewann der Spieler am 30.10.
+# 19 von 20 Duellen auf bot_difficulty 3 ("selbst die Stufe 3 ist zu schwach"); der
+# Bot traf nur zweimal zuerst, in 15 Siegen gar nicht. 250 ms ~ menschliche
+# Reaktionszeit, 150 ms ~ sehr guter Spieler.
+AIM = {4: (250, 300), 5: (150, 800)}
 # Start so viele Sekunden VOR deinem Tod, an den Positionen aus der Demo.
 # Rueckmeldung nach dem ersten Training: am Todesort "ist man zu schnell
 # konfrontiert" - dort laeuft das Duell schon.
@@ -85,7 +92,10 @@ GRENADES = {"weapon_flashbang", "weapon_smokegrenade", "weapon_hegrenade", "weap
 NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade", "flashbang",
             "smokegrenade", "decoy", "world", "taser", "planted_c4")
 
-COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop", "pause", "weiter", "menu", "menue"}
+MODE_COMMANDS = {"retake": "retake", "halten": "halten", "sitehold": "halten", "hold": "halten",
+                 "situation": "situation", "duell": "duell"}
+COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop", "pause", "weiter", "menu", "menue",
+            *MODE_COMMANDS}
 SESSIONS_DIR = "training_sessions"
 ITEMS_FILE = ".training_items.json"  # Szenarien mit mehreren Gegnern (bis ~1 MB, nicht in den Zustand)
 MODE_ALIASES = {"duell": "duell", "duel": "duell", "situation": "situation", "multi": "situation",
@@ -471,8 +481,17 @@ def _give_commands(human_uid, bot_uid, pre: dict | None) -> list[str]:
     return out
 
 
+def _difficulty(state: dict) -> str:
+    return f"bot_difficulty {min(int(state.get('level', START_LEVEL)), 3)}"
+
+
+def _aim_commands(state: dict, uids) -> list[str]:
+    react, hold = AIM.get(int(state.get("level", START_LEVEL)), (0, 0))
+    return [f"coach_bot_skill {uid} {react} {hold}" for uid in uids]
+
+
 def _level_text(state: dict) -> str:
-    return f"Bot-Stufe {state['level']}/3"
+    return f"Bot-Stufe {state['level']}/{MAX_LEVEL}"
 
 
 def _admins(cfg: dict) -> set[str]:
@@ -509,6 +528,15 @@ class Director:
         """Antwortzeilen fuer einen Trainingsbefehl."""
         if sid not in _admins(self.cfg):
             return ["Das Training kann nur der Server-Besitzer starten."]
+        if cmd in MODE_COMMANDS:
+            mode = MODE_COMMANDS[cmd]
+            target = arg.lower().split()[0] if arg.strip() else self._current_map()
+            target = target if target.startswith("de_") else f"de_{target}"
+            if target in self.maps():
+                return self._start(sid, name, f"{target} {mode}")
+            if uid is not None:
+                return self._open_mode_maps(uid, mode)
+            return [f"Auf welcher Map? z. B. !{cmd} mirage"]
         if cmd in ("menu", "menue") or (cmd in ("training", "train") and not arg and uid is not None):
             return self._open_menu(uid)
         if cmd in ("training", "train") and arg.lower().split()[-1:] == ["menu"] and uid is not None:
@@ -549,7 +577,7 @@ class Director:
             if cmd in ("leichter", "schwerer"):
                 self._shift(state, -1 if cmd == "leichter" else 1)
                 save_state(self.path, state)
-                self.send(f"bot_difficulty {state['level']}")
+                self.send(_difficulty(state))
                 return [_level_text(state)]
         return []
 
@@ -666,7 +694,7 @@ class Director:
             print(f"[training] Abbruch ohne RCON: {e}", flush=True)
 
     def _shift(self, state: dict, step: int) -> None:
-        state["level"] = max(0, min(3, state["level"] + step))
+        state["level"] = max(0, min(MAX_LEVEL, state["level"] + step))
 
     def _stop(self, state: dict, why: str, immediate: bool = False) -> list[str]:
         """Training beenden.
@@ -731,6 +759,21 @@ class Director:
         from .ingame_coach import save_last_duel
         save_last_duel(self.path, {**duel, "map": state.get("map"), "weapon": weapon_label(sc.weapon),
                                    "direction": state.get("direction", "?")})
+
+    def _current_map(self) -> str:
+        """Aktuelle Server-Map aus 'status' ("loaded spawngroup(  1)  : SV:  [1: de_mirage | ...")."""
+        import re as _re
+        m = _re.search(r"spawngroup\(\s*1\)\s*:\s*SV:\s*\[1:\s*([\w-]+)", self.send("status")[0])
+        return m.group(1) if m else ""
+
+    def _open_mode_maps(self, uid, mode: str) -> list[str]:
+        from .training_scenarios import MODES
+        items = [[m.removeprefix("de_").capitalize(), f"!training {m.removeprefix('de_')} {mode}"]
+                 for m in self.maps()] + [["Schliessen", ""]]
+        reply = self.send(menu(uid, f"{MODES[mode]}: Map waehlen", items))[0]
+        if "coach_menu ok" not in reply:
+            return [f"Auf welcher Map? z. B. !{mode} mirage"]
+        return []
 
     def _open_menu(self, uid, bsp: str | None = None) -> list[str]:
         """W/S + E im Spiel statt Befehle tippen (Plugin 1.3.0). Erst Map, dann Modus."""
@@ -931,11 +974,11 @@ class Director:
         if wins >= 4:
             self._shift(state, 1)
             state["window"] = []
-            self.send(f"bot_difficulty {state['level']}", _say(f"Stark! Schwerer: {_level_text(state)}"))
+            self.send(_difficulty(state), _say(f"Stark! Schwerer: {_level_text(state)}"))
         elif wins <= 1:
             self._shift(state, -1)
             state["window"] = []
-            self.send(f"bot_difficulty {state['level']}", _say(f"Etwas leichter: {_level_text(state)}"))
+            self.send(_difficulty(state), _say(f"Etwas leichter: {_level_text(state)}"))
         else:
             state["window"] = window[-4:]
 
@@ -990,7 +1033,7 @@ class Director:
             _font(f"kommt von {state['direction']}", "#ffffff"),
             _font(f"Stand {_score(state)} &#183; {_level_text(state)}", GREY, "s")]))
         replies = self.send(f"coach_tp {state['human_uid']} {_fmt(me)}",
-                            f"coach_tp {bot} {_fmt(foe)}", *walk, *give, info,
+                            f"coach_tp {bot} {_fmt(foe)}", *walk, *give, info, *_aim_commands(state, [bot]),
                             _say(f"Duell {n}/{total} ({sc.source}): {sc.opponent}, {when}, {how}"))
         if walk and "coach_path ok start" not in replies[1 + len(walk)]:
             failed_walk = replies[1 + len(walk)].strip() or "keine Antwort"
@@ -1049,6 +1092,7 @@ class Director:
             _font(f"Stand {_score(state)} &#183; {_level_text(state)}", GREY, "s")])))
         cmds.append(_say(f"{MODES[state['mode']]} {n}/{total} ({item.get('source', '')}): {len(active)} Gegner, "
                          "jeder laeuft seinen echten Weg, bis er dich sieht"))
+        cmds += _aim_commands(state, active)
         replies = self.send(*cmds)
         failed = [r.strip() for c, r in zip(cmds, replies) if c.startswith("coach_tp ") and "coach_tp ok" not in r]
         if failed and not state.get("tp_warned"):
@@ -1064,7 +1108,7 @@ class Director:
             team = state.get("team")
             hint = (f"Team {'T' if team == 'TERRORIST' else 'CT'} erkannt, Bot kommt gleich." if team
                     else "Wähle ein Team (T oder CT) - der Bot kommt auf die andere Seite.")
-            self.send(*SETUP, f"bot_difficulty {state['level']}", _say(hint))
+            self.send(*SETUP, _difficulty(state), _say(hint))
             if team:
                 self._add_bot(state)
             else:
