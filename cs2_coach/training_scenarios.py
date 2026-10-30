@@ -39,7 +39,8 @@ PATH_AFTER = {"retake": 10, "halten": 12}  # Sekunden Weg ab Start; Situation: b
 TICKRATE = 64
 PATH_HZ = 16
 CT = 3
-SCAN_VERSION = 1
+SCAN_VERSION = 2  # 2: mit deinen damaligen Mitspielern ("mates") fuer das Training zu mehreren
+MAX_MATES = 4
 MAX_NEW_SCANS = 15  # beim ersten Mal nicht ewig lesen: Retakes brauchten 92 s fuer 20 (30.10.)
 
 
@@ -150,8 +151,18 @@ def scan_demo(demo_path, me: str, lead: float, parser_factory=None) -> dict[str,
                     break
                 path.append(_point(q))
             enemies.append({"name": str(r["name"]), "start": _point(r), "path": path, "items": _inventory(r)})
+        # Deine damaligen Mitspieler: dort starten Freunde, die mittrainieren - mit der
+        # Ausruestung von damals. Naechste zuerst.
+        mates = []
+        for _, r in rows.iterrows():
+            team = int(r["team_num"]) if r["team_num"] == r["team_num"] else 0
+            if team != my_team or str(r["steamid"]) == me or not bool(r["is_alive"]):
+                continue
+            dist = math.dist((float(r["X"]), float(r["Y"])), (float(me_row["X"]), float(me_row["Y"])))
+            mates.append((dist, {"name": str(r["name"]), "start": _point(r), "items": _inventory(r)}))
+        mates = [m for _, m in sorted(mates, key=lambda x: x[0])[:MAX_MATES]]
         out[mode].append({"mode": mode, "round": round_no(start), "tick": start, "me": _point(me_row),
-                          "me_items": _inventory(me_row), "enemies": enemies})
+                          "me_items": _inventory(me_row), "enemies": enemies, "mates": mates})
     return out
 
 

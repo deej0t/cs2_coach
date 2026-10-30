@@ -94,8 +94,12 @@ NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade",
 
 MODE_COMMANDS = {"retake": "retake", "halten": "halten", "sitehold": "halten", "hold": "halten",
                  "situation": "situation", "duell": "duell"}
+# Training zu mehreren: der Besitzer laedt ein, der Freund sagt zu. Mitmachen und
+# Aussteigen darf jeder - das sind die einzigen Befehle ohne Besitzer-Pruefung.
+PARTY_COMMANDS = {"einladen", "ausladen", "mitmachen", "aussteigen"}
+PARTY_FILE = ".training_party.json"
 COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop", "pause", "weiter", "menu", "menue",
-            *MODE_COMMANDS}
+            *MODE_COMMANDS, *PARTY_COMMANDS}
 SESSIONS_DIR = "training_sessions"
 ITEMS_FILE = ".training_items.json"  # Szenarien mit mehreren Gegnern (bis ~1 MB, nicht in den Zustand)
 MODE_ALIASES = {"duell": "duell", "duel": "duell", "situation": "situation", "multi": "situation",
@@ -118,6 +122,8 @@ SETUP = [
     "mp_t_default_primary weapon_ak47", "mp_ct_default_primary weapon_m4a1",
     "mp_give_player_c4 0",
     "mp_halftime 0", "mp_match_can_clinch 0", "mp_ignore_round_win_conditions 0",
+    # Mitspieler starten im Duell an deiner Stelle - durchlaessig, sonst stecken sie ineinander.
+    "mp_solid_teammates 0",
 ]
 RESTORE = ["bot_kick", "bot_quota 0", "bot_freeze 0", 'bot_loadout ""', "mp_warmuptime 30",
            'mp_t_default_primary ""', 'mp_ct_default_primary ""',
@@ -486,8 +492,45 @@ def _difficulty(state: dict) -> str:
 
 
 def _aim_commands(state: dict, uids) -> list[str]:
+    """Zielhilfe je nach Stufe und - ab Plugin 1.9.0 - Jagd: nach der Uebergabe an die
+    KI oder dem ersten Toten der Runde weiss der Bot, wo der naechste Mensch steht.
+    Wunsch vom 30.10.: "die Bots duerfen gerne wissen wo ich bin, spaetestens nach
+    dem ersten Kill"."""
     react, hold = AIM.get(int(state.get("level", START_LEVEL)), (0, 0))
-    return [f"coach_bot_skill {uid} {react} {hold}" for uid in uids]
+    out = []
+    for uid in uids:
+        out += [f"coach_bot_skill {uid} {react} {hold}", f"coach_hunt {uid} 1"]
+    return out
+
+
+def _side(team: str) -> str:
+    return "t" if team == "TERRORIST" else "ct"
+
+
+def load_party(config_path: Path) -> dict:
+    """{"invited": [Namen], "joined": {steam64: Name}} - bleibt ueber Trainings hinweg."""
+    try:
+        data = json.loads((Path(config_path).parent / PARTY_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    return {"invited": list(data.get("invited") or []), "joined": dict(data.get("joined") or {})}
+
+
+def save_party(config_path: Path, party: dict) -> None:
+    (Path(config_path).parent / PARTY_FILE).write_text(json.dumps(party, ensure_ascii=False), encoding="utf-8")
+
+
+def _human_sids(state: dict) -> list[str]:
+    """Du und alle Mitspieler, die gerade verbunden sind."""
+    return [state["human"]] + [s for s, p in (state.get("party") or {}).items() if p.get("uid") is not None]
+
+
+def _party_uids(state: dict) -> list:
+    return [p["uid"] for p in (state.get("party") or {}).values() if p.get("uid") is not None]
+
+
+def _party_hud(state: dict, seconds: float, body: str) -> list[str]:
+    return [hud(uid, seconds, body) for uid in _party_uids(state)]
 
 
 def _level_text(state: dict) -> str:
@@ -526,8 +569,12 @@ class Director:
 
     def command(self, sid: str, name: str, cmd: str, arg: str, uid: int | None = None) -> list[str]:
         """Antwortzeilen fuer einen Trainingsbefehl."""
+        if cmd in ("mitmachen", "aussteigen"):
+            return self._join(sid, name, cmd, uid)
         if sid not in _admins(self.cfg):
             return ["Das Training kann nur der Server-Besitzer starten."]
+        if cmd in ("einladen", "ausladen"):
+            return self._invite(name, cmd, arg, uid)
         if cmd in MODE_COMMANDS:
             mode = MODE_COMMANDS[cmd]
             target = arg.lower().split()[0] if arg.strip() else self._current_map()
@@ -604,9 +651,10 @@ class Director:
             # Nach CS2-Updates ist Metamod oft inkompatibel; der cs2-waechter schaltet
             # es dann ab, damit der Server ueberhaupt laeuft - ohne Plugin kein Training.
             return ["Trainings-Plugin nicht geladen (nach einem CS2-Update?). Training gerade nicht möglich."]
-        others = [h for h in _humans(self.send("status")[0]) if h != name]
+        others = self._strangers(name)
         if others:
-            return [f"Erst wenn der Server leer ist - gerade online: {', '.join(others)}."]
+            return [f"Erst wenn der Server leer ist - gerade online: {', '.join(others)}. "
+                    "Mittrainieren: !einladen <Name>"]
         n = min(MAX_SCENARIOS, len(all_sc[bsp]))
         chosen = all_sc[bsp][:n]
         demos = len({sc.demo for sc in chosen if sc.demo})
@@ -618,7 +666,7 @@ class Director:
                 return ["Es läuft schon ein Training. Erst !stop."]
             state = {"phase": "loading", "map": bsp, "human": sid, "name": name, "queue": list(range(n)),
                      "pos": 0, "results": [], "level": START_LEVEL, "round": 0,
-                     "pre": {str(i): v for i, v in pre.items()},
+                     "pre": {str(i): v for i, v in pre.items()}, "party": self._party_state(),
                      "started": datetime.now().isoformat(timespec="seconds"), "t0": time.time()}
             save_state(self.path, state)
         self.timer(LOAD_TIMEOUT, self._check_loaded)
@@ -632,6 +680,80 @@ class Director:
                   "sv_hibernate_when_empty 0", f"map {bsp}")
         return []
 
+    def _strangers(self, name: str) -> list[str]:
+        """Online, aber weder du noch ein Mitspieler, der zugesagt hat."""
+        joined = {n.lower() for n in load_party(self.path)["joined"].values()}
+        return [h for h in _humans(self.send("status")[0]) if h != name and h.lower() not in joined]
+
+    def _party_state(self) -> dict:
+        return {sid: {"name": n, "uid": None} for sid, n in load_party(self.path)["joined"].items()}
+
+    def _invite(self, name: str, cmd: str, arg: str, uid) -> list[str]:
+        party = load_party(self.path)
+        target = arg.strip().lower()
+        if cmd == "ausladen":
+            if not target:
+                return ["Wen? !ausladen <Name>"]
+            party["invited"] = [n for n in party["invited"] if target not in n.lower()]
+            gone = [s for s, n in party["joined"].items() if target in n.lower()]
+            for s_ in gone:
+                party["joined"].pop(s_)
+            save_party(self.path, party)
+            with _Lock(self.path):
+                state = load_state(self.path)
+                if state and any(s_ in state.get("party", {}) for s_ in gone):
+                    for s_ in gone:
+                        state["party"].pop(s_, None)
+                    save_state(self.path, state)
+            return [f"Ausgeladen: {arg.strip()}."]
+        online = [h for h in _humans(self.send("status")[0]) if h != name]
+        if not target:
+            cands = [h for h in online if h not in party["joined"].values()]
+            if not cands:
+                return ["Gerade ist niemand sonst online, den du einladen kannst."]
+            if uid is not None:
+                from .server_live import _safe
+                items = [[h, f"!einladen {_safe(h)}"] for h in cands[:8]] + [["Schliessen", ""]]
+                if "coach_menu ok" in self.send(menu(uid, "Mitspieler einladen", items))[0]:
+                    return []
+            return [f"Wen? !einladen <Name> - online: {', '.join(cands[:6])}"]
+        hits = [h for h in online if target in h.lower()]
+        exact = [h for h in hits if h.lower() == target]
+        hits = exact or hits
+        if len(hits) != 1:
+            return [f"Kein eindeutiger Spieler '{arg.strip()}' online"
+                    + (f" (online: {', '.join(online[:6])})." if online else ".")]
+        who = hits[0]
+        if who not in party["invited"]:
+            party["invited"].append(who)
+        save_party(self.path, party)
+        return [f"{who}: {name} laedt dich zum Training ein - !mitmachen zum Mitmachen, !aussteigen zum Aufhoeren."]
+
+    def _join(self, sid: str, name: str, cmd: str, uid) -> list[str]:
+        party = load_party(self.path)
+        if cmd == "aussteigen":
+            was = party["joined"].pop(sid, None)
+            save_party(self.path, party)
+            with _Lock(self.path):
+                state = load_state(self.path)
+                if state and state.get("party", {}).pop(sid, None):
+                    save_state(self.path, state)
+            return [f"{name} trainiert nicht mehr mit."] if was else []
+        invited = [n for n in party["invited"] if n.lower() == name.lower()]
+        if not invited and sid not in party["joined"]:
+            return [f"{name}: erst muss dich der Server-Besitzer einladen (!einladen {name})."]
+        party["invited"] = [n for n in party["invited"] if n not in invited]
+        party["joined"][sid] = name
+        save_party(self.path, party)
+        with _Lock(self.path):
+            state = load_state(self.path)
+            if state:
+                state.setdefault("party", {})[sid] = {"name": name, "uid": uid}
+                if uid is not None and state.get("team"):
+                    self.send(f"coach_team {uid} {_side(state['team'])}")
+                save_state(self.path, state)
+        return [f"{name} trainiert mit - du startest, wo damals ein Mitspieler stand."]
+
     def _preflight(self, name: str) -> list[str]:
         """Plugin geladen, kein anderer Mensch, kein Training aktiv? Leere Liste = los."""
         if is_active(self.path):
@@ -639,9 +761,10 @@ class Director:
         version = self.send("coach_tp_version")[0]
         if not version.strip().startswith("coach_tp "):
             return ["Trainings-Plugin nicht geladen (nach einem CS2-Update?). Training gerade nicht möglich."]
-        others = [h for h in _humans(self.send("status")[0]) if h != name]
+        others = self._strangers(name)
         if others:
-            return [f"Erst wenn der Server leer ist - gerade online: {', '.join(others)}."]
+            return [f"Erst wenn der Server leer ist - gerade online: {', '.join(others)}. "
+                    "Mittrainieren: !einladen <Name>"]
         return []
 
     def _start_multi(self, sid: str, name: str, bsp: str, mode: str) -> list[str]:
@@ -664,7 +787,7 @@ class Director:
                 "phase": "loading", "map": bsp, "mode": mode, "human": sid, "name": name,
                 "queue": list(range(len(items))), "bot_need": need, "pos": 0, "results": [],
                 "level": START_LEVEL, "round": 0, "started": datetime.now().isoformat(timespec="seconds"),
-                "t0": time.time()})
+                "t0": time.time(), "party": self._party_state()})
         self.timer(LOAD_TIMEOUT, self._check_loaded)
         self.send(_say(f"{len(items)} {MODES[mode]}-Situationen, bis zu {need} Gegner. Map wird geladen..."),
                   "sv_hibernate_when_empty 0", f"map {bsp}")
@@ -754,11 +877,19 @@ class Director:
                 "outcome": outcome, "tries": state.get("tries", 0) + 1, "level": state.get("level"),
                 "export": sc.export, "round": sc.round, "you_hits": rnd.get("you_hits", 0),
                 "you_head": rnd.get("you_head", 0), "bot_hits": rnd.get("bot_hits", 0),
-                "first": rnd.get("first"), "tip": tip}
+                "first": rnd.get("first"), "tip": tip, "kit": self._kit(state)}
         state.setdefault("duels", []).append(duel)
         from .ingame_coach import save_last_duel
         save_last_duel(self.path, {**duel, "map": state.get("map"), "weapon": weapon_label(sc.weapon),
                                    "direction": state.get("direction", "?")})
+
+    def _kit(self, state: dict) -> list[str]:
+        """Deine Ausruestung in dieser Situation (aus der Demo), lesbar - fuer das Fazit."""
+        if state.get("mode", "duell") == "duell":
+            items = (state.get("pre", {}).get(str(state["queue"][state["pos"]])) or {}).get("me_items") or []
+        else:
+            items = self._items()[state["queue"][state["pos"]]].get("me_items") or []
+        return [weapon_label(x) for x in items[1:] if x and "knife" not in x]
 
     def _current_map(self) -> str:
         """Aktuelle Server-Map aus 'status' ("loaded spawngroup(  1)  : SV:  [1: de_mirage | ...")."""
@@ -786,12 +917,13 @@ class Director:
             title = f"{short.capitalize()}: was trainieren?"
         elif not state:
             items = [[f"{m.removeprefix('de_').capitalize()} ({len(v)} Duelle)", f"!training {m.removeprefix('de_')} menu"]
-                     for m, v in sorted(self.scenarios().items())] + [["Schliessen", ""]]
+                     for m, v in sorted(self.scenarios().items())]
+            items += [["Mitspieler einladen", "!einladen"], ["Schliessen", ""]]
             title = "Training: Map waehlen"
         else:
             items = [["Weiter", "!weiter"] if state.get("paused") else ["Pause", "!pause"],
                      ["Duell ueberspringen", "!skip"], ["Leichter", "!leichter"], ["Schwerer", "!schwerer"],
-                     ["Training beenden", "!stop"], ["Schliessen", ""]]
+                     ["Mitspieler einladen", "!einladen"], ["Training beenden", "!stop"], ["Schliessen", ""]]
             title = f"Training {state.get('map', '')} &#183; Stand {_score(state)}"
         reply = self.send(menu(uid, title, items))[0]
         if "coach_menu ok" not in reply:
@@ -827,6 +959,14 @@ class Director:
             uid = int(m.group("auid"))
             if to not in ("TERRORIST", "CT"):
                 return state
+            mate = (state.get("party") or {}).get(ss.steam64(m.group("asid")))
+            if mate is not None:
+                # Mitspieler gehoeren in dein Team; der Wechsel per coach_team erzeugt
+                # eine zweite Zeile mit dem richtigen Team, also keine Schleife.
+                mate["uid"] = uid
+                if state.get("team") and to != state["team"]:
+                    self.send(f"coach_team {uid} {_side(state['team'])}")
+                return state
             if ss.steam64(m.group("asid")) == state["human"] and phase in ("setup", "team"):
                 # Gemessen 30.10.: Team gewaehlt 2 s bevor das Setup lief - in "setup"
                 # nur merken, _setup holt dann den Bot, statt auf einen zweiten Wechsel zu warten.
@@ -848,6 +988,9 @@ class Director:
                     # Am 30.10. brachte ein bot_add zwei Bots - jeder ueberzaehlige fliegt.
                     self.send(f"kickid {uid}")
             return state
+        if (m := ss._LEAVE.match(msg)) and ss.steam64(m.group("asid")) in (state.get("party") or {}):
+            state["party"][ss.steam64(m.group("asid"))]["uid"] = None  # Training laeuft fuer dich weiter
+            return state
         if phase in ("team", "bot", "running") and (m := ss._LEAVE.match(msg)) \
                 and ss.steam64(m.group("asid")) == state["human"]:
             # Sonst bliebe der Server mit sv_cheats 1 und Bot im Trainingsmodus.
@@ -860,8 +1003,9 @@ class Director:
             return self._round_start(state)
         if m := ss._ATTACK.match(msg):
             rnd = state.setdefault("rnd", {})
+            if ss.steam64(m.group("asid")) in _human_sids(state):
+                state["active"] = True  # jemand von euch hat in dieser Runde getroffen
             if ss.steam64(m.group("asid")) == state["human"]:
-                state["active"] = True  # du hast in dieser Runde getroffen
                 rnd["you_hits"] = rnd.get("you_hits", 0) + 1
                 rnd["you_head"] = rnd.get("you_head", 0) + (m.group("hitgroup") == "head")
                 rnd.setdefault("first", "you")
@@ -872,15 +1016,20 @@ class Director:
         if (m := ss._KILL.match(msg)) and not state.get("outcome"):
             killer = ss.steam64(m.group("asid"))
             victim = ss.steam64(m.group("vsid"))
-            if killer == state["human"]:
+            humans = _human_sids(state)
+            if killer in humans:
                 state["active"] = True
-            if victim == state["human"]:
-                state["outcome"] = "loss"
+            if victim in humans:
+                # Zu mehreren ist die Runde erst verloren, wenn alle Menschen tot sind.
+                dead = state.setdefault("rnd", {}).setdefault("dead", [])
+                dead.append(victim)
+                if all(h in dead for h in humans):
+                    state["outcome"] = "loss"
             elif m.group("vsid") == "BOT":
                 rnd = state.setdefault("rnd", {})
                 active = rnd.get("active_bots")
                 if active is None:  # Duell: ein Bot
-                    if killer == state["human"]:
+                    if killer in humans:
                         state["outcome"] = "win"
                 elif int(m.group("vuid")) in active:
                     rnd["bots_dead"] = rnd.get("bots_dead", 0) + 1
@@ -907,7 +1056,8 @@ class Director:
                     outcome, ("UNENTSCHIEDEN", YELLOW))
                 self.send(hud(state["human_uid"], 4, _font(text, color, "xl") + "<br>"
                               + _font(f"Stand {_score(state)}", GREY)
-                              + (f"<br>{_font(html.escape(tip), '#ffffff', 's')}" if tip else "")))
+                              + (f"<br>{_font(html.escape(tip), '#ffffff', 's')}" if tip else "")),
+                          *_party_hud(state, 4, _font(text, color, "xl") + "<br>" + _font(f"Stand {_score(state)}", GREY)))
                 if tip:
                     from .ingame_coach import tell
                     tell(self.send, state["human_uid"], f"Tipp: {tip} Mehr dazu: !tipp")
@@ -1032,8 +1182,15 @@ class Director:
             _font(f"Gegner mit {html.escape(weapon_label(sc.weapon))}", RED, "l"),
             _font(f"kommt von {state['direction']}", "#ffffff"),
             _font(f"Stand {_score(state)} &#183; {_level_text(state)}", GREY, "s")]))
+        # Mitspieler im Duell: an deiner Stelle (mp_solid_teammates 0), mit deiner Ausruestung.
+        mates = []
+        for uid in _party_uids(state):
+            mates.append(f"coach_tp {uid} {_fmt(me)}")
+            mates += [g.replace(f"coach_give {state['human_uid']} ", f"coach_give {uid} ", 1)
+                      for g in give if g.startswith(f"coach_give {state['human_uid']} ")]
+            mates.append(info.replace(f"coach_hud {state['human_uid']} ", f"coach_hud {uid} ", 1))
         replies = self.send(f"coach_tp {state['human_uid']} {_fmt(me)}",
-                            f"coach_tp {bot} {_fmt(foe)}", *walk, *give, info, *_aim_commands(state, [bot]),
+                            f"coach_tp {bot} {_fmt(foe)}", *walk, *give, info, *mates, *_aim_commands(state, [bot]),
                             _say(f"Duell {n}/{total} ({sc.source}): {sc.opponent}, {when}, {how}"))
         if walk and "coach_path ok start" not in replies[1 + len(walk)]:
             failed_walk = replies[1 + len(walk)].strip() or "keine Antwort"
@@ -1080,16 +1237,30 @@ class Director:
                 cmds.append(f"coach_give {uid} {e['items'][0] if e['items'][0] in guns else guns[-1]} "
                             + " ".join(guns))
         state["rnd"]["active_bots"] = active
+        # Mitspieler: dort, wo deine damaligen Teamkollegen standen, mit ihrer Ausruestung.
+        # Mehr Freunde als Kollegen in der Demo: an deine Stelle, mit deiner Ausruestung.
+        demo_mates = item.get("mates") or []
+        for k, uid in enumerate(_party_uids(state)):
+            spot = demo_mates[k] if k < len(demo_mates) else {"start": item["me"], "items": mine}
+            pos = list(spot["start"])
+            pos[3], pos[4] = _calc_view_angle(pos[0], pos[1], pos[2] + 64, target[0], target[1], target[2] + 64)
+            cmds.append(f"coach_tp {uid} {_fmt(pos)}")
+            kit = spot.get("items") or []
+            if len(kit) > 1:
+                hand = kit[0] or next((x for x in kit[1:] if x not in GRENADES and x != "weapon_knife"), "")
+                cmds.append(f"coach_give {uid} {hand or 'weapon_knife'} " + " ".join(kit[1:]))
         nearest = min(enemies[:len(active)] or enemies, key=lambda e: math.dist(me[:2], e["start"][:2]))
         state["direction"] = direction(me, nearest["start"])
         n, total = state["pos"] + 1, len(state["queue"])
         weapons = ", ".join(weapon_label(next((x for x in e["items"] if x and x not in GRENADES
                                                and x != "weapon_knife"), "?")) for e in enemies[:len(active)])
-        cmds.append(hud(human, FREEZE_TIME + 4, "<br>".join([
+        body = "<br>".join([
             _font(f"{MODES[state['mode']]} {n}/{total} &#183; {html.escape(item.get('source', ''))}", PURPLE),
             _font(f"{len(active)} Gegner: {html.escape(weapons)}", RED, "l"),
             _font(f"naechster kommt von {state['direction']}", "#ffffff"),
-            _font(f"Stand {_score(state)} &#183; {_level_text(state)}", GREY, "s")])))
+            _font(f"Stand {_score(state)} &#183; {_level_text(state)}", GREY, "s")])
+        cmds.append(hud(human, FREEZE_TIME + 4, body))
+        cmds += _party_hud(state, FREEZE_TIME + 4, body)
         cmds.append(_say(f"{MODES[state['mode']]} {n}/{total} ({item.get('source', '')}): {len(active)} Gegner, "
                          "jeder laeuft seinen echten Weg, bis er dich sieht"))
         cmds += _aim_commands(state, active)
@@ -1125,7 +1296,8 @@ class Director:
             loadout = [f'bot_loadout "{self.scenarios()[state["map"]][state["queue"][0]].weapon}"']
         # bot_quota statt bot_add: am 30.10. brachte ein "bot_add_ct" zwei Bots
         # (die Map-Konfiguration setzt bot_quota_mode competitive).
-        self.send(*loadout, "bot_quota_mode normal", f"bot_join_team {bot_team}", f"bot_quota {need}")
+        mates = [f"coach_team {uid} {_side(state['team'])}" for uid in _party_uids(state)]
+        self.send(*loadout, *mates, "bot_quota_mode normal", f"bot_join_team {bot_team}", f"bot_quota {need}")
 
 
 def sessions_dir(config_path: Path) -> Path:
@@ -1140,7 +1312,9 @@ def save_session(config_path: Path, state: dict, why: str) -> Path:
     path = folder / f"{started.replace(':', '-')}_{state.get('map', 'map')}.json"
     path.write_text(json.dumps({
         "map": state.get("map"), "started": started, "ended": datetime.now().isoformat(timespec="seconds"),
-        "why": why, "level_end": state.get("level"), "duels": state.get("duels", [])},
+        "why": why, "level_end": state.get("level"), "duels": state.get("duels", []),
+        "mode": state.get("mode", "duell"),
+        "party": sorted(p.get("name", "") for p in (state.get("party") or {}).values())},
         ensure_ascii=False, indent=1), encoding="utf-8")
     return path
 

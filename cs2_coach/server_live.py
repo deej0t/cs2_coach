@@ -41,7 +41,7 @@ _CHAT = re.compile(ss._player("a") + r' say(?:_team)? "(?P<text>.*)"$')
 _last_command: dict[str, float] = {}
 
 HELP = ("Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !help · Besitzer: !training (Menue) · "
-        "!retake / !halten / !situation [map] · !coach <Frage>")
+        "!retake / !halten / !situation [map] · !einladen <Name> · !coach <Frage> · Eingeladen: !mitmachen")
 
 
 # --------------------------------------------------------------------------

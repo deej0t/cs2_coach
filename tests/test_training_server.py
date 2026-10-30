@@ -543,7 +543,7 @@ def test_menu_during_training_offers_actions(env):
     director().command(OWNER, "dj", "menu", "", 2)
     import base64, json
     m = json.loads(base64.b64decode(next(c for c in server.sent if c.startswith("coach_menu 2 ")).split()[2]))
-    assert [i[1] for i in m["items"]] == ["!weiter", "!skip", "!leichter", "!schwerer", "!stop", ""]
+    assert [i[1] for i in m["items"]] == ["!weiter", "!skip", "!leichter", "!schwerer", "!einladen", "!stop", ""]
 
 
 def test_menu_with_old_plugin_falls_back_to_commands(env):
@@ -671,3 +671,74 @@ def test_mode_command_on_aim_map_opens_map_menu(env):
     import base64, json
     m = json.loads(base64.b64decode(next(c for c in server.sent if c.startswith("coach_menu 2 ")).split()[2]))
     assert m["title"] == "Retake: Map waehlen" and ["Mirage", "!training mirage retake"] in m["items"]
+
+
+DANCHO_SID = str(76561197960265728 + 12345)
+DANCHO = '"Dancho<3><[U:1:12345]><TERRORIST>"'
+
+
+def test_invite_join_and_train_together(env):
+    """Wunsch 30.10.: ein Freund soll Retakes, Duelle usw. mitmachen koennen."""
+    _, path, server, timers, director = env
+    server.status = STATUS_TWO
+    assert "Dancho" in director().command(OWNER, "dj", "training", "mirage")[0]  # Fremder online
+    assert "!mitmachen" in director().command(OWNER, "dj", "einladen", "danch")[0]
+    assert "einladen" in director().command("999", "Wer", "mitmachen", "")[0]  # nicht eingeladen
+    assert "trainiert mit" in director().command(DANCHO_SID, "Dancho", "mitmachen", "", 3)[0]
+    assert director().command(OWNER, "dj", "training", "mirage") == []  # jetzt erlaubt
+    state = ts.load_state(path)
+    assert state["party"] == {DANCHO_SID: {"name": "Dancho", "uid": None}}
+
+    director().on_lines([line('Loading map "de_mirage"')])
+    director().on_lines([line('"dj<2><[U:1:58996800]>" switched from team <Unassigned> to <TERRORIST>')])
+    run_timers(timers)
+    # Freund waehlt CT -> wird in dein Team gesetzt
+    director().on_lines([line('"Dancho<3><[U:1:12345]>" switched from team <Unassigned> to <CT>')])
+    assert "coach_team 3 t" in server.sent
+    director().on_lines([line('"K<4><BOT>" switched from team <Unassigned> to <CT>')])
+    server.sent.clear()
+    director().on_lines([line('World triggered "Round_Start"')])
+    assert any(c.startswith("coach_tp 3 ") for c in server.sent)
+    assert any(h for h in huds(server)) and sum(c.startswith("coach_hud 3 ") for c in server.sent) == 1
+
+    # Du stirbst, der Freund lebt: noch nicht verloren; er toetet den Bot: gewonnen
+    director().on_lines([line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "m4a1"')])
+    assert ts.load_state(path)["outcome"] is None
+    director().on_lines([line(f'{DANCHO} [0 0 0] killed {BOT} [1 1 1] with "ak47"')])
+    assert ts.load_state(path)["outcome"] == "win"
+
+
+def test_all_humans_dead_is_a_loss(env):
+    _, path, server, _, director = env
+    ts.save_state(path, running_state(party={DANCHO_SID: {"name": "Dancho", "uid": 3}}))
+    director().on_lines([line('World triggered "Round_Start"'),
+                         line(f'{BOT} [1 1 1] killed {DANCHO} [0 0 0] with "m4a1"')])
+    assert ts.load_state(path)["outcome"] is None
+    director().on_lines([line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "m4a1"')])
+    assert ts.load_state(path)["outcome"] == "loss"
+
+
+def test_friend_leaving_keeps_training_running(env):
+    _, path, server, _, director = env
+    ts.save_state(path, running_state(party={DANCHO_SID: {"name": "Dancho", "uid": 3}}))
+    director().on_lines([line(f'{DANCHO} disconnected (reason "x")')])
+    state = ts.load_state(path)
+    assert state["phase"] == "running" and state["party"][DANCHO_SID]["uid"] is None
+    director().on_lines([line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "m4a1"')])
+    assert ts.load_state(path)["outcome"] == "loss"  # er zaehlt nicht mehr mit
+
+
+def test_invite_menu_lists_online_players(env):
+    import base64
+    _, _, server, _, director = env
+    server.status = STATUS_TWO
+    assert director().command(OWNER, "dj", "einladen", "", 2) == []
+    m = json.loads(base64.b64decode(next(c for c in server.sent if c.startswith("coach_menu 2 ")).split()[2]))
+    assert m["items"][0] == ["Dancho", "!einladen Dancho"]
+
+
+def test_bots_hunt_you(env):
+    _, path, server, _, director = env
+    ts.save_state(path, running_state())
+    director().on_lines([line('World triggered "Round_Start"')])
+    assert "coach_hunt 4 1" in server.sent

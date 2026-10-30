@@ -186,3 +186,28 @@ def test_demo_without_plant_still_scans():
 
     out = tsc.scan_demo("x.dem", ME, 3, parser_factory=NoPlant)
     assert out["retake"] == [] and out["situation"] and out["halten"]
+
+
+
+def test_teammates_from_the_demo_are_kept_for_coop():
+    out = tsc.scan_demo("x.dem", ME, 3, parser_factory=FakeDemo)
+    mates = out["retake"][0]["mates"]
+    assert [m["name"] for m in mates] == [f"p{MATE}"]
+    assert mates[0]["items"][0] == "weapon_awp" and mates[0]["start"][0] == 50.0
+
+
+def test_friend_starts_where_your_teammate_stood(multi):
+    director, server, timers, path = multi
+    director().command(ME, "dj", "training", "mirage retake")
+    state = ts.load_state(path)
+    state.update(phase="running", human_uid=2, bot_uids=[3, 4, 5], bot_uid=3,
+                 party={"7656": {"name": "Freund", "uid": 9}})
+    items = tsc.scan_demo("x.dem", ME, 3, parser_factory=FakeDemo)["retake"]
+    (path.parent / ts.ITEMS_FILE).write_text(json.dumps(items))
+    ts.save_state(path, state)
+    server.sent.clear()
+    director().on_lines([line('World triggered "Round_Start"')])
+    tp = next(c for c in server.sent if c.startswith("coach_tp 9 "))
+    assert tp.split()[2] == "50.0"  # Position von MATE aus der Demo
+    assert any(c.startswith("coach_give 9 weapon_awp") for c in server.sent)
+    assert any(c.startswith("coach_hud 9 ") for c in server.sent)

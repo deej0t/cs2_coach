@@ -23,6 +23,13 @@
 //     coach_chat <userid> <text_base64>
 //         Private Chatzeilen nur fuer diesen Spieler (KI-Coach, Tipps). Zeilen
 //         werden am Zeilenumbruch getrennt.
+//     coach_team <userid> <t|ct>
+//         Mitspieler ins Team des Trainierenden setzen (Training zu mehreren).
+//     coach_hunt <userid> <0|1>
+//         Jagd: sobald der Bot nicht mehr seinen Weg laeuft (Uebergabe an die KI)
+//         oder jemand in der Runde gestorben ist, kennt er die Position des
+//         naechsten Gegners und geht dorthin ("Geraeusch" an der Stelle, alle
+//         0,25 s erneuert). Der erste Tote der Runde beendet auch alle Wege.
 //     coach_tp_version
 //
 // Alles andere - welche Situation, wann, wer - entscheidet der Coach, damit
@@ -38,6 +45,7 @@ using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
+using Microsoft.Extensions.Logging;
 using System.Globalization;
 
 namespace CoachTeleport;
@@ -45,7 +53,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.7.0";
+    public override string ModuleVersion => "1.9.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -74,11 +82,13 @@ public class CoachTeleport : BasePlugin
         RegisterListener<Listeners.OnTick>(OnTick);
         RegisterListener<Listeners.OnTick>(DrawCenter);
         RegisterListener<Listeners.OnTick>(AimAssist);
+        RegisterListener<Listeners.OnTick>(Hunt);
         RegisterListener<Listeners.OnPlayerButtonsChanged>(OnButtons);
         RegisterEventHandler<EventRoundStart>((_, _) =>
         {
             _inFreeze = true;
             _sawAt.Clear();
+            _roundKill = false;
             return HookResult.Continue;
         });
         RegisterEventHandler<EventRoundFreezeEnd>((_, _) =>
@@ -97,6 +107,7 @@ public class CoachTeleport : BasePlugin
         RegisterEventHandler<EventPlayerDeath>((ev, _) =>
         {
             if (ev.Userid is { } victim) _replays.Remove(victim.UserId ?? -1);
+            if (!_inFreeze) OnFirstKill();
             return HookResult.Continue;
         });
         RegisterEventHandler<EventRoundEnd>((_, _) =>
@@ -378,21 +389,90 @@ public class CoachTeleport : BasePlugin
         info.ReplyToCommand($"coach_bot_skill ok {userid}");
     }
 
-    private static void FaceNearestEnemy(CCSPlayerController bot, CCSPlayerPawn pawn)
+    // Jagd (1.9.0). Wunsch vom 30.10.: "die Bots duerfen gerne wissen wo ich bin,
+    // das die auf mich zu kommen - spaetestens nach dem ersten Kill". Nach der
+    // Uebergabe wusste die KI nicht, wo der Spieler ist, und lief irgendwohin.
+    // Die Valve-KI geht Geraeuschen nach (InvestigateNoise); hier bekommt sie
+    // alle 16 Ticks ein frisches "Geraeusch" an der Stelle des naechsten Gegners.
+    // Ob die KI dem wirklich folgt, zeigt das Log: alle 2 s die Entfernung.
+    private readonly HashSet<int> _hunters = new();
+    private bool _roundKill;
+
+    private void OnFirstKill()
+    {
+        if (_roundKill) return;
+        _roundKill = true;
+        foreach (var userid in _hunters)
+        {
+            if (!_replays.Remove(userid)) continue;
+            var bot = Utilities.GetPlayerFromUserid(userid);
+            var pawn = bot?.PlayerPawn.Value;
+            if (bot is not null && bot.IsValid && pawn is not null && pawn.IsValid
+                && pawn.LifeState == (byte)LifeState_t.LIFE_ALIVE) FaceNearestEnemy(bot, pawn);
+        }
+    }
+
+    private void Hunt()
+    {
+        if (_hunters.Count == 0 || _inFreeze || Server.TickCount % 16 != 0) return;
+        foreach (var userid in _hunters.ToList())
+        {
+            if (_replays.ContainsKey(userid)) continue;  // laeuft noch seinen echten Weg
+            var bot = Utilities.GetPlayerFromUserid(userid);
+            var pawn = bot?.PlayerPawn.Value;
+            if (bot is null || !bot.IsValid || pawn is null || !pawn.IsValid
+                || pawn.LifeState != (byte)LifeState_t.LIFE_ALIVE || pawn.AbsOrigin is null) continue;
+            if (SeesEnemy(bot)) continue;  // kaempft schon - nicht stoeren
+            var target = NearestEnemy(bot, pawn);
+            var brain = pawn.Bot;
+            if (target?.AbsOrigin is null || brain is null) continue;
+            var dist = (target.AbsOrigin - pawn.AbsOrigin).Length();
+            brain.NoisePosition.X = target.AbsOrigin.X;
+            brain.NoisePosition.Y = target.AbsOrigin.Y;
+            brain.NoisePosition.Z = target.AbsOrigin.Z;
+            brain.NoiseTravelDistance = dist;
+            brain.NoiseTimestamp = Server.CurrentTime - 0.5f;  // Reaktionszeit schon vorbei
+            if (Server.TickCount % 128 == 0)
+                Logger.LogInformation("coach_hunt {Bot} dist {Dist:F0}", userid, dist);
+        }
+    }
+
+    [ConsoleCommand("coach_hunt", "Bot kennt die Position des naechsten Gegners: <userid> <0|1>")]
+    [CommandHelper(minArgs: 2, usage: "<userid> <0|1>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnHunt(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (!int.TryParse(info.GetArg(1), out var userid))
+        {
+            info.ReplyToCommand("coach_hunt: ungueltige userid");
+            return;
+        }
+        if (info.GetArg(2) == "0") _hunters.Remove(userid);
+        else _hunters.Add(userid);
+        info.ReplyToCommand($"coach_hunt ok {userid}");
+    }
+
+    private static CCSPlayerPawn? NearestEnemy(CCSPlayerController bot, CCSPlayerPawn pawn)
     {
         var from = pawn.AbsOrigin;
-        if (from is null) return;
+        if (from is null) return null;
         CCSPlayerPawn? best = null;
         var bestDist = float.MaxValue;
         foreach (var p in Utilities.GetPlayers())
         {
             var other = p.PlayerPawn.Value;
-            if (p == bot || p.TeamNum == bot.TeamNum || other is null || !other.IsValid
+            if (p == bot || p.TeamNum == bot.TeamNum || p.TeamNum < 2 || other is null || !other.IsValid
                 || other.LifeState != (byte)LifeState_t.LIFE_ALIVE || other.AbsOrigin is null) continue;
             var d = (other.AbsOrigin - from).Length();
             if (d < bestDist) { bestDist = d; best = other; }
         }
-        if (best?.AbsOrigin is null) return;
+        return best;
+    }
+
+    private static void FaceNearestEnemy(CCSPlayerController bot, CCSPlayerPawn pawn)
+    {
+        var from = pawn.AbsOrigin;
+        var best = NearestEnemy(bot, pawn);
+        if (from is null || best?.AbsOrigin is null) return;
         var dx = best.AbsOrigin.X - from.X;
         var dy = best.AbsOrigin.Y - from.Y;
         var dz = best.AbsOrigin.Z - from.Z;
@@ -535,6 +615,21 @@ public class CoachTeleport : BasePlugin
         }
         if (pawn.LifeState == (byte)LifeState_t.LIFE_ALIVE) pawn.CommitSuicide(false, true);
         info.ReplyToCommand($"coach_slay ok {userid}");
+    }
+
+    [ConsoleCommand("coach_team", "Mitspieler ins Team des Trainierenden setzen: <userid> <t|ct>")]
+    [CommandHelper(minArgs: 2, usage: "<userid> <t|ct>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnTeam(CCSPlayerController? caller, CommandInfo info)
+    {
+        var player = int.TryParse(info.GetArg(1), out var userid) ? Utilities.GetPlayerFromUserid(userid) : null;
+        if (player is null || !player.IsValid)
+        {
+            info.ReplyToCommand("coach_team: kein Spieler");
+            return;
+        }
+        var team = info.GetArg(2).ToLowerInvariant() == "ct" ? CsTeam.CounterTerrorist : CsTeam.Terrorist;
+        if ((CsTeam)player.TeamNum != team) player.ChangeTeam(team);
+        info.ReplyToCommand($"coach_team ok {userid}");
     }
 
     [ConsoleCommand("coach_tp_version", "Version des Coach-Plugins (Coach prueft damit, ob es geladen ist)")]

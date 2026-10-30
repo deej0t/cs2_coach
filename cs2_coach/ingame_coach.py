@@ -168,33 +168,43 @@ def training_facts(config_path: Path) -> str:
 # --------------------------------------------------------------------------
 
 FAZIT_LIMIT = 520
-FAZIT_SYSTEM = """Du bist der persoenliche CS2-Coach eines einzelnen Spielers. Er hat gerade ein Duell-Training beendet:
-verlorene Duelle aus seinen eigenen Matches, nachgespielt gegen einen Bot.
+# Nur die Trainingsdaten, keine Match-Statistik: das erste Fazit (30.10.) nannte als
+# "deutlichstes Problem" zu wenige HE-Granaten (0.43 vs 0.31 pro Runde) - ein Ziel aus
+# dem Tages-Briefing. Im Training hatte er oft gar keine HE ("Ich kann doch keine
+# HE-Granaten nutzen, wenn ich keine zu der Situation habe").
+FAZIT_SYSTEM = """Du bist der persoenliche CS2-Coach eines einzelnen Spielers. Er hat gerade ein Training auf dem
+Server beendet: Situationen aus seinen eigenen Matches, nachgespielt gegen Bots.
 - Deutsch, du-Form, hoechstens 4 kurze Saetze, zusammen hoechstens 480 Zeichen.
-- Satz 1: das Ergebnis in einem Satz. Dann das deutlichste Muster bei den Niederlagen (aus den Daten).
-  Zum Schluss genau eine Sache, die er als Naechstes ueben soll.
-- Verwende nur die Fakten unten, erfinde keine Zahlen. Kein Markdown, keine Aufzaehlung, keine Emojis."""
+- Satz 1: das Ergebnis. Dann das deutlichste Muster bei den Niederlagen - nur aus den Trainingsdaten
+  (wer zuerst traf, Treffer, Kopftreffer, Waffe des Gegners, Versuche).
+- Zum Schluss genau eine Sache, die er in solchen Situationen als Naechstes ueben soll.
+- Rate nur zu Ausruestung, die er in der Situation laut Daten wirklich hatte. Keine Ratschlaege zu
+  Granaten, Wirtschaft oder Match-Statistik.
+- Verwende nur die Fakten, erfinde keine Zahlen. Kein Markdown, keine Aufzaehlung, keine Emojis."""
 
 
 def session_facts(session: dict) -> str:
     duels = session.get("duels") or []
     won = sum(1 for d in duels if d.get("outcome") == "win")
-    out = [f"Training auf {session.get('map')}: {won} von {len(duels)} Duellen gewonnen, "
-           f"Bot-Stufe am Ende {session.get('level_end')}/3."]
+    from .training_server import MAX_LEVEL
+    party = session.get("party") or []
+    out = [f"Training ({session.get('mode', 'duell')}) auf {session.get('map')}: {won} von {len(duels)} gewonnen, "
+           f"Bot-Stufe am Ende {session.get('level_end')}/{MAX_LEVEL}."
+           + (f" Zusammen mit {', '.join(party)} gespielt." if party else "")]
     for d in duels:
         res = dict(win="gewonnen", loss="verloren").get(d.get("outcome"), "unentschieden")
         first = {"you": "du zuerst getroffen", "bot": "Gegner zuerst getroffen"}.get(d.get("first"), "")
         out.append(f"- Duell {d.get('n')} ({d.get('source')}, Gegner mit {d.get('weapon')}): {res}"
                    f"{', ' + first if first else ''}, deine Treffer {d.get('you_hits', '?')} (Kopf {d.get('you_head', '?')}),"
-                   f" Treffer des Gegners {d.get('bot_hits', '?')}, Versuche {d.get('tries', 1)}.")
+                   f" Treffer des Gegners {d.get('bot_hits', '?')}, Versuche {d.get('tries', 1)}"
+                   + (f", deine Ausruestung: {', '.join(d['kit'])}" if d.get("kit") else "") + ".")
     return "\n".join(out)
 
 
 def session_fazit(cfg: dict, config_path: Path, session_file: Path, ask_fn=None) -> str | None:
     """KI-Fazit eines beendeten Trainings; wird auch in der Session-Datei gespeichert (fuer /training)."""
     session = json.loads(Path(session_file).read_text(encoding="utf-8"))
-    context = FAZIT_SYSTEM + "\n\nFakten zum Spieler:\n" + player_facts(cfg, config_path)
-    text = (ask_fn or ask)(cfg, context, session_facts(session) + "\n\nSchreibe das Fazit.")
+    text = (ask_fn or ask)(cfg, FAZIT_SYSTEM, session_facts(session) + "\n\nSchreibe das Fazit.")
     if not text:
         return None
     text = clean(text, FAZIT_LIMIT)

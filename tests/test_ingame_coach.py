@@ -102,3 +102,25 @@ def test_training_history_reaches_the_ai(tmp_path):
     facts = ic.training_facts(path)
     assert "auf de_mirage: 1 von 2 Duellen gewonnen" in facts
     assert "Oft verloren: 27.10. R3 gegen Poepp mit M4A4 (1x verloren, 0x gewonnen)" in facts
+
+
+def test_fazit_uses_only_training_facts(tmp_path, monkeypatch):
+    """30.10.: das Fazit riet zu mehr HE (Briefing-Ziel), obwohl er im Training keine HE hatte."""
+    import json as _json
+    from cs2_coach import ingame_coach as ic
+    monkeypatch.setattr(ic, "player_facts", lambda *a, **k: "HE-Granaten pro Runde: 0.43 vs 0.31")
+    session = tmp_path / "s.json"
+    session.write_text(_json.dumps({"map": "de_mirage", "mode": "retake", "level_end": 4, "party": ["Dancho"],
+                                    "duels": [{"n": 1, "outcome": "loss", "first": "bot", "you_hits": 1,
+                                               "you_head": 0, "bot_hits": 3, "weapon": "ak47", "source": "27.10. R3",
+                                               "kit": ["M4A4", "USP-S", "Flashbang"]}]}), encoding="utf-8")
+    seen = {}
+
+    def fake_ask(cfg, system, prompt):
+        seen.update(system=system, prompt=prompt)
+        return "Kurzes Fazit."
+
+    assert ic.session_fazit({}, tmp_path / "config.yaml", session, ask_fn=fake_ask) == "Kurzes Fazit."
+    assert "HE-Granaten pro Runde" not in seen["system"] + seen["prompt"]
+    assert "deine Ausruestung: M4A4, USP-S, Flashbang" in seen["prompt"]
+    assert "/5" in seen["prompt"] and "Dancho" in seen["prompt"]
