@@ -65,6 +65,35 @@
 </div>
 {% endif %}
 
+{% if measured %}
+<h3 style="margin-bottom: var(--space-2);">Messwerte im Training</h3>
+<p style="color: var(--color-neutral-500); font-size: 12px; margin-bottom: var(--space-3);">
+    Vom Server-Plugin gemessen, Median pro Training. <strong>Beim Auftauchen</strong>: wie weit dein Fadenkreuz vom
+    Gegner weg war, als du ihn zum ersten Mal sehen konntest (Fuß zu Fuß, in Grad). <strong>Erster Schuss</strong>:
+    Zeit vom Sehen bis zum ersten Schuss, noch ohne Bewertung - der Sichtzeitpunkt stammt aus den Radar-Daten
+    und ist nicht gegen echte Reaktionszeiten geeicht. <strong>Vor Kills</strong>: Fadenkreuz 0,5&nbsp;s vor jedem
+    Kill - dieselbe Messung wie in deinen Match-Analysen{% if match_cp is not none %} (letzte 10 Matches:
+    <strong>{{ '%.1f'|format(match_cp) }}°</strong>){% endif %}. Mit wenigen Duellen schwanken die Werte stark.
+</p>
+<div class="card elev-sm" style="margin-bottom: var(--space-5); padding: 0; overflow-x: auto;">
+<table class="table" style="width: 100%;">
+    <thead><tr><th>Training</th><th>Map</th><th>Fadenkreuz beim Auftauchen</th><th>Erster Schuss</th>
+        <th>Fadenkreuz vor Kills</th></tr></thead>
+    <tbody>
+    {% for s in measured %}{% set m = s.measures %}
+    <tr>
+        <td>{{ s.started[8:10] }}.{{ s.started[5:7] }}. {{ s.started[11:16] }}</td>
+        <td>{{ (s.map or '')|replace('de_', '')|capitalize }}</td>
+        <td>{% if m.seen_n %}{{ '%.1f'|format(m.seen_err) }}° <span style="color: var(--color-neutral-500);">({{ m.seen_n }})</span>{% else %}–{% endif %}</td>
+        <td>{% if m.react_n %}{{ '%.0f'|format(m.react_ms) }} ms <span style="color: var(--color-neutral-500);">({{ m.react_n }})</span>{% else %}–{% endif %}</td>
+        <td>{% if m.kill_n %}{{ '%.1f'|format(m.kill_err) }}° <span style="color: var(--color-neutral-500);">({{ m.kill_n }} Kills)</span>{% else %}–{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
 <h3 style="margin-bottom: var(--space-3);">Letzte Trainings</h3>
 {% for s in sessions %}
 <details class="card elev-sm" style="margin-bottom: var(--space-3);" {% if loop.first %}open{% endif %}>
@@ -73,14 +102,15 @@
         {{ s.started[8:10] }}.{{ s.started[5:7] }}. {{ s.started[11:16] }} ·
         <span style="color: {{ 'var(--color-green)' if s.played and s.won * 2 >= s.played else 'var(--color-red)' }}; font-weight: 600;">
             {{ s.won }} von {{ s.played }} gewonnen</span>
-        {% if s.level_end is not none %}<span style="color: var(--color-neutral-500);"> · Bot-Stufe am Ende {{ s.level_end }}/3</span>{% endif %}
+        {% if s.level_end is not none %}<span style="color: var(--color-neutral-500);"> · Bot-Stufe am Ende {{ s.level_end }}/{{ max_level }}</span>{% endif %}
     </summary>
     {% if s.fazit %}
     <p style="margin: var(--space-3) 0 0; font-size: 13px; border-left: 3px solid var(--color-accent); padding-left: var(--space-3);">
         <strong>Fazit des Coaches:</strong> {{ s.fazit }}</p>
     {% endif %}
     <table class="table" style="width: 100%; margin-top: var(--space-3);">
-        <thead><tr><th>#</th><th>Situation</th><th>Gegner</th><th>Waffe</th><th>Ergebnis</th><th>Versuche</th><th></th></tr></thead>
+        <thead><tr><th>#</th><th>Situation</th><th>Gegner</th><th>Waffe</th><th>Ergebnis</th><th>Versuche</th>
+            <th>Fadenkreuz</th><th>Erster Schuss</th><th></th></tr></thead>
         <tbody>
         {% for d in s.duels %}
         <tr>
@@ -89,6 +119,10 @@
                 {% elif d.outcome == 'loss' %}<span style="color: var(--color-red);">verloren</span>
                 {% else %}<span style="color: var(--color-yellow);">unentschieden</span>{% endif %}</td>
             <td>{{ d.tries }}</td>
+            <td>{% if d.seen_err is defined %}{{ '%.0f'|format(d.seen_err) }}°{% if d.seen_err >= 3 %}
+                <span style="color: var(--color-neutral-500);">{{ aim_side(d.dpitch or 0, d.dyaw or 0) }}</span>{% endif %}
+                {% else %}–{% endif %}</td>
+            <td>{% if d.react_ms is defined %}{{ '%.0f'|format(d.react_ms) ~ ' ms' if d.react_ms >= 0 else 'vorgeschossen' }}{% else %}–{% endif %}</td>
             <td>{% if d.export %}<a href="{{ url_for('view_export', filename=d.export) }}">Match</a>{% endif %}</td>
         </tr>
         {% endfor %}

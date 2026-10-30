@@ -128,9 +128,32 @@ def duel_facts(duel: dict) -> str:
         out.append("Zuerst getroffen hat: " + ("der Spieler" if first == "you" else "der Gegner") + ".")
     out.append(f"Treffer des Spielers: {duel.get('you_hits', 0)}, davon am Kopf: {duel.get('you_head', 0)}. "
                f"Treffer des Gegners: {duel.get('bot_hits', 0)}.")
+    seen = _measure_facts(duel)
+    if seen:
+        out.append(seen)
     if duel.get("tip"):
         out.append(f"Automatischer Hinweis: {duel['tip']}")
     return "\n".join(out)
+
+
+def _measure_facts(d: dict) -> str:
+    """Messwerte des Plugins als Satz fuer die KI (nur was gemessen wurde)."""
+    from .training_server import aim_side
+    parts = []
+    if "seen_err" in d:
+        parts.append(f"Fadenkreuz beim Auftauchen des Gegners {d['seen_err']:.0f} Grad daneben "
+                     f"({aim_side(d.get('dpitch', 0), d.get('dyaw', 0))})")
+    if "react_ms" in d:
+        parts.append(f"erster Schuss {d['react_ms']:.0f} ms nach dem Sehen" if d["react_ms"] >= 0
+                     else "vor dem Sehen geschossen (vorgeschossen)")
+    if "hit_ms" in d:
+        parts.append(f"erster Treffer {d['hit_ms']:.0f} ms nach dem Sehen")
+    if "peek_ms" in d:
+        parts.append(f"der Gegner sah ihn {d['peek_ms']:.0f} ms frueher" if d["peek_ms"] > 0
+                     else f"er sah den Gegner {-d['peek_ms']:.0f} ms frueher")
+    if d.get("kill_errs"):
+        parts.append("Fadenkreuz 0,5 s vor seinen Kills: " + ", ".join(f"{k:.0f} Grad" for k in d["kill_errs"]))
+    return ("Gemessen: " + "; ".join(parts) + ".") if parts else ""
 
 
 def training_facts(config_path: Path) -> str:
@@ -146,7 +169,7 @@ def training_facts(config_path: Path) -> str:
         res = state.get("results", [])
         lines.append(f"Duell-Training laeuft auf {state.get('map')}: Duell {state.get('pos', 0) + 1} von "
                      f"{len(state.get('queue', []))}, Stand {res.count('win')} gewonnen zu {res.count('loss')} "
-                     f"verloren, Bot-Stufe {state.get('level')}/3.")
+                     f"verloren, Bot-Stufe {state.get('level')}/5.")
     else:
         lines.append("Gerade laeuft kein Duell-Training.")
     sessions = load_sessions(config_path)
@@ -157,6 +180,12 @@ def training_facts(config_path: Path) -> str:
         won_played[1] += s["played"]
     for m, (won, played) in sorted(by_map.items()):
         lines.append(f"Bisher im Duell-Training auf {m}: {won} von {played} Duellen gewonnen.")
+    measured = next((s for s in sessions if s.get("measures", {}).get("seen_n")), None)
+    if measured:
+        m = measured["measures"]
+        lines.append(f"Letztes gemessenes Training ({measured.get('map')}): Median Fadenkreuz beim Auftauchen "
+                     f"{m['seen_err']:.1f} Grad"
+                     + (f", erster Schuss {m['react_ms']:.0f} ms nach dem Sehen" if m["react_n"] else "") + ".")
     for h in hardest(sessions, limit=3):
         lines.append(f"Oft verloren: {h.get('source')} gegen {h.get('opponent')} mit "
                      f"{weapon_label(h.get('weapon', ''))} ({h['lost']}x verloren, {h['won']}x gewonnen).")
@@ -176,7 +205,8 @@ FAZIT_SYSTEM = """Du bist der persoenliche CS2-Coach eines einzelnen Spielers. E
 Server beendet: Situationen aus seinen eigenen Matches, nachgespielt gegen Bots.
 - Deutsch, du-Form, hoechstens 4 kurze Saetze, zusammen hoechstens 480 Zeichen.
 - Satz 1: das Ergebnis. Dann das deutlichste Muster bei den Niederlagen - nur aus den Trainingsdaten
-  (wer zuerst traf, Treffer, Kopftreffer, Waffe des Gegners, Versuche).
+  (wer zuerst traf, wer wen zuerst sah, Fadenkreuz beim Auftauchen und vor Kills in Grad, Treffer,
+  Waffe des Gegners). Reaktionszeiten nur nennen, nicht als gut oder schlecht bewerten.
 - Zum Schluss genau eine Sache, die er in solchen Situationen als Naechstes ueben soll.
 - Rate nur zu Ausruestung, die er in der Situation laut Daten wirklich hatte. Keine Ratschlaege zu
   Granaten, Wirtschaft oder Match-Statistik.
@@ -191,6 +221,17 @@ def session_facts(session: dict) -> str:
     out = [f"Training ({session.get('mode', 'duell')}) auf {session.get('map')}: {won} von {len(duels)} gewonnen, "
            f"Bot-Stufe am Ende {session.get('level_end')}/{MAX_LEVEL}."
            + (f" Zusammen mit {', '.join(party)} gespielt." if party else "")]
+    from .training_server import session_measures
+    m = session_measures(duels)
+    if m["seen_n"]:
+        out.append(f"Median Fadenkreuz beim Auftauchen: {m['seen_err']:.1f} Grad ({m['seen_n']} Duelle).")
+    if m["react_n"]:
+        out.append(f"Median erster Schuss nach dem Sehen: {m['react_ms']:.0f} ms ({m['react_n']} Duelle).")
+    if m["kill_n"]:
+        line = f"Median Fadenkreuz 0,5 s vor Kills im Training: {m['kill_err']:.1f} Grad ({m['kill_n']} Kills)"
+        if session.get("match_cp") is not None:
+            line += f"; in seinen letzten Matches (gleiche Messung): {session['match_cp']:.1f} Grad"
+        out.append(line + ".")
     for d in duels:
         res = dict(win="gewonnen", loss="verloren").get(d.get("outcome"), "unentschieden")
         first = {"you": "du zuerst getroffen", "bot": "Gegner zuerst getroffen"}.get(d.get("first"), "")
@@ -198,12 +239,17 @@ def session_facts(session: dict) -> str:
                    f"{', ' + first if first else ''}, deine Treffer {d.get('you_hits', '?')} (Kopf {d.get('you_head', '?')}),"
                    f" Treffer des Gegners {d.get('bot_hits', '?')}, Versuche {d.get('tries', 1)}"
                    + (f", deine Ausruestung: {', '.join(d['kit'])}" if d.get("kit") else "") + ".")
+        seen = _measure_facts(d)
+        if seen:
+            out.append("  " + seen)
     return "\n".join(out)
 
 
 def session_fazit(cfg: dict, config_path: Path, session_file: Path, ask_fn=None) -> str | None:
     """KI-Fazit eines beendeten Trainings; wird auch in der Session-Datei gespeichert (fuer /training)."""
     session = json.loads(Path(session_file).read_text(encoding="utf-8"))
+    from .training_server import match_crosshair_median
+    session["match_cp"] = match_crosshair_median(cfg)
     text = (ask_fn or ask)(cfg, FAZIT_SYSTEM, session_facts(session) + "\n\nSchreibe das Fazit.")
     if not text:
         return None

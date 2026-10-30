@@ -30,6 +30,14 @@
 //         oder jemand in der Runde gestorben ist, kennt er die Position des
 //         naechsten Gegners und geht dorthin ("Geraeusch" an der Stelle, alle
 //         0,25 s erneuert). Der erste Tote der Runde beendet auch alle Wege.
+//     coach_stats <userid>
+//         Messwerte der laufenden Runde fuer einen Menschen (seit Freeze-Ende):
+//         seen=ms bis zum ersten Sichtkontakt, start=1 wenn der Gegner schon
+//         beim Freeze-Ende sichtbar war, err/dpitch/dyaw=Fadenkreuz-Abstand zum
+//         Gegner in dem Moment (Grad, dpitch>0 = zu tief), react=ms vom Sehen
+//         bis zum ersten Schuss (negativ = vorher geschossen), hit=ms bis zum
+//         ersten Treffer, peek=ms, die der Gegner dich vorher sah (negativ = du
+//         ihn zuerst), kills=Fadenkreuz 0,5 s vor jedem Kill (wie im Match-Parser).
 //     coach_tp_version
 //
 // Alles andere - welche Situation, wann, wer - entscheidet der Coach, damit
@@ -53,7 +61,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.9.0";
+    public override string ModuleVersion => "1.10.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -83,6 +91,15 @@ public class CoachTeleport : BasePlugin
         RegisterListener<Listeners.OnTick>(DrawCenter);
         RegisterListener<Listeners.OnTick>(AimAssist);
         RegisterListener<Listeners.OnTick>(Hunt);
+        RegisterListener<Listeners.OnTick>(MeasureTick);
+        RegisterEventHandler<EventWeaponFire>((ev, _) =>
+        {
+            if (_inFreeze || ev.Userid is not { } shooter || shooter.IsBot) return HookResult.Continue;
+            if (IsNoGun(ev.Weapon)) return HookResult.Continue;
+            var m = MeasureOf(shooter.UserId ?? -1);
+            if (m.ShotTick < 0) m.ShotTick = Server.TickCount;
+            return HookResult.Continue;
+        });
         RegisterListener<Listeners.OnPlayerButtonsChanged>(OnButtons);
         RegisterEventHandler<EventRoundStart>((_, _) =>
         {
@@ -94,6 +111,9 @@ public class CoachTeleport : BasePlugin
         RegisterEventHandler<EventRoundFreezeEnd>((_, _) =>
         {
             _inFreeze = false;
+            _measures.Clear();
+            _views.Clear();
+            _freezeEndTick = Server.TickCount;
             foreach (var r in _replays.Values.Where(r => r.Armed && r.StartTick < 0))
                 r.StartTick = Server.TickCount;
             return HookResult.Continue;
@@ -102,12 +122,20 @@ public class CoachTeleport : BasePlugin
         RegisterEventHandler<EventPlayerHurt>((ev, _) =>
         {
             if (ev.Userid is { } victim) _replays.Remove(victim.UserId ?? -1);
+            if (!_inFreeze && ev.Attacker is { IsBot: false } att && ev.Userid is { } vic && vic.TeamNum != att.TeamNum)
+            {
+                var m = MeasureOf(att.UserId ?? -1);
+                if (m.HitTick < 0) m.HitTick = Server.TickCount;
+            }
             return HookResult.Continue;
         });
         RegisterEventHandler<EventPlayerDeath>((ev, _) =>
         {
             if (ev.Userid is { } victim) _replays.Remove(victim.UserId ?? -1);
             if (!_inFreeze) OnFirstKill();
+            if (!_inFreeze && ev.Attacker is { IsBot: false } att && ev.Userid is { } dead
+                && dead.TeamNum != att.TeamNum && ev.Penetrated == 0 && !IsNoGun(ev.Weapon))
+                RecordKillError(att, dead);
             return HookResult.Continue;
         });
         RegisterEventHandler<EventRoundEnd>((_, _) =>
@@ -387,6 +415,133 @@ public class CoachTeleport : BasePlugin
         if (hold <= 0) _skills.Remove(userid);
         else _skills[userid] = (Math.Max(0, react) * 64 / 1000, hold * 64 / 1000);
         info.ReplyToCommand($"coach_bot_skill ok {userid}");
+    }
+
+    // Messung (1.10.0). Bisher stand im Log nur, wer zuerst getroffen hat; die
+    // Reaktionszeit und wo das Fadenkreuz war, als der Gegner auftauchte, fehlten
+    // ("steht nicht im Log", training_server.duel_tip). Sichtkontakt = Spotted-
+    // Maske (dieselben Radar-Daten wie bei der Uebergabe an die KI). Aufloesung
+    // 1 Tick = 15,6 ms.
+    private sealed class Measure
+    {
+        public int SeenTick = -1, EnemySawTick = -1, ShotTick = -1, HitTick = -1;
+        public bool AtStart;
+        public float Err = -1, DPitch, DYaw;
+        public readonly List<float> KillErrs = new();
+    }
+
+    private readonly Dictionary<int, Measure> _measures = new();
+    private readonly Dictionary<int, Queue<(int Tick, float X, float Y, float Z, float Pitch, float Yaw)>> _views = new();
+    private int _freezeEndTick = -1;
+    private const int PreAimTicks = 32;  // wie PRE_AIM_OFFSET_TICKS im Match-Parser
+
+    private Measure MeasureOf(int userid)
+    {
+        if (!_measures.TryGetValue(userid, out var m)) _measures[userid] = m = new Measure();
+        return m;
+    }
+
+    private static bool IsNoGun(string weapon)
+    {
+        var w = (weapon ?? "").ToLowerInvariant();
+        return w.Contains("knife") || w.Contains("bayonet") || w.Contains("grenade") || w.Contains("flashbang")
+            || w.Contains("molotov") || w.Contains("decoy") || w.Contains("inferno") || w.Contains("c4")
+            || w.Contains("taser") || w.Length == 0;
+    }
+
+    // Wie _angular_error im Parser: Fuss zu Fuss, Yaw-Differenz mit Umlauf,
+    // dpitch = eigener Pitch minus idealer Pitch (Source: positiv = nach unten).
+    private static (float Err, float DPitch, float DYaw) AngularError(float fx, float fy, float fz, float pitch, float yaw, Vector to)
+    {
+        var dx = to.X - fx;
+        var dy = to.Y - fy;
+        var dz = to.Z - fz;
+        var d2 = Math.Sqrt(dx * dx + dy * dy);
+        if (d2 < 1) return (0, 0, 0);
+        var idealYaw = Math.Atan2(dy, dx) * 180 / Math.PI;
+        var idealPitch = -Math.Atan2(dz, d2) * 180 / Math.PI;
+        var dyaw = ((yaw - idealYaw) % 360 + 540) % 360 - 180;
+        var dpitch = pitch - idealPitch;
+        return ((float)Math.Sqrt(dyaw * dyaw + dpitch * dpitch), (float)dpitch, (float)dyaw);
+    }
+
+    private static bool SeenByEnemy(CCSPlayerController human, CCSPlayerPawn pawn)
+    {
+        var mask = pawn.EntitySpottedState.SpottedByMask;
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p == human || p.TeamNum == human.TeamNum || p.TeamNum < 2) continue;
+            var other = p.PlayerPawn.Value;
+            if (other is null || !other.IsValid || other.LifeState != (byte)LifeState_t.LIFE_ALIVE) continue;
+            var slot = p.Slot;
+            if (slot >= 0 && slot < 64 && (mask[slot / 32] & (1u << (slot % 32))) != 0) return true;
+        }
+        return false;
+    }
+
+    private void MeasureTick()
+    {
+        if (_inFreeze || _freezeEndTick < 0) return;
+        var now = Server.TickCount;
+        foreach (var human in Utilities.GetPlayers())
+        {
+            if (human.IsBot || human.TeamNum < 2) continue;
+            var pawn = human.PlayerPawn.Value;
+            if (pawn is null || !pawn.IsValid || pawn.LifeState != (byte)LifeState_t.LIFE_ALIVE
+                || pawn.AbsOrigin is null) continue;
+            var uid = human.UserId ?? -1;
+            var (x, y, z) = (pawn.AbsOrigin.X, pawn.AbsOrigin.Y, pawn.AbsOrigin.Z);
+            var pitch = pawn.EyeAngles.X;
+            var yaw = pawn.EyeAngles.Y;
+            if (!_views.TryGetValue(uid, out var views)) _views[uid] = views = new();
+            views.Enqueue((now, x, y, z, pitch, yaw));
+            while (views.Count > PreAimTicks + 4) views.Dequeue();
+            var m = MeasureOf(uid);
+            if (m.EnemySawTick < 0 && SeenByEnemy(human, pawn)) m.EnemySawTick = now;
+            if (m.SeenTick >= 0) continue;
+            var foe = SeenEnemy(human);
+            if (foe?.AbsOrigin is null) continue;
+            m.SeenTick = now;
+            m.AtStart = now - _freezeEndTick <= 2;
+            (m.Err, m.DPitch, m.DYaw) = AngularError(x, y, z, pitch, yaw, foe.AbsOrigin);
+        }
+    }
+
+    private void RecordKillError(CCSPlayerController att, CCSPlayerController dead)
+    {
+        var target = dead.PlayerPawn.Value?.AbsOrigin;
+        if (target is null || !_views.TryGetValue(att.UserId ?? -1, out var views) || views.Count == 0) return;
+        var want = Server.TickCount - PreAimTicks;
+        var best = views.OrderBy(v => Math.Abs(v.Tick - want)).First();
+        if (Math.Abs(best.Tick - want) > 4) return;  // Kill zu frueh nach Freeze-Ende: kein Blick von davor
+        var (err, _, _) = AngularError(best.X, best.Y, best.Z, best.Pitch, best.Yaw, target);
+        if (err <= 180) MeasureOf(att.UserId ?? -1).KillErrs.Add(err);
+    }
+
+    [ConsoleCommand("coach_stats", "Messwerte der Runde: <userid>")]
+    [CommandHelper(minArgs: 1, usage: "<userid>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnStats(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (!int.TryParse(info.GetArg(1), out var userid))
+        {
+            info.ReplyToCommand("coach_stats: ungueltige userid");
+            return;
+        }
+        var ci = CultureInfo.InvariantCulture;
+        string Ms(int a, int b) => a >= 0 && b >= 0 ? ((a - b) * 1000 / 64).ToString(ci) : "-";
+        _measures.TryGetValue(userid, out var m);
+        m ??= new Measure();
+        var parts = new List<string>
+        {
+            $"seen={Ms(m.SeenTick, _freezeEndTick)}", $"start={(m.AtStart ? 1 : 0)}",
+            $"err={(m.SeenTick >= 0 ? m.Err.ToString("F1", ci) : "-")}",
+            $"dpitch={(m.SeenTick >= 0 ? m.DPitch.ToString("F1", ci) : "-")}",
+            $"dyaw={(m.SeenTick >= 0 ? m.DYaw.ToString("F1", ci) : "-")}",
+            $"react={Ms(m.ShotTick, m.SeenTick)}", $"hit={Ms(m.HitTick, m.SeenTick)}",
+            $"peek={Ms(m.SeenTick, m.EnemySawTick)}",
+            $"kills={(m.KillErrs.Count > 0 ? string.Join(",", m.KillErrs.Select(k => k.ToString("F1", ci))) : "-")}",
+        };
+        info.ReplyToCommand($"coach_stats {userid} " + string.Join(" ", parts));
     }
 
     // Jagd (1.9.0). Wunsch vom 30.10.: "die Bots duerfen gerne wissen wo ich bin,

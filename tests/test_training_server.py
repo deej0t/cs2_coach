@@ -583,7 +583,9 @@ def test_training_page_renders_sessions(tmp_path, monkeypatch):
         mod = importlib.reload(app_module)
         ts.save_session(cfg, {"map": "de_mirage", "started": "2026-10-30T08:00:00", "level": 2, "duels": [
             {"n": 1, "source": "27.10. R3", "opponent": "Pöpp Escobar", "weapon": "m4a1", "outcome": "loss",
-             "tries": 2, "export": "2026-10-27_mirage_13-8_2049_coach.json", "round": 3}]}, "Training fertig")
+             "tries": 2, "export": "2026-10-27_mirage_13-8_2049_coach.json", "round": 3,
+             "seen_err": 12.4, "dpitch": 9.0, "dyaw": 2.0, "react_ms": 281.0, "kill_errs": [3.5]}]},
+            "Training fertig")
         f = next(ts.sessions_dir(cfg).glob("*.json"))
         import json as _json
         data = _json.loads(f.read_text(encoding="utf-8")); data["fazit"] = "Halte die Winkel enger."
@@ -593,6 +595,7 @@ def test_training_page_renders_sessions(tmp_path, monkeypatch):
         assert "0 von 1 gewonnen" in page and "Pöpp Escobar" in page and "M4A4" in page
         assert "/export/2026-10-27_mirage_13-8_2049_coach.json" in page
         assert "Fazit des Coaches:</strong> Halte die Winkel enger." in page
+        assert "Messwerte im Training" in page and "12.4°" in page and "281 ms" in page and "zu tief" in page
     finally:
         monkeypatch.delenv("CS2COACH_CONFIG")
         importlib.reload(app_module)
@@ -742,3 +745,66 @@ def test_bots_hunt_you(env):
     ts.save_state(path, running_state())
     director().on_lines([line('World triggered "Round_Start"')])
     assert "coach_hunt 4 1" in server.sent
+
+
+STATS = "coach_stats 2 seen=840 start=0 err=12.4 dpitch=9.0 dyaw=-2.0 react=281 hit=343 peek=125 kills=3.5,8.0"
+
+
+def test_parse_stats_from_plugin():
+    m = ts.parse_stats(STATS + "\n")
+    assert m == {"seen_ms": 840.0, "seen_err": 12.4, "dpitch": 9.0, "dyaw": -2.0, "react_ms": 281.0,
+                 "hit_ms": 343.0, "peek_ms": 125.0, "kill_errs": [3.5, 8.0]}
+    assert ts.parse_stats("coach_stats 2 seen=- start=0 err=- react=- kills=-") == {}
+    assert ts.parse_stats("Unknown command 'coach_stats'!") == {}  # altes Plugin
+    # Gegner schon beim Freeze-Ende sichtbar: Blick kam vom Versetzen, nur Kills zaehlen
+    assert ts.parse_stats("coach_stats 2 seen=0 start=1 err=40.0 react=900 kills=4.0") == {"kill_errs": [4.0]}
+
+
+def test_aim_side_follows_source_angles():
+    assert ts.aim_side(9, 2) == "zu tief" and ts.aim_side(-9, 2) == "zu hoch"
+    assert ts.aim_side(1, 8) == "links daneben" and ts.aim_side(1, -8) == "rechts daneben"
+
+
+def test_tip_uses_measurements_first():
+    assert "standest offen" in ts.duel_tip({"peek_ms": 300, "you_hits": 1}, "loss")
+    tip = ts.duel_tip({"seen_err": 14, "dpitch": 10, "dyaw": 1, "you_hits": 1}, "loss")
+    assert "14°" in tip and "zu tief" in tip
+    assert ts.duel_tip({"seen_err": 14}, "win") is None
+
+
+def test_round_end_records_measurements(env):
+    _, path, server, _, director = env
+    replies = {"coach_stats 2": STATS}
+    orig = server.__call__
+
+    def call(*cmds):
+        out = orig(*cmds)
+        return [replies.get(c, o) for c, o in zip(cmds, out)]
+
+    director_with = lambda: ts.Director(env[0], path, call, timer=lambda *a: None)  # noqa: E731
+    ts.save_state(path, running_state())
+    director_with().on_lines([line('World triggered "Round_Start"'),
+                              line(f'{DJ} [0 0 0] attacked {BOT} [1 1 1] with "ak47" (damage "27") (damage_armor "3") '
+                                   '(health "73") (armor "96") (hitgroup "chest")'),
+                              line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "m4a1"'),
+                              line('World triggered "Round_End"')])
+    duel = ts.load_state(path)["duels"][0]
+    assert duel["seen_err"] == 12.4 and duel["react_ms"] == 281.0 and duel["kill_errs"] == [3.5, 8.0]
+    assert any("Fadenkreuz 12° (zu tief)" in h and "Reaktion 281 ms" in h for h in huds(server))
+    assert "zu tief" in duel["tip"]
+
+
+def test_session_measures_use_medians():
+    m = ts.session_measures([{"seen_err": 4}, {"seen_err": 30, "react_ms": -50}, {"seen_err": 6, "react_ms": 250,
+                                                                                   "kill_errs": [2, 9, 4]}])
+    assert m["seen_err"] == 6 and m["react_ms"] == 250 and m["react_n"] == 1 and m["kill_err"] == 4
+
+
+def test_match_crosshair_from_exports(tmp_path):
+    folder = tmp_path / "CS2-Coach" / "exports"
+    folder.mkdir(parents=True)
+    for i, deg in enumerate([5.0, 7.0, 9.0]):
+        (folder / f"2026-10-2{i}_mirage_13-8_2049_coach.json").write_text(json.dumps(
+            {"player": {"crosshair_placement": {"median_degrees": deg, "kills_analyzed": 10}}}))
+    assert ts.match_crosshair_median({"obsidian_vault_path": str(tmp_path)}) == 7.0
+    assert ts.match_crosshair_median({"obsidian_vault_path": str(tmp_path)}, last=1) == 9.0

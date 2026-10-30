@@ -28,9 +28,13 @@ def create_blueprint(load_config, config_path) -> Blueprint:
         sessions = training_server.load_sessions(path)
         total = sum(s["played"] for s in sessions)
         won = sum(s["won"] for s in sessions)
+        cfg = load_config()
         return render_template(
             "training.html", sessions=sessions[:20], hardest=training_server.hardest(sessions),
             running=training_server.state_summary(path), total=total, won=won,
-            weapon_label=training_server.weapon_label, config=load_config())
+            weapon_label=training_server.weapon_label, aim_side=training_server.aim_side,
+            measured=[s for s in sessions[:20] if s["measures"]["seen_n"] or s["measures"]["kill_n"]],
+            match_cp=training_server.match_crosshair_median(cfg), max_level=training_server.MAX_LEVEL,
+            config=cfg)
 
     return bp

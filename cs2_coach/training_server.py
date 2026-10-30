@@ -441,16 +441,122 @@ def direction(me, foe) -> str:
     return f"{where}, {meters:.0f} m"
 
 
+_STAT_KEYS = {"seen": "seen_ms", "err": "seen_err", "dpitch": "dpitch", "dyaw": "dyaw",
+              "react": "react_ms", "hit": "hit_ms", "peek": "peek_ms"}
+MEASURE_KEYS = ("seen_err", "dpitch", "dyaw", "react_ms", "hit_ms", "peek_ms", "kill_errs")
+
+
+def parse_stats(reply: str) -> dict:
+    """Antwort von coach_stats (Plugin 1.10.0) -> Messwerte; "-" = nicht gemessen.
+
+    War der Gegner schon beim Freeze-Ende sichtbar (start=1), sagen Sicht-
+    zeitpunkt, Fadenkreuz und Reaktion nichts: der Blick wurde beim Versetzen
+    gesetzt, und in der Freeze-Time kann niemand schiessen. Dann zaehlen nur
+    die Kills.
+    """
+    reply = (reply or "").strip()
+    if not reply.startswith("coach_stats "):
+        return {}
+    out: dict = {}
+    try:
+        for part in reply.split()[2:]:
+            key, _, val = part.partition("=")
+            if not val or val == "-":
+                continue
+            if key == "kills":
+                out["kill_errs"] = [float(x) for x in val.split(",") if x]
+            elif key == "start":
+                out["at_start"] = val == "1"
+            elif key in _STAT_KEYS:
+                out[_STAT_KEYS[key]] = float(val)
+    except ValueError:
+        return {}
+    if out.pop("at_start", False):
+        out = {k: v for k, v in out.items() if k == "kill_errs"}
+    return out
+
+
+def aim_side(dpitch: float, dyaw: float) -> str:
+    """Groesster Anteil des Fadenkreuz-Fehlers. Source: Pitch positiv = nach unten,
+    Yaw positiv = nach links - dyaw > 0 heisst also: links am Gegner vorbei."""
+    if abs(dpitch) >= abs(dyaw):
+        return "zu tief" if dpitch > 0 else "zu hoch"
+    return "links daneben" if dyaw > 0 else "rechts daneben"
+
+
+def measure_line(m: dict) -> str:
+    """"Fadenkreuz 12° (zu tief) · Reaktion 280 ms · er sah dich 150 ms frueher" - nur Gemessenes."""
+    parts = []
+    if "seen_err" in m:
+        parts.append(f"Fadenkreuz {m['seen_err']:.0f}° ({aim_side(m.get('dpitch', 0), m.get('dyaw', 0))})"
+                     if m["seen_err"] >= 3 else f"Fadenkreuz {m['seen_err']:.0f}°")
+    if "react_ms" in m:
+        parts.append(f"Reaktion {m['react_ms']:.0f} ms" if m["react_ms"] >= 0 else "vorgeschossen")
+    if m.get("peek_ms", 0) >= 100:
+        parts.append(f"er sah dich {m['peek_ms']:.0f} ms frueher")
+    elif m.get("peek_ms", 0) <= -100:
+        parts.append(f"du sahst ihn {-m['peek_ms']:.0f} ms frueher")
+    return " · ".join(parts)
+
+
+def _median(values):
+    from statistics import median
+    values = [v for v in values if v is not None]
+    return median(values) if values else None
+
+
+def session_measures(duels: list[dict]) -> dict:
+    """Mediane eines Trainings (Median wie im Match-Parser: die Verteilung ist schief)."""
+    seen = [d["seen_err"] for d in duels if "seen_err" in d]
+    react = [d["react_ms"] for d in duels if d.get("react_ms", -1) >= 0]
+    kills = [k for d in duels for k in d.get("kill_errs") or []]
+    return {"seen_err": _median(seen), "seen_n": len(seen), "react_ms": _median(react), "react_n": len(react),
+            "kill_err": _median(kills), "kill_n": len(kills)}
+
+
+def match_crosshair_median(cfg: dict, last: int = 10) -> float | None:
+    """Fadenkreuz 0,5 s vor Kills in deinen letzten Matches (Median der Match-Mediane).
+
+    Dieselbe Messung wie kill_errs im Training (Plugin rechnet wie der Parser),
+    also direkt vergleichbar - anders als das Fadenkreuz beim Auftauchen.
+    """
+    from .obsidian import export_sort_key
+    vault = (cfg.get("obsidian_vault_path") or "").strip()
+    if not vault:
+        return None
+    files = sorted((Path(vault) / cfg.get("coach_subfolder", "CS2-Coach") / "exports").glob("*_coach.json"),
+                   key=export_sort_key)
+    values = []
+    for f in reversed(files):
+        try:
+            cp = json.loads(f.read_text(encoding="utf-8")).get("player", {}).get("crosshair_placement") or {}
+        except (OSError, ValueError):
+            continue
+        if cp.get("kills_analyzed") and cp.get("median_degrees") is not None:
+            values.append(float(cp["median_degrees"]))
+        if len(values) >= last:
+            break
+    return _median(values)
+
+
 def duel_tip(rnd: dict, outcome: str) -> str | None:
     """Kurzer Hinweis nach einem verlorenen Duell - nur aus dem, was das Log misst.
 
-    Gemessen werden Treffer, Trefferzone und wer zuerst getroffen hat. Mehr
-    (Reaktionszeit, Peek-Timing) steht nicht im Log; die Erklaerung dazu
-    gibt die KI mit !tipp. Ein verlorenes Duell ohne Treffer zaehlt nicht
-    (Leerlauf), kommt hier also nicht an.
+    Aus dem Log: Treffer, Trefferzone, wer zuerst getroffen hat. Vom Plugin
+    (1.10.0): wer wen zuerst sah und wo dein Fadenkreuz war, als er auftauchte.
+    Die Reaktionszeit wird angezeigt, aber noch nicht bewertet - ab wann sie
+    "langsam" ist, haengt davon ab, wie frueh die Spotted-Maske anschlaegt, und
+    das ist noch nicht gegen echte Duelle kalibriert. Ein verlorenes Duell ohne
+    Treffer zaehlt nicht (Leerlauf), kommt hier also nicht an.
     """
     if outcome != "loss":
         return None
+    if rnd.get("peek_ms", 0) >= 250:
+        return (f"Er sah dich {rnd['peek_ms']:.0f} ms bevor du ihn - du standest offen. "
+                "Enger an der Deckung halten oder einen anderen Winkel nehmen.")
+    if rnd.get("seen_err", 0) >= 10:
+        return (f"Als er auftauchte, war dein Fadenkreuz {rnd['seen_err']:.0f}° daneben "
+                f"({aim_side(rnd.get('dpitch', 0), rnd.get('dyaw', 0))}) - dorthin vorzielen, wo er rauskommt.")
     hits, head = rnd.get("you_hits", 0), rnd.get("you_head", 0)
     if hits and not head:
         return f"Keiner deiner {hits} Treffer am Kopf - Fadenkreuz auf Kopfhoehe halten."
@@ -877,11 +983,20 @@ class Director:
                 "outcome": outcome, "tries": state.get("tries", 0) + 1, "level": state.get("level"),
                 "export": sc.export, "round": sc.round, "you_hits": rnd.get("you_hits", 0),
                 "you_head": rnd.get("you_head", 0), "bot_hits": rnd.get("bot_hits", 0),
-                "first": rnd.get("first"), "tip": tip, "kit": self._kit(state)}
+                "first": rnd.get("first"), "tip": tip, "kit": self._kit(state),
+                **{k: rnd[k] for k in MEASURE_KEYS if k in rnd}}
         state.setdefault("duels", []).append(duel)
         from .ingame_coach import save_last_duel
         save_last_duel(self.path, {**duel, "map": state.get("map"), "weapon": weapon_label(sc.weapon),
                                    "direction": state.get("direction", "?")})
+
+    def _measure(self, state: dict) -> dict:
+        """Messwerte der Runde vom Plugin; altes Plugin oder keine Antwort = leer."""
+        try:
+            return parse_stats(self.send(f"coach_stats {state['human_uid']}")[0])
+        except Exception as e:  # noqa: BLE001 - ohne Messung zaehlt das Duell trotzdem
+            print(f"[training] coach_stats: {e}", flush=True)
+            return {}
 
     def _kit(self, state: dict) -> list[str]:
         """Deine Ausruestung in dieser Situation (aus der Demo), lesbar - fuer das Fazit."""
@@ -1049,13 +1164,16 @@ class Director:
             state["idle"] = 0
             if not skipped:
                 outcome = state.get("outcome") or "draw"
+                state.setdefault("rnd", {}).update(self._measure(state))
                 self._result(state, outcome)
                 tip = duel_tip(state.get("rnd") or {}, outcome)
                 self._record(state, outcome, tip)
                 text, color = {"win": ("GEWONNEN", GREEN), "loss": ("VERLOREN", RED)}.get(
                     outcome, ("UNENTSCHIEDEN", YELLOW))
+                seen = measure_line(state.get("rnd") or {})
                 self.send(hud(state["human_uid"], 4, _font(text, color, "xl") + "<br>"
                               + _font(f"Stand {_score(state)}", GREY)
+                              + (f"<br>{_font(html.escape(seen), '#ffffff', 's')}" if seen else "")
                               + (f"<br>{_font(html.escape(tip), '#ffffff', 's')}" if tip else "")),
                           *_party_hud(state, 4, _font(text, color, "xl") + "<br>" + _font(f"Stand {_score(state)}", GREY)))
                 if tip:
@@ -1330,6 +1448,7 @@ def load_sessions(config_path: Path) -> list[dict]:
         duels = data.get("duels") or []
         data["won"] = sum(1 for d in duels if d.get("outcome") == "win")
         data["played"] = len(duels)
+        data["measures"] = session_measures(duels)
         out.append(data)
     return out
 

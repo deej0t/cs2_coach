@@ -124,3 +124,19 @@ def test_fazit_uses_only_training_facts(tmp_path, monkeypatch):
     assert "HE-Granaten pro Runde" not in seen["system"] + seen["prompt"]
     assert "deine Ausruestung: M4A4, USP-S, Flashbang" in seen["prompt"]
     assert "/5" in seen["prompt"] and "Dancho" in seen["prompt"]
+
+
+def test_fazit_and_tipp_get_measurements(tmp_path, monkeypatch):
+    import json as _json
+    from cs2_coach import ingame_coach as ic, training_server as ts
+    monkeypatch.setattr(ts, "match_crosshair_median", lambda cfg, last=10: 6.3)
+    duel = {"n": 1, "outcome": "loss", "seen_err": 12.4, "dpitch": 9.0, "dyaw": 2.0, "react_ms": 281.0,
+            "peek_ms": 125.0, "kill_errs": [3.5]}
+    assert "12 Grad daneben (zu tief)" in ic.duel_facts(duel) and "125 ms frueher" in ic.duel_facts(duel)
+    session = tmp_path / "s.json"
+    session.write_text(_json.dumps({"map": "de_mirage", "level_end": 3, "duels": [duel]}), encoding="utf-8")
+    seen = {}
+    ic.session_fazit({}, tmp_path / "config.yaml", session,
+                     ask_fn=lambda cfg, system, prompt: seen.setdefault("prompt", prompt) and "Fazit.")
+    assert "Median Fadenkreuz beim Auftauchen: 12.4 Grad" in seen["prompt"]
+    assert "in seinen letzten Matches (gleiche Messung): 6.3 Grad" in seen["prompt"]
