@@ -58,6 +58,8 @@ START_LEVEL = 1  # bot_difficulty 0-3
 # konfrontiert" - dort laeuft das Duell schon.
 LEAD_SECONDS = 3
 TICKRATE = 64
+PATH_HZ = 16  # Wegpunkte pro Sekunde fuer den Bot; das Plugin interpoliert dazwischen
+PATH_CHUNK = 8  # Punkte pro RCON-Befehl (10 Punkte mit voller Genauigkeit waren 869 Zeichen)
 NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade", "flashbang",
             "smokegrenade", "decoy", "world", "taser", "planted_c4")
 
@@ -126,7 +128,10 @@ def pre_positions(demo_path: Path, me: str, ticks: list[int], lead: float = LEAD
 
     Gemessen am 30.10. an einer 244-MB-Demo: 3,3 s fuer die Events, 0,3 s fuer
     die Ticks. Nie vor das Ende der Freeze-Time derselben Runde zurueck.
-    Ergebnis je Todes-Tick: {"me": [x,y,z,pitch,yaw], "foe": [...], "lead": s}.
+    Ergebnis je Todes-Tick: {"me": [x,y,z,pitch,yaw], "foe": [...], "lead": s,
+    "path": [[x,y,z,pitch,yaw], ...]} - "path" ist der Weg deines Killers vom
+    Start bis zu deinem Tod, PATH_HZ Punkte pro Sekunde (gemessen: 49 Punkte
+    fuer 3 s in 0,3 s; im Mittel 118 u/s, Spitze 236 - Laufen und Gehen).
     """
     if parser_factory is None:
         from demoparser2 import DemoParser as parser_factory
@@ -146,12 +151,14 @@ def pre_positions(demo_path: Path, me: str, ticks: list[int], lead: float = LEAD
         wanted[tick] = (start, str(row.iloc[0]["attacker_steamid"]))
     if not wanted:
         return {}
-    df = parser.parse_ticks(["X", "Y", "Z", "pitch", "yaw"], ticks=sorted({s for s, _ in wanted.values()}))
+    step = TICKRATE // PATH_HZ
+    path_ticks = {t: list(range(start, t + 1, step)) for t, (start, _) in wanted.items()}
+    all_ticks = sorted({s for s, _ in wanted.values()} | {x for ts in path_ticks.values() for x in ts})
+    df = parser.parse_ticks(["X", "Y", "Z", "pitch", "yaw"], ticks=all_ticks)
     out = {}
     for tick, (start, killer) in wanted.items():
-        rows = df[df["tick"] == start]
-
-        def at(sid):
+        def at(sid, when):
+            rows = df[df["tick"] == when]
             r = rows[rows["steamid"].astype(str) == sid]
             if r.empty:
                 return None
@@ -159,9 +166,10 @@ def pre_positions(demo_path: Path, me: str, ticks: list[int], lead: float = LEAD
             return [round(float(r["X"]), 1), round(float(r["Y"]), 1), round(float(r["Z"]), 1),
                     _angle(r["pitch"]), _angle(r["yaw"])]
 
-        mine, foe = at(me), at(killer)
+        mine, foe = at(me, start), at(killer, start)
         if mine and foe:
-            out[tick] = {"me": mine, "foe": foe, "lead": round((tick - start) / TICKRATE, 1)}
+            path = [pt for pt in (at(killer, x) for x in path_ticks[tick]) if pt]
+            out[tick] = {"me": mine, "foe": foe, "lead": round((tick - start) / TICKRATE, 1), "path": path}
     return out
 
 
@@ -196,7 +204,7 @@ def prepare(cfg: dict, config_path: Path, scenarios: list[Scenario], parser_fact
             known = json.loads(cache.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             known = {}
-        key = f"lead{lead:g}"
+        key = f"v2-lead{lead:g}"  # v2: mit Weg des Gegners
         missing = [scenarios[i].tick for i in idx if str(scenarios[i].tick) not in known.get(key, {})]
         path = Path(folder) / demo
         if missing and path.exists():
@@ -305,6 +313,11 @@ def _humans(status: str) -> list[str]:
         if m and m.group(1) != "BOT":
             out.append(m.group(2))
     return out
+
+
+def _fmt(pt) -> str:
+    """Punkt als "x y z pitch yaw" mit einer Nachkommastelle (RCON-Zeilen bleiben kurz)."""
+    return " ".join(f"{float(v):.1f}" for v in pt)
 
 
 def _level_text(state: dict) -> str:
@@ -609,10 +622,22 @@ class Director:
             me, foe = [sc.x, sc.y, sc.z, pitch, yaw], [sc.ex, sc.ey, sc.ez, bpitch, byaw]
             when = "am Todesort (Demo fehlt)"
         n, total = state["pos"] + 1, len(state["queue"])
-        replies = self.send(f"coach_tp {state['human_uid']} {' '.join(str(v) for v in me)}",
-                            f"coach_tp {state['bot_uid']} {' '.join(str(v) for v in foe)}",
-                            _say(f"Duell {n}/{total} ({sc.source}): {sc.opponent} mit {sc.weapon}, "
+        path = (pre or {}).get("path") or []
+        bot = state["bot_uid"]
+        walk = (([f"coach_path_clear {bot}"]
+                 + [f"coach_path_add {bot} " + " ".join(_fmt(pt) for pt in path[i:i + PATH_CHUNK])
+                    for i in range(0, len(path), PATH_CHUNK)]
+                 + [f"coach_path_start {bot} {PATH_HZ}"]) if len(path) >= 2 else [])
+        how = "läuft den echten Weg" if walk else "Bot-KI"
+        replies = self.send(f"coach_tp {state['human_uid']} {_fmt(me)}",
+                            f"coach_tp {bot} {_fmt(foe)}", *walk,
+                            _say(f"Duell {n}/{total} ({sc.source}): {sc.opponent} mit {sc.weapon} {how}, "
                                  f"{when}, {_level_text(state)}"))
+        if walk and "coach_path ok start" not in replies[1 + len(walk)]:
+            failed_walk = replies[1 + len(walk)].strip() or "keine Antwort"
+            if not state.get("walk_warned"):
+                state["walk_warned"] = True
+                self.send(_say(f"Weg ablaufen nicht moeglich ({failed_walk[:50]}) - Plugin aktuell?"))
         failed = [r.strip() for r in replies[:2] if "coach_tp ok" not in r]
         if failed and not state.get("tp_warned"):
             state["tp_warned"] = True

@@ -1,17 +1,24 @@
-// CS2 Coach - Teleport-Plugin fuer das Duell-Training.
+// CS2 Coach - Plugin fuer das Duell-Training.
 //
-// Ein einziger Server-Befehl, den der Coach per RCON aufruft:
+// Server-Befehle, die der Coach per RCON aufruft (cs2_coach/training_server.py):
 //     coach_tp <userid> <x> <y> <z> <pitch> <yaw>
-// Er setzt einen Spieler (Mensch oder Bot) mit Blickrichtung an eine Stelle.
-// Alles andere - welche Situation, wann, wer - entscheidet der Coach
-// (cs2_coach/training_server.py), damit dieses Plugin nach CS2-Updates
-// so wenig wie moeglich anfassen muss.
+//         Spieler (Mensch oder Bot) mit Blickrichtung an eine Stelle setzen.
+//     coach_path_clear <userid>
+//     coach_path_add <userid> <x y z pitch yaw> [<x y z pitch yaw> ...]
+//     coach_path_start <userid> <punkte_pro_sekunde>
+//         Einen Bot den echten Weg des Gegners aus der Demo ablaufen lassen.
+//         Startet mit dem Ende der Freeze-Time (oder sofort, wenn sie vorbei
+//         ist), Tick fuer Tick zwischen den Punkten interpoliert. Wird der Bot
+//         getroffen oder ist der Weg zu Ende, uebernimmt die Bot-KI.
+//     coach_tp_version
+//
+// Alles andere - welche Situation, wann, wer - entscheidet der Coach, damit
+// dieses Plugin nach CS2-Updates so wenig wie moeglich anfassen muss.
 //
 // Warum ueberhaupt ein Plugin: am 30.10.2026 gemessen bewegt keiner der
-// Konsolenbefehle (ent_setpos, setpos_player) einen echten Spieler - im
-// Training stand dj nach dem "Versetzen" weiter am T-Spawn. Bots liessen
-// sich mit ent_setpos nur eingefroren versetzen. Teleport() setzt Position,
-// Blickrichtung und Geschwindigkeit so, wie es auch Trigger in Maps tun.
+// Konsolenbefehle (ent_setpos, setpos_player) einen echten Spieler. Und die
+// Bot-KI laeuft nach dem Loslassen ihren eigenen Weg - "der bot laeuft den
+// weg nicht wirklich ab und ist mega bottig".
 
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
@@ -25,8 +32,91 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.0.0";
+    public override string ModuleVersion => "1.1.0";
     public override string ModuleAuthor => "cs2-coach";
+
+    private sealed class Replay
+    {
+        public readonly List<float[]> Points = new();
+        public float Hz = 16;
+        public bool Armed;
+        public int StartTick = -1;
+    }
+
+    private readonly Dictionary<int, Replay> _replays = new();
+    private bool _inFreeze;
+
+    public override void Load(bool hotReload)
+    {
+        RegisterListener<Listeners.OnTick>(OnTick);
+        RegisterEventHandler<EventRoundStart>((_, _) =>
+        {
+            _inFreeze = true;
+            return HookResult.Continue;
+        });
+        RegisterEventHandler<EventRoundFreezeEnd>((_, _) =>
+        {
+            _inFreeze = false;
+            foreach (var r in _replays.Values.Where(r => r.Armed && r.StartTick < 0))
+                r.StartTick = Server.TickCount;
+            return HookResult.Continue;
+        });
+        // Getroffen: ab jetzt reagiert die Bot-KI selbst.
+        RegisterEventHandler<EventPlayerHurt>((ev, _) =>
+        {
+            if (ev.Userid is { } victim) _replays.Remove(victim.UserId ?? -1);
+            return HookResult.Continue;
+        });
+        RegisterEventHandler<EventPlayerDeath>((ev, _) =>
+        {
+            if (ev.Userid is { } victim) _replays.Remove(victim.UserId ?? -1);
+            return HookResult.Continue;
+        });
+        RegisterEventHandler<EventRoundEnd>((_, _) =>
+        {
+            _replays.Clear();
+            return HookResult.Continue;
+        });
+    }
+
+    private void OnTick()
+    {
+        if (_replays.Count == 0) return;
+        foreach (var (userid, r) in _replays.ToList())
+        {
+            if (r.StartTick < 0 || r.Points.Count < 2) continue;
+            var player = Utilities.GetPlayerFromUserid(userid);
+            var pawn = player?.PlayerPawn.Value;
+            if (player is null || !player.IsValid || pawn is null || !pawn.IsValid || pawn.LifeState != (byte)LifeState_t.LIFE_ALIVE)
+            {
+                _replays.Remove(userid);
+                continue;
+            }
+            var t = (Server.TickCount - r.StartTick) / 64f * r.Hz;
+            var i = (int)t;
+            if (i >= r.Points.Count - 1)
+            {
+                _replays.Remove(userid);  // Weg zu Ende: die Bot-KI uebernimmt
+                continue;
+            }
+            var f = t - i;
+            var a = r.Points[i];
+            var b = r.Points[i + 1];
+            var pos = new Vector(Lerp(a[0], b[0], f), Lerp(a[1], b[1], f), Lerp(a[2], b[2], f));
+            var ang = new QAngle(Lerp(a[3], b[3], f), LerpAngle(a[4], b[4], f), 0);
+            // Geschwindigkeit wie im Original, damit die Laufanimation passt.
+            var vel = new Vector((b[0] - a[0]) * r.Hz, (b[1] - a[1]) * r.Hz, 0);
+            pawn.Teleport(pos, ang, vel);
+        }
+    }
+
+    private static float Lerp(float a, float b, float f) => a + (b - a) * f;
+
+    private static float LerpAngle(float a, float b, float f)
+    {
+        var d = ((b - a) % 360 + 540) % 360 - 180;  // kuerzester Weg um 180/-180
+        return a + d * f;
+    }
 
     [ConsoleCommand("coach_tp", "Spieler mit Blickrichtung versetzen: <userid> <x> <y> <z> <pitch> <yaw>")]
     [CommandHelper(minArgs: 6, usage: "<userid> <x> <y> <z> <pitch> <yaw>", whoCanExecute: CommandUsage.SERVER_ONLY)]
@@ -46,6 +136,45 @@ public class CoachTeleport : BasePlugin
         }
         pawn.Teleport(new Vector(v[0], v[1], v[2]), new QAngle(v[3], v[4], 0), new Vector(0, 0, 0));
         info.ReplyToCommand($"coach_tp ok {userid}");
+    }
+
+    [ConsoleCommand("coach_path_clear", "Weg eines Bots verwerfen: <userid>")]
+    [CommandHelper(minArgs: 1, usage: "<userid>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnPathClear(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (int.TryParse(info.GetArg(1), out var userid)) _replays[userid] = new Replay();
+        info.ReplyToCommand("coach_path ok");
+    }
+
+    [ConsoleCommand("coach_path_add", "Wegpunkte anhaengen: <userid> <x y z pitch yaw>...")]
+    [CommandHelper(minArgs: 6, usage: "<userid> <x y z pitch yaw>...", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnPathAdd(CCSPlayerController? caller, CommandInfo info)
+    {
+        var n = info.ArgCount - 2;
+        if (!int.TryParse(info.GetArg(1), out var userid) || n % 5 != 0 || !TryFloats(info, 2, n, out var v))
+        {
+            info.ReplyToCommand("coach_path: ungueltige Argumente");
+            return;
+        }
+        if (!_replays.TryGetValue(userid, out var r)) _replays[userid] = r = new Replay();
+        for (var i = 0; i < n; i += 5) r.Points.Add(v[i..(i + 5)]);
+        info.ReplyToCommand($"coach_path ok {r.Points.Count}");
+    }
+
+    [ConsoleCommand("coach_path_start", "Weg ablaufen (ab Ende der Freeze-Time): <userid> <punkte_pro_sekunde>")]
+    [CommandHelper(minArgs: 2, usage: "<userid> <punkte_pro_sekunde>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnPathStart(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (!int.TryParse(info.GetArg(1), out var userid) || !_replays.TryGetValue(userid, out var r)
+            || !float.TryParse(info.GetArg(2), NumberStyles.Float, CultureInfo.InvariantCulture, out var hz) || hz <= 0)
+        {
+            info.ReplyToCommand("coach_path: kein Weg oder ungueltige Rate");
+            return;
+        }
+        r.Hz = hz;
+        r.Armed = true;
+        r.StartTick = _inFreeze ? -1 : Server.TickCount;
+        info.ReplyToCommand($"coach_path ok start {r.Points.Count}");
     }
 
     [ConsoleCommand("coach_tp_version", "Version des Coach-Plugins (Coach prueft damit, ob es geladen ist)")]

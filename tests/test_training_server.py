@@ -50,6 +50,7 @@ class FakeServer:
         self.status = status
         self.plugin = True
         self.tp_reply = "coach_tp ok"
+        self.path_reply = "coach_path ok start 49"
 
     def __call__(self, *cmds):
         self.sent.extend(cmds)
@@ -61,6 +62,10 @@ class FakeServer:
                 out.append("coach_tp 1.0.0" if self.plugin else "Unknown command 'coach_tp_version'!")
             elif c.startswith("coach_tp "):
                 out.append(f"{self.tp_reply} {c.split()[1]}")
+            elif c.startswith("coach_path_start"):
+                out.append(self.path_reply)
+            elif c.startswith("coach_path"):
+                out.append("coach_path ok")
             else:
                 out.append("")
         return out
@@ -415,3 +420,36 @@ def test_round_with_hit_counts_even_when_lost(env):
                          line('World triggered "Round_End"')])
     state = ts.load_state(path)
     assert state["results"] == ["loss"] and state["pos"] == 1
+
+
+def test_killer_path_from_demo():
+    pre = ts.pre_positions("demo.dem", OWNER, [17263], parser_factory=FakeParser)[17263]
+    assert len(pre["path"]) == 3 * ts.PATH_HZ + 1  # 3 s mit 16 Punkten pro Sekunde, Start und Ende
+    assert pre["path"][0] == pre["foe"]
+
+
+def test_round_start_sends_path_in_short_commands(env):
+    _, path, server, _, director = env
+    pts = [[float(i), -1922.5, -168.0, 0.4, -152.1] for i in range(49)]
+    ts.save_state(path, {"phase": "running", "map": "de_mirage", "human": OWNER, "queue": [0, 1],
+                         "pos": 0, "results": [], "level": 1, "round": 0, "human_uid": 2, "bot_uid": 4,
+                         "pre": {"0": {"me": [0, 0, 0, 0, 0], "foe": pts[0], "lead": 3.0, "path": pts}}})
+    director().on_lines([line('World triggered "Round_Start"')])
+    adds = [c for c in server.sent if c.startswith("coach_path_add 4 ")]
+    assert server.sent[2] == "coach_path_clear 4" and len(adds) == 7  # 49 Punkte zu je 8
+    assert all(len(c) < 400 for c in adds)
+    assert adds[0].startswith("coach_path_add 4 0.0 -1922.5 -168.0 0.4 -152.1 1.0 ")
+    assert "coach_path_start 4 16" in server.sent
+    assert any("läuft den echten Weg" in c for c in server.sent)
+    assert not any("nicht moeglich" in c for c in server.sent)
+
+
+def test_old_plugin_without_path_is_reported(env):
+    _, path, server, _, director = env
+    server.path_reply = "Unknown command 'coach_path_start'!"
+    pts = [[0, 0, 0, 0, 0], [1, 1, 1, 0, 0]]
+    ts.save_state(path, {"phase": "running", "map": "de_mirage", "human": OWNER, "queue": [0, 1],
+                         "pos": 0, "results": [], "level": 1, "round": 0, "human_uid": 2, "bot_uid": 4,
+                         "pre": {"0": {"me": [0, 0, 0, 0, 0], "foe": pts[0], "lead": 3.0, "path": pts}}})
+    director().on_lines([line('World triggered "Round_Start"')])
+    assert any("Weg ablaufen nicht moeglich" in c for c in server.sent)
