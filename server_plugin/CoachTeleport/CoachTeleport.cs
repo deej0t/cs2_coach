@@ -10,6 +10,9 @@
 //         Startet mit dem Ende der Freeze-Time (oder sofort, wenn sie vorbei
 //         ist), Tick fuer Tick zwischen den Punkten interpoliert. Wird der Bot
 //         getroffen oder ist der Weg zu Ende, uebernimmt die Bot-KI.
+//     coach_give <userid> <aktive_waffe> <item> [<item> ...]
+//         Alles wegnehmen und genau diese Items geben (z. B. das Inventar aus
+//         der Demo), danach die aktive Waffe in die Hand.
 //     coach_tp_version
 //
 // Alles andere - welche Situation, wann, wer - entscheidet der Coach, damit
@@ -32,7 +35,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.1.0";
+    public override string ModuleVersion => "1.2.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -96,7 +99,11 @@ public class CoachTeleport : BasePlugin
             var i = (int)t;
             if (i >= r.Points.Count - 1)
             {
-                _replays.Remove(userid);  // Weg zu Ende: die Bot-KI uebernimmt
+                // Weg zu Ende: zum Gegner drehen, dann uebernimmt die Bot-KI. Ohne das
+                // schaute der Bot dorthin, wo der Spieler in der Demo stand, und lief los,
+                // ohne zu wissen, wo er wirklich ist.
+                _replays.Remove(userid);
+                FaceNearestEnemy(player, pawn);
                 continue;
             }
             var f = t - i;
@@ -108,6 +115,29 @@ public class CoachTeleport : BasePlugin
             var vel = new Vector((b[0] - a[0]) * r.Hz, (b[1] - a[1]) * r.Hz, 0);
             pawn.Teleport(pos, ang, vel);
         }
+    }
+
+    private static void FaceNearestEnemy(CCSPlayerController bot, CCSPlayerPawn pawn)
+    {
+        var from = pawn.AbsOrigin;
+        if (from is null) return;
+        CCSPlayerPawn? best = null;
+        var bestDist = float.MaxValue;
+        foreach (var p in Utilities.GetPlayers())
+        {
+            var other = p.PlayerPawn.Value;
+            if (p == bot || p.TeamNum == bot.TeamNum || other is null || !other.IsValid
+                || other.LifeState != (byte)LifeState_t.LIFE_ALIVE || other.AbsOrigin is null) continue;
+            var d = (other.AbsOrigin - from).Length();
+            if (d < bestDist) { bestDist = d; best = other; }
+        }
+        if (best?.AbsOrigin is null) return;
+        var dx = best.AbsOrigin.X - from.X;
+        var dy = best.AbsOrigin.Y - from.Y;
+        var dz = best.AbsOrigin.Z - from.Z;
+        var yaw = (float)(Math.Atan2(dy, dx) * 180 / Math.PI);
+        var pitch = (float)(-Math.Atan2(dz, Math.Sqrt(dx * dx + dy * dy)) * 180 / Math.PI);
+        pawn.Teleport(null, new QAngle(pitch, yaw, 0), null);
     }
 
     private static float Lerp(float a, float b, float f) => a + (b - a) * f;
@@ -175,6 +205,35 @@ public class CoachTeleport : BasePlugin
         r.Armed = true;
         r.StartTick = _inFreeze ? -1 : Server.TickCount;
         info.ReplyToCommand($"coach_path ok start {r.Points.Count}");
+    }
+
+    [ConsoleCommand("coach_give", "Inventar setzen: <userid> <aktive_waffe> <item>...")]
+    [CommandHelper(minArgs: 3, usage: "<userid> <aktive_waffe> <item>...", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnGive(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (!int.TryParse(info.GetArg(1), out var userid))
+        {
+            info.ReplyToCommand("coach_give: ungueltige userid");
+            return;
+        }
+        var player = Utilities.GetPlayerFromUserid(userid);
+        if (player is null || !player.IsValid || player.PlayerPawn.Value is null)
+        {
+            info.ReplyToCommand($"coach_give: kein Spieler mit userid {userid}");
+            return;
+        }
+        player.RemoveWeapons();
+        var given = 0;
+        for (var i = 3; i < info.ArgCount; i++)
+        {
+            var item = info.GetArg(i);
+            if (!item.StartsWith("weapon_") && !item.StartsWith("item_")) continue;
+            player.GiveNamedItem(item);
+            given++;
+        }
+        var active = info.GetArg(2);
+        if (active.StartsWith("weapon_")) player.ExecuteClientCommandFromServer($"use {active}");
+        info.ReplyToCommand($"coach_give ok {userid} {given}");
     }
 
     [ConsoleCommand("coach_tp_version", "Version des Coach-Plugins (Coach prueft damit, ob es geladen ist)")]

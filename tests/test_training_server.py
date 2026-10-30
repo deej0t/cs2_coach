@@ -316,8 +316,11 @@ class FakeParser:
         self.calls += 1
         rows = []
         for t in ticks:
-            rows += [{"tick": t, "steamid": OWNER, "X": -876.5, "Y": -2262.3, "Z": -171.5, "pitch": 356.3, "yaw": 22.9},
-                     {"tick": t, "steamid": "765", "X": -199.6, "Y": -1922.5, "Z": -168.0, "pitch": 0.4, "yaw": 207.9},
+            rows += [{"tick": t, "steamid": OWNER, "X": -876.5, "Y": -2262.3, "Z": -171.5, "pitch": 356.3, "yaw": 22.9,
+                      "inventory": ["Skeleton Knife", "Glock-18", "MP9", "High Explosive Grenade"],
+                      "active_weapon_name": "MP9"},
+                     {"tick": t, "steamid": "765", "X": -199.6, "Y": -1922.5, "Z": -168.0, "pitch": 0.4, "yaw": 207.9,
+                      "inventory": ["knife", "P2000", "M4A4"], "active_weapon_name": "M4A4"},
                      {"tick": t, "steamid": "766", "X": 1.0, "Y": 2.0, "Z": 3.0, "pitch": 0.0, "yaw": 0.0}]
         return self.pd.DataFrame(rows)
 
@@ -357,14 +360,34 @@ def test_round_start_uses_demo_positions(env):
                          "pre": {"0": {"me": [-876.5, -2262.3, -171.5, -3.7, 22.9],
                                        "foe": [-199.6, -1922.5, -168.0, 0.4, -152.1], "lead": 3.0}}})
     director().on_lines([line('World triggered "Round_Start"')])
-    assert server.sent[0] == "coach_tp 2 -876.5 -2262.3 -171.5 -3.7 22.9"
+    # Blick zum Gegner (nicht die Blickrichtung von damals: "mit dem Ruecken zum Gegner")
+    assert server.sent[0].startswith("coach_tp 2 -876.5 -2262.3 -171.5 ")
+    pitch, yaw = map(float, server.sent[0].split()[5:7])
+    assert abs(yaw - 26.7) < 1 and abs(pitch) < 2
     assert server.sent[1] == "coach_tp 4 -199.6 -1922.5 -168.0 0.4 -152.1"
     assert "3 s vor dem Duell" in server.sent[2]
 
 
-def test_loadout_without_knife_pistol_and_bomb():
-    assert {'mp_t_default_melee ""', 'mp_ct_default_secondary ""', "mp_give_player_c4 0"} <= set(ts.SETUP)
-    assert {"mp_t_default_melee weapon_knife", "mp_give_player_c4 1"} <= set(ts.RESTORE)
+def test_weapon_names_from_demo():
+    assert ts.classname("M4A4") == "weapon_m4a1" and ts.classname("M4A1-S") == "weapon_m4a1_silencer"
+    assert ts.classname("Skeleton Knife") == "weapon_knife" and ts.classname("knife") == "weapon_knife"
+    assert ts.classname("High Explosive Grenade") == "weapon_hegrenade"
+    assert ts.classname("C4 Explosive") == ""
+
+
+def test_give_full_kit_to_you_and_only_guns_to_bot():
+    """Echte Inventare aus R5 der Mirage-Demo vom 27.10."""
+    pre = {"me_items": ["weapon_ak47", "weapon_knife", "weapon_glock", "weapon_ak47", "weapon_flashbang",
+                        "weapon_flashbang", "weapon_hegrenade"],
+           "foe_items": ["weapon_aug", "weapon_knife", "weapon_usp_silencer", "weapon_aug",
+                         "weapon_smokegrenade", "weapon_hegrenade"]}
+    give = ts._give_commands(2, 4, pre)
+    assert give[0] == ("coach_give 2 weapon_ak47 weapon_knife weapon_glock weapon_ak47 "
+                       "weapon_flashbang weapon_flashbang weapon_hegrenade")
+    assert give[1] == "coach_give 4 weapon_aug weapon_usp_silencer weapon_aug"
+    assert ts._give_commands(2, 4, None) == []  # ohne Demo: Standardausruestung
+    assert "mp_give_player_c4 0" in ts.SETUP
+
 
 
 def running_state(**extra):
@@ -453,3 +476,9 @@ def test_old_plugin_without_path_is_reported(env):
                          "pre": {"0": {"me": [0, 0, 0, 0, 0], "foe": pts[0], "lead": 3.0, "path": pts}}})
     director().on_lines([line('World triggered "Round_Start"')])
     assert any("Weg ablaufen nicht moeglich" in c for c in server.sent)
+
+
+def test_inventory_from_demo():
+    pre = ts.pre_positions("demo.dem", OWNER, [17263], parser_factory=FakeParser)[17263]
+    assert pre["me_items"] == ["weapon_mp9", "weapon_knife", "weapon_glock", "weapon_mp9", "weapon_hegrenade"]
+    assert pre["foe_items"] == ["weapon_m4a1", "weapon_knife", "weapon_hkp2000", "weapon_m4a1"]

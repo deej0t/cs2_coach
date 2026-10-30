@@ -59,7 +59,23 @@ START_LEVEL = 1  # bot_difficulty 0-3
 LEAD_SECONDS = 3
 TICKRATE = 64
 PATH_HZ = 16  # Wegpunkte pro Sekunde fuer den Bot; das Plugin interpoliert dazwischen
-PATH_CHUNK = 8  # Punkte pro RCON-Befehl (10 Punkte mit voller Genauigkeit waren 869 Zeichen)
+PATH_CHUNK = 8  # noqa: E501
+# demoparser2 liefert das Inventar mit Anzeigenamen (gemessen 30.10.:
+# "Glock-18", "M4A4", "High Explosive Grenade", "Skeleton Knife").
+WEAPONS = {
+    "Glock-18": "glock", "USP-S": "usp_silencer", "P2000": "hkp2000", "P250": "p250",
+    "Five-SeveN": "fiveseven", "Tec-9": "tec9", "CZ75-Auto": "cz75a", "Desert Eagle": "deagle",
+    "R8 Revolver": "revolver", "Dual Berettas": "elite", "MAC-10": "mac10", "MP9": "mp9",
+    "MP7": "mp7", "MP5-SD": "mp5sd", "UMP-45": "ump45", "P90": "p90", "PP-Bizon": "bizon",
+    "Galil AR": "galilar", "FAMAS": "famas", "AK-47": "ak47", "M4A4": "m4a1",
+    "M4A1-S": "m4a1_silencer", "SG 553": "sg556", "AUG": "aug", "SSG 08": "ssg08", "AWP": "awp",
+    "G3SG1": "g3sg1", "SCAR-20": "scar20", "Nova": "nova", "XM1014": "xm1014", "MAG-7": "mag7",
+    "Sawed-Off": "sawedoff", "M249": "m249", "Negev": "negev", "Zeus x27": "taser",
+    "Flashbang": "flashbang", "Smoke Grenade": "smokegrenade", "High Explosive Grenade": "hegrenade",
+    "Molotov": "molotov", "Incendiary Grenade": "incgrenade", "Decoy Grenade": "decoy",
+}
+GRENADES = {"weapon_flashbang", "weapon_smokegrenade", "weapon_hegrenade", "weapon_molotov",
+            "weapon_incgrenade", "weapon_decoy"}  # Punkte pro RCON-Befehl (10 Punkte mit voller Genauigkeit waren 869 Zeichen)
 NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade", "flashbang",
             "smokegrenade", "decoy", "world", "taser", "planted_c4")
 
@@ -67,9 +83,11 @@ COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop", "pause"
 IDLE_ROUNDS = 2  # so viele Runden ohne Treffer in Folge = pausieren
 PAUSE_TIMEOUT = 900  # Sekunden pausiert, dann endet das Training
 
-# Ohne Messer, Pistole und C4: die Waffe des Gegners ist die einzige des Bots,
-# also hat er sie in der Hand. Im ersten Training hielten die Bots anfangs das
-# Messer ("die sind anfangs unbewaffnet"), der T-Bot trug ausserdem die Bombe.
+# Ausruestung kommt pro Duell aus der Demo (coach_give): du bekommst dein
+# damaliges Inventar, der Bot die Schusswaffen deines Gegners ohne Messer.
+# Erst wurden Messer und Pistole fuer alle abgeschaltet, damit Bots nicht mit
+# dem Messer dastehen - dann hattest du nur noch die AK ("nicht mal die
+# Pistole, Utilities oder Messer"). C4 bleibt aus.
 SETUP = [
     "sv_cheats 1", "sv_hibernate_when_empty 0", "mp_autoteambalance 0", "mp_limitteams 0",
     "bot_quota_mode normal", "bot_join_after_player 0", "bot_kick", "bot_quota 0",
@@ -77,8 +95,7 @@ SETUP = [
     f"mp_freezetime {FREEZE_TIME}", "mp_roundtime 1", "mp_round_restart_delay 2",
     "mp_maxrounds 99", "mp_buytime 0", "mp_free_armor 2", "mp_death_drop_gun 0",
     "mp_t_default_primary weapon_ak47", "mp_ct_default_primary weapon_m4a1",
-    'mp_t_default_secondary ""', 'mp_ct_default_secondary ""',
-    'mp_t_default_melee ""', 'mp_ct_default_melee ""', "mp_give_player_c4 0",
+    "mp_give_player_c4 0",
     "mp_halftime 0", "mp_match_can_clinch 0",
 ]
 RESTORE = ["bot_kick", "bot_quota 0", "bot_freeze 0", 'bot_loadout ""', "mp_warmuptime 30",
@@ -154,7 +171,7 @@ def pre_positions(demo_path: Path, me: str, ticks: list[int], lead: float = LEAD
     step = TICKRATE // PATH_HZ
     path_ticks = {t: list(range(start, t + 1, step)) for t, (start, _) in wanted.items()}
     all_ticks = sorted({s for s, _ in wanted.values()} | {x for ts in path_ticks.values() for x in ts})
-    df = parser.parse_ticks(["X", "Y", "Z", "pitch", "yaw"], ticks=all_ticks)
+    df = parser.parse_ticks(["X", "Y", "Z", "pitch", "yaw", "inventory", "active_weapon_name"], ticks=all_ticks)
     out = {}
     for tick, (start, killer) in wanted.items():
         def at(sid, when):
@@ -166,11 +183,33 @@ def pre_positions(demo_path: Path, me: str, ticks: list[int], lead: float = LEAD
             return [round(float(r["X"]), 1), round(float(r["Y"]), 1), round(float(r["Z"]), 1),
                     _angle(r["pitch"]), _angle(r["yaw"])]
 
+        def items(sid, when):
+            """[aktive Waffe, alle Items] als Klassennamen; unbekannte Namen fallen weg."""
+            rows = df[(df["tick"] == when) & (df["steamid"].astype(str) == sid)]
+            if rows.empty:
+                return []
+            r = rows.iloc[0]
+            raw = r.get("inventory")
+            try:
+                inv = [classname(x) for x in raw] if not isinstance(raw, str) else []
+            except TypeError:
+                inv = []  # NaN: kein Inventar fuer diesen Spieler/Tick
+            return [classname(r.get("active_weapon_name") or "")] + [x for x in inv if x]
+
         mine, foe = at(me, start), at(killer, start)
         if mine and foe:
             path = [pt for pt in (at(killer, x) for x in path_ticks[tick]) if pt]
-            out[tick] = {"me": mine, "foe": foe, "lead": round((tick - start) / TICKRATE, 1), "path": path}
+            out[tick] = {"me": mine, "foe": foe, "lead": round((tick - start) / TICKRATE, 1), "path": path,
+                         "me_items": items(me, start), "foe_items": items(killer, start)}
     return out
+
+
+def classname(display: str) -> str:
+    """Anzeigename aus der Demo -> weapon_*; jedes Messer -> weapon_knife; unbekannt -> ""."""
+    name = str(display or "")
+    if any(k in name.lower() for k in ("knife", "bayonet", "karambit", "daggers")):
+        return "weapon_knife"
+    return f"weapon_{WEAPONS[name]}" if name in WEAPONS else ""
 
 
 def lead_seconds(cfg: dict) -> float:
@@ -204,7 +243,7 @@ def prepare(cfg: dict, config_path: Path, scenarios: list[Scenario], parser_fact
             known = json.loads(cache.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             known = {}
-        key = f"v2-lead{lead:g}"  # v2: mit Weg des Gegners
+        key = f"v3-lead{lead:g}"  # v2: mit Weg des Gegners, v3: mit Inventar
         missing = [scenarios[i].tick for i in idx if str(scenarios[i].tick) not in known.get(key, {})]
         path = Path(folder) / demo
         if missing and path.exists():
@@ -268,8 +307,11 @@ class _Lock:
                 os.close(os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
                 return self
             except FileExistsError:
-                if time.time() - self.path.stat().st_mtime > 30:
-                    self.path.unlink(missing_ok=True)  # verwaist
+                try:
+                    if time.time() - self.path.stat().st_mtime > 30:
+                        self.path.unlink(missing_ok=True)  # verwaist
+                except FileNotFoundError:
+                    pass  # gerade freigegeben - gleich nochmal versuchen (stuerzte am 30.10. ab)
                 time.sleep(0.05)
         raise TimeoutError("Trainings-Zustand gesperrt")
 
@@ -318,6 +360,27 @@ def _humans(status: str) -> list[str]:
 def _fmt(pt) -> str:
     """Punkt als "x y z pitch yaw" mit einer Nachkommastelle (RCON-Zeilen bleiben kurz)."""
     return " ".join(f"{float(v):.1f}" for v in pt)
+
+
+def _give_commands(human_uid, bot_uid, pre: dict | None) -> list[str]:
+    """coach_give fuer beide aus dem Demo-Inventar.
+
+    Du: alles wie damals, Messer und Granaten inklusive, die damalige Waffe in
+    der Hand. Bot: nur die Schusswaffen deines Gegners - ohne Messer und
+    Granaten, sonst hat er beim Loslaufen nichts Schussbereites in der Hand.
+    Ohne Demo-Inventar kein Befehl (dann gilt die Standardausruestung).
+    """
+    out = []
+    mine = (pre or {}).get("me_items") or []
+    if len(mine) > 1:
+        active = mine[0] or next((x for x in mine[1:] if x not in GRENADES and x != "weapon_knife"), "weapon_knife")
+        out.append(f"coach_give {human_uid} {active} " + " ".join(mine[1:]))
+    foe = (pre or {}).get("foe_items") or []
+    guns = [x for x in foe[1:] if x and x not in GRENADES and x != "weapon_knife"]
+    if guns:
+        active = foe[0] if foe[0] in guns else guns[-1]
+        out.append(f"coach_give {bot_uid} {active} " + " ".join(guns))
+    return out
 
 
 def _level_text(state: dict) -> str:
@@ -614,7 +677,12 @@ class Director:
         sc = self._scenario(state)
         pre = state.get("pre", {}).get(str(state["queue"][state["pos"]]))
         if pre:
-            me, foe = pre["me"], pre["foe"]
+            me, foe = list(pre["me"]), pre["foe"]
+            # Blick dorthin, wo dein Gegner dich erschossen hat (Ende seines Wegs),
+            # nicht deine Blickrichtung von damals: damit stand man "meist mit dem
+            # Ruecken zum Gegner".
+            target = (pre.get("path") or [foe])[-1]
+            me[3], me[4] = _calc_view_angle(me[0], me[1], me[2] + 64, target[0], target[1], target[2] + 64)
             when = f"{pre['lead']:g} s vor dem Duell"
         else:
             pitch, yaw = _calc_view_angle(sc.x, sc.y, sc.z + 64, sc.ex, sc.ey, sc.ez + 64)
@@ -629,8 +697,9 @@ class Director:
                     for i in range(0, len(path), PATH_CHUNK)]
                  + [f"coach_path_start {bot} {PATH_HZ}"]) if len(path) >= 2 else [])
         how = "läuft den echten Weg" if walk else "Bot-KI"
+        give = _give_commands(state["human_uid"], bot, pre)
         replies = self.send(f"coach_tp {state['human_uid']} {_fmt(me)}",
-                            f"coach_tp {bot} {_fmt(foe)}", *walk,
+                            f"coach_tp {bot} {_fmt(foe)}", *walk, *give,
                             _say(f"Duell {n}/{total} ({sc.source}): {sc.opponent} mit {sc.weapon} {how}, "
                                  f"{when}, {_level_text(state)}"))
         if walk and "coach_path ok start" not in replies[1 + len(walk)]:
