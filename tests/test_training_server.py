@@ -127,7 +127,9 @@ def test_lists_maps_and_rejects_pool_outsiders(env):
     assert "nicht im Trainings-Pool" in director().command(OWNER, "dj", "training", "cache")[0]
 
 
-def test_full_flow(env):
+def test_full_flow(env, monkeypatch):
+    from cs2_coach import ingame_coach
+    monkeypatch.setattr(ingame_coach, "ask", lambda cfg, system, prompt: "Gutes Training, weiter so.")
     _, path, server, timers, director = env
     assert director().command(OWNER, "dj", "training", "mirage") == []
     assert "map de_mirage" in server.sent
@@ -167,8 +169,15 @@ def test_full_flow(env):
                          line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "awp"'),
                          line('World triggered "Round_End"')])
     assert not ts.is_active(path)
-    assert "sv_cheats 0" in server.sent and server.sent[-1] == "host_workshop_map 3245740485"
     assert any("1/2 Duelle gewonnen" in c for c in server.sent)
+    # Map bleibt noch stehen ("abrupt" gewechselt), Fazit kommt privat, dann zurueck
+    assert "sv_cheats 0" not in server.sent and "bot_kick" in server.sent
+    assert any("TRAINING FERTIG" in h and "Map wechselt in 30 s" in h for h in huds(server))
+    assert sorted(sec for sec, _ in timers) == [0.1, ts.FAREWELL_SECONDS]
+    run_timers(timers)
+    assert any(c.startswith("coach_chat 2 ") for c in server.sent)
+    assert "sv_cheats 0" in server.sent and server.sent[-1] == "host_workshop_map 3245740485"
+    assert ts.load_sessions(path)[0]["fazit"] == "Gutes Training, weiter so."
 
 
 def test_adaptive_level():
@@ -417,12 +426,16 @@ def test_round_without_hit_repeats_duel_then_pauses(env):
                              line('World triggered "Round_End"')])
     state = ts.load_state(path)
     assert state["pos"] == 0 and state["results"] == []  # nichts gezaehlt, gleiches Duell
-    assert state["paused"] and "mp_pause_match" in server.sent
+    assert state["paused"] and "bot_freeze 1" in server.sent and "mp_ignore_round_win_conditions 1" in server.sent
+    assert "mp_pause_match" not in server.sent  # CS2-Pause verdraengte das Menue
     assert any("KEIN TREFFER" in h for h in huds(server)) and any("PAUSE" in h for h in huds(server))
     assert timers[-1][0] == ts.PAUSE_TIMEOUT
 
-    assert director().command(OWNER, "dj", "weiter", "") == ["Weiter geht's."]
-    assert "mp_unpause_match" in server.sent and not ts.load_state(path)["paused"]
+    assert director().command(OWNER, "dj", "weiter", "") == []
+    assert server.sent[-1] == "endround" and not ts.load_state(path)["paused"]
+    director().on_lines([line('World triggered "Round_End"')])  # Runde durch !weiter beendet
+    state = ts.load_state(path)
+    assert state["pos"] == 0 and state["results"] == []  # dasselbe Duell, nichts gezaehlt
 
 
 def test_long_pause_ends_training(env):
@@ -571,10 +584,15 @@ def test_training_page_renders_sessions(tmp_path, monkeypatch):
         ts.save_session(cfg, {"map": "de_mirage", "started": "2026-10-30T08:00:00", "level": 2, "duels": [
             {"n": 1, "source": "27.10. R3", "opponent": "Pöpp Escobar", "weapon": "m4a1", "outcome": "loss",
              "tries": 2, "export": "2026-10-27_mirage_13-8_2049_coach.json", "round": 3}]}, "Training fertig")
+        f = next(ts.sessions_dir(cfg).glob("*.json"))
+        import json as _json
+        data = _json.loads(f.read_text(encoding="utf-8")); data["fazit"] = "Halte die Winkel enger."
+        f.write_text(_json.dumps(data), encoding="utf-8")
         client = mod.create_app().test_client()
         page = client.get("/training").get_data(as_text=True)
         assert "0 von 1 gewonnen" in page and "Pöpp Escobar" in page and "M4A4" in page
         assert "/export/2026-10-27_mirage_13-8_2049_coach.json" in page
+        assert "Fazit des Coaches:</strong> Halte die Winkel enger." in page
     finally:
         monkeypatch.delenv("CS2COACH_CONFIG")
         importlib.reload(app_module)
@@ -597,3 +615,21 @@ def test_lost_duel_gives_tip_and_remembers_it_for_tipp(env):
     from cs2_coach.ingame_coach import load_last_duel
     last = load_last_duel(path)
     assert last["weapon"] == "M4A4" and last["direction"].startswith("vorne")
+
+
+
+def test_restore_waits_unless_new_training_started(env):
+    _, path, server, timers, director = env
+    ts.save_state(path, running_state(human_uid=2))
+    director().command(OWNER, "dj", "stop", "")
+    assert "sv_cheats 0" not in server.sent
+    ts.save_state(path, running_state())  # in den 30 s ein neues Training gestartet
+    next(fn for sec, fn in timers if sec == ts.FAREWELL_SECONDS)()
+    assert "sv_cheats 0" not in server.sent
+
+
+def test_disconnect_still_restores_immediately(env):
+    _, path, server, timers, director = env
+    ts.save_state(path, running_state(round=1))
+    director().on_lines([line('"dj<2><[U:1:58996800]><TERRORIST>" disconnected (reason "Disconnect")')])
+    assert "sv_cheats 0" in server.sent and not timers

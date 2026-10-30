@@ -48,25 +48,25 @@ def chat_line(uid, text: str) -> str:
     return f"coach_chat {uid} {base64.b64encode(text.encode('utf-8')).decode('ascii')}"
 
 
-def clean(text: str) -> str:
-    """Markdown weg, Leerraum zusammen, an einer Satzgrenze auf MAX_ANSWER kuerzen."""
+def clean(text: str, limit: int = MAX_ANSWER) -> str:
+    """Markdown weg, Leerraum zusammen, an einer Satzgrenze auf limit kuerzen."""
     text = re.sub(r"[*#`_>]+", "", str(text or ""))
     text = re.sub(r"^\s*[-•]\s*", "", text, flags=re.M)
     text = re.sub(r"\s+", " ", text).strip()
-    if len(text) <= MAX_ANSWER:
+    if len(text) <= limit:
         return text
-    cut = text[:MAX_ANSWER]
+    cut = text[:limit]
     end = max(cut.rfind(". "), cut.rfind("! "), cut.rfind("? "))
     return cut[:end + 1] if end > 80 else cut.rstrip() + " ..."
 
 
-def wrap(text: str) -> list[str]:
-    return textwrap.wrap(text, LINE_WIDTH)[:MAX_LINES]
+def wrap(text: str, max_lines: int = MAX_LINES) -> list[str]:
+    return textwrap.wrap(text, LINE_WIDTH)[:max_lines]
 
 
-def tell(send, uid, text: str) -> None:
+def tell(send, uid, text: str, max_lines: int = MAX_LINES) -> None:
     """Privat an den Spieler; ohne Plugin 1.4.0 oeffentlich per say."""
-    lines = wrap(text) if "\n" not in text else text.split("\n")
+    lines = wrap(text, max_lines) if "\n" not in text else text.split("\n")
     reply = send(chat_line(uid, "\n".join(lines)))
     if not reply or "coach_chat ok" not in reply[0]:
         from .server_live import _say_commands
@@ -166,6 +166,42 @@ def training_facts(config_path: Path) -> str:
 # --------------------------------------------------------------------------
 # KI
 # --------------------------------------------------------------------------
+
+FAZIT_LIMIT = 520
+FAZIT_SYSTEM = """Du bist der persoenliche CS2-Coach eines einzelnen Spielers. Er hat gerade ein Duell-Training beendet:
+verlorene Duelle aus seinen eigenen Matches, nachgespielt gegen einen Bot.
+- Deutsch, du-Form, hoechstens 4 kurze Saetze, zusammen hoechstens 480 Zeichen.
+- Satz 1: das Ergebnis in einem Satz. Dann das deutlichste Muster bei den Niederlagen (aus den Daten).
+  Zum Schluss genau eine Sache, die er als Naechstes ueben soll.
+- Verwende nur die Fakten unten, erfinde keine Zahlen. Kein Markdown, keine Aufzaehlung, keine Emojis."""
+
+
+def session_facts(session: dict) -> str:
+    duels = session.get("duels") or []
+    won = sum(1 for d in duels if d.get("outcome") == "win")
+    out = [f"Training auf {session.get('map')}: {won} von {len(duels)} Duellen gewonnen, "
+           f"Bot-Stufe am Ende {session.get('level_end')}/3."]
+    for d in duels:
+        res = dict(win="gewonnen", loss="verloren").get(d.get("outcome"), "unentschieden")
+        first = {"you": "du zuerst getroffen", "bot": "Gegner zuerst getroffen"}.get(d.get("first"), "")
+        out.append(f"- Duell {d.get('n')} ({d.get('source')}, Gegner mit {d.get('weapon')}): {res}"
+                   f"{', ' + first if first else ''}, deine Treffer {d.get('you_hits', '?')} (Kopf {d.get('you_head', '?')}),"
+                   f" Treffer des Gegners {d.get('bot_hits', '?')}, Versuche {d.get('tries', 1)}.")
+    return "\n".join(out)
+
+
+def session_fazit(cfg: dict, config_path: Path, session_file: Path, ask_fn=None) -> str | None:
+    """KI-Fazit eines beendeten Trainings; wird auch in der Session-Datei gespeichert (fuer /training)."""
+    session = json.loads(Path(session_file).read_text(encoding="utf-8"))
+    context = FAZIT_SYSTEM + "\n\nFakten zum Spieler:\n" + player_facts(cfg, config_path)
+    text = (ask_fn or ask)(cfg, context, session_facts(session) + "\n\nSchreibe das Fazit.")
+    if not text:
+        return None
+    text = clean(text, FAZIT_LIMIT)
+    session["fazit"] = text
+    Path(session_file).write_text(json.dumps(session, ensure_ascii=False, indent=1), encoding="utf-8")
+    return text
+
 
 def ask(cfg: dict, system: str, prompt: str, sleep=time.sleep) -> str | None:
     from .ai_chat import call_gemini, call_ollama

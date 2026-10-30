@@ -103,13 +103,16 @@ SETUP = [
     "mp_maxrounds 99", "mp_buytime 0", "mp_free_armor 2", "mp_death_drop_gun 0",
     "mp_t_default_primary weapon_ak47", "mp_ct_default_primary weapon_m4a1",
     "mp_give_player_c4 0",
-    "mp_halftime 0", "mp_match_can_clinch 0",
+    "mp_halftime 0", "mp_match_can_clinch 0", "mp_ignore_round_win_conditions 0",
 ]
 RESTORE = ["bot_kick", "bot_quota 0", "bot_freeze 0", 'bot_loadout ""', "mp_warmuptime 30",
            'mp_t_default_primary ""', 'mp_ct_default_primary ""',
            "mp_t_default_secondary weapon_glock", "mp_ct_default_secondary weapon_hkp2000",
            "mp_t_default_melee weapon_knife", "mp_ct_default_melee weapon_knife", "mp_give_player_c4 1",
-           "sv_cheats 0", "sv_hibernate_when_empty 1"]
+           "mp_ignore_round_win_conditions 0", "sv_cheats 0", "sv_hibernate_when_empty 1"]
+# Nach dem Training noch so lange auf der Map bleiben (Fazit lesen, gleich weiter
+# trainieren). Vorher wechselte die Map sofort - "abrupt".
+FAREWELL_SECONDS = 30
 
 # Teamwechsel-Zeilen haben ein Feld weniger als Kill-Zeilen (gemessen):
 # "K<4><BOT>" switched from team <Unassigned> to <CT>
@@ -523,18 +526,20 @@ class Director:
                 self.send("endround")
                 return ["Übersprungen."]
             if cmd == "pause":
-                state.update(paused=True, paused_at=time.time())
+                if state.get("paused"):
+                    return ["Schon pausiert. Weiter mit !weiter."]
+                self._pause(state, "Pause")
                 save_state(self.path, state)
-                self.send("mp_pause_match")
-                self.timer(PAUSE_TIMEOUT, lambda stamp=state["paused_at"]: self._check_paused(stamp))
-                return ["Pause ab der nächsten Runde. Weiter mit !weiter."]
+                return []
             if cmd == "weiter":
                 if not state.get("paused"):
                     return ["Das Training läuft schon."]
-                state.update(paused=False, idle=0)
+                # Dasselbe Duell noch einmal von vorn: Runde beenden, ohne zu zaehlen.
+                state.update(paused=False, idle=0, redo=True)
                 save_state(self.path, state)
-                self.send("mp_unpause_match", hud(state.get("human_uid"), 0, ""))
-                return ["Weiter geht's."]
+                self.send("mp_ignore_round_win_conditions 0", "bot_freeze 0",
+                          hud(state.get("human_uid"), 0, ""), "endround")
+                return []
             if cmd in ("leichter", "schwerer"):
                 self._shift(state, -1 if cmd == "leichter" else 1)
                 save_state(self.path, state)
@@ -608,22 +613,55 @@ class Director:
     def _shift(self, state: dict, step: int) -> None:
         state["level"] = max(0, min(3, state["level"] + step))
 
-    def _stop(self, state: dict, why: str) -> list[str]:
+    def _stop(self, state: dict, why: str, immediate: bool = False) -> list[str]:
+        """Training beenden.
+
+        Regulaer (fertig oder !stop) bleibt die Map noch FAREWELL_SECONDS stehen:
+        Ergebnis gross, Fazit der KI im Chat, Zeit fuer ein neues !training.
+        Vorher wechselte sie sofort ("abrupt"). Bei Verbindungsabbruch,
+        haengendem Laden oder langer Pause sofort zurueck.
+        """
         res = state.get("results", [])
         won = sum(1 for r in res if r == "win")
         summary = f"{why}: {won}/{len(res)} Duelle gewonnen" if res else why
-        restore = (self.cfg.get("server_restore_command") or "").strip() or "map de_mirage"
         save_state(self.path, {})
-        if state.get("duels"):
-            save_session(self.path, state, why)
+        session = save_session(self.path, state, why) if state.get("duels") else None
+        uid = state.get("human_uid")
+        if immediate or uid is None:
+            self._restore()
+            self.send(_say(summary))
+            return []
         base = (self.cfg.get("public_url") or "").strip().rstrip("/")
-        link = [_say(f"Auswertung: {base.split('://')[-1]}/training")] if base and state.get("duels") else []
-        big = []
-        if state.get("human_uid") is not None and res:
-            big = [hud(state["human_uid"], 8, _font("TRAINING FERTIG", PURPLE, "xl") + "<br>"
-                       + _font(f"{won} von {len(res)} gewonnen ({won * 100 // len(res)} %)", "#ffffff", "l"))]
-        self.send(_say(summary), *link, *big, *RESTORE, restore)
+        link = [_say(f"Auswertung: {base.split('://')[-1]}/training")] if base and session else []
+        lines = [_font("TRAINING FERTIG", PURPLE, "xl")]
+        if res:
+            lines.append(_font(f"{won} von {len(res)} gewonnen ({won * 100 // len(res)} %)", "#ffffff", "l"))
+        lines.append(_font(f"Fazit im Chat &#183; Map wechselt in {FAREWELL_SECONDS} s &#183; !training fuer ein neues",
+                           GREY, "s"))
+        self.send("bot_kick", "bot_quota 0", "mp_ignore_round_win_conditions 0",
+                  hud(uid, FAREWELL_SECONDS, "<br>".join(lines)), _say(summary), *link)
+        if session:
+            self.timer(0.1, lambda: self._fazit(uid, session))
+        self.timer(FAREWELL_SECONDS, self._restore_if_idle)
         return []
+
+    def _restore(self) -> None:
+        restore = (self.cfg.get("server_restore_command") or "").strip() or "map de_mirage"
+        self.send(*RESTORE, restore)
+
+    def _restore_if_idle(self) -> None:
+        if not is_active(self.path):  # hat er inzwischen ein neues Training gestartet?
+            self._restore()
+
+    def _fazit(self, uid, session: Path) -> None:
+        from .ingame_coach import session_fazit, tell
+        try:
+            text = session_fazit(self.cfg, self.path, session)
+        except Exception as e:  # noqa: BLE001 - ohne Fazit endet das Training trotzdem sauber
+            print(f"[training] Fazit fehlgeschlagen: {e}", flush=True)
+            text = None
+        if text:
+            tell(self.send, uid, f"Fazit: {text}")
 
     def _record(self, state: dict, outcome: str, tip: str | None = None) -> None:
         """Gezaehltes Duell fuer die Auswertung und fuer !tipp merken."""
@@ -704,7 +742,7 @@ class Director:
                 and ss.steam64(m.group("asid")) == state["human"]:
             # Sonst bliebe der Server mit sv_cheats 1 und Bot im Trainingsmodus.
             # Nicht in "loading"/"setup": beim Mapwechsel verbinden sich alle neu.
-            self._stop(state, "Training abgebrochen (Verbindung getrennt)")
+            self._stop(state, "Training abgebrochen (Verbindung getrennt)", immediate=True)
             return {}
         if phase != "running":
             return state
@@ -732,6 +770,10 @@ class Director:
         if msg.startswith('World triggered "Round_End"'):
             if not state.get("round"):
                 return state  # Ende der Aufwaermphase
+            if state.pop("redo", False):
+                return state  # nach !weiter: dasselbe Duell noch einmal, nichts zaehlen
+            if state.get("paused"):
+                return state  # pausierte Runde (endet nur durch !weiter)
             skipped = state.pop("skip", False)
             if not skipped and not state.get("active"):
                 return self._idle_round(state)
@@ -769,24 +811,33 @@ class Director:
         state["tries"] = state.get("tries", 0) + 1
         uid = state.get("human_uid")
         if state["idle"] >= IDLE_ROUNDS and not state.get("paused"):
-            stamp = time.time()
-            state.update(paused=True, paused_at=stamp)
-            self.send("mp_pause_match",
-                      hud(uid, PAUSE_TIMEOUT, _font("PAUSE", YELLOW, "xl") + "<br>"
-                          + _font(f"{IDLE_ROUNDS} Runden ohne Treffer", "#ffffff") + "<br>"
-                          + _font("!weiter &#183; !menu &#183; !stop", GREY, "s")),
-                      _say("Pausiert. Weiter mit !weiter, Menue mit !menu."))
-            self.timer(PAUSE_TIMEOUT, lambda: self._check_paused(stamp))
+            self._pause(state, f"{IDLE_ROUNDS} Runden ohne Treffer")
         else:
             self.send(hud(uid, 3, _font("KEIN TREFFER", YELLOW, "xl") + "<br>"
                           + _font("Das Duell kommt noch einmal", "#ffffff")))
         return state
 
+    def _pause(self, state: dict, why: str) -> None:
+        """Eigene Pause: Bot eingefroren, Runde endet nicht.
+
+        Nicht mp_pause_match: die Match-Pause von CS2 bringt eine eigene Anzeige
+        in der Bildschirmmitte mit, und das Menue "verschwindet sofort, wenn man
+        in der !pause ist" (30.10.2026).
+        """
+        stamp = time.time()
+        state.update(paused=True, paused_at=stamp)
+        self.send("bot_freeze 1", "mp_ignore_round_win_conditions 1",
+                  hud(state.get("human_uid"), PAUSE_TIMEOUT, _font("PAUSE", YELLOW, "xl") + "<br>"
+                      + _font(why, "#ffffff") + "<br>"
+                      + _font("!weiter &#183; !menu &#183; !stop", GREY, "s")),
+                  _say("Pausiert. Weiter mit !weiter, Menue mit !menu."))
+        self.timer(PAUSE_TIMEOUT, lambda: self._check_paused(stamp))
+
     def _check_paused(self, stamp: float) -> None:
         with _Lock(self.path):
             state = load_state(self.path)
             if state.get("paused") and state.get("paused_at") == stamp:
-                self._stop(state, f"Training beendet ({PAUSE_TIMEOUT // 60} Minuten pausiert)")
+                self._stop(state, f"Training beendet ({PAUSE_TIMEOUT // 60} Minuten pausiert)", immediate=True)
 
     def _result(self, state: dict, result: str) -> None:
         """Ergebnis merken und nach je 5 Duellen die Stufe anpassen (Ziel: etwa die Haelfte gewinnen).

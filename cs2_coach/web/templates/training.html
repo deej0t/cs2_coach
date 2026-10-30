@@ -75,6 +75,10 @@
             {{ s.won }} von {{ s.played }} gewonnen</span>
         {% if s.level_end is not none %}<span style="color: var(--color-neutral-500);"> · Bot-Stufe am Ende {{ s.level_end }}/3</span>{% endif %}
     </summary>
+    {% if s.fazit %}
+    <p style="margin: var(--space-3) 0 0; font-size: 13px; border-left: 3px solid var(--color-accent); padding-left: var(--space-3);">
+        <strong>Fazit des Coaches:</strong> {{ s.fazit }}</p>
+    {% endif %}
     <table class="table" style="width: 100%; margin-top: var(--space-3);">
         <thead><tr><th>#</th><th>Situation</th><th>Gegner</th><th>Waffe</th><th>Ergebnis</th><th>Versuche</th><th></th></tr></thead>
         <tbody>
