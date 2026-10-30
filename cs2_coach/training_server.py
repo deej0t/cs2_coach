@@ -61,7 +61,9 @@ TICKRATE = 64
 NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade", "flashbang",
             "smokegrenade", "decoy", "world", "taser", "planted_c4")
 
-COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop"}
+COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop", "pause", "weiter"}
+IDLE_ROUNDS = 2  # so viele Runden ohne Treffer in Folge = pausieren
+PAUSE_TIMEOUT = 900  # Sekunden pausiert, dann endet das Training
 
 # Ohne Messer, Pistole und C4: die Waffe des Gegners ist die einzige des Bots,
 # also hat er sie in der Hand. Im ersten Training hielten die Bots anfangs das
@@ -361,6 +363,19 @@ class Director:
                 save_state(self.path, state)
                 self.send("endround")
                 return ["Übersprungen."]
+            if cmd == "pause":
+                state.update(paused=True, paused_at=time.time())
+                save_state(self.path, state)
+                self.send("mp_pause_match")
+                self.timer(PAUSE_TIMEOUT, lambda stamp=state["paused_at"]: self._check_paused(stamp))
+                return ["Pause ab der nächsten Runde. Weiter mit !weiter."]
+            if cmd == "weiter":
+                if not state.get("paused"):
+                    return ["Das Training läuft schon."]
+                state.update(paused=False, idle=0)
+                save_state(self.path, state)
+                self.send("mp_unpause_match")
+                return ["Weiter geht's."]
             if cmd in ("leichter", "schwerer"):
                 self._shift(state, -1 if cmd == "leichter" else 1)
                 save_state(self.path, state)
@@ -481,7 +496,7 @@ class Director:
             elif m.group("asid") == "BOT" and phase in ("bot", "running"):
                 if state.get("bot_uid") is None:
                     state.update(bot_uid=uid, phase="running", round=0, pos=0)
-                    self.send(_say("Los geht's. !skip überspringt, !leichter / !schwerer, !stop beendet."),
+                    self.send(_say("Los geht's. !skip, !leichter / !schwerer, !pause / !weiter, !stop."),
                               "mp_warmup_end")
                 elif uid != state["bot_uid"]:
                     # Am 30.10. brachte ein bot_add zwei Bots - jeder weitere fliegt.
@@ -497,23 +512,57 @@ class Director:
             return state
         if msg.startswith('World triggered "Round_Start"'):
             return self._round_start(state)
-        if (m := ss._KILL.match(msg)) and not state.get("decided"):
+        if (m := ss._ATTACK.match(msg)) and ss.steam64(m.group("asid")) == state["human"]:
+            state["active"] = True  # du hast in dieser Runde getroffen
+            return state
+        if (m := ss._KILL.match(msg)) and not state.get("outcome"):
             killer = ss.steam64(m.group("asid"))
             victim = ss.steam64(m.group("vsid"))
             if killer == state["human"] and m.group("vsid") == "BOT":
-                self._result(state, "win")
+                state.update(outcome="win", active=True)
             elif victim == state["human"]:
-                self._result(state, "loss")
+                state["outcome"] = "loss"
             return state
         if msg.startswith('World triggered "Round_End"'):
-            if not state.get("decided") and not state.pop("skip", False) and state.get("round"):
-                self._result(state, "draw")
-            state["pos"] = state.get("pos", 0) + (1 if state.get("round") else 0)
+            if not state.get("round"):
+                return state  # Ende der Aufwaermphase
+            skipped = state.pop("skip", False)
+            if not skipped and not state.get("active"):
+                return self._idle_round(state)
+            state["idle"] = 0
+            if not skipped:
+                self._result(state, state.get("outcome") or "draw")
+            state["pos"] = state.get("pos", 0) + 1
             if state["pos"] >= len(state["queue"]):
                 self._stop(state, "Training fertig")
                 return {}
             self.send(f'bot_loadout "{self._scenario(state).weapon}"')
         return state
+
+    def _idle_round(self, state: dict) -> dict:
+        """Runde ohne einen Treffer von dir: zaehlt nicht, dasselbe Duell kommt noch einmal.
+
+        Am 30.10. lief das Training weiter, waehrend der Spieler nicht spielte:
+        Bot-Kills und abgelaufene Runden zaehlten als Duelle, nach 20 Runden
+        war es "fertig" und die Aim-Map kam zurueck. Nach IDLE_ROUNDS solcher
+        Runden in Folge pausiert das Training; nach PAUSE_TIMEOUT endet es.
+        """
+        state["idle"] = state.get("idle", 0) + 1
+        if state["idle"] >= IDLE_ROUNDS and not state.get("paused"):
+            stamp = time.time()
+            state.update(paused=True, paused_at=stamp)
+            self.send("mp_pause_match",
+                      _say(f"Pausiert - {IDLE_ROUNDS} Runden ohne Treffer. Weiter mit !weiter, Ende mit !stop."))
+            self.timer(PAUSE_TIMEOUT, lambda: self._check_paused(stamp))
+        else:
+            self.send(_say("Kein Treffer - das Duell kommt noch einmal."))
+        return state
+
+    def _check_paused(self, stamp: float) -> None:
+        with _Lock(self.path):
+            state = load_state(self.path)
+            if state.get("paused") and state.get("paused_at") == stamp:
+                self._stop(state, f"Training beendet ({PAUSE_TIMEOUT // 60} Minuten pausiert)")
 
     def _result(self, state: dict, result: str) -> None:
         """Ergebnis merken und nach je 5 Duellen die Stufe anpassen (Ziel: etwa die Haelfte gewinnen).
@@ -521,7 +570,6 @@ class Director:
         Nach einer Anpassung beginnt das Fenster neu - sonst wuerde jedes
         weitere Duell mit 4 von 5 Siegen erneut verschaerfen.
         """
-        state["decided"] = True
         state["results"].append(result)
         window = state.setdefault("window", [])
         window.append(result)
@@ -549,7 +597,7 @@ class Director:
         nicht, im ersten Training fiel jeder Bot ohne einen Schuss.
         """
         state["round"] = state.get("round", 0) + 1
-        state["decided"] = False
+        state.update(outcome=None, active=False)
         sc = self._scenario(state)
         pre = state.get("pre", {}).get(str(state["queue"][state["pos"]]))
         if pre:

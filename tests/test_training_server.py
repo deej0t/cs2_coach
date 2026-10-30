@@ -149,6 +149,8 @@ def test_full_flow(env):
 
     # Runde 2 verloren -> letzte Situation vorbei -> Training endet, Server zurueck
     director().on_lines([line('World triggered "Round_Start"'),
+                         line(f'{DJ} [0 0 0] attacked {BOT} [1 1 1] with "ak47" (damage "27") (damage_armor "3") '
+                              '(health "73") (armor "96") (hitgroup "chest")'),
                          line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "awp"'),
                          line('World triggered "Round_End"')])
     assert not ts.is_active(path)
@@ -358,3 +360,58 @@ def test_round_start_uses_demo_positions(env):
 def test_loadout_without_knife_pistol_and_bomb():
     assert {'mp_t_default_melee ""', 'mp_ct_default_secondary ""', "mp_give_player_c4 0"} <= set(ts.SETUP)
     assert {"mp_t_default_melee weapon_knife", "mp_give_player_c4 1"} <= set(ts.RESTORE)
+
+
+def running_state(**extra):
+    st = {"phase": "running", "map": "de_mirage", "human": OWNER, "queue": [0, 1], "pos": 0,
+          "results": [], "level": 1, "round": 0, "human_uid": 2, "bot_uid": 4}
+    st.update(extra)
+    return st
+
+
+def test_round_without_hit_repeats_duel_then_pauses(env):
+    """30.10.: AFK-Runden zaehlten als Duelle, nach 20 Runden kam die Aim-Map zurueck."""
+    _, path, server, timers, director = env
+    ts.save_state(path, running_state())
+    for _ in range(2):
+        director().on_lines([line('World triggered "Round_Start"'),
+                             line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "m4a1"'),
+                             line('World triggered "Round_End"')])
+    state = ts.load_state(path)
+    assert state["pos"] == 0 and state["results"] == []  # nichts gezaehlt, gleiches Duell
+    assert state["paused"] and "mp_pause_match" in server.sent
+    assert any("Kein Treffer" in c for c in server.sent)
+    assert timers[-1][0] == ts.PAUSE_TIMEOUT
+
+    assert director().command(OWNER, "dj", "weiter", "") == ["Weiter geht's."]
+    assert "mp_unpause_match" in server.sent and not ts.load_state(path)["paused"]
+
+
+def test_long_pause_ends_training(env):
+    _, path, server, timers, director = env
+    ts.save_state(path, running_state(idle=1))
+    director().on_lines([line('World triggered "Round_Start"'), line('World triggered "Round_End"')])
+    timers.pop()[1]()  # PAUSE_TIMEOUT abgelaufen
+    assert not ts.is_active(path) and any("pausiert" in c for c in server.sent)
+
+
+def test_resumed_pause_is_not_ended_by_old_timer(env):
+    _, path, server, timers, director = env
+    ts.save_state(path, running_state(idle=1))
+    director().on_lines([line('World triggered "Round_Start"'), line('World triggered "Round_End"')])
+    old = timers.pop()[1]
+    director().command(OWNER, "dj", "weiter", "")
+    old()
+    assert ts.is_active(path)
+
+
+def test_round_with_hit_counts_even_when_lost(env):
+    _, path, server, _, director = env
+    ts.save_state(path, running_state())
+    director().on_lines([line('World triggered "Round_Start"'),
+                         line(f'{DJ} [0 0 0] attacked {BOT} [1 1 1] with "ak47" (damage "27") (damage_armor "3") '
+                              '(health "73") (armor "96") (hitgroup "chest")'),
+                         line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "m4a1"'),
+                         line('World triggered "Round_End"')])
+    state = ts.load_state(path)
+    assert state["results"] == ["loss"] and state["pos"] == 1
