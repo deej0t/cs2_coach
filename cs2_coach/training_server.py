@@ -55,7 +55,9 @@ LOCK_FILE = ".training_server.lock"
 MAX_SCENARIOS = 20
 MIN_DISTANCE = 150  # naeher = Messer/Nahkampf-Zufall, kein Duell
 FREEZE_TIME = 3
-START_LEVEL = 1  # bot_difficulty 0-3
+# bot_difficulty 0-3. Start bei 2: auf 1 gewann der Spieler am 30.10. 28 von 29 Duellen
+# (damals allerdings vor allem, weil der Bot auf seinem Weg nicht zielen konnte).
+START_LEVEL = 2
 # Start so viele Sekunden VOR deinem Tod, an den Positionen aus der Demo.
 # Rueckmeldung nach dem ersten Training: am Todesort "ist man zu schnell
 # konfrontiert" - dort laeuft das Duell schon.
@@ -842,7 +844,7 @@ class Director:
                  + [f"coach_path_add {bot} " + " ".join(_fmt(pt) for pt in path[i:i + PATH_CHUNK])
                     for i in range(0, len(path), PATH_CHUNK)]
                  + [f"coach_path_start {bot} {PATH_HZ}"]) if len(path) >= 2 else [])
-        how = "läuft den echten Weg" if walk else "Bot-KI"
+        how = "läuft den echten Weg, bis er dich sieht" if walk else "Bot-KI"
         give = _give_commands(state["human_uid"], bot, pre)
         state["direction"] = direction(me, foe)
         info = hud(state["human_uid"], FREEZE_TIME + 3, "<br>".join([

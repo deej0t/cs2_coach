@@ -45,7 +45,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.4.2";
+    public override string ModuleVersion => "1.5.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -113,6 +113,15 @@ public class CoachTeleport : BasePlugin
             var player = Utilities.GetPlayerFromUserid(userid);
             var pawn = player?.PlayerPawn.Value;
             if (player is null || !player.IsValid || pawn is null || !pawn.IsValid || pawn.LifeState != (byte)LifeState_t.LIFE_ALIVE)
+            {
+                _replays.Remove(userid);
+                continue;
+            }
+            // Sieht der Bot seinen Gegner, uebernimmt sofort die KI. Waehrend des Wegs
+            // setzt das Plugin jeden Tick auch die Blickrichtung - die KI kann dann
+            // nicht zielen. Am 30.10. gewann der Spieler so 15 von 15 Duellen, in 13
+            // davon traf ihn der Bot kein einziges Mal ("noch zu schwach").
+            if (SeesEnemy(player))
             {
                 _replays.Remove(userid);
                 continue;
@@ -309,6 +318,23 @@ public class CoachTeleport : BasePlugin
         {
             info.ReplyToCommand($"coach_menu: ungueltiges JSON ({e.GetType().Name})");
         }
+    }
+
+    // Dieselben Daten wie fuers Radar: m_entitySpottedState.m_bSpottedByMask eines
+    // Spielers hat ein Bit fuer jeden Slot, der ihn gerade sieht.
+    private static bool SeesEnemy(CCSPlayerController bot)
+    {
+        var slot = bot.Slot;
+        if (slot < 0 || slot >= 64) return false;
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p == bot || p.TeamNum == bot.TeamNum) continue;
+            var pawn = p.PlayerPawn.Value;
+            if (pawn is null || !pawn.IsValid || pawn.LifeState != (byte)LifeState_t.LIFE_ALIVE) continue;
+            var mask = pawn.EntitySpottedState.SpottedByMask;
+            if ((mask[slot / 32] & (1u << (slot % 32))) != 0) return true;
+        }
+        return false;
     }
 
     private static void FaceNearestEnemy(CCSPlayerController bot, CCSPlayerPawn pawn)
