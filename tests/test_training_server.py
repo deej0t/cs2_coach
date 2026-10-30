@@ -133,17 +133,13 @@ def test_full_flow(env):
     assert (state["phase"], state["bot_uid"]) == ("running", 4)
     assert server.sent[-1] == "mp_warmup_end"
 
-    # Runde 1: beide per Plugin genau an die Demo-Positionen, mit Blickrichtung
+    # Runde 1: beide per Plugin an die Demo-Positionen (hier ohne Demo: am Todesort)
     server.sent.clear()
     director().on_lines([line('World triggered "Round_Start"')])
-    assert server.sent[0] == "bot_freeze 1"
-    assert server.sent[1].startswith("coach_tp 2 -822.8 -2301.1 -174.5 ")
-    assert server.sent[2].startswith("coach_tp 4 -178.4 -1961.2 -168.0 ")
+    assert server.sent[0].startswith("coach_tp 2 -822.8 -2301.1 -174.5 ")
+    assert server.sent[1].startswith("coach_tp 4 -178.4 -1961.2 -168.0 ")
+    assert "bot_freeze 1" not in server.sent  # eingefrorene Bots schiessen nicht
     assert not any("fehlgeschlagen" in c for c in server.sent)
-    sec, release = timers.pop()
-    assert sec == ts.FREEZE_TIME + ts.DELAYS[ts.START_LEVEL[1]]
-    release()
-    assert server.sent[-1] == "bot_freeze 0"
 
     director().on_lines([line(f'{DJ} [0 0 0] killed {BOT} [1 1 1] with "ak47" (headshot)'),
                          line('World triggered "Round_End"')])
@@ -160,43 +156,33 @@ def test_full_flow(env):
     assert any("1/2 Duelle gewonnen" in c for c in server.sent)
 
 
-def test_old_release_timer_does_not_free_next_round(env):
-    _, path, server, timers, director = env
-    ts.save_state(path, {"phase": "running", "map": "de_mirage", "human": OWNER, "queue": [0, 1],
-                         "pos": 0, "results": [], "level": [1, 1], "round": 0,
-                         "human_uid": 2, "bot_uid": 4})
-    director().on_lines([line('World triggered "Round_Start"')])
-    old_release = timers.pop()[1]
-    director().on_lines([line('World triggered "Round_End"'), line('World triggered "Round_Start"')])
-    server.sent.clear()
-    old_release()
-    assert "bot_freeze 0" not in server.sent
-
-
 def test_adaptive_level():
     d = ts.Director({}, "x", lambda *c: [""])
-    state = {"results": [], "level": [1, 1]}
+    state = {"results": [], "level": 1}
     sent = []
     d.send = lambda *c: sent.extend(c) or [""]
     for _ in range(5):
         d._result(state, "win")
-    assert state["level"] == [1, 2] and state["window"] == []  # Bot startet frueher
+    assert state["level"] == 2 and state["window"] == [] and "bot_difficulty 2" in sent
     for _ in range(5):
         d._result(state, "loss")
-    assert state["level"] == [1, 1]
+    assert state["level"] == 1
     for _ in range(4):
         d._result(state, "win")
     d._result(state, "loss")
-    assert state["level"] == [1, 2]
-    state["level"] = [1, len(ts.DELAYS) - 1]
+    assert state["level"] == 2
+    state["level"] = 3
     d._shift(state, 1)
-    assert state["level"] == [2, len(ts.DELAYS) - 1]  # erst wenn kein Vorsprung mehr: staerkerer Bot
+    assert state["level"] == 3  # Obergrenze
+    state["level"] = 0
+    d._shift(state, -1)
+    assert state["level"] == 0
 
 
 def test_skip_ends_round_without_counting(env):
     _, path, server, timers, director = env
     ts.save_state(path, {"phase": "running", "map": "de_mirage", "human": OWNER, "queue": [0, 1],
-                         "pos": 0, "results": [], "level": [1, 1], "round": 0,
+                         "pos": 0, "results": [], "level": 1, "round": 0,
                          "human_uid": 2, "bot_uid": 4})
     director().on_lines([line('World triggered "Round_Start"')])
     assert director().command(OWNER, "dj", "skip", "") == ["Übersprungen."]
@@ -209,7 +195,7 @@ def test_skip_ends_round_without_counting(env):
 def test_stop_restores_server(env):
     _, path, server, _, director = env
     ts.save_state(path, {"phase": "running", "map": "de_mirage", "human": OWNER, "queue": [0],
-                         "pos": 0, "results": ["win", "loss"], "level": [1, 1]})
+                         "pos": 0, "results": ["win", "loss"], "level": 1})
     director().command(OWNER, "dj", "stop", "")
     assert not ts.is_active(path)
     assert "bot_kick" in server.sent and "sv_hibernate_when_empty 1" in server.sent
@@ -219,7 +205,7 @@ def test_stop_restores_server(env):
 def test_disconnect_restores_server(env):
     _, path, server, _, director = env
     ts.save_state(path, {"phase": "running", "map": "de_mirage", "human": OWNER, "queue": [0],
-                         "pos": 0, "results": [], "level": [1, 1], "round": 1})
+                         "pos": 0, "results": [], "level": 1, "round": 1})
     director().on_lines([line('"dj<2><[U:1:58996800]><TERRORIST>" disconnected (reason "Disconnect")')])
     assert not ts.is_active(path) and "sv_cheats 0" in server.sent
 
@@ -227,7 +213,7 @@ def test_disconnect_restores_server(env):
 def test_disconnect_during_map_load_is_ignored(env):
     _, path, _, _, director = env
     ts.save_state(path, {"phase": "loading", "map": "de_mirage", "human": OWNER, "queue": [0],
-                         "pos": 0, "results": [], "level": [1, 1], "t0": time.time()})
+                         "pos": 0, "results": [], "level": 1, "t0": time.time()})
     director().on_lines([line('"dj<2><[U:1:58996800]><TERRORIST>" disconnected (reason "Map change")')])
     assert ts.is_active(path)
 
@@ -246,7 +232,7 @@ def test_stale_loading_state_ignores_server_restart(env):
     """Startet der haengende Server neu, meldet er "Loading map de_mirage" - das alte Training nicht aufsetzen."""
     _, path, server, timers, director = env
     ts.save_state(path, {"phase": "loading", "map": "de_mirage", "human": OWNER, "queue": [0],
-                         "pos": 0, "results": [], "level": [1, 1], "t0": 0})
+                         "pos": 0, "results": [], "level": 1, "t0": 0})
     director().on_lines([line('Loading map "de_mirage"')])
     assert not ts.is_active(path) and timers == [] and "sv_cheats 1" not in server.sent
 
@@ -281,7 +267,7 @@ def test_second_bot_is_kicked(env):
     """30.10.: ein bot_add_ct brachte zwei Bots."""
     _, path, server, _, director = env
     ts.save_state(path, {"phase": "bot", "map": "de_mirage", "human": OWNER, "queue": [0], "pos": 0,
-                         "results": [], "level": [1, 1], "human_uid": 0, "team": "TERRORIST"})
+                         "results": [], "level": 1, "human_uid": 0, "team": "TERRORIST"})
     director().on_lines([line('"Juuvy<3><BOT>" switched from team <Unassigned> to <CT>'),
                          line('"Aggressor<4><BOT>" switched from team <Unassigned> to <CT>')])
     assert ts.load_state(path)["bot_uid"] == 3 and server.sent[-1] == "kickid 4"
@@ -298,7 +284,77 @@ def test_failed_teleport_is_reported_once(env):
     _, path, server, _, director = env
     server.tp_reply = "coach_tp: kein Spieler mit userid"
     ts.save_state(path, {"phase": "running", "map": "de_mirage", "human": OWNER, "queue": [0, 1],
-                         "pos": 0, "results": [], "level": [1, 1], "round": 0, "human_uid": 2, "bot_uid": 4})
+                         "pos": 0, "results": [], "level": 1, "round": 0, "human_uid": 2, "bot_uid": 4})
     director().on_lines([line('World triggered "Round_Start"'), line('World triggered "Round_End"'),
                          line('World triggered "Round_Start"')])
     assert sum("Versetzen fehlgeschlagen" in c for c in server.sent) == 1
+
+
+class FakeParser:
+    """Antwortet wie demoparser2 an der echten Mirage-Demo vom 27.10. (Werte gekuerzt)."""
+
+    def __init__(self, path):
+        import pandas as pd
+        self.pd = pd
+        self.calls = 0
+
+    def parse_event(self, name):
+        pd = self.pd
+        if name == "player_death":
+            return pd.DataFrame({"tick": [17263, 900], "user_steamid": [OWNER, OWNER],
+                                 "attacker_steamid": ["765", "766"]})
+        return pd.DataFrame({"tick": [16500, 800]})  # round_freeze_end
+
+    def parse_ticks(self, props, ticks):
+        self.calls += 1
+        rows = []
+        for t in ticks:
+            rows += [{"tick": t, "steamid": OWNER, "X": -876.5, "Y": -2262.3, "Z": -171.5, "pitch": 356.3, "yaw": 22.9},
+                     {"tick": t, "steamid": "765", "X": -199.6, "Y": -1922.5, "Z": -168.0, "pitch": 0.4, "yaw": 207.9},
+                     {"tick": t, "steamid": "766", "X": 1.0, "Y": 2.0, "Z": 3.0, "pitch": 0.0, "yaw": 0.0}]
+        return self.pd.DataFrame(rows)
+
+
+def test_pre_positions_three_seconds_before_death():
+    pre = ts.pre_positions("demo.dem", OWNER, [17263, 900], parser_factory=FakeParser)
+    a = pre[17263]
+    assert a["me"] == [-876.5, -2262.3, -171.5, -3.7, 22.9]  # 356,3 Grad = 3,7 nach oben
+    assert a["foe"] == [-199.6, -1922.5, -168.0, 0.4, -152.1]
+    assert a["lead"] == 3.0
+    assert pre[900]["lead"] == round(100 / 64, 1)  # nie vor das Ende der Freeze-Time
+
+
+def test_prepare_caches_per_demo(tmp_path):
+    (tmp_path / "demos").mkdir()
+    (tmp_path / "demos" / "m.dem").write_bytes(b"x")
+    cfg = {"demo_folder": str(tmp_path / "demos"), "steam_id": OWNER}
+    scs = [ts.Scenario("de_mirage", 0, 0, 0, 1, 1, 1, "m4a1", "x", "s", 17263, "m.dem"),
+           ts.Scenario("de_mirage", 0, 0, 0, 1, 1, 1, "m4a1", "x", "s", 555, "m.dem"),
+           ts.Scenario("de_mirage", 0, 0, 0, 1, 1, 1, "m4a1", "x", "s", 17263, "fehlt.dem")]
+    made = []
+
+    def factory(path):
+        made.append(path)
+        return FakeParser(path)
+
+    pre = ts.prepare(cfg, tmp_path / "config.yaml", scs, parser_factory=factory)
+    assert set(pre) == {0} and len(made) == 1  # Tick 555 ist kein Tod von dir, fehlende Demo uebersprungen
+    ts.prepare(cfg, tmp_path / "config.yaml", scs[:1], parser_factory=factory)
+    assert len(made) == 1  # aus dem Zwischenspeicher
+
+
+def test_round_start_uses_demo_positions(env):
+    _, path, server, _, director = env
+    ts.save_state(path, {"phase": "running", "map": "de_mirage", "human": OWNER, "queue": [0, 1],
+                         "pos": 0, "results": [], "level": 1, "round": 0, "human_uid": 2, "bot_uid": 4,
+                         "pre": {"0": {"me": [-876.5, -2262.3, -171.5, -3.7, 22.9],
+                                       "foe": [-199.6, -1922.5, -168.0, 0.4, -152.1], "lead": 3.0}}})
+    director().on_lines([line('World triggered "Round_Start"')])
+    assert server.sent[0] == "coach_tp 2 -876.5 -2262.3 -171.5 -3.7 22.9"
+    assert server.sent[1] == "coach_tp 4 -199.6 -1922.5 -168.0 0.4 -152.1"
+    assert "3 s vor dem Duell" in server.sent[2]
+
+
+def test_loadout_without_knife_pistol_and_bomb():
+    assert {'mp_t_default_melee ""', 'mp_ct_default_secondary ""', "mp_give_player_c4 0"} <= set(ts.SETUP)
+    assert {"mp_t_default_melee weapon_knife", "mp_give_player_c4 1"} <= set(ts.RESTORE)

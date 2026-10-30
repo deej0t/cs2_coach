@@ -51,6 +51,8 @@ server_rcon_password: ''
 # de_inferno, de_mirage, de_nuke, de_overpass, de_train.
 training_maps: []
 training_admins: []
+# Start so viele Sekunden vor dem Duell (Positionen aus der Demo), Standard 3.
+training_lead_seconds: 3
 # Befehl, der nach dem Training die normale Map zurueckholt (z. B. Workshop-Map).
 server_restore_command: ''
 # Spielende und "Spieler der Woche" nach Discord. Leer = discord_webhook.
