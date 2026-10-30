@@ -45,7 +45,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.4.0";
+    public override string ModuleVersion => "1.4.2";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -140,28 +140,88 @@ public class CoachTeleport : BasePlugin
     }
 
     // Einblendung und Menue teilen sich die Bildschirmmitte; das Menue hat Vorrang.
-    // Viermal pro Sekunde neu senden, damit nichts verschwindet, solange es gilt.
+    //
+    // Nur senden, wenn sich der Inhalt aendert: jedes PrintToCenterHtml baut die
+    // Einblendung neu auf. Bis 1.4.0 wurde viermal pro Sekunde neu gesendet - die
+    // Anzeige "blinkt zu sehr, dass man kaum was lesen kann" (30.10.2026).
+    // Jetzt einmal mit der vollen Anzeigedauer; Menues werden nur kurz vor Ablauf
+    // ihrer MenuSeconds aufgefrischt.
+    private readonly Dictionary<int, (string Html, int UntilTick)> _shown = new();
+    private const int MenuSeconds = 120;
+
     private void DrawCenter()
     {
-        if (Server.TickCount % 16 != 0 || (_huds.Count == 0 && _menus.Count == 0)) return;
-        foreach (var userid in _huds.Keys.Concat(_menus.Keys).Distinct().ToList())
+        if (Server.TickCount % 32 != 0 || (_huds.Count == 0 && _menus.Count == 0 && _shown.Count == 0)) return;
+        foreach (var userid in _huds.Keys.Concat(_menus.Keys).Concat(_shown.Keys).Distinct().ToList())
+            Refresh(userid);
+    }
+
+    private void Refresh(int userid)
+    {
+        var player = Utilities.GetPlayerFromUserid(userid);
+        if (player is null || !player.IsValid)
         {
-            var player = Utilities.GetPlayerFromUserid(userid);
-            if (player is null || !player.IsValid)
-            {
-                _huds.Remove(userid);
-                _menus.Remove(userid);
-                continue;
-            }
-            if (_menus.TryGetValue(userid, out var menu))
-            {
-                player.PrintToCenterHtml(RenderMenu(menu), 1);
-            }
-            else if (_huds.TryGetValue(userid, out var hud))
-            {
-                if (Server.TickCount > hud.UntilTick) _huds.Remove(userid);
-                else player.PrintToCenterHtml(hud.Html, 1);
-            }
+            _huds.Remove(userid);
+            _menus.Remove(userid);
+            _shown.Remove(userid);
+            return;
+        }
+        var now = Server.TickCount;
+        if (_huds.TryGetValue(userid, out var expired) && now > expired.UntilTick) _huds.Remove(userid);
+
+        string? html = null;
+        var until = 0;
+        var isMenu = _menus.TryGetValue(userid, out var menu);
+        if (isMenu)
+        {
+            html = RenderMenu(menu!);
+            until = now + MenuSeconds * 64;
+        }
+        else if (_huds.TryGetValue(userid, out var hud))
+        {
+            html = hud.Html;
+            until = hud.UntilTick;
+        }
+
+        var hasShown = _shown.TryGetValue(userid, out var shown);
+        if (html is null)
+        {
+            // Nichts mehr anzuzeigen, aber etwas Langes steht noch (z. B. PAUSE): sofort weg.
+            if (hasShown && shown.UntilTick > now) TryCenter(player, " ", 1);
+            _shown.Remove(userid);
+            return;
+        }
+        // Auch derselbe Text muss neu raus, wenn der alte schon abgelaufen ist (zweimal
+        // hintereinander "KEIN TREFFER") oder der neue deutlich laenger stehen soll.
+        var changed = !hasShown || shown.Html != html || shown.UntilTick <= now
+                      || (!isMenu && until > shown.UntilTick + 64);
+        var menuExpiring = isMenu && shown.UntilTick - now < 2 * 64;
+        if (!changed && !menuExpiring) return;
+        var seconds = Math.Max(1, (int)Math.Ceiling((until - now) / 64f));
+        if (!TryCenter(player, html, seconds))
+        {
+            _huds.Remove(userid);
+            _menus.Remove(userid);
+            _shown.Remove(userid);
+            return;
+        }
+        _shown[userid] = (html, now + seconds * 64);
+    }
+
+    // PrintToCenterHtml wirft "Could not get player event listener" fuer Bots und
+    // Spieler ohne Verbindung (gesehen am 30.10. mit einer ungueltigen userid) -
+    // dann verwerfen statt zweimal pro Sekunde erneut zu scheitern.
+    private static bool TryCenter(CCSPlayerController player, string html, int seconds)
+    {
+        if (player.IsBot) return false;
+        try
+        {
+            player.PrintToCenterHtml(html, seconds);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
         }
     }
 
@@ -187,11 +247,12 @@ public class CoachTeleport : BasePlugin
         {
             var command = m.Items[m.Cursor].Command;
             _menus.Remove(userid);
+            Refresh(userid);
             if (!string.IsNullOrWhiteSpace(command)) player.ExecuteClientCommandFromServer($"say {command}");
             return;
         }
         else return;
-        player.PrintToCenterHtml(RenderMenu(m), 1);
+        Refresh(userid);
     }
 
     private static string? FromBase64(string value)
@@ -213,6 +274,7 @@ public class CoachTeleport : BasePlugin
         }
         if (seconds <= 0) _huds.Remove(userid);
         else _huds[userid] = (html, Server.TickCount + (int)(seconds * 64));
+        Refresh(userid);
         info.ReplyToCommand("coach_hud ok");
     }
 
@@ -229,6 +291,7 @@ public class CoachTeleport : BasePlugin
         if (string.IsNullOrEmpty(json))
         {
             _menus.Remove(userid);
+            Refresh(userid);
             info.ReplyToCommand("coach_menu ok closed");
             return;
         }
@@ -239,6 +302,7 @@ public class CoachTeleport : BasePlugin
             foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
                 menu.Items.Add((item[0].GetString() ?? "", item[1].GetString() ?? ""));
             _menus[userid] = menu;
+            Refresh(userid);
             info.ReplyToCommand($"coach_menu ok {menu.Items.Count}");
         }
         catch (Exception e) when (e is System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException)
