@@ -69,11 +69,19 @@ def scan_demo(demo_path, me: str, lead: float, parser_factory=None) -> dict[str,
     """Alle Szenarien einer Demo, je Modus. Ohne Datei-Cache (siehe collect)."""
     if parser_factory is None:
         from demoparser2 import DemoParser as parser_factory
+    import pandas as pd
     p = parser_factory(str(demo_path))
-    deaths = p.parse_event("player_death")
-    plants = p.parse_event("bomb_planted")
-    hurts = p.parse_event("player_hurt")
-    freeze = sorted(int(t) for t in p.parse_event("round_freeze_end")["tick"])
+
+    def event(name: str, columns: list[str]):
+        """demoparser2 liefert [] statt einer leeren Tabelle, wenn ein Ereignis nie vorkommt
+        (am 30.10. bei zwei Demos ohne Bomben-Plant: "'list' object has no attribute 'iterrows'")."""
+        df = p.parse_event(name)
+        return df if hasattr(df, "iterrows") else pd.DataFrame(columns=columns)
+
+    deaths = event("player_death", ["tick", "user_steamid", "attacker_steamid"])
+    plants = event("bomb_planted", ["tick", "site", "user_steamid"])
+    hurts = event("player_hurt", ["tick", "user_steamid", "attacker_steamid"])
+    freeze = sorted(int(t) for t in event("round_freeze_end", ["tick"])["tick"])
 
     def round_start(tick):
         before = [f for f in freeze if f <= tick]

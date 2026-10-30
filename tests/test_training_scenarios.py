@@ -175,3 +175,14 @@ def test_mode_menu_after_map(multi):
 def test_unknown_mode_is_rejected(multi):
     director, _, _, _ = multi
     assert "Unbekannter Modus" in director().command(ME, "dj", "training", "mirage quatsch")[0]
+
+
+
+def test_demo_without_plant_still_scans():
+    """demoparser2 gibt [] statt einer Tabelle zurueck, wenn es kein bomb_planted gibt."""
+    class NoPlant(FakeDemo):
+        def parse_event(self, name):
+            return [] if name == "bomb_planted" else super().parse_event(name)
+
+    out = tsc.scan_demo("x.dem", ME, 3, parser_factory=NoPlant)
+    assert out["retake"] == [] and out["situation"] and out["halten"]
