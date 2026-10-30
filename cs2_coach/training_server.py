@@ -416,6 +416,26 @@ def direction(me, foe) -> str:
     return f"{where}, {meters:.0f} m"
 
 
+def duel_tip(rnd: dict, outcome: str) -> str | None:
+    """Kurzer Hinweis nach einem verlorenen Duell - nur aus dem, was das Log misst.
+
+    Gemessen werden Treffer, Trefferzone und wer zuerst getroffen hat. Mehr
+    (Reaktionszeit, Peek-Timing) steht nicht im Log; die Erklaerung dazu
+    gibt die KI mit !tipp. Ein verlorenes Duell ohne Treffer zaehlt nicht
+    (Leerlauf), kommt hier also nicht an.
+    """
+    if outcome != "loss":
+        return None
+    hits, head = rnd.get("you_hits", 0), rnd.get("you_head", 0)
+    if hits and not head:
+        return f"Keiner deiner {hits} Treffer am Kopf - Fadenkreuz auf Kopfhoehe halten."
+    if rnd.get("first") == "bot":
+        return "Er hat zuerst getroffen - den Winkel vorzielen, bevor er kommt."
+    if hits >= 2:
+        return f"Du hast zuerst getroffen ({hits} Treffer, {head} am Kopf), er hat trotzdem gewonnen - nachsetzen statt abzusetzen."
+    return None
+
+
 def _score(state: dict) -> str:
     res = state.get("results", [])
     return f"{res.count('win')}:{res.count('loss')}"
@@ -603,13 +623,19 @@ class Director:
         self.send(_say(summary), *link, *big, *RESTORE, restore)
         return []
 
-    def _record(self, state: dict, outcome: str) -> None:
-        """Gezaehltes Duell fuer die Auswertung merken (nur Daten, keine Bewertung)."""
+    def _record(self, state: dict, outcome: str, tip: str | None = None) -> None:
+        """Gezaehltes Duell fuer die Auswertung und fuer !tipp merken."""
         sc = self._scenario(state)
-        state.setdefault("duels", []).append({
-            "n": state["pos"] + 1, "source": sc.source, "opponent": sc.opponent, "weapon": sc.weapon,
-            "outcome": outcome, "tries": state.get("tries", 0) + 1, "level": state.get("level"),
-            "export": sc.export, "round": sc.round})
+        rnd = state.get("rnd") or {}
+        duel = {"n": state["pos"] + 1, "source": sc.source, "opponent": sc.opponent, "weapon": sc.weapon,
+                "outcome": outcome, "tries": state.get("tries", 0) + 1, "level": state.get("level"),
+                "export": sc.export, "round": sc.round, "you_hits": rnd.get("you_hits", 0),
+                "you_head": rnd.get("you_head", 0), "bot_hits": rnd.get("bot_hits", 0),
+                "first": rnd.get("first"), "tip": tip}
+        state.setdefault("duels", []).append(duel)
+        from .ingame_coach import save_last_duel
+        save_last_duel(self.path, {**duel, "map": state.get("map"), "weapon": weapon_label(sc.weapon),
+                                   "direction": state.get("direction", "?")})
 
     def _open_menu(self, uid) -> list[str]:
         """W/S + E im Spiel statt Befehle tippen (Plugin 1.3.0)."""
@@ -682,8 +708,16 @@ class Director:
             return state
         if msg.startswith('World triggered "Round_Start"'):
             return self._round_start(state)
-        if (m := ss._ATTACK.match(msg)) and ss.steam64(m.group("asid")) == state["human"]:
-            state["active"] = True  # du hast in dieser Runde getroffen
+        if m := ss._ATTACK.match(msg):
+            rnd = state.setdefault("rnd", {})
+            if ss.steam64(m.group("asid")) == state["human"]:
+                state["active"] = True  # du hast in dieser Runde getroffen
+                rnd["you_hits"] = rnd.get("you_hits", 0) + 1
+                rnd["you_head"] = rnd.get("you_head", 0) + (m.group("hitgroup") == "head")
+                rnd.setdefault("first", "you")
+            elif m.group("asid") == "BOT" and ss.steam64(m.group("vsid")) == state["human"]:
+                rnd["bot_hits"] = rnd.get("bot_hits", 0) + 1
+                rnd.setdefault("first", "bot")
             return state
         if (m := ss._KILL.match(msg)) and not state.get("outcome"):
             killer = ss.steam64(m.group("asid"))
@@ -703,11 +737,16 @@ class Director:
             if not skipped:
                 outcome = state.get("outcome") or "draw"
                 self._result(state, outcome)
-                self._record(state, outcome)
+                tip = duel_tip(state.get("rnd") or {}, outcome)
+                self._record(state, outcome, tip)
                 text, color = {"win": ("GEWONNEN", GREEN), "loss": ("VERLOREN", RED)}.get(
                     outcome, ("UNENTSCHIEDEN", YELLOW))
-                self.send(hud(state["human_uid"], 3, _font(text, color, "xl") + "<br>"
-                              + _font(f"Stand {_score(state)}", GREY)))
+                self.send(hud(state["human_uid"], 4, _font(text, color, "xl") + "<br>"
+                              + _font(f"Stand {_score(state)}", GREY)
+                              + (f"<br>{_font(html.escape(tip), '#ffffff', 's')}" if tip else "")))
+                if tip:
+                    from .ingame_coach import tell
+                    tell(self.send, state["human_uid"], f"Tipp: {tip} Mehr dazu: !tipp")
             state["tries"] = 0
             state["pos"] = state.get("pos", 0) + 1
             if state["pos"] >= len(state["queue"]):
@@ -780,7 +819,7 @@ class Director:
         nicht, im ersten Training fiel jeder Bot ohne einen Schuss.
         """
         state["round"] = state.get("round", 0) + 1
-        state.update(outcome=None, active=False)
+        state.update(outcome=None, active=False, rnd={})
         sc = self._scenario(state)
         pre = state.get("pre", {}).get(str(state["queue"][state["pos"]]))
         if pre:
@@ -805,10 +844,11 @@ class Director:
                  + [f"coach_path_start {bot} {PATH_HZ}"]) if len(path) >= 2 else [])
         how = "läuft den echten Weg" if walk else "Bot-KI"
         give = _give_commands(state["human_uid"], bot, pre)
+        state["direction"] = direction(me, foe)
         info = hud(state["human_uid"], FREEZE_TIME + 3, "<br>".join([
             _font(f"Duell {n}/{total} &#183; {html.escape(sc.source)}", PURPLE),
             _font(f"Gegner mit {html.escape(weapon_label(sc.weapon))}", RED, "l"),
-            _font(f"kommt von {direction(me, foe)}", "#ffffff"),
+            _font(f"kommt von {state['direction']}", "#ffffff"),
             _font(f"Stand {_score(state)} &#183; {_level_text(state)}", GREY, "s")]))
         replies = self.send(f"coach_tp {state['human_uid']} {_fmt(me)}",
                             f"coach_tp {bot} {_fmt(foe)}", *walk, *give, info,

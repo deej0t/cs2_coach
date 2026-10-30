@@ -20,6 +20,9 @@
 //         Menue {"title": "...", "items": [["Text", "!befehl"], ...]}: W/S waehlen,
 //         E bestaetigt. Die Auswahl schreibt der Spieler als Chatbefehl
 //         ("say !befehl") - so kommt sie ueber das Server-Log beim Coach an.
+//     coach_chat <userid> <text_base64>
+//         Private Chatzeilen nur fuer diesen Spieler (KI-Coach, Tipps). Zeilen
+//         werden am Zeilenumbruch getrennt.
 //     coach_tp_version
 //
 // Alles andere - welche Situation, wann, wer - entscheidet der Coach, damit
@@ -42,7 +45,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.3.0";
+    public override string ModuleVersion => "1.4.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -361,6 +364,31 @@ public class CoachTeleport : BasePlugin
         var active = info.GetArg(2);
         if (active.StartsWith("weapon_")) player.ExecuteClientCommandFromServer($"use {active}");
         info.ReplyToCommand($"coach_give ok {userid} {given}");
+    }
+
+    [ConsoleCommand("coach_chat", "Private Chatzeilen: <userid> <text_base64>")]
+    [CommandHelper(minArgs: 2, usage: "<userid> <text_base64>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnChat(CCSPlayerController? caller, CommandInfo info)
+    {
+        var text = FromBase64(info.GetArg(2));
+        if (!int.TryParse(info.GetArg(1), out var userid) || text is null)
+        {
+            info.ReplyToCommand("coach_chat: ungueltige Argumente");
+            return;
+        }
+        var player = Utilities.GetPlayerFromUserid(userid);
+        if (player is null || !player.IsValid)
+        {
+            info.ReplyToCommand($"coach_chat: kein Spieler mit userid {userid}");
+            return;
+        }
+        foreach (var line in text.Split('\n'))
+        {
+            // Fuehrendes Leerzeichen: sonst ignoriert CS2 die erste Farbe.
+            if (!string.IsNullOrWhiteSpace(line))
+                player.PrintToChat($" {ChatColors.Purple}[Coach]{ChatColors.Default} {line}");
+        }
+        info.ReplyToCommand("coach_chat ok");
     }
 
     [ConsoleCommand("coach_tp_version", "Version des Coach-Plugins (Coach prueft damit, ob es geladen ist)")]

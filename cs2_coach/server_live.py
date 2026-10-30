@@ -40,7 +40,7 @@ SESSION_HOURS = 6
 _CHAT = re.compile(ss._player("a") + r' say(?:_team)? "(?P<text>.*)"$')
 _last_command: dict[str, float] = {}
 
-HELP = "Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !training (Besitzer) · !help"
+HELP = "Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !help · Besitzer: !training · !coach <Frage>"
 
 
 # --------------------------------------------------------------------------
@@ -212,6 +212,7 @@ def rcon_sender(cfg: dict):
 
 def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, now=None) -> int:
     """Chat-Befehle aus einem Stapel beantworten. Gibt die Zahl der Antworten zurueck."""
+    from .ingame_coach import COMMANDS as COACH, handle as coach_handle
     from .training_server import COMMANDS as TRAINING, Director
     commands = parse_commands(lines)
     send = send or rcon_sender(cfg)
@@ -221,6 +222,11 @@ def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, n
     sent = 0
     for sid, name, cmd, arg, uid in commands:
         if time.monotonic() - _last_command.get(sid, -COOLDOWN) < COOLDOWN:
+            continue
+        if cmd in COACH:
+            _last_command[sid] = time.monotonic()
+            coach_handle(cfg, config_path, send, sid, uid, cmd, arg)
+            sent += 1
             continue
         if cmd in TRAINING:
             reply = Director(cfg, config_path, send).command(sid, name, cmd, arg, uid)

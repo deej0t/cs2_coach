@@ -578,3 +578,22 @@ def test_training_page_renders_sessions(tmp_path, monkeypatch):
     finally:
         monkeypatch.delenv("CS2COACH_CONFIG")
         importlib.reload(app_module)
+
+
+def test_lost_duel_gives_tip_and_remembers_it_for_tipp(env):
+    _, path, server, _, director = env
+    ts.save_state(path, running_state())
+    hit = '(damage "27") (damage_armor "3") (health "73") (armor "96") (hitgroup "{g}")'
+    director().on_lines([line('World triggered "Round_Start"'),
+                         line(f'{BOT} [1 1 1] attacked {DJ} [0 0 0] with "m4a1" ' + hit.format(g="chest")),
+                         line(f'{DJ} [0 0 0] attacked {BOT} [1 1 1] with "ak47" ' + hit.format(g="chest")),
+                         line(f'{DJ} [0 0 0] attacked {BOT} [1 1 1] with "ak47" ' + hit.format(g="stomach")),
+                         line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "m4a1"'),
+                         line('World triggered "Round_End"')])
+    duel = ts.load_state(path)["duels"][0]
+    assert (duel["first"], duel["you_hits"], duel["you_head"], duel["bot_hits"]) == ("bot", 2, 0, 1)
+    assert duel["tip"].startswith("Keiner deiner 2 Treffer am Kopf")
+    assert any("Keiner deiner 2 Treffer" in h for h in huds(server))
+    from cs2_coach.ingame_coach import load_last_duel
+    last = load_last_duel(path)
+    assert last["weapon"] == "M4A4" and last["direction"].startswith("vorne")
