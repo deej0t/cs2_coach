@@ -90,3 +90,15 @@ def test_duel_tips_only_from_measurements():
     assert "nachsetzen" in ts.duel_tip({"you_hits": 2, "you_head": 1, "first": "you"}, "loss")
     assert ts.duel_tip({"you_hits": 1, "you_head": 1, "first": "you"}, "loss") is None  # nichts Klares
     assert ts.duel_tip({"you_hits": 3, "you_head": 0}, "win") is None
+
+
+def test_training_history_reaches_the_ai(tmp_path):
+    """Ohne Bilanz sagte die KI zu Mirage-Duellen "Dazu liegen mir keine Daten vor"."""
+    path = tmp_path / "config.yaml"
+    ts.save_session(path, {"map": "de_mirage", "started": "2026-10-30T08:00:00", "duels": [
+        {"n": 1, "source": "27.10. R3", "opponent": "Poepp", "weapon": "m4a1", "outcome": "loss", "export": "x", "round": 3},
+        {"n": 2, "source": "27.10. R4", "opponent": "Bursche", "weapon": "mp9", "outcome": "win", "export": "y", "round": 4}]},
+        "Training fertig")
+    facts = ic.training_facts(path)
+    assert "auf de_mirage: 1 von 2 Duellen gewonnen" in facts
+    assert "Oft verloren: 27.10. R3 gegen Poepp mit M4A4 (1x verloren, 0x gewonnen)" in facts

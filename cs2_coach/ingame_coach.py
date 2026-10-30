@@ -134,14 +134,33 @@ def duel_facts(duel: dict) -> str:
 
 
 def training_facts(config_path: Path) -> str:
-    from .training_server import load_state
+    """Laufendes Training plus Bilanz aller Trainings (wie auf /training).
+
+    Ohne die Bilanz antwortete die KI am 30.10. auf "Wie werde ich besser in
+    Duellen auf Mirage?" mit "Dazu liegen mir keine Daten vor".
+    """
+    from .training_server import hardest, load_sessions, load_state, weapon_label
+    lines = []
     state = load_state(config_path)
-    if not state:
-        return "Gerade laeuft kein Duell-Training."
-    res = state.get("results", [])
-    return (f"Duell-Training auf {state.get('map')}: Duell {state.get('pos', 0) + 1} von "
-            f"{len(state.get('queue', []))}, Stand {res.count('win')} gewonnen zu {res.count('loss')} verloren, "
-            f"Bot-Stufe {state.get('level')}/3.")
+    if state:
+        res = state.get("results", [])
+        lines.append(f"Duell-Training laeuft auf {state.get('map')}: Duell {state.get('pos', 0) + 1} von "
+                     f"{len(state.get('queue', []))}, Stand {res.count('win')} gewonnen zu {res.count('loss')} "
+                     f"verloren, Bot-Stufe {state.get('level')}/3.")
+    else:
+        lines.append("Gerade laeuft kein Duell-Training.")
+    sessions = load_sessions(config_path)
+    by_map: dict[str, list[int]] = {}
+    for s in sessions:
+        won_played = by_map.setdefault(s.get("map") or "?", [0, 0])
+        won_played[0] += s["won"]
+        won_played[1] += s["played"]
+    for m, (won, played) in sorted(by_map.items()):
+        lines.append(f"Bisher im Duell-Training auf {m}: {won} von {played} Duellen gewonnen.")
+    for h in hardest(sessions, limit=3):
+        lines.append(f"Oft verloren: {h.get('source')} gegen {h.get('opponent')} mit "
+                     f"{weapon_label(h.get('weapon', ''))} ({h['lost']}x verloren, {h['won']}x gewonnen).")
+    return "\n".join(lines)
 
 
 # --------------------------------------------------------------------------
