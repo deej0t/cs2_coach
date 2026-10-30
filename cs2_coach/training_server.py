@@ -74,6 +74,7 @@ _TEAM = re.compile(r'^"(?P<aname>.*?)<(?P<auid>-?\d+)><(?P<asid>[^>]*)>" switche
 # Nach einem Mapwechsel steht nur "Loading map" im Log, kein "Started map".
 _LOADING = re.compile(r'^Loading map "(?P<map>[^"]+)"')
 SETUP_WAIT = 8  # Sekunden nach "Loading map": erst dann ist die server.cfg durch
+LOAD_TIMEOUT = 120  # Map bis dahin nicht geladen = Training verwerfen
 
 
 @dataclass
@@ -270,11 +271,34 @@ class Director:
         n = min(MAX_SCENARIOS, len(all_sc[bsp]))
         state = {"phase": "loading", "map": bsp, "human": sid, "name": name, "queue": list(range(n)),
                  "pos": 0, "results": [], "level": list(START_LEVEL), "round": 0,
-                 "started": datetime.now().isoformat(timespec="seconds")}
+                 "started": datetime.now().isoformat(timespec="seconds"), "t0": time.time()}
         save_state(self.path, state)
+        self.timer(LOAD_TIMEOUT, self._check_loaded)
+        # "map" statt "changelevel": am 30.10. hing der Server bei changelevel von
+        # der Workshop-Map weg, waehrend ein Spieler verbunden war (Watchdog,
+        # Neustart noetig). "map" trennt die Clients und laesst sie neu verbinden,
+        # statt sie durch den Wechsel zu tragen. Ob das den Haenger vermeidet,
+        # ist noch nicht belegt - darum zusaetzlich LOAD_TIMEOUT und cs2-waechter.
         self.send(_say(f"Training {bsp}: {n} Duelle aus deinen Matches. Map wird geladen..."),
-                  "sv_hibernate_when_empty 0", f"changelevel {bsp}")
+                  "sv_hibernate_when_empty 0", f"map {bsp}")
         return []
+
+    def _check_loaded(self) -> None:
+        """Map nach LOAD_TIMEOUT nicht geladen: Training verwerfen.
+
+        Sonst wuerde ein spaeteres "Loading map" - etwa beim Neustart des
+        haengenden Servers, der mit +map de_mirage startet - das alte
+        Training mit sv_cheats 1 aufsetzen.
+        """
+        with _Lock(self.path):
+            state = load_state(self.path)
+            if state.get("phase") != "loading":
+                return
+            save_state(self.path, {})
+        try:
+            self.send(_say("Map nicht geladen - Training abgebrochen."), *RESTORE)
+        except Exception as e:  # noqa: BLE001 - haengender Server: der cs2-waechter startet ihn neu
+            print(f"[training] Abbruch ohne RCON: {e}", flush=True)
 
     def _shift(self, state: dict, step: int) -> None:
         diff, d = state["level"]
@@ -296,7 +320,7 @@ class Director:
         res = state.get("results", [])
         won = sum(1 for r in res if r == "win")
         summary = f"{why}: {won}/{len(res)} Duelle gewonnen" if res else why
-        restore = (self.cfg.get("server_restore_command") or "").strip() or "changelevel de_mirage"
+        restore = (self.cfg.get("server_restore_command") or "").strip() or "map de_mirage"
         save_state(self.path, {})
         self.send(_say(summary), *RESTORE, restore)
         return []
@@ -313,11 +337,14 @@ class Director:
                 if m:
                     state = self._event(state, m.group(2))
                     if not state:
+                        save_state(self.path, {})  # beendet oder verworfen
                         return
             save_state(self.path, state)
 
     def _event(self, state: dict, msg: str) -> dict:
         phase = state["phase"]
+        if phase == "loading" and time.time() - state.get("t0", 0) > LOAD_TIMEOUT:
+            return {}  # verwaist (z. B. Server neu gestartet), nicht mehr aufsetzen
         if phase == "loading" and (m := _LOADING.match(msg)) and m.group("map") == state["map"]:
             state["phase"] = "setup"
             self.timer(SETUP_WAIT, self._setup)

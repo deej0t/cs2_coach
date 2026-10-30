@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
@@ -112,7 +113,7 @@ def test_lists_maps_and_rejects_pool_outsiders(env):
 def test_full_flow(env):
     _, path, server, timers, director = env
     assert director().command(OWNER, "dj", "training", "mirage") == []
-    assert "changelevel de_mirage" in server.sent
+    assert "map de_mirage" in server.sent
 
     director().on_lines([line('Loading map "de_mirage"')])
     run_timers(timers)
@@ -224,6 +225,38 @@ def test_disconnect_restores_server(env):
 def test_disconnect_during_map_load_is_ignored(env):
     _, path, _, _, director = env
     ts.save_state(path, {"phase": "loading", "map": "de_mirage", "human": OWNER, "queue": [0],
-                         "pos": 0, "results": [], "level": [1, 1]})
+                         "pos": 0, "results": [], "level": [1, 1], "t0": time.time()})
     director().on_lines([line('"dj<2><[U:1:58996800]><TERRORIST>" disconnected (reason "Map change")')])
     assert ts.is_active(path)
+
+
+def test_map_not_loaded_in_time_is_discarded(env):
+    """30.10.: der Server hing beim Mapwechsel. Das Training darf danach nicht weiterleben."""
+    _, path, server, timers, director = env
+    director().command(OWNER, "dj", "training", "mirage")
+    sec, check = timers.pop()
+    assert sec == ts.LOAD_TIMEOUT
+    check()
+    assert not ts.is_active(path) and "sv_cheats 0" in server.sent
+
+
+def test_stale_loading_state_ignores_server_restart(env):
+    """Startet der haengende Server neu, meldet er "Loading map de_mirage" - das alte Training nicht aufsetzen."""
+    _, path, server, timers, director = env
+    ts.save_state(path, {"phase": "loading", "map": "de_mirage", "human": OWNER, "queue": [0],
+                         "pos": 0, "results": [], "level": [1, 1], "t0": 0})
+    director().on_lines([line('Loading map "de_mirage"')])
+    assert not ts.is_active(path) and timers == [] and "sv_cheats 1" not in server.sent
+
+
+def test_check_loaded_survives_dead_rcon(tmp_path):
+    root = export(tmp_path)
+
+    def dead(*cmds):
+        raise TimeoutError("timed out")
+
+    d = ts.Director({"steam_id": OWNER, "obsidian_vault_path": str(root / "vault")},
+                    tmp_path / "config.yaml", dead, timer=lambda s, f: None)
+    ts.save_state(d.path, {"phase": "loading", "map": "de_mirage", "t0": 0})
+    d._check_loaded()
+    assert not ts.is_active(d.path)

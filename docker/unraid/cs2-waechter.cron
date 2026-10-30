@@ -1,0 +1,3 @@
+# cs2-waechter: startet den CS2-Server neu, wenn er laenger als 4 Minuten nicht antwortet.
+# Skript und Hintergrund: /boot/config/custom/cs2-waechter.sh
+*/2 * * * * bash /boot/config/custom/cs2-waechter.sh >/dev/null 2>&1
