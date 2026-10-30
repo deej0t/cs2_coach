@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Duell-Training{% endblock %}
+
+{% block content %}
+<h2>Duell-Training</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-5);">
+    Auf dem eigenen Server spielst du deine verlorenen Duelle aus den Demos nach: du und ein Bot startet dort,
+    wo ihr 3&nbsp;Sekunden vor deinem Tod standet, der Bot läuft den echten Weg deines Gegners.
+    Start im Spiel mit <code>!training</code> (Menü: W/S wählen, E bestätigen) oder <code>!training mirage</code>.
+</p>
+
+{% if running %}
+<div class="card elev-sm" style="margin-bottom: var(--space-5); border-left: 3px solid var(--color-green);">
+    <span class="card-kicker">Läuft gerade</span>
+    <p style="margin: var(--space-2) 0 0; font-size: 14px;">
+        {{ running.map }} · Duell {{ running.pos + 1 }} von {{ running.total }} ·
+        {{ running.won }} von {{ running.played }} gewonnen
+        {% if running.phase != 'running' %}<span style="color: var(--color-neutral-500);">({{ running.phase }})</span>{% endif %}
+    </p>
+</div>
+{% endif %}
+
+{% if not sessions %}
+<div class="card elev-sm"><p style="margin: 0; color: var(--color-neutral-500);">
+    Noch kein Training abgeschlossen. Sobald du eins beendest, steht hier, welche Duelle du gewonnen und verloren hast.
+</p></div>
+{% else %}
+
+<div style="display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap;">
+    <div class="card elev-sm" style="flex: 1; min-width: 140px; text-align: center;">
+        <div style="font-size: 26px; font-weight: 700;">{{ sessions|length }}</div>
+        <div class="card-kicker">Trainings</div>
+    </div>
+    <div class="card elev-sm" style="flex: 1; min-width: 140px; text-align: center;">
+        <div style="font-size: 26px; font-weight: 700;">{{ total }}</div>
+        <div class="card-kicker">Duelle gespielt</div>
+    </div>
+    <div class="card elev-sm" style="flex: 1; min-width: 140px; text-align: center;">
+        <div style="font-size: 26px; font-weight: 700;">{{ (won * 100 // total) if total else 0 }} %</div>
+        <div class="card-kicker">gewonnen ({{ won }})</div>
+    </div>
+</div>
+
+{% if hardest %}
+<h3 style="margin-bottom: var(--space-2);">Situationen, die du am öftesten verlierst</h3>
+<p style="color: var(--color-neutral-500); font-size: 12px; margin-bottom: var(--space-3);">
+    Gezählt über alle Trainings. Ein Duell ohne einen Treffer von dir zählt nicht (es wird im Spiel wiederholt).
+    Mit wenigen Versuchen ist das ein Hinweis, worauf du achten kannst, keine Statistik.
+</p>
+<div class="card elev-sm" style="margin-bottom: var(--space-5); padding: 0; overflow-x: auto;">
+<table class="table" style="width: 100%;">
+    <thead><tr><th>Situation</th><th>Map</th><th>Gegner</th><th>Waffe</th><th>verloren</th><th>gewonnen</th><th></th></tr></thead>
+    <tbody>
+    {% for h in hardest %}
+    <tr>
+        <td>{{ h.source }}</td><td>{{ (h.map or '')|replace('de_', '')|capitalize }}</td><td>{{ h.opponent }}</td>
+        <td>{{ weapon_label(h.weapon) }}</td>
+        <td style="color: var(--color-red); font-weight: 600;">{{ h.lost }}</td>
+        <td style="color: var(--color-green);">{{ h.won }}</td>
+        <td>{% if h.export %}<a href="{{ url_for('view_export', filename=h.export) }}">Match ansehen</a>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
+<h3 style="margin-bottom: var(--space-3);">Letzte Trainings</h3>
+{% for s in sessions %}
+<details class="card elev-sm" style="margin-bottom: var(--space-3);" {% if loop.first %}open{% endif %}>
+    <summary style="cursor: pointer; font-size: 14px;">
+        <strong>{{ (s.map or '')|replace('de_', '')|capitalize }}</strong> ·
+        {{ s.started[8:10] }}.{{ s.started[5:7] }}. {{ s.started[11:16] }} ·
+        <span style="color: {{ 'var(--color-green)' if s.played and s.won * 2 >= s.played else 'var(--color-red)' }}; font-weight: 600;">
+            {{ s.won }} von {{ s.played }} gewonnen</span>
+        {% if s.level_end is not none %}<span style="color: var(--color-neutral-500);"> · Bot-Stufe am Ende {{ s.level_end }}/3</span>{% endif %}
+    </summary>
+    <table class="table" style="width: 100%; margin-top: var(--space-3);">
+        <thead><tr><th>#</th><th>Situation</th><th>Gegner</th><th>Waffe</th><th>Ergebnis</th><th>Versuche</th><th></th></tr></thead>
+        <tbody>
+        {% for d in s.duels %}
+        <tr>
+            <td>{{ d.n }}</td><td>{{ d.source }}</td><td>{{ d.opponent }}</td><td>{{ weapon_label(d.weapon) }}</td>
+            <td>{% if d.outcome == 'win' %}<span style="color: var(--color-green);">gewonnen</span>
+                {% elif d.outcome == 'loss' %}<span style="color: var(--color-red);">verloren</span>
+                {% else %}<span style="color: var(--color-yellow);">unentschieden</span>{% endif %}</td>
+            <td>{{ d.tries }}</td>
+            <td>{% if d.export %}<a href="{{ url_for('view_export', filename=d.export) }}">Match</a>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <p style="font-size: 11px; color: var(--color-neutral-500); margin: var(--space-2) 0 0;">{{ s.why }}</p>
+</details>
+{% endfor %}
+{% endif %}
+{% endblock %}

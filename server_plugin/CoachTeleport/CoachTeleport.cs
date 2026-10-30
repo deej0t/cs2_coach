@@ -13,6 +13,13 @@
 //     coach_give <userid> <aktive_waffe> <item> [<item> ...]
 //         Alles wegnehmen und genau diese Items geben (z. B. das Inventar aus
 //         der Demo), danach die aktive Waffe in die Hand.
+//     coach_hud <userid> <sekunden> <html_base64>
+//         Grosse Einblendung in der Bildschirmmitte (HTML, Base64, damit
+//         Leerzeichen, Anfuehrungszeichen und Semikolons die Konsole nicht stoeren).
+//     coach_menu <userid> <json_base64>
+//         Menue {"title": "...", "items": [["Text", "!befehl"], ...]}: W/S waehlen,
+//         E bestaetigt. Die Auswahl schreibt der Spieler als Chatbefehl
+//         ("say !befehl") - so kommt sie ueber das Server-Log beim Coach an.
 //     coach_tp_version
 //
 // Alles andere - welche Situation, wann, wer - entscheidet der Coach, damit
@@ -35,7 +42,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.2.0";
+    public override string ModuleVersion => "1.3.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -49,9 +56,21 @@ public class CoachTeleport : BasePlugin
     private readonly Dictionary<int, Replay> _replays = new();
     private bool _inFreeze;
 
+    private sealed class Menu
+    {
+        public string Title = "";
+        public List<(string Label, string Command)> Items = new();
+        public int Cursor;
+    }
+
+    private readonly Dictionary<int, (string Html, int UntilTick)> _huds = new();
+    private readonly Dictionary<int, Menu> _menus = new();
+
     public override void Load(bool hotReload)
     {
         RegisterListener<Listeners.OnTick>(OnTick);
+        RegisterListener<Listeners.OnTick>(DrawCenter);
+        RegisterListener<Listeners.OnPlayerButtonsChanged>(OnButtons);
         RegisterEventHandler<EventRoundStart>((_, _) =>
         {
             _inFreeze = true;
@@ -114,6 +133,114 @@ public class CoachTeleport : BasePlugin
             // Geschwindigkeit wie im Original, damit die Laufanimation passt.
             var vel = new Vector((b[0] - a[0]) * r.Hz, (b[1] - a[1]) * r.Hz, 0);
             pawn.Teleport(pos, ang, vel);
+        }
+    }
+
+    // Einblendung und Menue teilen sich die Bildschirmmitte; das Menue hat Vorrang.
+    // Viermal pro Sekunde neu senden, damit nichts verschwindet, solange es gilt.
+    private void DrawCenter()
+    {
+        if (Server.TickCount % 16 != 0 || (_huds.Count == 0 && _menus.Count == 0)) return;
+        foreach (var userid in _huds.Keys.Concat(_menus.Keys).Distinct().ToList())
+        {
+            var player = Utilities.GetPlayerFromUserid(userid);
+            if (player is null || !player.IsValid)
+            {
+                _huds.Remove(userid);
+                _menus.Remove(userid);
+                continue;
+            }
+            if (_menus.TryGetValue(userid, out var menu))
+            {
+                player.PrintToCenterHtml(RenderMenu(menu), 1);
+            }
+            else if (_huds.TryGetValue(userid, out var hud))
+            {
+                if (Server.TickCount > hud.UntilTick) _huds.Remove(userid);
+                else player.PrintToCenterHtml(hud.Html, 1);
+            }
+        }
+    }
+
+    private static string RenderMenu(Menu m)
+    {
+        var lines = new List<string> { $"<font class='fontSize-m' color='#9184d9'>{m.Title}</font>" };
+        for (var i = 0; i < m.Items.Count; i++)
+        {
+            lines.Add(i == m.Cursor
+                ? $"<font color='#4ade80'>&#9658; {m.Items[i].Label}</font>"
+                : $"<font color='#cccccc'>{m.Items[i].Label}</font>");
+        }
+        lines.Add("<font class='fontSize-s' color='#888888'>W/S w&#228;hlen &#183; E best&#228;tigen</font>");
+        return string.Join("<br>", lines);
+    }
+
+    private void OnButtons(CCSPlayerController player, PlayerButtons pressed, PlayerButtons released)
+    {
+        if (player.UserId is not { } userid || !_menus.TryGetValue(userid, out var m) || m.Items.Count == 0) return;
+        if ((pressed & PlayerButtons.Forward) != 0) m.Cursor = (m.Cursor + m.Items.Count - 1) % m.Items.Count;
+        else if ((pressed & PlayerButtons.Back) != 0) m.Cursor = (m.Cursor + 1) % m.Items.Count;
+        else if ((pressed & PlayerButtons.Use) != 0)
+        {
+            var command = m.Items[m.Cursor].Command;
+            _menus.Remove(userid);
+            if (!string.IsNullOrWhiteSpace(command)) player.ExecuteClientCommandFromServer($"say {command}");
+            return;
+        }
+        else return;
+        player.PrintToCenterHtml(RenderMenu(m), 1);
+    }
+
+    private static string? FromBase64(string value)
+    {
+        try { return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
+        catch (FormatException) { return null; }
+    }
+
+    [ConsoleCommand("coach_hud", "Einblendung: <userid> <sekunden> <html_base64>")]
+    [CommandHelper(minArgs: 3, usage: "<userid> <sekunden> <html_base64>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnHud(CCSPlayerController? caller, CommandInfo info)
+    {
+        var html = FromBase64(info.GetArg(3));
+        if (!int.TryParse(info.GetArg(1), out var userid) || !float.TryParse(info.GetArg(2),
+                NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) || html is null)
+        {
+            info.ReplyToCommand("coach_hud: ungueltige Argumente");
+            return;
+        }
+        if (seconds <= 0) _huds.Remove(userid);
+        else _huds[userid] = (html, Server.TickCount + (int)(seconds * 64));
+        info.ReplyToCommand("coach_hud ok");
+    }
+
+    [ConsoleCommand("coach_menu", "Menue: <userid> <json_base64> (leer = schliessen)")]
+    [CommandHelper(minArgs: 1, usage: "<userid> <json_base64>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnMenu(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (!int.TryParse(info.GetArg(1), out var userid))
+        {
+            info.ReplyToCommand("coach_menu: ungueltige userid");
+            return;
+        }
+        var json = info.ArgCount > 2 ? FromBase64(info.GetArg(2)) : null;
+        if (string.IsNullOrEmpty(json))
+        {
+            _menus.Remove(userid);
+            info.ReplyToCommand("coach_menu ok closed");
+            return;
+        }
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var menu = new Menu { Title = doc.RootElement.GetProperty("title").GetString() ?? "" };
+            foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
+                menu.Items.Add((item[0].GetString() ?? "", item[1].GetString() ?? ""));
+            _menus[userid] = menu;
+            info.ReplyToCommand($"coach_menu ok {menu.Items.Count}");
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            info.ReplyToCommand($"coach_menu: ungueltiges JSON ({e.GetType().Name})");
         }
     }
 

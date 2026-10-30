@@ -92,7 +92,7 @@ def _webhook(cfg: dict) -> str:
 # --------------------------------------------------------------------------
 
 def parse_commands(lines: list[str]) -> list[tuple[str, str, str, str]]:
-    """(steam_id64, name, befehl, argument) fuer jede Chatzeile, die mit ! beginnt."""
+    """(steam_id64, name, befehl, argument, userid) fuer jede Chatzeile, die mit ! beginnt."""
     out = []
     for raw in lines:
         m = ss._LINE.match(raw)
@@ -108,7 +108,7 @@ def parse_commands(lines: list[str]) -> list[tuple[str, str, str, str]]:
         if not sid:
             continue
         cmd, _, arg = text[1:].partition(" ")
-        out.append((sid, c.group("aname"), cmd.lower(), arg.strip()))
+        out.append((sid, c.group("aname"), cmd.lower(), arg.strip(), int(c.group("auid"))))
     return out
 
 
@@ -219,11 +219,11 @@ def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, n
         return 0
     log = None
     sent = 0
-    for sid, name, cmd, arg in commands:
+    for sid, name, cmd, arg, uid in commands:
         if time.monotonic() - _last_command.get(sid, -COOLDOWN) < COOLDOWN:
             continue
         if cmd in TRAINING:
-            reply = Director(cfg, config_path, send).command(sid, name, cmd, arg)
+            reply = Director(cfg, config_path, send).command(sid, name, cmd, arg, uid)
             _last_command[sid] = time.monotonic()
             if reply:
                 send(*_say_commands(reply))

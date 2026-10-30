@@ -33,7 +33,10 @@ nicht, ob ein Match Premier war - darum eine feste Liste.
 
 from __future__ import annotations
 
+import base64
+import html
 import json
+import math
 import os
 import re
 import threading
@@ -79,7 +82,9 @@ GRENADES = {"weapon_flashbang", "weapon_smokegrenade", "weapon_hegrenade", "weap
 NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade", "flashbang",
             "smokegrenade", "decoy", "world", "taser", "planted_c4")
 
-COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop", "pause", "weiter"}
+COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop", "pause", "weiter", "menu", "menue"}
+SESSIONS_DIR = "training_sessions"
+GREEN, RED, YELLOW, PURPLE, GREY = "#4ade80", "#f87171", "#fbbf24", "#9184d9", "#aaaaaa"
 IDLE_ROUNDS = 2  # so viele Runden ohne Treffer in Folge = pausieren
 PAUSE_TIMEOUT = 900  # Sekunden pausiert, dann endet das Training
 
@@ -127,6 +132,8 @@ class Scenario:
     source: str  # z. B. "27.10. R3"
     tick: int = 0  # Tick deines Todes in der Demo
     demo: str = ""  # Dateiname der Demo (match.demo_file)
+    export: str = ""  # Export-Datei (Link in der Auswertung)
+    round: int = 0
 
 
 # --------------------------------------------------------------------------
@@ -289,7 +296,7 @@ def build_scenarios(exports_dir: Path, maps: list[str] | None = None) -> dict[st
             out.setdefault(bsp, []).append(Scenario(
                 bsp, kp["x"], kp["y"], kp["z"], kp["ex"], kp["ey"], kp["ez"], kp["w"],
                 kp.get("e", "?"), f"{label} R{kp.get('r', '?')}", int(kp.get("tk") or 0),
-                data.get("match", {}).get("demo_file", "")))
+                data.get("match", {}).get("demo_file", ""), f.name, int(kp.get("r") or 0)))
     return out
 
 
@@ -362,6 +369,58 @@ def _fmt(pt) -> str:
     return " ".join(f"{float(v):.1f}" for v in pt)
 
 
+# --------------------------------------------------------------------------
+# Anzeige im Spiel (Plugin 1.3.0: coach_hud, coach_menu)
+# --------------------------------------------------------------------------
+
+def _b64(text: str) -> str:
+    return base64.b64encode(text.encode("utf-8")).decode("ascii")
+
+
+def hud(uid, seconds: float, body: str) -> str:
+    """Grosse Einblendung in der Bildschirmmitte; seconds=0 loescht sie."""
+    return f"coach_hud {uid} {seconds:g} {_b64(body or ' ')}"
+
+
+def menu(uid, title: str, items: list) -> str:
+    return f"coach_menu {uid} {_b64(json.dumps({'title': title, 'items': items}, ensure_ascii=False))}"
+
+
+def _font(text: str, color: str, size: str = "m") -> str:
+    return f"<font class='fontSize-{size}' color='{color}'>{text}</font>"
+
+
+def weapon_label(name: str) -> str:
+    """"m4a1" / "weapon_m4a1" -> "M4A4" (Anzeigename wie im Spiel)."""
+    short = str(name).removeprefix("weapon_")
+    return next((k for k, v in WEAPONS.items() if v == short), short.upper())
+
+
+def direction(me, foe) -> str:
+    """Woher kommt der Gegner, relativ zu deiner Blickrichtung? "links vorne, 24 m"."""
+    bearing = math.degrees(math.atan2(foe[1] - me[1], foe[0] - me[0]))
+    rel = (bearing - me[4] + 180) % 360 - 180  # Source: positiv = links
+    side = "links" if rel > 0 else "rechts"
+    a = abs(rel)
+    if a <= 22.5:
+        where = "vorne"
+    elif a <= 67.5:
+        where = f"{side} vorne"
+    elif a <= 112.5:
+        where = side
+    elif a <= 157.5:
+        where = f"{side} hinten"
+    else:
+        where = "hinten"
+    meters = math.dist(me[:2], foe[:2]) * 0.0254  # 1 Unit = 1 Zoll
+    return f"{where}, {meters:.0f} m"
+
+
+def _score(state: dict) -> str:
+    res = state.get("results", [])
+    return f"{res.count('win')}:{res.count('loss')}"
+
+
 def _give_commands(human_uid, bot_uid, pre: dict | None) -> list[str]:
     """coach_give fuer beide aus dem Demo-Inventar.
 
@@ -417,10 +476,12 @@ class Director:
 
     # -- Chat-Befehle -------------------------------------------------------
 
-    def command(self, sid: str, name: str, cmd: str, arg: str) -> list[str]:
+    def command(self, sid: str, name: str, cmd: str, arg: str, uid: int | None = None) -> list[str]:
         """Antwortzeilen fuer einen Trainingsbefehl."""
         if sid not in _admins(self.cfg):
             return ["Das Training kann nur der Server-Besitzer starten."]
+        if cmd in ("menu", "menue") or (cmd in ("training", "train") and not arg and uid is not None):
+            return self._open_menu(uid)
         if cmd in ("training", "train"):
             # Ohne Sperre: das Auslesen der Demos dauert einige Sekunden, solange
             # duerfen Log-Stapel nicht an der Sperre haengen. _start sperrt erst
@@ -450,7 +511,7 @@ class Director:
                     return ["Das Training läuft schon."]
                 state.update(paused=False, idle=0)
                 save_state(self.path, state)
-                self.send("mp_unpause_match")
+                self.send("mp_unpause_match", hud(state.get("human_uid"), 0, ""))
                 return ["Weiter geht's."]
             if cmd in ("leichter", "schwerer"):
                 self._shift(state, -1 if cmd == "leichter" else 1)
@@ -531,7 +592,40 @@ class Director:
         summary = f"{why}: {won}/{len(res)} Duelle gewonnen" if res else why
         restore = (self.cfg.get("server_restore_command") or "").strip() or "map de_mirage"
         save_state(self.path, {})
-        self.send(_say(summary), *RESTORE, restore)
+        if state.get("duels"):
+            save_session(self.path, state, why)
+        base = (self.cfg.get("public_url") or "").strip().rstrip("/")
+        link = [_say(f"Auswertung: {base.split('://')[-1]}/training")] if base and state.get("duels") else []
+        big = []
+        if state.get("human_uid") is not None and res:
+            big = [hud(state["human_uid"], 8, _font("TRAINING FERTIG", PURPLE, "xl") + "<br>"
+                       + _font(f"{won} von {len(res)} gewonnen ({won * 100 // len(res)} %)", "#ffffff", "l"))]
+        self.send(_say(summary), *link, *big, *RESTORE, restore)
+        return []
+
+    def _record(self, state: dict, outcome: str) -> None:
+        """Gezaehltes Duell fuer die Auswertung merken (nur Daten, keine Bewertung)."""
+        sc = self._scenario(state)
+        state.setdefault("duels", []).append({
+            "n": state["pos"] + 1, "source": sc.source, "opponent": sc.opponent, "weapon": sc.weapon,
+            "outcome": outcome, "tries": state.get("tries", 0) + 1, "level": state.get("level"),
+            "export": sc.export, "round": sc.round})
+
+    def _open_menu(self, uid) -> list[str]:
+        """W/S + E im Spiel statt Befehle tippen (Plugin 1.3.0)."""
+        state = load_state(self.path)
+        if not state:
+            items = [[f"{m.removeprefix('de_').capitalize()} ({len(v)} Duelle)", f"!training {m.removeprefix('de_')}"]
+                     for m, v in sorted(self.scenarios().items())] + [["Schliessen", ""]]
+            title = "Duell-Training: Map waehlen"
+        else:
+            items = [["Weiter", "!weiter"] if state.get("paused") else ["Pause", "!pause"],
+                     ["Duell ueberspringen", "!skip"], ["Leichter", "!leichter"], ["Schwerer", "!schwerer"],
+                     ["Training beenden", "!stop"], ["Schliessen", ""]]
+            title = f"Training {state.get('map', '')} &#183; Stand {_score(state)}"
+        reply = self.send(menu(uid, title, items))[0]
+        if "coach_menu ok" not in reply:
+            return ["Menue braucht das aktuelle Server-Plugin. Befehle: !training <map>, !pause, !weiter, !skip, !stop"]
         return []
 
     # -- Log-Ereignisse -------------------------------------------------------
@@ -572,7 +666,7 @@ class Director:
             elif m.group("asid") == "BOT" and phase in ("bot", "running"):
                 if state.get("bot_uid") is None:
                     state.update(bot_uid=uid, phase="running", round=0, pos=0)
-                    self.send(_say("Los geht's. !skip, !leichter / !schwerer, !pause / !weiter, !stop."),
+                    self.send(_say("Los geht's. Alles Weitere im Menue: !menu (W/S waehlen, E bestaetigen)."),
                               "mp_warmup_end")
                 elif uid != state["bot_uid"]:
                     # Am 30.10. brachte ein bot_add zwei Bots - jeder weitere fliegt.
@@ -607,7 +701,14 @@ class Director:
                 return self._idle_round(state)
             state["idle"] = 0
             if not skipped:
-                self._result(state, state.get("outcome") or "draw")
+                outcome = state.get("outcome") or "draw"
+                self._result(state, outcome)
+                self._record(state, outcome)
+                text, color = {"win": ("GEWONNEN", GREEN), "loss": ("VERLOREN", RED)}.get(
+                    outcome, ("UNENTSCHIEDEN", YELLOW))
+                self.send(hud(state["human_uid"], 3, _font(text, color, "xl") + "<br>"
+                              + _font(f"Stand {_score(state)}", GREY)))
+            state["tries"] = 0
             state["pos"] = state.get("pos", 0) + 1
             if state["pos"] >= len(state["queue"]):
                 self._stop(state, "Training fertig")
@@ -624,14 +725,20 @@ class Director:
         Runden in Folge pausiert das Training; nach PAUSE_TIMEOUT endet es.
         """
         state["idle"] = state.get("idle", 0) + 1
+        state["tries"] = state.get("tries", 0) + 1
+        uid = state.get("human_uid")
         if state["idle"] >= IDLE_ROUNDS and not state.get("paused"):
             stamp = time.time()
             state.update(paused=True, paused_at=stamp)
             self.send("mp_pause_match",
-                      _say(f"Pausiert - {IDLE_ROUNDS} Runden ohne Treffer. Weiter mit !weiter, Ende mit !stop."))
+                      hud(uid, PAUSE_TIMEOUT, _font("PAUSE", YELLOW, "xl") + "<br>"
+                          + _font(f"{IDLE_ROUNDS} Runden ohne Treffer", "#ffffff") + "<br>"
+                          + _font("!weiter &#183; !menu &#183; !stop", GREY, "s")),
+                      _say("Pausiert. Weiter mit !weiter, Menue mit !menu."))
             self.timer(PAUSE_TIMEOUT, lambda: self._check_paused(stamp))
         else:
-            self.send(_say("Kein Treffer - das Duell kommt noch einmal."))
+            self.send(hud(uid, 3, _font("KEIN TREFFER", YELLOW, "xl") + "<br>"
+                          + _font("Das Duell kommt noch einmal", "#ffffff")))
         return state
 
     def _check_paused(self, stamp: float) -> None:
@@ -698,10 +805,14 @@ class Director:
                  + [f"coach_path_start {bot} {PATH_HZ}"]) if len(path) >= 2 else [])
         how = "läuft den echten Weg" if walk else "Bot-KI"
         give = _give_commands(state["human_uid"], bot, pre)
+        info = hud(state["human_uid"], FREEZE_TIME + 3, "<br>".join([
+            _font(f"Duell {n}/{total} &#183; {html.escape(sc.source)}", PURPLE),
+            _font(f"Gegner mit {html.escape(weapon_label(sc.weapon))}", RED, "l"),
+            _font(f"kommt von {direction(me, foe)}", "#ffffff"),
+            _font(f"Stand {_score(state)} &#183; {_level_text(state)}", GREY, "s")]))
         replies = self.send(f"coach_tp {state['human_uid']} {_fmt(me)}",
-                            f"coach_tp {bot} {_fmt(foe)}", *walk, *give,
-                            _say(f"Duell {n}/{total} ({sc.source}): {sc.opponent} mit {sc.weapon} {how}, "
-                                 f"{when}, {_level_text(state)}"))
+                            f"coach_tp {bot} {_fmt(foe)}", *walk, *give, info,
+                            _say(f"Duell {n}/{total} ({sc.source}): {sc.opponent}, {when}, {how}"))
         if walk and "coach_path ok start" not in replies[1 + len(walk)]:
             failed_walk = replies[1 + len(walk)].strip() or "keine Antwort"
             if not state.get("walk_warned"):
@@ -737,6 +848,54 @@ class Director:
         # (die Map-Konfiguration setzt bot_quota_mode competitive).
         self.send(f'bot_loadout "{first.weapon}"', "bot_quota_mode normal",
                   f"bot_join_team {bot_team}", "bot_quota 1")
+
+
+def sessions_dir(config_path: Path) -> Path:
+    return Path(config_path).parent / SESSIONS_DIR
+
+
+def save_session(config_path: Path, state: dict, why: str) -> Path:
+    """Ein Training als JSON neben der Config ablegen (Grundlage fuer /training)."""
+    folder = sessions_dir(config_path)
+    folder.mkdir(exist_ok=True)
+    started = state.get("started") or datetime.now().isoformat(timespec="seconds")
+    path = folder / f"{started.replace(':', '-')}_{state.get('map', 'map')}.json"
+    path.write_text(json.dumps({
+        "map": state.get("map"), "started": started, "ended": datetime.now().isoformat(timespec="seconds"),
+        "why": why, "level_end": state.get("level"), "duels": state.get("duels", [])},
+        ensure_ascii=False, indent=1), encoding="utf-8")
+    return path
+
+
+def load_sessions(config_path: Path) -> list[dict]:
+    """Alle gespeicherten Trainings, neueste zuerst."""
+    out = []
+    for f in sorted(sessions_dir(config_path).glob("*.json"), reverse=True):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        duels = data.get("duels") or []
+        data["won"] = sum(1 for d in duels if d.get("outcome") == "win")
+        data["played"] = len(duels)
+        out.append(data)
+    return out
+
+
+def hardest(sessions: list[dict], limit: int = 8) -> list[dict]:
+    """Situationen, die du am oeftesten verloren hast (ueber alle Trainings)."""
+    agg: dict[tuple, dict] = {}
+    for s in sessions:
+        for d in s.get("duels", []):
+            key = (d.get("export"), d.get("round"), d.get("source"))
+            a = agg.setdefault(key, {**d, "map": s.get("map"), "lost": 0, "won": 0})
+            if d.get("outcome") == "loss":
+                a["lost"] += 1
+            elif d.get("outcome") == "win":
+                a["won"] += 1
+    rows = [a for a in agg.values() if a["lost"]]
+    rows.sort(key=lambda a: (-a["lost"], a["won"]))
+    return rows[:limit]
 
 
 def state_summary(config_path: Path) -> dict | None:

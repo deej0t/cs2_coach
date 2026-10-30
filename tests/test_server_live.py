@@ -39,7 +39,7 @@ def duel_lines(n_dj: int, n_da: int) -> list[str]:
 def test_parse_commands_from_chat():
     cmds = sl.parse_commands([line(1, f'{DJ} say "!top"'), line(2, f'{DA} say_team "!vs dj"'),
                               line(3, f'{DJ} say "gg"'), line(4, '"Bot<4><BOT><CT>" say "!top"')])
-    assert cmds == [(DJ64, "dj", "top", ""), (str(ss.STEAM64_BASE + 923059335), "Dancho", "vs", "dj")]
+    assert cmds == [(DJ64, "dj", "top", "", 2), (str(ss.STEAM64_BASE + 923059335), "Dancho", "vs", "dj", 3)]
 
 
 def test_names_cannot_inject_rcon_commands():

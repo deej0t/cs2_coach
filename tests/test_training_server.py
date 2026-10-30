@@ -22,6 +22,12 @@ STATUS_ALONE = """---------players--------
 #end"""
 STATUS_TWO = STATUS_ALONE.replace("#end", "   3    09:25   19    0     active 786432 213.55.218.192:19968 'Dancho'\n#end")
 
+def huds(server) -> list[str]:
+    """Inhalt aller Einblendungen (coach_hud <uid> <s> <base64>)."""
+    import base64
+    return [base64.b64decode(c.split()[3]).decode("utf-8") for c in server.sent if c.startswith("coach_hud ")]
+
+
 def line(msg: str) -> str:
     return f"10/30/2026 - 01:00:00.000 - {msg}"
 
@@ -62,6 +68,8 @@ class FakeServer:
                 out.append("coach_tp 1.0.0" if self.plugin else "Unknown command 'coach_tp_version'!")
             elif c.startswith("coach_tp "):
                 out.append(f"{self.tp_reply} {c.split()[1]}")
+            elif c.startswith("coach_menu"):
+                out.append("coach_menu ok 3" if self.plugin else "Unknown command 'coach_menu'!")
             elif c.startswith("coach_path_start"):
                 out.append(self.path_reply)
             elif c.startswith("coach_path"):
@@ -365,7 +373,9 @@ def test_round_start_uses_demo_positions(env):
     pitch, yaw = map(float, server.sent[0].split()[5:7])
     assert abs(yaw - 26.7) < 1 and abs(pitch) < 2
     assert server.sent[1] == "coach_tp 4 -199.6 -1922.5 -168.0 0.4 -152.1"
-    assert "3 s vor dem Duell" in server.sent[2]
+    assert any("3 s vor dem Duell" in c for c in server.sent)
+    shown = huds(server)
+    assert "Duell 1/2" in shown[0] and "Gegner mit M4A4" in shown[0] and "kommt von vorne" in shown[0]
 
 
 def test_weapon_names_from_demo():
@@ -408,7 +418,7 @@ def test_round_without_hit_repeats_duel_then_pauses(env):
     state = ts.load_state(path)
     assert state["pos"] == 0 and state["results"] == []  # nichts gezaehlt, gleiches Duell
     assert state["paused"] and "mp_pause_match" in server.sent
-    assert any("Kein Treffer" in c for c in server.sent)
+    assert any("KEIN TREFFER" in h for h in huds(server)) and any("PAUSE" in h for h in huds(server))
     assert timers[-1][0] == ts.PAUSE_TIMEOUT
 
     assert director().command(OWNER, "dj", "weiter", "") == ["Weiter geht's."]
@@ -482,3 +492,89 @@ def test_inventory_from_demo():
     pre = ts.pre_positions("demo.dem", OWNER, [17263], parser_factory=FakeParser)[17263]
     assert pre["me_items"] == ["weapon_mp9", "weapon_knife", "weapon_glock", "weapon_mp9", "weapon_hegrenade"]
     assert pre["foe_items"] == ["weapon_m4a1", "weapon_knife", "weapon_hkp2000", "weapon_m4a1"]
+
+
+def test_direction_relative_to_your_view():
+    me = [0, 0, 0, 0, 0]  # Blick nach +X
+    assert ts.direction(me, [1000, 0, 0]) == "vorne, 25 m"
+    assert ts.direction(me, [0, 1000, 0]).startswith("links,")  # Source: +Y liegt links
+    assert ts.direction(me, [0, -1000, 0]).startswith("rechts,")
+    assert ts.direction(me, [-1000, 10, 0]).startswith("hinten")
+    assert ts.direction(me, [700, 700, 0]).startswith("links vorne")
+
+
+def test_result_is_shown_big_and_duel_recorded(env):
+    _, path, server, _, director = env
+    ts.save_state(path, running_state())
+    director().on_lines([line('World triggered "Round_Start"'),
+                         line(f'{DJ} [0 0 0] killed {BOT} [1 1 1] with "ak47" (headshot)'),
+                         line('World triggered "Round_End"')])
+    assert any("GEWONNEN" in h and "Stand 1:0" in h for h in huds(server))
+    duel = ts.load_state(path)["duels"][0]
+    assert (duel["outcome"], duel["tries"], duel["opponent"], duel["round"]) == ("win", 1, "Pöpp Escobar", 3)
+    assert duel["export"].endswith("_coach.json")
+
+
+def test_menu_without_training_lists_maps(env):
+    _, path, server, _, director = env
+    assert director().command(OWNER, "dj", "training", "", 2) == []
+    import base64, json
+    m = json.loads(base64.b64decode(next(c for c in server.sent if c.startswith("coach_menu 2 ")).split()[2]))
+    assert m["items"][0] == ["Mirage (2 Duelle)", "!training mirage"] and m["items"][-1][1] == ""
+    assert not ts.is_active(path)
+
+
+def test_menu_during_training_offers_actions(env):
+    _, path, server, _, director = env
+    ts.save_state(path, running_state(paused=True))
+    director().command(OWNER, "dj", "menu", "", 2)
+    import base64, json
+    m = json.loads(base64.b64decode(next(c for c in server.sent if c.startswith("coach_menu 2 ")).split()[2]))
+    assert [i[1] for i in m["items"]] == ["!weiter", "!skip", "!leichter", "!schwerer", "!stop", ""]
+
+
+def test_menu_with_old_plugin_falls_back_to_commands(env):
+    _, _, server, _, director = env
+    server.plugin = False
+    assert "aktuelle Server-Plugin" in director().command(OWNER, "dj", "menu", "", 2)[0]
+
+
+def test_finished_training_is_saved_for_the_web_page(env):
+    cfg, path, server, _, director = env
+    cfg["public_url"] = "https://cs2-coach.deej0t.eu"
+    ts.save_state(path, running_state(queue=[0], started="2026-10-30T08:00:00"))
+    director().on_lines([line('World triggered "Round_Start"'),
+                         line(f'{BOT} [1 1 1] attacked {DJ} [0 0 0] with "m4a1" (damage "27") (damage_armor "3") '
+                              '(health "73") (armor "96") (hitgroup "chest")'),
+                         line(f'{DJ} [0 0 0] attacked {BOT} [1 1 1] with "ak47" (damage "27") (damage_armor "3") '
+                              '(health "73") (armor "96") (hitgroup "chest")'),
+                         line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "m4a1"'),
+                         line('World triggered "Round_End"')])
+    assert not ts.is_active(path)
+    sessions = ts.load_sessions(path)
+    assert len(sessions) == 1 and sessions[0]["played"] == 1 and sessions[0]["won"] == 0
+    assert any("cs2-coach.deej0t.eu/training" in c for c in server.sent)
+    assert any("TRAINING FERTIG" in h for h in huds(server))
+    hard = ts.hardest(sessions)
+    assert hard[0]["lost"] == 1 and hard[0]["opponent"] == "Pöpp Escobar"
+
+
+def test_training_page_renders_sessions(tmp_path, monkeypatch):
+    """Die Seite mit gespeichertem Training - der Smoke-Test sieht sie nur leer."""
+    import importlib
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("language: de\n", encoding="utf-8")
+    monkeypatch.setenv("CS2COACH_CONFIG", str(cfg))
+    import cs2_coach.web.app as app_module
+    try:
+        mod = importlib.reload(app_module)
+        ts.save_session(cfg, {"map": "de_mirage", "started": "2026-10-30T08:00:00", "level": 2, "duels": [
+            {"n": 1, "source": "27.10. R3", "opponent": "Pöpp Escobar", "weapon": "m4a1", "outcome": "loss",
+             "tries": 2, "export": "2026-10-27_mirage_13-8_2049_coach.json", "round": 3}]}, "Training fertig")
+        client = mod.create_app().test_client()
+        page = client.get("/training").get_data(as_text=True)
+        assert "0 von 1 gewonnen" in page and "Pöpp Escobar" in page and "M4A4" in page
+        assert "/export/2026-10-27_mirage_13-8_2049_coach.json" in page
+    finally:
+        monkeypatch.delenv("CS2COACH_CONFIG")
+        importlib.reload(app_module)
