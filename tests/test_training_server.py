@@ -122,7 +122,8 @@ def test_full_flow(env):
     director().on_lines([line(f'"dj<2><[U:1:58996800]>" switched from team <Unassigned> to <TERRORIST>')])
     run_timers(timers)
     assert ts.load_state(path)["human_pawn"] == 385
-    assert 'bot_loadout "m4a1"' in server.sent and "bot_add_ct" in server.sent
+    assert 'bot_loadout "m4a1"' in server.sent and "bot_join_team ct" in server.sent
+    assert server.sent[-1] == "bot_quota 1"
 
     server.pawns = ENT_BOTH
     director().on_lines([line('"K<4><BOT>" switched from team <Unassigned> to <CT>')])
@@ -260,3 +261,37 @@ def test_check_loaded_survives_dead_rcon(tmp_path):
     ts.save_state(d.path, {"phase": "loading", "map": "de_mirage", "t0": 0})
     d._check_loaded()
     assert not ts.is_active(d.path)
+
+
+def test_team_chosen_before_setup_is_remembered(env):
+    """30.10.: dj trat T bei, 2 s bevor das Setup lief - der Ablauf hing danach in "team"."""
+    _, path, server, timers, director = env
+    director().command(OWNER, "dj", "training", "mirage")
+    timers.clear()  # Lade-Zeitlimit
+    director().on_lines([line('Loading map "de_mirage"'),
+                         line('"dj<0><[U:1:58996800]>" switched from team <Unassigned> to <TERRORIST>')])
+    run_timers(timers)  # _setup -> erkennt Team -> _identify_human
+    state = ts.load_state(path)
+    assert (state["phase"], state["human_pawn"]) == ("identify_bot", 385)
+    assert any("Team T erkannt" in c for c in server.sent)
+
+
+def test_two_bots_trigger_one_retry_then_abort(env):
+    _, path, server, timers, director = env
+    ts.save_state(path, {"phase": "identify_bot", "map": "de_mirage", "human": OWNER, "queue": [0],
+                         "pos": 0, "results": [], "level": [1, 1], "human_pawn": 385, "team": "TERRORIST"})
+    server.pawns = ENT_BOTH + "\n   'player' : '' (entindex 390) "
+    director()._identify_bot()
+    assert ts.load_state(path)["bot_retry"] and server.sent[-3:] == ["bot_kick", "bot_quota_mode normal", "bot_quota 1"]
+    director()._identify_bot()
+    assert not ts.is_active(path)
+    assert any("2 Bot-Figuren" in c for c in server.sent)
+
+
+def test_retry_with_one_bot_succeeds(env):
+    _, path, server, timers, director = env
+    ts.save_state(path, {"phase": "identify_bot", "map": "de_mirage", "human": OWNER, "queue": [0],
+                         "pos": 0, "results": [], "level": [1, 1], "human_pawn": 385, "bot_retry": True})
+    server.pawns = ENT_BOTH
+    director()._identify_bot()
+    assert ts.load_state(path)["bot_pawn"] == 387

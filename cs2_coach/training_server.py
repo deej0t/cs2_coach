@@ -349,10 +349,14 @@ class Director:
             state["phase"] = "setup"
             self.timer(SETUP_WAIT, self._setup)
             return state
-        if phase in ("team", "identify_bot") and (m := _TEAM.match(msg)):
+        if phase in ("setup", "team", "identify_bot") and (m := _TEAM.match(msg)):
             sid = ss.steam64(m.group("asid"))
             to = m.group("to")
-            if sid == state["human"] and to in ("TERRORIST", "CT") and phase == "team":
+            if sid == state["human"] and to in ("TERRORIST", "CT") and phase == "setup":
+                # Gemessen 30.10.: Team gewaehlt 2 s bevor das Setup lief - merken,
+                # _setup macht dann direkt weiter, statt auf einen zweiten Wechsel zu warten.
+                state["team"] = to
+            elif sid == state["human"] and to in ("TERRORIST", "CT") and phase == "team":
                 state.update(phase="identify_human", team=to)
                 self.timer(IDENTIFY_WAIT, self._identify_human)
             elif m.group("asid") == "BOT" and state["phase"] == "identify_bot":
@@ -442,10 +446,14 @@ class Director:
             state = load_state(self.path)
             if state.get("phase") != "setup":
                 return
-            state["phase"] = "team"
+            team = state.get("team")
+            state["phase"] = "identify_human" if team else "team"
             save_state(self.path, state)
-            self.send(*SETUP, f"bot_difficulty {state['level'][0]}",
-                      _say("Wähle ein Team (T oder CT) - der Bot kommt auf die andere Seite."))
+            hint = (f"Team {'T' if team == 'TERRORIST' else 'CT'} erkannt, Bot kommt gleich." if team
+                    else "Wähle ein Team (T oder CT) - der Bot kommt auf die andere Seite.")
+            self.send(*SETUP, f"bot_difficulty {state['level'][0]}", _say(hint))
+        if team:
+            self.timer(IDENTIFY_WAIT, self._identify_human)
 
     def _identify_human(self) -> None:
         with _Lock(self.path):
@@ -460,7 +468,10 @@ class Director:
             save_state(self.path, state)
             bot_team = "ct" if state["team"] == "TERRORIST" else "t"
             first = self.scenarios()[state["map"]][state["queue"][0]]
-            self.send(f'bot_loadout "{first.weapon}"', f"bot_add_{bot_team}")
+            # bot_quota statt bot_add: am 30.10. brachte ein "bot_add_ct" zwei Bots
+            # (die Map-Konfiguration setzt bot_quota_mode competitive).
+            self.send(f'bot_loadout "{first.weapon}"', "bot_quota_mode normal",
+                      f"bot_join_team {bot_team}", "bot_quota 1")
 
     def _identify_bot(self) -> None:
         with _Lock(self.path):
@@ -469,6 +480,13 @@ class Director:
                 return
             pawns = _pawns(self.send("ent_find player")[0]) - {state["human_pawn"]}
             if len(pawns) != 1:
+                if not state.get("bot_retry"):
+                    # Einmal neu: alle Bots raus, genau einer wieder rein. Sein
+                    # Teambeitritt loest _identify_bot erneut aus.
+                    state["bot_retry"] = True
+                    save_state(self.path, state)
+                    self.send("bot_kick", "bot_quota_mode normal", "bot_quota 1")
+                    return
                 self._stop(state, f"Abbruch: {len(pawns)} Bot-Figuren statt einer gefunden")
                 return
             state.update(phase="running", bot_pawn=pawns.pop(), round=0, pos=0)
