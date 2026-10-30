@@ -45,7 +45,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.6.0";
+    public override string ModuleVersion => "1.6.1";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -150,17 +150,16 @@ public class CoachTeleport : BasePlugin
 
     // Einblendung und Menue teilen sich die Bildschirmmitte; das Menue hat Vorrang.
     //
-    // Nur senden, wenn sich der Inhalt aendert: jedes PrintToCenterHtml baut die
-    // Einblendung neu auf. Bis 1.4.0 wurde viermal pro Sekunde neu gesendet - die
-    // Anzeige "blinkt zu sehr, dass man kaum was lesen kann" (30.10.2026).
-    // Jetzt einmal mit der vollen Anzeigedauer; Menues werden nur kurz vor Ablauf
-    // ihrer MenuSeconds aufgefrischt.
+    // JEDEN Tick senden - genau wie CounterStrikeSharps eigenes CenterHtmlMenu
+    // (OnTick -> Display -> PrintToCenterHtml). Zwei Fehlversuche am 30.10.2026:
+    // viermal pro Sekunde (1.3.0/1.4.0) "blinkt zu sehr, dass man kaum was lesen
+    // kann"; einmal mit langer Dauer (1.4.1-1.6.0) "wird nur sehr kurz angezeigt" -
+    // CS2 haelt die Einblendung nicht ueber die angegebene Dauer.
     private readonly Dictionary<int, (string Html, int UntilTick)> _shown = new();
-    private const int MenuSeconds = 120;
 
     private void DrawCenter()
     {
-        if (Server.TickCount % 32 != 0 || (_huds.Count == 0 && _menus.Count == 0 && _shown.Count == 0)) return;
+        if (_huds.Count == 0 && _menus.Count == 0 && _shown.Count == 0) return;
         foreach (var userid in _huds.Keys.Concat(_menus.Keys).Concat(_shown.Keys).Distinct().ToList())
             Refresh(userid);
     }
@@ -179,42 +178,24 @@ public class CoachTeleport : BasePlugin
         if (_huds.TryGetValue(userid, out var expired) && now > expired.UntilTick) _huds.Remove(userid);
 
         string? html = null;
-        var until = 0;
-        var isMenu = _menus.TryGetValue(userid, out var menu);
-        if (isMenu)
-        {
-            html = RenderMenu(menu!);
-            until = now + MenuSeconds * 64;
-        }
-        else if (_huds.TryGetValue(userid, out var hud))
-        {
-            html = hud.Html;
-            until = hud.UntilTick;
-        }
+        if (_menus.TryGetValue(userid, out var menu)) html = RenderMenu(menu);
+        else if (_huds.TryGetValue(userid, out var hud)) html = hud.Html;
 
-        var hasShown = _shown.TryGetValue(userid, out var shown);
         if (html is null)
         {
-            // Nichts mehr anzuzeigen, aber etwas Langes steht noch (z. B. PAUSE): sofort weg.
-            if (hasShown && shown.UntilTick > now) TryCenter(player, " ", 1);
+            // Nichts mehr anzuzeigen: einmal leeren, damit nichts nachhaengt.
+            if (_shown.ContainsKey(userid)) TryCenter(player, " ", 1);
             _shown.Remove(userid);
             return;
         }
-        // Auch derselbe Text muss neu raus, wenn der alte schon abgelaufen ist (zweimal
-        // hintereinander "KEIN TREFFER") oder der neue deutlich laenger stehen soll.
-        var changed = !hasShown || shown.Html != html || shown.UntilTick <= now
-                      || (!isMenu && until > shown.UntilTick + 64);
-        var menuExpiring = isMenu && shown.UntilTick - now < 2 * 64;
-        if (!changed && !menuExpiring) return;
-        var seconds = Math.Max(1, (int)Math.Ceiling((until - now) / 64f));
-        if (!TryCenter(player, html, seconds))
+        if (!TryCenter(player, html, 1))
         {
             _huds.Remove(userid);
             _menus.Remove(userid);
             _shown.Remove(userid);
             return;
         }
-        _shown[userid] = (html, now + seconds * 64);
+        _shown[userid] = (html, now + 64);
     }
 
     // PrintToCenterHtml wirft "Could not get player event listener" fuer Bots und

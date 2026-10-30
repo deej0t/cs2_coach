@@ -103,7 +103,7 @@ def test_scenarios_only_gun_duels_at_distance(tmp_path):
 
 
 def test_maps_outside_pool_are_ignored(tmp_path):
-    export(tmp_path, "Cache")
+    export(tmp_path, "Vertigo")
     assert ts.build_scenarios(tmp_path / "vault" / "CS2-Coach" / "exports") == {}
 
 
@@ -124,7 +124,7 @@ def test_start_refused_while_others_play(env):
 def test_lists_maps_and_rejects_pool_outsiders(env):
     _, _, _, _, director = env
     assert director().command(OWNER, "dj", "training", "")[0].startswith("Maps mit Situationen: mirage (2)")
-    assert "nicht im Trainings-Pool" in director().command(OWNER, "dj", "training", "cache")[0]
+    assert "nicht im Trainings-Pool" in director().command(OWNER, "dj", "training", "vertigo")[0]
 
 
 def test_full_flow(env, monkeypatch):
@@ -633,3 +633,9 @@ def test_disconnect_still_restores_immediately(env):
     ts.save_state(path, running_state(round=1))
     director().on_lines([line('"dj<2><[U:1:58996800]><TERRORIST>" disconnected (reason "Disconnect")')])
     assert "sv_cheats 0" in server.sent and not timers
+
+
+def test_cache_is_in_the_pool(tmp_path):
+    """Auf Wunsch des Spielers ("die Map Cache fehlt")."""
+    export(tmp_path, "Cache")
+    assert "de_cache" in ts.build_scenarios(tmp_path / "vault" / "CS2-Coach" / "exports")

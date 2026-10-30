@@ -48,7 +48,8 @@ from pathlib import Path
 from . import server_stats as ss
 from .practice import _calc_view_angle, _map_to_bspname
 
-DEFAULT_MAPS = ["de_ancient", "de_anubis", "de_dust2", "de_inferno", "de_mirage", "de_nuke",
+# Cache auf Wunsch des Spielers dabei ("die Map Cache fehlt"); er spielt sie oft (20 Matches).
+DEFAULT_MAPS = ["de_ancient", "de_anubis", "de_cache", "de_dust2", "de_inferno", "de_mirage", "de_nuke",
                 "de_overpass", "de_train"]
 STATE_FILE = ".training_server.json"
 LOCK_FILE = ".training_server.lock"
