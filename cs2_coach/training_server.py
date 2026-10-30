@@ -86,6 +86,9 @@ NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade",
 
 COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop", "pause", "weiter", "menu", "menue"}
 SESSIONS_DIR = "training_sessions"
+ITEMS_FILE = ".training_items.json"  # Szenarien mit mehreren Gegnern (bis ~1 MB, nicht in den Zustand)
+MODE_ALIASES = {"duell": "duell", "duel": "duell", "situation": "situation", "multi": "situation",
+                "retake": "retake", "halten": "halten", "hold": "halten", "site": "halten"}
 GREEN, RED, YELLOW, PURPLE, GREY = "#4ade80", "#f87171", "#fbbf24", "#9184d9", "#aaaaaa"
 IDLE_ROUNDS = 2  # so viele Runden ohne Treffer in Folge = pausieren
 PAUSE_TIMEOUT = 900  # Sekunden pausiert, dann endet das Training
@@ -507,6 +510,8 @@ class Director:
             return ["Das Training kann nur der Server-Besitzer starten."]
         if cmd in ("menu", "menue") or (cmd in ("training", "train") and not arg and uid is not None):
             return self._open_menu(uid)
+        if cmd in ("training", "train") and arg.lower().split()[-1:] == ["menu"] and uid is not None:
+            return self._open_menu(uid, arg.lower().split()[0])
         if cmd in ("training", "train"):
             # Ohne Sperre: das Auslesen der Demos dauert einige Sekunden, solange
             # duerfen Log-Stapel nicht an der Sperre haengen. _start sperrt erst
@@ -551,11 +556,16 @@ class Director:
         all_sc = self.scenarios()
         if not arg:
             avail = ", ".join(f"{m.removeprefix('de_')} ({len(v)})" for m, v in sorted(all_sc.items()))
-            return [f"Maps mit Situationen: {avail or 'keine'}. Start: !training <map>"]
-        bsp = arg.lower().strip()
-        bsp = bsp if bsp.startswith("de_") else f"de_{bsp}"
+            return [f"Maps mit Situationen: {avail or 'keine'}. Start: !training <map> [situation|retake|halten]"]
+        parts = arg.lower().split()
+        bsp = parts[0] if parts[0].startswith("de_") else f"de_{parts[0]}"
+        mode = MODE_ALIASES.get(parts[1], "") if len(parts) > 1 else "duell"
+        if not mode:
+            return [f"Unbekannter Modus '{parts[1]}'. Moeglich: duell, situation, retake, halten."]
         if bsp not in self.maps():
             return [f"{bsp} ist nicht im Trainings-Pool ({', '.join(m.removeprefix('de_') for m in self.maps())})."]
+        if mode != "duell":
+            return self._start_multi(sid, name, bsp, mode)
         if not all_sc.get(bsp):
             return [f"Keine verlorenen Duelle auf {bsp} in deinen Matches."]
         if is_active(self.path):
@@ -592,6 +602,50 @@ class Director:
         self.send(_say(f"{n} Duelle aus deinen Matches{late}. Map wird geladen..."),
                   "sv_hibernate_when_empty 0", f"map {bsp}")
         return []
+
+    def _preflight(self, name: str) -> list[str]:
+        """Plugin geladen, kein anderer Mensch, kein Training aktiv? Leere Liste = los."""
+        if is_active(self.path):
+            return ["Es läuft schon ein Training. Erst !stop."]
+        version = self.send("coach_tp_version")[0]
+        if not version.strip().startswith("coach_tp "):
+            return ["Trainings-Plugin nicht geladen (nach einem CS2-Update?). Training gerade nicht möglich."]
+        others = [h for h in _humans(self.send("status")[0]) if h != name]
+        if others:
+            return [f"Erst wenn der Server leer ist - gerade online: {', '.join(others)}."]
+        return []
+
+    def _start_multi(self, sid: str, name: str, bsp: str, mode: str) -> list[str]:
+        """Situation, Retake oder Site halten: mehrere Gegner, alle mit ihrem echten Weg."""
+        from .training_scenarios import MODES, collect
+        problem = self._preflight(name)
+        if problem:
+            return problem
+        self.send(_say(f"{MODES[mode]} auf {bsp}: suche Situationen in deinen Demos "
+                       "(beim ersten Mal bis zu 1-2 Minuten)..."))
+        items = collect(self.cfg, self.path, bsp, mode, limit=MAX_SCENARIOS)
+        if not items:
+            return [f"Keine {MODES[mode]}-Situationen auf {bsp} in deinen Demos gefunden."]
+        (self.path.parent / ITEMS_FILE).write_text(json.dumps(items), encoding="utf-8")
+        need = max(len(it["enemies"]) for it in items)
+        with _Lock(self.path):
+            if is_active(self.path):
+                return ["Es läuft schon ein Training. Erst !stop."]
+            save_state(self.path, {
+                "phase": "loading", "map": bsp, "mode": mode, "human": sid, "name": name,
+                "queue": list(range(len(items))), "bot_need": need, "pos": 0, "results": [],
+                "level": START_LEVEL, "round": 0, "started": datetime.now().isoformat(timespec="seconds"),
+                "t0": time.time()})
+        self.timer(LOAD_TIMEOUT, self._check_loaded)
+        self.send(_say(f"{len(items)} {MODES[mode]}-Situationen, bis zu {need} Gegner. Map wird geladen..."),
+                  "sv_hibernate_when_empty 0", f"map {bsp}")
+        return []
+
+    def _items(self) -> list[dict]:
+        try:
+            return json.loads((self.path.parent / ITEMS_FILE).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
 
     def _check_loaded(self) -> None:
         """Map nach LOAD_TIMEOUT nicht geladen: Training verwerfen.
@@ -661,7 +715,7 @@ class Director:
             print(f"[training] Fazit fehlgeschlagen: {e}", flush=True)
             text = None
         if text:
-            tell(self.send, uid, f"Fazit: {text}")
+            tell(self.send, uid, f"Fazit: {text}", max_lines=6)
 
     def _record(self, state: dict, outcome: str, tip: str | None = None) -> None:
         """Gezaehltes Duell fuer die Auswertung und fuer !tipp merken."""
@@ -677,13 +731,19 @@ class Director:
         save_last_duel(self.path, {**duel, "map": state.get("map"), "weapon": weapon_label(sc.weapon),
                                    "direction": state.get("direction", "?")})
 
-    def _open_menu(self, uid) -> list[str]:
-        """W/S + E im Spiel statt Befehle tippen (Plugin 1.3.0)."""
+    def _open_menu(self, uid, bsp: str | None = None) -> list[str]:
+        """W/S + E im Spiel statt Befehle tippen (Plugin 1.3.0). Erst Map, dann Modus."""
+        from .training_scenarios import MODE_HELP, MODES
         state = load_state(self.path)
-        if not state:
-            items = [[f"{m.removeprefix('de_').capitalize()} ({len(v)} Duelle)", f"!training {m.removeprefix('de_')}"]
+        if not state and bsp:
+            short = bsp.removeprefix("de_")
+            items = [[f"{MODES[m]} ({MODE_HELP[m]})", f"!training {short} {m}"] for m in MODES]
+            items.append(["Zurueck", "!training"])
+            title = f"{short.capitalize()}: was trainieren?"
+        elif not state:
+            items = [[f"{m.removeprefix('de_').capitalize()} ({len(v)} Duelle)", f"!training {m.removeprefix('de_')} menu"]
                      for m, v in sorted(self.scenarios().items())] + [["Schliessen", ""]]
-            title = "Duell-Training: Map waehlen"
+            title = "Training: Map waehlen"
         else:
             items = [["Weiter", "!weiter"] if state.get("paused") else ["Pause", "!pause"],
                      ["Duell ueberspringen", "!skip"], ["Leichter", "!leichter"], ["Schwerer", "!schwerer"],
@@ -730,12 +790,18 @@ class Director:
                 if phase == "team":
                     self._add_bot(state)
             elif m.group("asid") == "BOT" and phase in ("bot", "running"):
-                if state.get("bot_uid") is None:
-                    state.update(bot_uid=uid, phase="running", round=0, pos=0)
-                    self.send(_say("Los geht's. Alles Weitere im Menue: !menu (W/S waehlen, E bestaetigen)."),
-                              "mp_warmup_end")
-                elif uid != state["bot_uid"]:
-                    # Am 30.10. brachte ein bot_add zwei Bots - jeder weitere fliegt.
+                bots = state.setdefault("bot_uids", [])
+                need = state.get("bot_need", 1)
+                if uid in bots:
+                    pass
+                elif len(bots) < need:
+                    bots.append(uid)
+                    if len(bots) == need and phase == "bot":
+                        state.update(bot_uid=bots[0], phase="running", round=0, pos=0)
+                        self.send(_say("Los geht's. Alles Weitere im Menue: !menu (W/S waehlen, E bestaetigen)."),
+                                  "mp_warmup_end")
+                else:
+                    # Am 30.10. brachte ein bot_add zwei Bots - jeder ueberzaehlige fliegt.
                     self.send(f"kickid {uid}")
             return state
         if phase in ("team", "bot", "running") and (m := ss._LEAVE.match(msg)) \
@@ -762,10 +828,20 @@ class Director:
         if (m := ss._KILL.match(msg)) and not state.get("outcome"):
             killer = ss.steam64(m.group("asid"))
             victim = ss.steam64(m.group("vsid"))
-            if killer == state["human"] and m.group("vsid") == "BOT":
-                state.update(outcome="win", active=True)
-            elif victim == state["human"]:
+            if killer == state["human"]:
+                state["active"] = True
+            if victim == state["human"]:
                 state["outcome"] = "loss"
+            elif m.group("vsid") == "BOT":
+                rnd = state.setdefault("rnd", {})
+                active = rnd.get("active_bots")
+                if active is None:  # Duell: ein Bot
+                    if killer == state["human"]:
+                        state["outcome"] = "win"
+                elif int(m.group("vuid")) in active:
+                    rnd["bots_dead"] = rnd.get("bots_dead", 0) + 1
+                    if rnd["bots_dead"] >= len(active):
+                        state["outcome"] = "win"
             return state
         if msg.startswith('World triggered "Round_End"'):
             if not state.get("round"):
@@ -863,7 +939,14 @@ class Director:
             state["window"] = window[-4:]
 
     def _scenario(self, state: dict) -> Scenario:
-        return self.scenarios()[state["map"]][state["queue"][state["pos"]]]
+        if state.get("mode", "duell") == "duell":
+            return self.scenarios()[state["map"]][state["queue"][state["pos"]]]
+        item = self._items()[state["queue"][state["pos"]]]
+        me, foe = item["me"], item["enemies"][0]
+        weapon = next((x for x in foe["items"] if x and x not in GRENADES and x != "weapon_knife"), "")
+        return Scenario(state["map"], me[0], me[1], me[2], foe["start"][0], foe["start"][1], foe["start"][2],
+                        weapon.removeprefix("weapon_"), f"{len(item['enemies'])} Gegner", item.get("source", ""),
+                        int(item.get("tick", 0)), "", item.get("export", ""), int(item.get("round", 0)))
 
     def _round_start(self, state: dict) -> dict:
         """Beide an ihre Positionen LEAD_SECONDS vor deinem Tod (aus der Demo), mit Blickrichtung.
@@ -873,6 +956,8 @@ class Director:
         """
         state["round"] = state.get("round", 0) + 1
         state.update(outcome=None, active=False, rnd={})
+        if state.get("mode", "duell") != "duell":
+            return self._round_start_multi(state)
         sc = self._scenario(state)
         pre = state.get("pre", {}).get(str(state["queue"][state["pos"]]))
         if pre:
@@ -917,6 +1002,59 @@ class Director:
             self.send(_say(f"Versetzen fehlgeschlagen: {failed[0][:60] or 'keine Antwort'}"))
         return state
 
+    def _round_start_multi(self, state: dict) -> dict:
+        """Alle Gegner der Situation an ihren Startpunkt, jeder mit seinem echten Weg."""
+        from .training_scenarios import MODES
+        items = self._items()
+        item = items[state["queue"][state["pos"]]]
+        enemies = item["enemies"]
+        human = state["human_uid"]
+        me = list(item["me"])
+        focus = enemies[0]
+        target = (focus["path"] or [focus["start"]])[-1]
+        me[3], me[4] = _calc_view_angle(me[0], me[1], me[2] + 64, target[0], target[1], target[2] + 64)
+        cmds = [f"coach_tp {human} {_fmt(me)}"]
+        mine = item.get("me_items") or []
+        if len(mine) > 1:
+            active_weapon = mine[0] or next((x for x in mine[1:] if x not in GRENADES and x != "weapon_knife"), "")
+            cmds.append(f"coach_give {human} {active_weapon or 'weapon_knife'} " + " ".join(mine[1:]))
+        active = []
+        for i, uid in enumerate(state.get("bot_uids", [])):
+            if i >= len(enemies):
+                cmds.append(f"coach_slay {uid}")  # dieses Szenario hat weniger Gegner
+                continue
+            e = enemies[i]
+            active.append(uid)
+            cmds.append(f"coach_tp {uid} {_fmt(e['start'])}")
+            if len(e["path"]) >= 2:
+                cmds += ([f"coach_path_clear {uid}"]
+                         + [f"coach_path_add {uid} " + " ".join(_fmt(pt) for pt in e["path"][j:j + PATH_CHUNK])
+                            for j in range(0, len(e["path"]), PATH_CHUNK)]
+                         + [f"coach_path_start {uid} {PATH_HZ}"])
+            guns = [x for x in e["items"][1:] if x and x not in GRENADES and x != "weapon_knife"]
+            if guns:
+                cmds.append(f"coach_give {uid} {e['items'][0] if e['items'][0] in guns else guns[-1]} "
+                            + " ".join(guns))
+        state["rnd"]["active_bots"] = active
+        nearest = min(enemies[:len(active)] or enemies, key=lambda e: math.dist(me[:2], e["start"][:2]))
+        state["direction"] = direction(me, nearest["start"])
+        n, total = state["pos"] + 1, len(state["queue"])
+        weapons = ", ".join(weapon_label(next((x for x in e["items"] if x and x not in GRENADES
+                                               and x != "weapon_knife"), "?")) for e in enemies[:len(active)])
+        cmds.append(hud(human, FREEZE_TIME + 4, "<br>".join([
+            _font(f"{MODES[state['mode']]} {n}/{total} &#183; {html.escape(item.get('source', ''))}", PURPLE),
+            _font(f"{len(active)} Gegner: {html.escape(weapons)}", RED, "l"),
+            _font(f"naechster kommt von {state['direction']}", "#ffffff"),
+            _font(f"Stand {_score(state)} &#183; {_level_text(state)}", GREY, "s")])))
+        cmds.append(_say(f"{MODES[state['mode']]} {n}/{total} ({item.get('source', '')}): {len(active)} Gegner, "
+                         "jeder laeuft seinen echten Weg, bis er dich sieht"))
+        replies = self.send(*cmds)
+        failed = [r.strip() for c, r in zip(cmds, replies) if c.startswith("coach_tp ") and "coach_tp ok" not in r]
+        if failed and not state.get("tp_warned"):
+            state["tp_warned"] = True
+            self.send(_say(f"Versetzen fehlgeschlagen: {failed[0][:60] or 'keine Antwort'}"))
+        return state
+
     def _setup(self) -> None:
         with _Lock(self.path):
             state = load_state(self.path)
@@ -936,11 +1074,13 @@ class Director:
         """Genau einen Bot ins Gegnerteam holen; sein Teambeitritt startet das Training."""
         state["phase"] = "bot"
         bot_team = "ct" if state["team"] == "TERRORIST" else "t"
-        first = self.scenarios()[state["map"]][state["queue"][0]]
+        need = state.get("bot_need", 1)
+        loadout = []
+        if state.get("mode", "duell") == "duell":
+            loadout = [f'bot_loadout "{self.scenarios()[state["map"]][state["queue"][0]].weapon}"']
         # bot_quota statt bot_add: am 30.10. brachte ein "bot_add_ct" zwei Bots
         # (die Map-Konfiguration setzt bot_quota_mode competitive).
-        self.send(f'bot_loadout "{first.weapon}"', "bot_quota_mode normal",
-                  f"bot_join_team {bot_team}", "bot_quota 1")
+        self.send(*loadout, "bot_quota_mode normal", f"bot_join_team {bot_team}", f"bot_quota {need}")
 
 
 def sessions_dir(config_path: Path) -> Path:

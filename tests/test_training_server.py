@@ -533,7 +533,7 @@ def test_menu_without_training_lists_maps(env):
     assert director().command(OWNER, "dj", "training", "", 2) == []
     import base64, json
     m = json.loads(base64.b64decode(next(c for c in server.sent if c.startswith("coach_menu 2 ")).split()[2]))
-    assert m["items"][0] == ["Mirage (2 Duelle)", "!training mirage"] and m["items"][-1][1] == ""
+    assert m["items"][0] == ["Mirage (2 Duelle)", "!training mirage menu"] and m["items"][-1][1] == ""
     assert not ts.is_active(path)
 
 

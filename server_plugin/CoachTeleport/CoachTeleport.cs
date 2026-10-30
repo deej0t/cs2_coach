@@ -45,7 +45,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.5.0";
+    public override string ModuleVersion => "1.6.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -479,6 +479,21 @@ public class CoachTeleport : BasePlugin
                 player.PrintToChat($" {ChatColors.Purple}[Coach]{ChatColors.Default} {line}");
         }
         info.ReplyToCommand("coach_chat ok");
+    }
+
+    [ConsoleCommand("coach_slay", "Bot aus der Runde nehmen (Szenario mit weniger Gegnern): <userid>")]
+    [CommandHelper(minArgs: 1, usage: "<userid>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnSlay(CCSPlayerController? caller, CommandInfo info)
+    {
+        var player = int.TryParse(info.GetArg(1), out var userid) ? Utilities.GetPlayerFromUserid(userid) : null;
+        var pawn = player?.PlayerPawn.Value;
+        if (player is null || !player.IsValid || pawn is null || !pawn.IsValid)
+        {
+            info.ReplyToCommand("coach_slay: kein Spieler");
+            return;
+        }
+        if (pawn.LifeState == (byte)LifeState_t.LIFE_ALIVE) pawn.CommitSuicide(false, true);
+        info.ReplyToCommand($"coach_slay ok {userid}");
     }
 
     [ConsoleCommand("coach_tp_version", "Version des Coach-Plugins (Coach prueft damit, ob es geladen ist)")]
