@@ -71,3 +71,6 @@ server_logs/
 CS2-Coach/Briefings/
 .training_server.json
 .training_server.lock
+server_plugin/**/bin/
+server_plugin/**/obj/
+server_plugin/**/out/

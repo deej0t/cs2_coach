@@ -8,18 +8,22 @@ laesst ihn nach einer Startverzoegerung los. Die Bot-KI pusht dann selbst.
 Gesteuert wird per Chat (nur der Besitzer, ``steam_id`` in der Config):
 ``!training <map>``, ``!skip``, ``!leichter``, ``!schwerer``, ``!stop``.
 Der Regisseur reagiert auf das Server-Log (server_live.on_batch) und
-antwortet per RCON - ohne Server-Plugin.
+steuert per RCON; nur das Versetzen braucht das eigene Plugin.
 
-Gemessen am 30.10.2026 auf de_mirage (Server 1.41.9.3), das bestimmt den Aufbau:
-- ``setpos_player`` tut bei Bots nichts, weder mit Nummer noch mit Namen.
-  ``ent_setpos <entindex>`` auf die Spielfigur (Klasse ``player``) wirkt.
-  Die Entity-Nummern bleiben ueber Runden und Tode gleich; sie werden
-  einmal zugeordnet: erst nur du auf dem Server, dann kommt der Bot dazu.
+Versetzt wird ueber das eigene Server-Plugin ``coach_tp`` (server_plugin/,
+Metamod + CounterStrikeSharp): ``coach_tp <userid> x y z pitch yaw``. Am
+30.10.2026 gemessen bewegt kein Konsolenbefehl einen echten Spieler - mit
+``ent_setpos`` stand dj im Training weiter am T-Spawn; Bots liessen sich nur
+eingefroren versetzen, und die Zuordnung Entity <-> Spieler war fehleranfaellig.
+Die userids stehen ohnehin im Log (``dj<0>``, ``Orlow<3><BOT>``).
+
+Weitere Messungen vom 30.10., die den Ablauf bestimmen:
 - ``bot_loadout m4a1`` gibt Bots die Waffe zum naechsten Rundenstart.
 - Eingefrorene Bots (``bot_freeze 1``) schiessen nicht - die
   Startverzoegerung ist darum ein echter Vorsprung fuer dich.
 - Ein Mapwechsel setzt ``sv_hibernate_when_empty`` zurueck; im Ruhemodus
   laeuft keine Spiellogik.
+- Ein ``bot_add_ct`` brachte zwei Bots; jeder weitere wird gekickt.
 
 Nur Maps aus ``training_maps`` (Premier/FACEIT-Pool). Die Exporte sagen
 nicht, ob ein Match Premier war - darum eine feste Liste.
@@ -48,7 +52,6 @@ MIN_DISTANCE = 150  # naeher = Messer/Nahkampf-Zufall, kein Duell
 FREEZE_TIME = 3
 DELAYS = [3.0, 2.0, 1.0, 0.5, 0.0]  # Startverzoegerung des Bots nach der Freeze-Time
 START_LEVEL = (1, 1)  # (bot_difficulty, Index in DELAYS)
-IDENTIFY_WAIT = 1.5  # Sekunden nach Teambeitritt, bis die Spielfigur existiert
 NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade", "flashbang",
             "smokegrenade", "decoy", "world", "taser", "planted_c4")
 
@@ -67,7 +70,6 @@ RESTORE = ["bot_kick", "bot_quota 0", "bot_freeze 0", 'bot_loadout ""', "mp_warm
            'mp_t_default_primary ""', 'mp_ct_default_primary ""', "sv_cheats 0",
            "sv_hibernate_when_empty 1"]
 
-_ENT = re.compile(r"'player' : '[^']*' \(entindex (\d+)\)")
 # Teamwechsel-Zeilen haben ein Feld weniger als Kill-Zeilen (gemessen):
 # "K<4><BOT>" switched from team <Unassigned> to <CT>
 _TEAM = re.compile(r'^"(?P<aname>.*?)<(?P<auid>-?\d+)><(?P<asid>[^>]*)>" switched from team <[^>]*> to <(?P<to>[^>]+)>')
@@ -187,10 +189,6 @@ def _humans(status: str) -> list[str]:
     return out
 
 
-def _pawns(ent_find: str) -> set[int]:
-    return {int(n) for n in _ENT.findall(ent_find)}
-
-
 def _level_text(state: dict) -> str:
     diff, d = state["level"]
     return f"Bot-Stufe {diff}/3, Start nach {DELAYS[d]:g} s"
@@ -265,6 +263,11 @@ class Director:
             return [f"Keine verlorenen Duelle auf {bsp} in deinen Matches."]
         if state:
             return ["Es läuft schon ein Training. Erst !stop."]
+        version = self.send("coach_tp_version")[0]
+        if not version.strip().startswith("coach_tp "):
+            # Nach CS2-Updates ist Metamod oft inkompatibel; der cs2-waechter schaltet
+            # es dann ab, damit der Server ueberhaupt laeuft - ohne Plugin kein Training.
+            return ["Trainings-Plugin nicht geladen (nach einem CS2-Update?). Training gerade nicht möglich."]
         others = [h for h in _humans(self.send("status")[0]) if h != name]
         if others:
             return [f"Erst wenn der Server leer ist - gerade online: {', '.join(others)}."]
@@ -349,20 +352,27 @@ class Director:
             state["phase"] = "setup"
             self.timer(SETUP_WAIT, self._setup)
             return state
-        if phase in ("setup", "team", "identify_bot") and (m := _TEAM.match(msg)):
-            sid = ss.steam64(m.group("asid"))
+        if phase in ("setup", "team", "bot", "running") and (m := _TEAM.match(msg)):
             to = m.group("to")
-            if sid == state["human"] and to in ("TERRORIST", "CT") and phase == "setup":
-                # Gemessen 30.10.: Team gewaehlt 2 s bevor das Setup lief - merken,
-                # _setup macht dann direkt weiter, statt auf einen zweiten Wechsel zu warten.
-                state["team"] = to
-            elif sid == state["human"] and to in ("TERRORIST", "CT") and phase == "team":
-                state.update(phase="identify_human", team=to)
-                self.timer(IDENTIFY_WAIT, self._identify_human)
-            elif m.group("asid") == "BOT" and state["phase"] == "identify_bot":
-                self.timer(IDENTIFY_WAIT, self._identify_bot)
+            uid = int(m.group("auid"))
+            if to not in ("TERRORIST", "CT"):
+                return state
+            if ss.steam64(m.group("asid")) == state["human"] and phase in ("setup", "team"):
+                # Gemessen 30.10.: Team gewaehlt 2 s bevor das Setup lief - in "setup"
+                # nur merken, _setup holt dann den Bot, statt auf einen zweiten Wechsel zu warten.
+                state.update(team=to, human_uid=uid)
+                if phase == "team":
+                    self._add_bot(state)
+            elif m.group("asid") == "BOT" and phase in ("bot", "running"):
+                if state.get("bot_uid") is None:
+                    state.update(bot_uid=uid, phase="running", round=0, pos=0)
+                    self.send(_say("Los geht's. !skip überspringt, !leichter / !schwerer, !stop beendet."),
+                              "mp_warmup_end")
+                elif uid != state["bot_uid"]:
+                    # Am 30.10. brachte ein bot_add zwei Bots - jeder weitere fliegt.
+                    self.send(f"kickid {uid}")
             return state
-        if phase in ("team", "identify_human", "identify_bot", "running") and (m := ss._LEAVE.match(msg)) \
+        if phase in ("team", "bot", "running") and (m := ss._LEAVE.match(msg)) \
                 and ss.steam64(m.group("asid")) == state["human"]:
             # Sonst bliebe der Server mit sv_cheats 1 und Bot im Trainingsmodus.
             # Nicht in "loading"/"setup": beim Mapwechsel verbinden sich alle neu.
@@ -425,13 +435,15 @@ class Director:
         bpitch, byaw = _calc_view_angle(sc.ex, sc.ey, sc.ez + 64, sc.x, sc.y, sc.z + 64)
         delay = DELAYS[state["level"][1]]
         n, total = state["pos"] + 1, len(state["queue"])
-        self.send("bot_freeze 1",
-                  f"ent_setpos {state['human_pawn']} {sc.x} {sc.y} {sc.z}",
-                  f"ent_setang {state['human_pawn']} {pitch} {yaw} 0",
-                  f"ent_setpos {state['bot_pawn']} {sc.ex} {sc.ey} {sc.ez}",
-                  f"ent_setang {state['bot_pawn']} {bpitch} {byaw} 0",
-                  _say(f"Duell {n}/{total} ({sc.source}): {sc.opponent} mit {sc.weapon}, "
-                       f"{_level_text(state)}"))
+        replies = self.send("bot_freeze 1",
+                            f"coach_tp {state['human_uid']} {sc.x} {sc.y} {sc.z} {pitch} {yaw}",
+                            f"coach_tp {state['bot_uid']} {sc.ex} {sc.ey} {sc.ez} {bpitch} {byaw}",
+                            _say(f"Duell {n}/{total} ({sc.source}): {sc.opponent} mit {sc.weapon}, "
+                                 f"{_level_text(state)}"))
+        failed = [r.strip() for r in replies[1:3] if "coach_tp ok" not in r]
+        if failed and not state.get("tp_warned"):
+            state["tp_warned"] = True
+            self.send(_say(f"Versetzen fehlgeschlagen: {failed[0][:60] or 'keine Antwort'}"))
         rnd = state["round"]
         self.timer(FREEZE_TIME + delay, lambda: self._release(rnd))
         return state
@@ -447,52 +459,24 @@ class Director:
             if state.get("phase") != "setup":
                 return
             team = state.get("team")
-            state["phase"] = "identify_human" if team else "team"
-            save_state(self.path, state)
             hint = (f"Team {'T' if team == 'TERRORIST' else 'CT'} erkannt, Bot kommt gleich." if team
                     else "Wähle ein Team (T oder CT) - der Bot kommt auf die andere Seite.")
             self.send(*SETUP, f"bot_difficulty {state['level'][0]}", _say(hint))
-        if team:
-            self.timer(IDENTIFY_WAIT, self._identify_human)
-
-    def _identify_human(self) -> None:
-        with _Lock(self.path):
-            state = load_state(self.path)
-            if state.get("phase") != "identify_human":
-                return
-            pawns = _pawns(self.send("ent_find player")[0])
-            if len(pawns) != 1:
-                self._stop(state, f"Abbruch: {len(pawns)} Spielfiguren statt einer gefunden")
-                return
-            state.update(phase="identify_bot", human_pawn=pawns.pop())
+            if team:
+                self._add_bot(state)
+            else:
+                state["phase"] = "team"
             save_state(self.path, state)
-            bot_team = "ct" if state["team"] == "TERRORIST" else "t"
-            first = self.scenarios()[state["map"]][state["queue"][0]]
-            # bot_quota statt bot_add: am 30.10. brachte ein "bot_add_ct" zwei Bots
-            # (die Map-Konfiguration setzt bot_quota_mode competitive).
-            self.send(f'bot_loadout "{first.weapon}"', "bot_quota_mode normal",
-                      f"bot_join_team {bot_team}", "bot_quota 1")
 
-    def _identify_bot(self) -> None:
-        with _Lock(self.path):
-            state = load_state(self.path)
-            if state.get("phase") != "identify_bot":
-                return
-            pawns = _pawns(self.send("ent_find player")[0]) - {state["human_pawn"]}
-            if len(pawns) != 1:
-                if not state.get("bot_retry"):
-                    # Einmal neu: alle Bots raus, genau einer wieder rein. Sein
-                    # Teambeitritt loest _identify_bot erneut aus.
-                    state["bot_retry"] = True
-                    save_state(self.path, state)
-                    self.send("bot_kick", "bot_quota_mode normal", "bot_quota 1")
-                    return
-                self._stop(state, f"Abbruch: {len(pawns)} Bot-Figuren statt einer gefunden")
-                return
-            state.update(phase="running", bot_pawn=pawns.pop(), round=0, pos=0)
-            save_state(self.path, state)
-            self.send(_say("Los geht's. !skip überspringt, !leichter / !schwerer, !stop beendet."),
-                      "mp_warmup_end")
+    def _add_bot(self, state: dict) -> None:
+        """Genau einen Bot ins Gegnerteam holen; sein Teambeitritt startet das Training."""
+        state["phase"] = "bot"
+        bot_team = "ct" if state["team"] == "TERRORIST" else "t"
+        first = self.scenarios()[state["map"]][state["queue"][0]]
+        # bot_quota statt bot_add: am 30.10. brachte ein "bot_add_ct" zwei Bots
+        # (die Map-Konfiguration setzt bot_quota_mode competitive).
+        self.send(f'bot_loadout "{first.weapon}"', "bot_quota_mode normal",
+                  f"bot_join_team {bot_team}", "bot_quota 1")
 
 
 def state_summary(config_path: Path) -> dict | None:

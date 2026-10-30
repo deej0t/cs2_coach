@@ -21,12 +21,6 @@ STATUS_ALONE = """---------players--------
    4      BOT    0    0     active      0 'K'
 #end"""
 STATUS_TWO = STATUS_ALONE.replace("#end", "   3    09:25   19    0     active 786432 213.55.218.192:19968 'Dancho'\n#end")
-ENT_HUMAN = """Searching for entities with class/target name containing substrings: "player"
-   'env_player_visibility' : '' (entindex 370)
-   'player' : '' (entindex 385)
-   'cs_player_controller' : '' (entindex 4)"""
-ENT_BOTH = ENT_HUMAN + "\n   'player' : '' (entindex 387) "
-
 
 def line(msg: str) -> str:
     return f"10/30/2026 - 01:00:00.000 - {msg}"
@@ -49,16 +43,26 @@ def export(tmp_path, map_name="Mirage", deaths=None):
 
 
 class FakeServer:
+    """Antwortet wie der echte Server mit Plugin (coach_tp 1.0.0, 30.10.2026)."""
+
     def __init__(self, status=STATUS_ALONE):
         self.sent: list[str] = []
         self.status = status
-        self.pawns = ENT_HUMAN
+        self.plugin = True
+        self.tp_reply = "coach_tp ok"
 
     def __call__(self, *cmds):
         self.sent.extend(cmds)
         out = []
         for c in cmds:
-            out.append(self.status if c == "status" else self.pawns if c == "ent_find player" else "")
+            if c == "status":
+                out.append(self.status)
+            elif c == "coach_tp_version":
+                out.append("coach_tp 1.0.0" if self.plugin else "Unknown command 'coach_tp_version'!")
+            elif c.startswith("coach_tp "):
+                out.append(f"{self.tp_reply} {c.split()[1]}")
+            else:
+                out.append("")
         return out
 
 
@@ -119,26 +123,23 @@ def test_full_flow(env):
     run_timers(timers)
     assert "sv_cheats 1" in server.sent and "mp_warmup_start" in server.sent
 
-    director().on_lines([line(f'"dj<2><[U:1:58996800]>" switched from team <Unassigned> to <TERRORIST>')])
-    run_timers(timers)
-    assert ts.load_state(path)["human_pawn"] == 385
+    director().on_lines([line('"dj<2><[U:1:58996800]>" switched from team <Unassigned> to <TERRORIST>')])
+    assert ts.load_state(path)["human_uid"] == 2
     assert 'bot_loadout "m4a1"' in server.sent and "bot_join_team ct" in server.sent
     assert server.sent[-1] == "bot_quota 1"
 
-    server.pawns = ENT_BOTH
     director().on_lines([line('"K<4><BOT>" switched from team <Unassigned> to <CT>')])
-    run_timers(timers)
     state = ts.load_state(path)
-    assert (state["phase"], state["bot_pawn"]) == ("running", 387)
+    assert (state["phase"], state["bot_uid"]) == ("running", 4)
     assert server.sent[-1] == "mp_warmup_end"
 
-    # Runde 1: Platzierung genau an den Demo-Positionen
+    # Runde 1: beide per Plugin genau an die Demo-Positionen, mit Blickrichtung
     server.sent.clear()
     director().on_lines([line('World triggered "Round_Start"')])
-    assert "ent_setpos 385 -822.8 -2301.1 -174.5" in server.sent
-    assert "ent_setpos 387 -178.4 -1961.2 -168.0" in server.sent
     assert server.sent[0] == "bot_freeze 1"
-    assert any(c.startswith("ent_setang 385 ") for c in server.sent)
+    assert server.sent[1].startswith("coach_tp 2 -822.8 -2301.1 -174.5 ")
+    assert server.sent[2].startswith("coach_tp 4 -178.4 -1961.2 -168.0 ")
+    assert not any("fehlgeschlagen" in c for c in server.sent)
     sec, release = timers.pop()
     assert sec == ts.FREEZE_TIME + ts.DELAYS[ts.START_LEVEL[1]]
     release()
@@ -163,7 +164,7 @@ def test_old_release_timer_does_not_free_next_round(env):
     _, path, server, timers, director = env
     ts.save_state(path, {"phase": "running", "map": "de_mirage", "human": OWNER, "queue": [0, 1],
                          "pos": 0, "results": [], "level": [1, 1], "round": 0,
-                         "human_pawn": 385, "bot_pawn": 387})
+                         "human_uid": 2, "bot_uid": 4})
     director().on_lines([line('World triggered "Round_Start"')])
     old_release = timers.pop()[1]
     director().on_lines([line('World triggered "Round_End"'), line('World triggered "Round_Start"')])
@@ -196,7 +197,7 @@ def test_skip_ends_round_without_counting(env):
     _, path, server, timers, director = env
     ts.save_state(path, {"phase": "running", "map": "de_mirage", "human": OWNER, "queue": [0, 1],
                          "pos": 0, "results": [], "level": [1, 1], "round": 0,
-                         "human_pawn": 385, "bot_pawn": 387})
+                         "human_uid": 2, "bot_uid": 4})
     director().on_lines([line('World triggered "Round_Start"')])
     assert director().command(OWNER, "dj", "skip", "") == ["Übersprungen."]
     assert server.sent[-1] == "endround"
@@ -270,28 +271,34 @@ def test_team_chosen_before_setup_is_remembered(env):
     timers.clear()  # Lade-Zeitlimit
     director().on_lines([line('Loading map "de_mirage"'),
                          line('"dj<0><[U:1:58996800]>" switched from team <Unassigned> to <TERRORIST>')])
-    run_timers(timers)  # _setup -> erkennt Team -> _identify_human
+    run_timers(timers)  # _setup -> Team bekannt -> Bot kommt
     state = ts.load_state(path)
-    assert (state["phase"], state["human_pawn"]) == ("identify_bot", 385)
-    assert any("Team T erkannt" in c for c in server.sent)
+    assert (state["phase"], state["human_uid"]) == ("bot", 0)
+    assert any("Team T erkannt" in c for c in server.sent) and server.sent[-1] == "bot_quota 1"
 
 
-def test_two_bots_trigger_one_retry_then_abort(env):
-    _, path, server, timers, director = env
-    ts.save_state(path, {"phase": "identify_bot", "map": "de_mirage", "human": OWNER, "queue": [0],
-                         "pos": 0, "results": [], "level": [1, 1], "human_pawn": 385, "team": "TERRORIST"})
-    server.pawns = ENT_BOTH + "\n   'player' : '' (entindex 390) "
-    director()._identify_bot()
-    assert ts.load_state(path)["bot_retry"] and server.sent[-3:] == ["bot_kick", "bot_quota_mode normal", "bot_quota 1"]
-    director()._identify_bot()
-    assert not ts.is_active(path)
-    assert any("2 Bot-Figuren" in c for c in server.sent)
+def test_second_bot_is_kicked(env):
+    """30.10.: ein bot_add_ct brachte zwei Bots."""
+    _, path, server, _, director = env
+    ts.save_state(path, {"phase": "bot", "map": "de_mirage", "human": OWNER, "queue": [0], "pos": 0,
+                         "results": [], "level": [1, 1], "human_uid": 0, "team": "TERRORIST"})
+    director().on_lines([line('"Juuvy<3><BOT>" switched from team <Unassigned> to <CT>'),
+                         line('"Aggressor<4><BOT>" switched from team <Unassigned> to <CT>')])
+    assert ts.load_state(path)["bot_uid"] == 3 and server.sent[-1] == "kickid 4"
 
 
-def test_retry_with_one_bot_succeeds(env):
-    _, path, server, timers, director = env
-    ts.save_state(path, {"phase": "identify_bot", "map": "de_mirage", "human": OWNER, "queue": [0],
-                         "pos": 0, "results": [], "level": [1, 1], "human_pawn": 385, "bot_retry": True})
-    server.pawns = ENT_BOTH
-    director()._identify_bot()
-    assert ts.load_state(path)["bot_pawn"] == 387
+def test_start_refused_without_plugin(env):
+    _, path, server, _, director = env
+    server.plugin = False
+    assert "Plugin nicht geladen" in director().command(OWNER, "dj", "training", "mirage")[0]
+    assert not ts.is_active(path) and "map de_mirage" not in server.sent
+
+
+def test_failed_teleport_is_reported_once(env):
+    _, path, server, _, director = env
+    server.tp_reply = "coach_tp: kein Spieler mit userid"
+    ts.save_state(path, {"phase": "running", "map": "de_mirage", "human": OWNER, "queue": [0, 1],
+                         "pos": 0, "results": [], "level": [1, 1], "round": 0, "human_uid": 2, "bot_uid": 4})
+    director().on_lines([line('World triggered "Round_Start"'), line('World triggered "Round_End"'),
+                         line('World triggered "Round_Start"')])
+    assert sum("Versetzen fehlgeschlagen" in c for c in server.sent) == 1
