@@ -37,7 +37,9 @@
 //         Gegner in dem Moment (Grad, dpitch>0 = zu tief), react=ms vom Sehen
 //         bis zum ersten Schuss (negativ = vorher geschossen), hit=ms bis zum
 //         ersten Treffer, peek=ms, die der Gegner dich vorher sah (negativ = du
-//         ihn zuerst), kills=Fadenkreuz 0,5 s vor jedem Kill (wie im Match-Parser).
+//         ihn zuerst), kills=Fadenkreuz 0,5 s vor jedem Kill (wie im Match-Parser),
+//         shots/stopped=Schuesse gesamt/davon gestoppt (<= 80 u/s, Counter-Strafing),
+//         fspeed=Geschwindigkeit beim ersten Schuss (u/s).
 //     coach_tp_version
 //
 // Alles andere - welche Situation, wann, wer - entscheidet der Coach, damit
@@ -61,7 +63,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.10.0";
+    public override string ModuleVersion => "1.11.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -97,7 +99,18 @@ public class CoachTeleport : BasePlugin
             if (_inFreeze || ev.Userid is not { } shooter || shooter.IsBot) return HookResult.Continue;
             if (IsNoGun(ev.Weapon)) return HookResult.Continue;
             var m = MeasureOf(shooter.UserId ?? -1);
-            if (m.ShotTick < 0) m.ShotTick = Server.TickCount;
+            // Counter-Strafing wie im Match-Parser: Schuss bei hoechstens 80 u/s
+            // waagerechter Geschwindigkeit gilt als gestoppt. Hier direkt aus der
+            // Geschwindigkeit statt aus dem Positionsdelta zum Vortick.
+            var v = shooter.PlayerPawn.Value?.AbsVelocity;
+            var speed = v is null ? 0f : (float)Math.Sqrt(v.X * v.X + v.Y * v.Y);
+            m.Shots++;
+            if (speed <= StoppedSpeed) m.Stopped++;
+            if (m.ShotTick < 0)
+            {
+                m.ShotTick = Server.TickCount;
+                m.FirstShotSpeed = speed;
+            }
             return HookResult.Continue;
         });
         RegisterListener<Listeners.OnPlayerButtonsChanged>(OnButtons);
@@ -167,7 +180,15 @@ public class CoachTeleport : BasePlugin
                 _replays.Remove(userid);
                 continue;
             }
-            var t = (Server.TickCount - r.StartTick) / 64f * r.Hz;
+            // Anfahren (1.11.0): "die Bots sind nicht fluessig von der Erstbewegung".
+            // Der Weg beginnt LEAD Sekunden vor dem Duell, oft mitten im Laufen - der
+            // Bot sprang aus dem Stand in einem Tick auf volle Geschwindigkeit. Jetzt
+            // beschleunigt er ueber RampTicks gleichmaessig (Weg = e^2/2R) und laeuft
+            // danach im Originaltempo, nur RampTicks/2 versetzt.
+            var e = (float)(Server.TickCount - r.StartTick);
+            var played = e < RampTicks ? e * e / (2 * RampTicks) : e - RampTicks / 2;
+            var pace = e < RampTicks ? e / RampTicks : 1f;
+            var t = played / 64f * r.Hz;
             var i = (int)t;
             if (i >= r.Points.Count - 1)
             {
@@ -181,10 +202,17 @@ public class CoachTeleport : BasePlugin
             var f = t - i;
             var a = r.Points[i];
             var b = r.Points[i + 1];
-            var pos = new Vector(Lerp(a[0], b[0], f), Lerp(a[1], b[1], f), Lerp(a[2], b[2], f));
+            // Catmull-Rom statt gerader Stuecke zwischen den 16-Hz-Punkten: vorher
+            // knickte die Bewegung alle 4 Ticks, die Geschwindigkeit sprang mit.
+            var p0 = r.Points[Math.Max(i - 1, 0)];
+            var p3 = r.Points[Math.Min(i + 2, r.Points.Count - 1)];
+            var pos = new Vector(Spline(p0[0], a[0], b[0], p3[0], f), Spline(p0[1], a[1], b[1], p3[1], f),
+                                 Spline(p0[2], a[2], b[2], p3[2], f));
             var ang = new QAngle(Lerp(a[3], b[3], f), LerpAngle(a[4], b[4], f), 0);
-            // Geschwindigkeit wie im Original, damit die Laufanimation passt.
-            var vel = new Vector((b[0] - a[0]) * r.Hz, (b[1] - a[1]) * r.Hz, 0);
+            // Geschwindigkeit wie im Original (Ableitung der Kurve), beim Anfahren
+            // anteilig - damit die Laufanimation zur Bewegung passt.
+            var vel = new Vector(SplineSlope(p0[0], a[0], b[0], p3[0], f) * r.Hz * pace,
+                                 SplineSlope(p0[1], a[1], b[1], p3[1], f) * r.Hz * pace, 0);
             pawn.Teleport(pos, ang, vel);
         }
     }
@@ -424,7 +452,8 @@ public class CoachTeleport : BasePlugin
     // 1 Tick = 15,6 ms.
     private sealed class Measure
     {
-        public int SeenTick = -1, EnemySawTick = -1, ShotTick = -1, HitTick = -1;
+        public int SeenTick = -1, EnemySawTick = -1, ShotTick = -1, HitTick = -1, Shots, Stopped;
+        public float FirstShotSpeed = -1;
         public bool AtStart;
         public float Err = -1, DPitch, DYaw;
         public readonly List<float> KillErrs = new();
@@ -434,6 +463,7 @@ public class CoachTeleport : BasePlugin
     private readonly Dictionary<int, Queue<(int Tick, float X, float Y, float Z, float Pitch, float Yaw)>> _views = new();
     private int _freezeEndTick = -1;
     private const int PreAimTicks = 32;  // wie PRE_AIM_OFFSET_TICKS im Match-Parser
+    private const float StoppedSpeed = 80f;  // wie COUNTER_STRAFE_SPEED_THRESHOLD im Match-Parser
 
     private Measure MeasureOf(int userid)
     {
@@ -540,6 +570,8 @@ public class CoachTeleport : BasePlugin
             $"react={Ms(m.ShotTick, m.SeenTick)}", $"hit={Ms(m.HitTick, m.SeenTick)}",
             $"peek={Ms(m.SeenTick, m.EnemySawTick)}",
             $"kills={(m.KillErrs.Count > 0 ? string.Join(",", m.KillErrs.Select(k => k.ToString("F1", ci))) : "-")}",
+            $"shots={m.Shots}", $"stopped={m.Stopped}",
+            $"fspeed={(m.FirstShotSpeed >= 0 ? m.FirstShotSpeed.ToString("F0", ci) : "-")}",
         };
         info.ReplyToCommand($"coach_stats {userid} " + string.Join(" ", parts));
     }
@@ -636,7 +668,16 @@ public class CoachTeleport : BasePlugin
         pawn.Teleport(null, new QAngle(pitch, yaw, 0), null);
     }
 
+    private const float RampTicks = 16f;  // 0,25 s anfahren
+
     private static float Lerp(float a, float b, float f) => a + (b - a) * f;
+
+    private static float Spline(float p0, float p1, float p2, float p3, float f) =>
+        0.5f * (2 * p1 + (p2 - p0) * f + (2 * p0 - 5 * p1 + 4 * p2 - p3) * f * f
+                + (3 * p1 - p0 - 3 * p2 + p3) * f * f * f);
+
+    private static float SplineSlope(float p0, float p1, float p2, float p3, float f) =>
+        0.5f * ((p2 - p0) + 2 * (2 * p0 - 5 * p1 + 4 * p2 - p3) * f + 3 * (3 * p1 - p0 - 3 * p2 + p3) * f * f);
 
     private static float LerpAngle(float a, float b, float f)
     {

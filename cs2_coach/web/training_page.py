@@ -33,8 +33,10 @@ def create_blueprint(load_config, config_path) -> Blueprint:
             "training.html", sessions=sessions[:20], hardest=training_server.hardest(sessions),
             running=training_server.state_summary(path), total=total, won=won,
             weapon_label=training_server.weapon_label, aim_side=training_server.aim_side,
-            measured=[s for s in sessions[:20] if s["measures"]["seen_n"] or s["measures"]["kill_n"]],
-            match_cp=training_server.match_crosshair_median(cfg), max_level=training_server.MAX_LEVEL,
+            measured=[s for s in sessions[:20] if s["measures"]["seen_n"] or s["measures"]["kill_n"]
+                      or s["measures"]["shots_n"]],
+            match_cp=training_server.match_crosshair_median(cfg),
+            match_cs=training_server.match_counter_strafe_median(cfg), max_level=training_server.MAX_LEVEL,
             config=cfg)
 
     return bp

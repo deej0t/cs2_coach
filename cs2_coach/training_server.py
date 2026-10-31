@@ -442,8 +442,12 @@ def direction(me, foe) -> str:
 
 
 _STAT_KEYS = {"seen": "seen_ms", "err": "seen_err", "dpitch": "dpitch", "dyaw": "dyaw",
-              "react": "react_ms", "hit": "hit_ms", "peek": "peek_ms"}
-MEASURE_KEYS = ("seen_err", "dpitch", "dyaw", "react_ms", "hit_ms", "peek_ms", "kill_errs")
+              "react": "react_ms", "hit": "hit_ms", "peek": "peek_ms", "fspeed": "first_speed"}
+MEASURE_KEYS = ("seen_err", "dpitch", "dyaw", "react_ms", "hit_ms", "peek_ms", "kill_errs",
+                "shots", "stopped", "first_speed")
+STOPPED_SPEED = 80  # u/s, wie COUNTER_STRAFE_SPEED_THRESHOLD im Parser (gegen inaccuracy_move geeicht)
+# Unabhaengig vom Sichtzeitpunkt - zaehlen auch, wenn der Gegner schon beim Freeze-Ende sichtbar war.
+_ALWAYS = ("kill_errs", "shots", "stopped", "first_speed")
 
 
 def parse_stats(reply: str) -> dict:
@@ -467,12 +471,16 @@ def parse_stats(reply: str) -> dict:
                 out["kill_errs"] = [float(x) for x in val.split(",") if x]
             elif key == "start":
                 out["at_start"] = val == "1"
+            elif key in ("shots", "stopped"):
+                out[key] = int(val)
             elif key in _STAT_KEYS:
                 out[_STAT_KEYS[key]] = float(val)
     except ValueError:
         return {}
     if out.pop("at_start", False):
-        out = {k: v for k, v in out.items() if k == "kill_errs"}
+        out = {k: v for k, v in out.items() if k in _ALWAYS}
+    if not out.get("shots"):
+        out = {k: v for k, v in out.items() if k not in ("shots", "stopped")}
     return out
 
 
@@ -492,6 +500,10 @@ def measure_line(m: dict) -> str:
                      if m["seen_err"] >= 3 else f"Fadenkreuz {m['seen_err']:.0f}°")
     if "react_ms" in m:
         parts.append(f"Reaktion {m['react_ms']:.0f} ms" if m["react_ms"] >= 0 else "vorgeschossen")
+    if m.get("first_speed", 0) > STOPPED_SPEED:
+        parts.append(f"1. Schuss in Bewegung ({m['first_speed']:.0f} u/s)")
+    if m.get("shots"):
+        parts.append(f"gestoppt {m.get('stopped', 0)}/{m['shots']}")
     if m.get("peek_ms", 0) >= 100:
         parts.append(f"er sah dich {m['peek_ms']:.0f} ms frueher")
     elif m.get("peek_ms", 0) <= -100:
@@ -510,8 +522,12 @@ def session_measures(duels: list[dict]) -> dict:
     seen = [d["seen_err"] for d in duels if "seen_err" in d]
     react = [d["react_ms"] for d in duels if d.get("react_ms", -1) >= 0]
     kills = [k for d in duels for k in d.get("kill_errs") or []]
+    shots = sum(d.get("shots", 0) for d in duels)
+    stopped = sum(d.get("stopped", 0) for d in duels)
+    # Counter-Strafing wie im Match: Anteil gestoppter Schuesse ueber alle Schuesse.
     return {"seen_err": _median(seen), "seen_n": len(seen), "react_ms": _median(react), "react_n": len(react),
-            "kill_err": _median(kills), "kill_n": len(kills)}
+            "kill_err": _median(kills), "kill_n": len(kills),
+            "strafe_pct": stopped * 100 / shots if shots else None, "shots_n": shots}
 
 
 def match_crosshair_median(cfg: dict, last: int = 10) -> float | None:
@@ -520,6 +536,25 @@ def match_crosshair_median(cfg: dict, last: int = 10) -> float | None:
     Dieselbe Messung wie kill_errs im Training (Plugin rechnet wie der Parser),
     also direkt vergleichbar - anders als das Fadenkreuz beim Auftauchen.
     """
+    def value(player):
+        cp = player.get("crosshair_placement") or {}
+        return cp.get("median_degrees") if cp.get("kills_analyzed") else None
+    return _match_median(cfg, value, last)
+
+
+def match_counter_strafe_median(cfg: dict, last: int = 10) -> float | None:
+    """Counter-Strafing (% gestoppter Schuesse) in deinen letzten Matches, Median.
+
+    Gleiche Schwelle (80 u/s) und gleiche Schuesse (ohne Granaten/Messer) wie
+    im Training; der Parser rechnet die Geschwindigkeit aus dem Positions-
+    delta, das Plugin liest sie direkt - beides die waagerechte Geschwindigkeit.
+    """
+    def value(player):
+        return player.get("counter_strafe_pct", player.get("counter_strafe_score"))
+    return _match_median(cfg, value, last)
+
+
+def _match_median(cfg: dict, value, last: int) -> float | None:
     from .obsidian import export_sort_key
     vault = (cfg.get("obsidian_vault_path") or "").strip()
     if not vault:
@@ -529,11 +564,11 @@ def match_crosshair_median(cfg: dict, last: int = 10) -> float | None:
     values = []
     for f in reversed(files):
         try:
-            cp = json.loads(f.read_text(encoding="utf-8")).get("player", {}).get("crosshair_placement") or {}
+            v = value(json.loads(f.read_text(encoding="utf-8")).get("player") or {})
         except (OSError, ValueError):
             continue
-        if cp.get("kills_analyzed") and cp.get("median_degrees") is not None:
-            values.append(float(cp["median_degrees"]))
+        if v is not None:
+            values.append(float(v))
         if len(values) >= last:
             break
     return _median(values)
@@ -554,6 +589,9 @@ def duel_tip(rnd: dict, outcome: str) -> str | None:
     if rnd.get("peek_ms", 0) >= 250:
         return (f"Er sah dich {rnd['peek_ms']:.0f} ms bevor du ihn - du standest offen. "
                 "Enger an der Deckung halten oder einen anderen Winkel nehmen.")
+    if rnd.get("first_speed", 0) > STOPPED_SPEED:
+        return (f"Dein erster Schuss kam aus der Bewegung ({rnd['first_speed']:.0f} u/s, gestoppt ist <= "
+                f"{STOPPED_SPEED}) - erst gegenstrafen, dann schiessen.")
     if rnd.get("seen_err", 0) >= 10:
         return (f"Als er auftauchte, war dein Fadenkreuz {rnd['seen_err']:.0f}° daneben "
                 f"({aim_side(rnd.get('dpitch', 0), rnd.get('dyaw', 0))}) - dorthin vorzielen, wo er rauskommt.")

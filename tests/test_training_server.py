@@ -808,3 +808,13 @@ def test_match_crosshair_from_exports(tmp_path):
             {"player": {"crosshair_placement": {"median_degrees": deg, "kills_analyzed": 10}}}))
     assert ts.match_crosshair_median({"obsidian_vault_path": str(tmp_path)}) == 7.0
     assert ts.match_crosshair_median({"obsidian_vault_path": str(tmp_path)}, last=1) == 9.0
+
+
+def test_counter_strafe_from_plugin():
+    m = ts.parse_stats("coach_stats 2 seen=0 start=1 err=40.0 kills=- shots=12 stopped=9 fspeed=143")
+    assert m == {"shots": 12, "stopped": 9, "first_speed": 143.0}  # zaehlt auch bei start=1
+    assert "1. Schuss in Bewegung (143 u/s)" in ts.measure_line(m) and "gestoppt 9/12" in ts.measure_line(m)
+    assert "gegenstrafen" in ts.duel_tip({"first_speed": 143, "you_hits": 1}, "loss")
+    s = ts.session_measures([{"shots": 12, "stopped": 9}, {"shots": 4, "stopped": 1}])
+    assert s["strafe_pct"] == 62.5 and s["shots_n"] == 16
+    assert ts.parse_stats("coach_stats 2 shots=0 stopped=0 fspeed=-") == {}

@@ -153,6 +153,11 @@ def _measure_facts(d: dict) -> str:
                      else f"er sah den Gegner {-d['peek_ms']:.0f} ms frueher")
     if d.get("kill_errs"):
         parts.append("Fadenkreuz 0,5 s vor seinen Kills: " + ", ".join(f"{k:.0f} Grad" for k in d["kill_errs"]))
+    if d.get("shots"):
+        parts.append(f"Counter-Strafing: {d.get('stopped', 0)} von {d['shots']} Schuessen gestoppt (<= 80 u/s)")
+    if "first_speed" in d:
+        parts.append(f"erster Schuss bei {d['first_speed']:.0f} u/s"
+                     + (" (in Bewegung)" if d["first_speed"] > 80 else " (gestoppt)"))
     return ("Gemessen: " + "; ".join(parts) + ".") if parts else ""
 
 
@@ -185,7 +190,9 @@ def training_facts(config_path: Path) -> str:
         m = measured["measures"]
         lines.append(f"Letztes gemessenes Training ({measured.get('map')}): Median Fadenkreuz beim Auftauchen "
                      f"{m['seen_err']:.1f} Grad"
-                     + (f", erster Schuss {m['react_ms']:.0f} ms nach dem Sehen" if m["react_n"] else "") + ".")
+                     + (f", erster Schuss {m['react_ms']:.0f} ms nach dem Sehen" if m["react_n"] else "")
+                     + (f", Counter-Strafing {m['strafe_pct']:.0f} % von {m['shots_n']} Schuessen"
+                        if m.get("shots_n") else "") + ".")
     for h in hardest(sessions, limit=3):
         lines.append(f"Oft verloren: {h.get('source')} gegen {h.get('opponent')} mit "
                      f"{weapon_label(h.get('weapon', ''))} ({h['lost']}x verloren, {h['won']}x gewonnen).")
@@ -205,8 +212,8 @@ FAZIT_SYSTEM = """Du bist der persoenliche CS2-Coach eines einzelnen Spielers. E
 Server beendet: Situationen aus seinen eigenen Matches, nachgespielt gegen Bots.
 - Deutsch, du-Form, hoechstens 4 kurze Saetze, zusammen hoechstens 480 Zeichen.
 - Satz 1: das Ergebnis. Dann das deutlichste Muster bei den Niederlagen - nur aus den Trainingsdaten
-  (wer zuerst traf, wer wen zuerst sah, Fadenkreuz beim Auftauchen und vor Kills in Grad, Treffer,
-  Waffe des Gegners). Reaktionszeiten nur nennen, nicht als gut oder schlecht bewerten.
+  (wer zuerst traf, wer wen zuerst sah, Fadenkreuz beim Auftauchen und vor Kills in Grad,
+  Counter-Strafing = Anteil Schuesse bei hoechstens 80 u/s, Treffer, Waffe des Gegners). Reaktionszeiten nur nennen, nicht als gut oder schlecht bewerten.
 - Zum Schluss genau eine Sache, die er in solchen Situationen als Naechstes ueben soll.
 - Rate nur zu Ausruestung, die er in der Situation laut Daten wirklich hatte. Keine Ratschlaege zu
   Granaten, Wirtschaft oder Match-Statistik.
@@ -232,6 +239,11 @@ def session_facts(session: dict) -> str:
         if session.get("match_cp") is not None:
             line += f"; in seinen letzten Matches (gleiche Messung): {session['match_cp']:.1f} Grad"
         out.append(line + ".")
+    if m["shots_n"]:
+        line = f"Counter-Strafing im Training: {m['strafe_pct']:.0f} % von {m['shots_n']} Schuessen gestoppt"
+        if session.get("match_cs") is not None:
+            line += f"; in seinen letzten Matches (gleiche Schwelle): {session['match_cs']:.0f} %"
+        out.append(line + ".")
     for d in duels:
         res = dict(win="gewonnen", loss="verloren").get(d.get("outcome"), "unentschieden")
         first = {"you": "du zuerst getroffen", "bot": "Gegner zuerst getroffen"}.get(d.get("first"), "")
@@ -250,6 +262,8 @@ def session_fazit(cfg: dict, config_path: Path, session_file: Path, ask_fn=None)
     session = json.loads(Path(session_file).read_text(encoding="utf-8"))
     from .training_server import match_crosshair_median
     session["match_cp"] = match_crosshair_median(cfg)
+    from .training_server import match_counter_strafe_median
+    session["match_cs"] = match_counter_strafe_median(cfg)
     text = (ask_fn or ask)(cfg, FAZIT_SYSTEM, session_facts(session) + "\n\nSchreibe das Fazit.")
     if not text:
         return None
