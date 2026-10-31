@@ -873,6 +873,7 @@ class Director:
             state = {"phase": "loading", "map": bsp, "human": sid, "name": name, "queue": list(range(n)),
                      "pos": 0, "results": [], "level": START_LEVEL, "round": 0,
                      "pre": {str(i): v for i, v in pre.items()}, "party": self._party_state(),
+                     "goal": self._goal("duell"),
                      "started": datetime.now().isoformat(timespec="seconds"), "t0": time.time()}
             save_state(self.path, state)
         self.timer(LOAD_TIMEOUT, self._check_loaded)
@@ -994,7 +995,7 @@ class Director:
                 "phase": "loading", "map": bsp, "mode": mode, "human": sid, "name": name,
                 "queue": list(range(len(items))), "bot_need": need, "pos": 0, "results": [],
                 "level": START_LEVEL, "round": 0, "started": datetime.now().isoformat(timespec="seconds"),
-                "t0": time.time(), "party": self._party_state()})
+                "t0": time.time(), "party": self._party_state(), "goal": self._goal(mode)})
         self.timer(LOAD_TIMEOUT, self._check_loaded)
         self.send(_say(f"{len(items)} {MODES[mode]}-Situationen, bis zu {need} Gegner. Map wird geladen..."),
                   "sv_hibernate_when_empty 0", f"map {bsp}")
@@ -1037,6 +1038,11 @@ class Director:
         res = state.get("results", [])
         won = sum(1 for r in res if r == "win")
         summary = f"{why}: {won}/{len(res)} Duelle gewonnen" if res else why
+        from .training_goal import progress, progress_text
+        state["goal_progress"] = progress(state.get("goal"), state.get("duels", []))
+        goal_text = progress_text(state.get("goal"), state["goal_progress"])
+        if goal_text:
+            summary += " " + goal_text
         if state.get("mode") == "eichen":
             calib = calibration_from(state.get("duels", []))
             if calib:
@@ -1098,6 +1104,27 @@ class Director:
         from .ingame_coach import save_last_duel
         save_last_duel(self.path, {**duel, "map": state.get("map"), "weapon": weapon_label(sc.weapon),
                                    "direction": state.get("direction", "?")})
+
+    def _goal(self, mode: str) -> dict | None:
+        if mode == "eichen":
+            return None
+        from .training_goal import pick_goal
+        try:
+            return pick_goal(load_sessions(self.path))
+        except Exception as e:  # noqa: BLE001 - ohne Ziel laeuft das Training trotzdem
+            print(f"[training] Ziel: {e}", flush=True)
+            return None
+
+    def _goal_line(self, state: dict) -> str:
+        """"Ziel ✓ Erster Schuss gestoppt · heute 6/9" fuer die Einblendung nach der Runde."""
+        goal = state.get("goal")
+        if not goal or not state.get("duels"):
+            return ""
+        from .training_goal import goal_ok, progress
+        ok = goal_ok(goal["key"], state["duels"][-1])
+        prog = progress(goal, state["duels"])
+        mark = {True: "&#10003;", False: "&#10007;"}.get(ok, "&#183;")
+        return f"Ziel {mark} {html.escape(goal['label'])} &#183; heute {prog['k']}/{prog['n']}"
 
     def _measure(self, state: dict) -> dict:
         """Messwerte der Runde vom Plugin; altes Plugin oder keine Antwort = leer."""
@@ -1206,7 +1233,10 @@ class Director:
                     bots.append(uid)
                     if len(bots) == need and phase == "bot":
                         state.update(bot_uid=bots[0], phase="running", round=0, pos=0)
+                        goal = state.get("goal")
                         self.send(_say("Los geht's. Alles Weitere im Menue: !menu (W/S waehlen, E bestaetigen)."),
+                                  *([_say(f"Ziel heute: {goal['label']} (bisher "
+                                          f"{goal['before_k'] * 100 // goal['before_n']} %)")] if goal else []),
                                   "mp_warmup_end")
                 else:
                     # Am 30.10. brachte ein bot_add zwei Bots - jeder ueberzaehlige fliegt.
@@ -1277,12 +1307,14 @@ class Director:
                 self._result(state, outcome)
                 tip = duel_tip(state.get("rnd") or {}, outcome)
                 self._record(state, outcome, tip)
+                goal_line = self._goal_line(state)
                 text, color = {"win": ("GEWONNEN", GREEN), "loss": ("VERLOREN", RED)}.get(
                     outcome, ("UNENTSCHIEDEN", YELLOW))
                 seen = measure_line(state.get("rnd") or {})
                 self.send(hud(state["human_uid"], 4, _font(text, color, "xl") + "<br>"
                               + _font(f"Stand {_score(state)}", GREY)
                               + (f"<br>{_font(html.escape(seen), '#ffffff', 's')}" if seen else "")
+                              + (f"<br>{_font(goal_line, PURPLE, 's')}" if goal_line else "")
                               + (f"<br>{_font(html.escape(tip), '#ffffff', 's')}" if tip else "")),
                           *_party_hud(state, 4, _font(text, color, "xl") + "<br>" + _font(f"Stand {_score(state)}", GREY)))
                 if tip:
@@ -1546,7 +1578,7 @@ def save_session(config_path: Path, state: dict, why: str) -> Path:
     path.write_text(json.dumps({
         "map": state.get("map"), "started": started, "ended": datetime.now().isoformat(timespec="seconds"),
         "why": why, "level_end": state.get("level"), "duels": state.get("duels", []),
-        "mode": state.get("mode", "duell"),
+        "mode": state.get("mode", "duell"), "goal": state.get("goal"), "goal_progress": state.get("goal_progress"),
         "party": sorted(p.get("name", "") for p in (state.get("party") or {}).values())},
         ensure_ascii=False, indent=1), encoding="utf-8")
     return path

@@ -230,6 +230,10 @@ def session_facts(session: dict) -> str:
     out = [f"Training ({session.get('mode', 'duell')}) auf {session.get('map')}: {won} von {len(duels)} gewonnen, "
            f"Bot-Stufe am Ende {session.get('level_end')}/{MAX_LEVEL}."
            + (f" Zusammen mit {', '.join(party)} gespielt." if party else "")]
+    from .training_goal import progress_text
+    if session.get("goal"):
+        out.append(progress_text(session["goal"], session.get("goal_progress")) or
+                   f"Ziel des Trainings: {session['goal']['label']}.")
     from .training_server import session_measures
     m = session_measures(duels)
     if m["seen_n"]:

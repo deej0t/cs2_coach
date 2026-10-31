@@ -818,3 +818,18 @@ def test_counter_strafe_from_plugin():
     s = ts.session_measures([{"shots": 12, "stopped": 9}, {"shots": 4, "stopped": 1}])
     assert s["strafe_pct"] == 62.5 and s["shots_n"] == 16
     assert ts.parse_stats("coach_stats 2 shots=0 stopped=0 fspeed=-") == {}
+
+
+def test_goal_is_counted_after_each_round(env):
+    _, path, server, _, _ = env
+    orig = server.__call__
+    call = lambda *c: [STATS + " shots=3 stopped=1 fspeed=140" if x == "coach_stats 2" else o  # noqa: E731
+                       for x, o in zip(c, orig(*c))]
+    goal = {"key": "stopped", "label": "Erster Schuss gestoppt", "before_k": 4, "before_n": 10}
+    ts.save_state(path, running_state(goal=goal))
+    ts.Director(env[0], path, call, timer=lambda *a: None).on_lines([
+        line('World triggered "Round_Start"'),
+        line(f'{DJ} [0 0 0] attacked {BOT} [1 1 1] with "ak47" (damage "27") (damage_armor "3") '
+             '(health "73") (armor "96") (hitgroup "chest")'),
+        line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "m4a1"'), line('World triggered "Round_End"')])
+    assert any("Ziel &#10007; Erster Schuss gestoppt" in h and "heute 0/1" in h for h in huds(server))

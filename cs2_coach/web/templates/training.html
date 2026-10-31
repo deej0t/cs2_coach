@@ -119,6 +119,14 @@
             {{ s.won }} von {{ s.played }} gewonnen</span>
         {% if s.level_end is not none %}<span style="color: var(--color-neutral-500);"> · Bot-Stufe am Ende {{ s.level_end }}/{{ max_level }}</span>{% endif %}
     </summary>
+    {% if s.goal and s.goal_progress and s.goal_progress.n %}
+    <p style="margin: var(--space-3) 0 0; font-size: 13px;">
+        <strong>Ziel:</strong> {{ s.goal.label }} · heute {{ s.goal_progress.k }}/{{ s.goal_progress.n }}
+        ({{ s.goal_progress.pct }} %), vorher {{ s.goal_progress.before_pct }} % ·
+        {% if s.goal_progress.verdict == 'besser' %}<span style="color: var(--color-green);">messbar besser</span>
+        {% elif s.goal_progress.verdict == 'schlechter' %}<span style="color: var(--color-red);">messbar schlechter</span>
+        {% else %}<span style="color: var(--color-neutral-500);">noch kein belastbarer Unterschied</span>{% endif %}</p>
+    {% endif %}
     {% if s.fazit %}
     <p style="margin: var(--space-3) 0 0; font-size: 13px; border-left: 3px solid var(--color-accent); padding-left: var(--space-3);">
         <strong>Fazit des Coaches:</strong> {{ s.fazit }}</p>
