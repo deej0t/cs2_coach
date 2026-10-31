@@ -18,6 +18,17 @@
 #    - Abgeschaltet: alle RETRY Sekunden die neuesten Metamod- und
 #      CounterStrikeSharp-Builds holen und es erneut versuchen.
 #
+# 3. CS2-Updates: ist der Server leer, fragt der Waechter alle UPDPAUSE Sekunden
+#    bei Steam, ob die installierte Version noch reicht (UpToDateCheck mit der
+#    PatchVersion aus steam.inf). Nein -> Neustart, der Container aktualisiert
+#    beim Start. Haengt das Update danach (appmanifest StateFlags 6), wird es
+#    erzwungen: am 31.10.2026 (1.41.9.3 -> .4) brach SteamCMD drei Stunden lang
+#    mit "state is 0x6" ab - Steam gab die Manifeste der *installierten alten*
+#    Version anonym nicht mehr heraus ("Access Denied"), ein frisches SteamCMD
+#    lud problemlos. Manifest beiseitelegen -> SteamCMD prueft die vorhandenen
+#    Dateien und laedt nur die Aenderungen. Das setzt gameinfo.gi zurueck,
+#    Metamod wird danach wieder eingetragen.
+#
 # Laeuft alle 2 Minuten per Cron (cs2-waechter.cron). Tut nichts, wenn der
 # Container gestoppt ist (absichtlich aus). Meldet sich ueber Unraid-notify.
 
@@ -38,6 +49,10 @@ SCHLEIFE=${SCHLEIFE:-3} # so viele Docker-Neustarts in 15 Minuten = Absturzschle
 RETRY=${RETRY:-21600}   # abgeschaltetes Metamod alle 6 h neu versuchen
 NOTIFY=/usr/local/emhttp/webGui/scripts/notify
 DRYRUN=${DRYRUN:-0}
+STEAMAPPS=${STEAMAPPS:-$GAME/../../steamapps}
+UPDCHECK=$RUN/cs2-waechter.update-check
+UPDFEHLER=$RUN/cs2-waechter.update-failed
+UPDPAUSE=${UPDPAUSE:-1800}  # hoechstens alle 30 min bei Steam nachfragen
 
 melde() { logger -t cs2-waechter "$2"; [ "$DRYRUN" = 1 ] && echo "MELDUNG: $2" || "$NOTIFY" -e "CS2-Waechter" -s "$1" -d "$2" -i "${3:-warning}"; }
 neustart() { [ "$DRYRUN" = 1 ] && { echo "DRYRUN: neustart"; return; }; date +%s > "$LETZTER"; docker restart -t 20 "$NAME" >/dev/null 2>&1; }
@@ -45,6 +60,26 @@ neustart() { [ "$DRYRUN" = 1 ] && { echo "DRYRUN: neustart"; return; }; date +%s
 metamod_an()  { grep -q "csgo/addons/metamod" "$GAMEINFO"; }
 metamod_ein() { metamod_an || sed -i 's#^\(\t*\)Game_LowViolence\tcsgo_lv // Perfect World content override#&\n\1Game\tcsgo/addons/metamod#' "$GAMEINFO"; metamod_an; }
 metamod_aus() { sed -i '/csgo\/addons\/metamod/d' "$GAMEINFO"; }
+
+# 0 = Steam verlangt eine neuere Version als die installierte.
+veraltet() {
+    v=$(sed -n 's/^PatchVersion=//p' "$GAME/steam.inf" | tr -d '.\r')
+    [ -n "$v" ] || return 1
+    curl -s -m 15 "https://api.steampowered.com/ISteamApps/UpToDateCheck/v1/?appid=730&version=$v" \
+        | grep -q '"up_to_date":false'
+}
+update_haengt() { grep -qE '"StateFlags"[[:space:]]+"6"' "$STEAMAPPS/appmanifest_730.acf" 2>/dev/null; }
+update_erzwingen() {
+    [ "$DRYRUN" = 1 ] && { echo "DRYRUN: update_erzwingen"; return 0; }
+    bak="$STEAMAPPS/../appmanifest_730.acf.bak-$(date +%Y%m%d%H%M)"
+    cp "$STEAMAPPS/appmanifest_730.acf" "$bak" && rm "$STEAMAPPS/appmanifest_730.acf" || return 1
+    if docker exec -u 99:100 "$NAME" /serverdata/steamcmd/steamcmd.sh +force_install_dir /serverdata/serverfiles \
+            +login anonymous +app_update 730 +quit 2>&1 | grep -q "Success! App '730'"; then
+        return 0
+    fi
+    [ -f "$STEAMAPPS/appmanifest_730.acf" ] || cp "$bak" "$STEAMAPPS/appmanifest_730.acf"
+    return 1
+}
 
 # Neueste Builds holen. Eigene Plugins (plugins/CoachTeleport) und configs
 # bleiben, weil nur die Dateien aus den Archiven ueberschrieben werden.
@@ -115,6 +150,23 @@ gestartet=$(date -d "$(docker inspect -f '{{.State.StartedAt}}' "$NAME")" +%s)
 spieler=$(abfragen || abfragen)
 if [ -n "$spieler" ]; then
     rm -f "$SEIT"
+    # --- CS2-Update (nur bei leerem Server)
+    if [ "$spieler" = 0 ] && { [ ! -f "$UPDCHECK" ] || [ $(( jetzt - $(cat "$UPDCHECK") )) -ge "$UPDPAUSE" ]; }; then
+        echo "$jetzt" > "$UPDCHECK"
+        if update_haengt; then
+            if update_erzwingen; then
+                rm -f "$UPDFEHLER"
+                [ -f "$AUS" ] || metamod_ein
+                melde "CS2-Update nachgeholt" "Das Update hing (Steam gab die alten Manifeste nicht heraus). Manifest neu aufgebaut, Update installiert, Server startet neu." normal
+                neustart; exit 0
+            fi
+            [ -f "$UPDFEHLER" ] || melde "CS2-Update haengt" "SteamCMD konnte das Update auch mit neu aufgebautem Manifest nicht laden - Details in /serverdata/Steam/logs/content_log.txt im Container. Neuer Versuch alle $(( UPDPAUSE / 60 )) min." alert
+            touch "$UPDFEHLER"
+        elif veraltet; then
+            melde "CS2-Update" "Steam verlangt eine neuere CS2-Version. Server war leer - Neustart, der Container aktualisiert beim Start." normal
+            neustart; exit 0
+        fi
+    fi
     # --- Metamod wieder eintragen (CS2-Update hat gameinfo.gi ersetzt) oder neu versuchen
     if ! metamod_an; then
         if [ -f "$AUS" ]; then
