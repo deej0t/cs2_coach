@@ -27,10 +27,12 @@ import json
 import math
 from pathlib import Path
 
-MODES = {"duell": "Duell", "situation": "Situation", "retake": "Retake", "halten": "Site halten"}
+MODES = {"duell": "Duell", "situation": "Situation", "retake": "Retake", "halten": "Site halten",
+         "eichen": "Reaktion eichen"}
 MULTI = ("situation", "retake", "halten")
 MODE_HELP = {"duell": "nur dein Killer", "situation": "alle Gegner in der Naehe",
-             "retake": "Bombe liegt, du bist CT", "halten": "du haeltst als CT, mehrere Ts kommen"}
+             "retake": "Bombe liegt, du bist CT", "halten": "du haeltst als CT, mehrere Ts kommen",
+             "eichen": "10 Runden, Gegner taucht auf"}
 MAX_ENEMIES = 5
 NEAR = 2500  # Units: Gegner, die zur Situation gehoeren (der Killer immer)
 HOLD_LEAD = 5

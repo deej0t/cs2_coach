@@ -169,7 +169,8 @@ def test_mode_menu_after_map(multi):
     director().command(ME, "dj", "training", "mirage menu", 2)
     m = json.loads(base64.b64decode(next(c for c in server.sent if c.startswith("coach_menu 2 ")).split()[2]))
     assert [i[1] for i in m["items"]] == ["!training mirage duell", "!training mirage situation",
-                                          "!training mirage retake", "!training mirage halten", "!training"]
+                                          "!training mirage retake", "!training mirage halten", "!training mirage eichen",
+                                          "!training"]
 
 
 def test_unknown_mode_is_rejected(multi):
@@ -211,3 +212,38 @@ def test_friend_starts_where_your_teammate_stood(multi):
     assert tp.split()[2] == "50.0"  # Position von MATE aus der Demo
     assert any(c.startswith("coach_give 9 weapon_awp") for c in server.sent)
     assert any(c.startswith("coach_hud 9 ") for c in server.sent)
+
+
+def test_calibration_round_hides_bot_and_saves_result(tmp_path):
+    import json as _json
+    from cs2_coach import training_server as ts
+    folder = tmp_path / "CS2-Coach" / "exports"
+    folder.mkdir(parents=True)
+    kills = [{"t": "k", "x": 0, "y": 0, "z": 0, "ex": 800, "ey": 0, "ez": 0, "w": "ak47", "r": i} for i in range(12)]
+    kills += [{"t": "k", "x": 0, "y": 0, "z": 0, "ex": 50, "ey": 0, "ez": 0, "w": "ak47"},  # zu nah
+              {"t": "k", "x": 0, "y": 0, "z": 0, "ex": 800, "ey": 0, "ez": 0, "w": "knife"}]
+    (folder / "2026-10-27_mirage_13-8_2049_coach.json").write_text(_json.dumps(
+        {"match": {"map": "Mirage"}, "kill_positions": kills}))
+    cfg = {"obsidian_vault_path": str(tmp_path)}
+    items = ts.calibration_items(cfg, "de_mirage")
+    assert len(items) == ts.CALIB_ROUNDS and items[0]["enemies"][0]["start"][:3] == (800, 0, 0) or \
+        list(items[0]["enemies"][0]["start"][:3]) == [800, 0, 0]
+    assert ts.parse_stats("coach_stats 2 seen=2000 start=0 appear_seen=47 appear_shot=265")["appear_shot_ms"] == 265
+    duels = [{"appear_seen_ms": 40 + i, "appear_shot_ms": 250 + 10 * i} for i in range(5)]
+    c = ts.calibration_from(duels)
+    assert c["reaction_ms"] == 270 and c["latency_ms"] == 42
+    assert ts.calibration_from(duels[:4]) is None
+
+
+def test_calibration_round_start_sends_appear(multi):
+    director, server, timers, path = multi
+    state = {"phase": "running", "map": "de_mirage", "mode": "eichen", "human": ME, "queue": [0], "pos": 0,
+             "results": [], "level": 3, "round": 0, "human_uid": 2, "bot_uids": [3], "bot_uid": 3}
+    item = {"me": [0, 0, 0, 0, 0], "me_items": [], "mates": [], "source": "Eichung",
+            "enemies": [{"name": "Ziel", "start": [800, 0, 0, 0, 180], "path": [], "items": []}]}
+    (path.parent / ts.ITEMS_FILE).write_text(json.dumps([item]))
+    ts.save_state(path, state)
+    director().on_lines([line('World triggered "Round_Start"')])
+    assert "bot_freeze 1" in server.sent
+    assert any(c.startswith("coach_appear 3 ") for c in server.sent)
+    assert not any(c.startswith("coach_tp 3 ") for c in server.sent)

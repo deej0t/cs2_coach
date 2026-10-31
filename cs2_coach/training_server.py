@@ -92,7 +92,7 @@ GRENADES = {"weapon_flashbang", "weapon_smokegrenade", "weapon_hegrenade", "weap
 NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade", "flashbang",
             "smokegrenade", "decoy", "world", "taser", "planted_c4")
 
-MODE_COMMANDS = {"retake": "retake", "halten": "halten", "sitehold": "halten", "hold": "halten",
+MODE_COMMANDS = {"eichen": "eichen", "retake": "retake", "halten": "halten", "sitehold": "halten", "hold": "halten",
                  "situation": "situation", "duell": "duell"}
 # Training zu mehreren: der Besitzer laedt ein, der Freund sagt zu. Mitmachen und
 # Aussteigen darf jeder - das sind die einzigen Befehle ohne Besitzer-Pruefung.
@@ -442,12 +442,23 @@ def direction(me, foe) -> str:
 
 
 _STAT_KEYS = {"seen": "seen_ms", "err": "seen_err", "dpitch": "dpitch", "dyaw": "dyaw",
-              "react": "react_ms", "hit": "hit_ms", "peek": "peek_ms", "fspeed": "first_speed"}
+              "react": "react_ms", "hit": "hit_ms", "peek": "peek_ms", "fspeed": "first_speed",
+              "appear_seen": "appear_seen_ms", "appear_shot": "appear_shot_ms"}
 MEASURE_KEYS = ("seen_err", "dpitch", "dyaw", "react_ms", "hit_ms", "peek_ms", "kill_errs",
-                "shots", "stopped", "first_speed")
+                "shots", "stopped", "first_speed", "appear_seen_ms", "appear_shot_ms")
 STOPPED_SPEED = 80  # u/s, wie COUNTER_STRAFE_SPEED_THRESHOLD im Parser (gegen inaccuracy_move geeicht)
 # Unabhaengig vom Sichtzeitpunkt - zaehlen auch, wenn der Gegner schon beim Freeze-Ende sichtbar war.
-_ALWAYS = ("kill_errs", "shots", "stopped", "first_speed")
+_ALWAYS = ("kill_errs", "shots", "stopped", "first_speed", "appear_seen_ms", "appear_shot_ms")
+
+# Eichung der Reaktionszeit (!eichen): der Bot taucht nach zufaelliger Zeit an einer
+# Stelle auf, an der du in einem echten Match einen Gegner getoetet hast (also mit
+# Sicht). Der Tick des Auftauchens ist genau bekannt - damit laesst sich messen, wie
+# spaet die Spotted-Maske anschlaegt und wie schnell du wirklich reagierst.
+CALIB_FILE = ".reaction_calibration.json"
+CALIB_ROUNDS = 10
+CALIB_MIN = 5  # weniger gueltige Runden = keine Eichung speichern
+CALIB_DELAY_MS = (1500, 4500)
+CALIB_DISTANCE = (400, 1500)
 
 
 def parse_stats(reply: str) -> dict:
@@ -572,6 +583,57 @@ def _match_median(cfg: dict, value, last: int) -> float | None:
         if len(values) >= last:
             break
     return _median(values)
+
+
+def calibration_items(cfg: dict, bsp: str, limit: int = CALIB_ROUNDS) -> list[dict]:
+    """Eigene Kills mit Sicht (Schusswaffe, 400-1500 Units) als Eichpunkte: du am
+    damaligen Platz, der Bot taucht dort auf, wo dein Opfer stand."""
+    from .obsidian import export_sort_key
+    from .practice import _map_to_bspname
+    vault = (cfg.get("obsidian_vault_path") or "").strip()
+    if not vault:
+        return []
+    folder = Path(vault) / cfg.get("coach_subfolder", "CS2-Coach") / "exports"
+    out = []
+    for f in sorted(folder.glob("*_coach.json"), key=export_sort_key, reverse=True):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if _map_to_bspname(data.get("match", {}).get("map", "")) != bsp:
+            continue
+        for k in data.get("kill_positions") or []:
+            if k.get("t") != "k" or not _is_gun(str(k.get("w", ""))):
+                continue
+            me, foe = (k["x"], k["y"], k["z"]), (k["ex"], k["ey"], k["ez"])
+            if not CALIB_DISTANCE[0] <= math.dist(me[:2], foe[:2]) <= CALIB_DISTANCE[1]:
+                continue
+            pitch, yaw = _calc_view_angle(me[0], me[1], me[2] + 64, foe[0], foe[1], foe[2] + 64)
+            bpitch, byaw = _calc_view_angle(foe[0], foe[1], foe[2] + 64, me[0], me[1], me[2] + 64)
+            out.append({"mode": "eichen", "round": int(k.get("r", 0)), "tick": int(k.get("tk", 0)),
+                        "me": [*me, pitch, yaw], "me_items": [],
+                        "enemies": [{"name": "Ziel", "start": [*foe, bpitch, byaw], "path": [], "items": []}],
+                        "mates": [], "export": f.name, "source": f"Eichung {f.name[8:10]}.{f.name[5:7]}."})
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def calibration_from(duels: list[dict]) -> dict | None:
+    """Median aus den gueltigen Eichrunden; None bei zu wenigen."""
+    seen = [d["appear_seen_ms"] for d in duels if d.get("appear_seen_ms", -1) >= 0]
+    shot = [d["appear_shot_ms"] for d in duels if d.get("appear_shot_ms", -1) >= 0]
+    if len(shot) < CALIB_MIN:
+        return None
+    return {"latency_ms": _median(seen), "latency_n": len(seen), "reaction_ms": _median(shot),
+            "reaction_n": len(shot), "date": datetime.now().isoformat(timespec="seconds")}
+
+
+def load_calibration(config_path: Path) -> dict | None:
+    try:
+        return json.loads((Path(config_path).parent / CALIB_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
 
 
 def duel_tip(rnd: dict, outcome: str) -> str | None:
@@ -919,7 +981,8 @@ class Director:
             return problem
         self.send(_say(f"{MODES[mode]} auf {bsp}: suche Situationen in deinen Demos "
                        "(beim ersten Mal bis zu 1-2 Minuten)..."))
-        items = collect(self.cfg, self.path, bsp, mode, limit=MAX_SCENARIOS)
+        items = (calibration_items(self.cfg, bsp) if mode == "eichen"
+                 else collect(self.cfg, self.path, bsp, mode, limit=MAX_SCENARIOS))
         if not items:
             return [f"Keine {MODES[mode]}-Situationen auf {bsp} in deinen Demos gefunden."]
         (self.path.parent / ITEMS_FILE).write_text(json.dumps(items), encoding="utf-8")
@@ -974,6 +1037,14 @@ class Director:
         res = state.get("results", [])
         won = sum(1 for r in res if r == "win")
         summary = f"{why}: {won}/{len(res)} Duelle gewonnen" if res else why
+        if state.get("mode") == "eichen":
+            calib = calibration_from(state.get("duels", []))
+            if calib:
+                (self.path.parent / CALIB_FILE).write_text(json.dumps(calib), encoding="utf-8")
+                summary = (f"Eichung fertig: du reagierst in {calib['reaction_ms']:.0f} ms, das Radar meldet "
+                           f"den Gegner {calib['latency_ms'] or 0:.0f} ms nach dem Auftauchen.")
+            else:
+                summary = f"Eichung: zu wenige gueltige Runden (mind. {CALIB_MIN}) - nichts gespeichert."
         save_state(self.path, {})
         session = save_session(self.path, state, why) if state.get("duels") else None
         uid = state.get("human_uid")
@@ -1382,6 +1453,10 @@ class Director:
                 continue
             e = enemies[i]
             active.append(uid)
+            if state["mode"] == "eichen":
+                import random
+                cmds += ["bot_freeze 1", f"coach_appear {uid} {random.randint(*CALIB_DELAY_MS)} {_fmt(e['start'])}"]
+                continue
             cmds.append(f"coach_tp {uid} {_fmt(e['start'])}")
             if len(e["path"]) >= 2:
                 cmds += ([f"coach_path_clear {uid}"]
@@ -1417,7 +1492,9 @@ class Director:
             _font(f"Stand {_score(state)} &#183; {_level_text(state)}", GREY, "s")])
         cmds.append(hud(human, FREEZE_TIME + 4, body))
         cmds += _party_hud(state, FREEZE_TIME + 4, body)
-        cmds.append(_say(f"{MODES[state['mode']]} {n}/{total} ({item.get('source', '')}): {len(active)} Gegner, "
+        cmds.append(_say(f"Eichung {n}/{total}: der Gegner taucht gleich vor dir auf - schiess, sobald du ihn siehst."
+                         if state["mode"] == "eichen" else
+                         f"{MODES[state['mode']]} {n}/{total} ({item.get('source', '')}): {len(active)} Gegner, "
                          "jeder laeuft seinen echten Weg, bis er dich sieht"))
         cmds += _aim_commands(state, active)
         replies = self.send(*cmds)

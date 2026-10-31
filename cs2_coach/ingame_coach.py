@@ -153,6 +153,8 @@ def _measure_facts(d: dict) -> str:
                      else f"er sah den Gegner {-d['peek_ms']:.0f} ms frueher")
     if d.get("kill_errs"):
         parts.append("Fadenkreuz 0,5 s vor seinen Kills: " + ", ".join(f"{k:.0f} Grad" for k in d["kill_errs"]))
+    if "appear_shot_ms" in d:
+        parts.append(f"Eichung: Gegner tauchte auf, erster Schuss nach {d['appear_shot_ms']:.0f} ms")
     if d.get("shots"):
         parts.append(f"Counter-Strafing: {d.get('stopped', 0)} von {d['shots']} Schuessen gestoppt (<= 80 u/s)")
     if "first_speed" in d:

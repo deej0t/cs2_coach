@@ -40,6 +40,11 @@
 //         ihn zuerst), kills=Fadenkreuz 0,5 s vor jedem Kill (wie im Match-Parser),
 //         shots/stopped=Schuesse gesamt/davon gestoppt (<= 80 u/s, Counter-Strafing),
 //         fspeed=Geschwindigkeit beim ersten Schuss (u/s).
+//     coach_appear <userid> <verzoegerung_ms> <x> <y> <z> <pitch> <yaw>
+//         Eichung: Bot so viele ms nach Freeze-Ende dorthin versetzen. Der Tick
+//         des Auftauchens ist damit genau bekannt; coach_stats meldet dann
+//         appear_seen (wann die Spotted-Maske anschlug) und appear_shot (dein
+//         erster Schuss), beide in ms nach dem Auftauchen.
 //     coach_tp_version
 //
 // Alles andere - welche Situation, wann, wer - entscheidet der Coach, damit
@@ -63,7 +68,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.11.0";
+    public override string ModuleVersion => "1.12.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -106,6 +111,7 @@ public class CoachTeleport : BasePlugin
             var speed = v is null ? 0f : (float)Math.Sqrt(v.X * v.X + v.Y * v.Y);
             m.Shots++;
             if (speed <= StoppedSpeed) m.Stopped++;
+            if (_appearTick >= 0 && m.AppearShotTick < 0) m.AppearShotTick = Server.TickCount;
             if (m.ShotTick < 0)
             {
                 m.ShotTick = Server.TickCount;
@@ -127,6 +133,8 @@ public class CoachTeleport : BasePlugin
             _measures.Clear();
             _views.Clear();
             _freezeEndTick = Server.TickCount;
+            _appearTick = -1;
+            if (_appear is { } ap) _appear = ap with { FireTick = Server.TickCount + ap.DelayTicks };
             foreach (var r in _replays.Values.Where(r => r.Armed && r.StartTick < 0))
                 r.StartTick = Server.TickCount;
             return HookResult.Continue;
@@ -453,6 +461,7 @@ public class CoachTeleport : BasePlugin
     private sealed class Measure
     {
         public int SeenTick = -1, EnemySawTick = -1, ShotTick = -1, HitTick = -1, Shots, Stopped;
+        public int AppearSeenTick = -1, AppearShotTick = -1;
         public float FirstShotSpeed = -1;
         public bool AtStart;
         public float Err = -1, DPitch, DYaw;
@@ -509,8 +518,40 @@ public class CoachTeleport : BasePlugin
         return false;
     }
 
+    private sealed record Appear(int Userid, int DelayTicks, float[] Pos, int FireTick);
+    private Appear? _appear;
+    private int _appearTick = -1;
+
+    [ConsoleCommand("coach_appear", "Eichung: <userid> <verzoegerung_ms> <x> <y> <z> <pitch> <yaw>")]
+    [CommandHelper(minArgs: 7, usage: "<userid> <ms> <x> <y> <z> <pitch> <yaw>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnAppear(CCSPlayerController? caller, CommandInfo info)
+    {
+        var ci = CultureInfo.InvariantCulture;
+        var v = new float[5];
+        if (!int.TryParse(info.GetArg(1), out var userid) || !int.TryParse(info.GetArg(2), out var ms)
+            || Enumerable.Range(0, 5).Any(k => !float.TryParse(info.GetArg(3 + k), NumberStyles.Float, ci, out v[k])))
+        {
+            info.ReplyToCommand("coach_appear: ungueltige Argumente");
+            return;
+        }
+        var delay = ms * 64 / 1000;
+        _appear = new Appear(userid, delay, v, _inFreeze ? -1 : Server.TickCount + delay);
+        info.ReplyToCommand($"coach_appear ok {userid}");
+    }
+
     private void MeasureTick()
     {
+        if (_appear is { FireTick: >= 0 } ap && Server.TickCount >= ap.FireTick && !_inFreeze)
+        {
+            _appear = null;
+            var bot = Utilities.GetPlayerFromUserid(ap.Userid)?.PlayerPawn.Value;
+            if (bot is not null && bot.IsValid)
+            {
+                bot.Teleport(new Vector(ap.Pos[0], ap.Pos[1], ap.Pos[2]), new QAngle(ap.Pos[3], ap.Pos[4], 0),
+                             new Vector(0, 0, 0));
+                _appearTick = Server.TickCount;
+            }
+        }
         if (_inFreeze || _freezeEndTick < 0) return;
         var now = Server.TickCount;
         foreach (var human in Utilities.GetPlayers())
@@ -528,6 +569,7 @@ public class CoachTeleport : BasePlugin
             while (views.Count > PreAimTicks + 4) views.Dequeue();
             var m = MeasureOf(uid);
             if (m.EnemySawTick < 0 && SeenByEnemy(human, pawn)) m.EnemySawTick = now;
+            if (_appearTick >= 0 && m.AppearSeenTick < 0 && SeenEnemy(human) is not null) m.AppearSeenTick = now;
             if (m.SeenTick >= 0) continue;
             var foe = SeenEnemy(human);
             if (foe?.AbsOrigin is null) continue;
@@ -571,6 +613,9 @@ public class CoachTeleport : BasePlugin
             $"peek={Ms(m.SeenTick, m.EnemySawTick)}",
             $"kills={(m.KillErrs.Count > 0 ? string.Join(",", m.KillErrs.Select(k => k.ToString("F1", ci))) : "-")}",
             $"shots={m.Shots}", $"stopped={m.Stopped}",
+            // Nur wenn der Bot vor dem Auftauchen nicht schon sichtbar war - sonst 0 ms ohne Aussage.
+            $"appear_seen={(m.SeenTick < 0 || m.SeenTick >= _appearTick ? Ms(m.AppearSeenTick, _appearTick) : "-")}",
+            $"appear_shot={(m.SeenTick < 0 || m.SeenTick >= _appearTick ? Ms(m.AppearShotTick, _appearTick) : "-")}",
             $"fspeed={(m.FirstShotSpeed >= 0 ? m.FirstShotSpeed.ToString("F0", ci) : "-")}",
         };
         info.ReplyToCommand($"coach_stats {userid} " + string.Join(" ", parts));

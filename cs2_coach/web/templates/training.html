@@ -65,6 +65,17 @@
 </div>
 {% endif %}
 
+{% if calibration %}
+<div class="card elev-sm" style="margin-bottom: var(--space-5);">
+    <span class="card-kicker">Reaktion geeicht ({{ calibration.date[8:10] }}.{{ calibration.date[5:7] }}.)</span>
+    <p style="margin: var(--space-2) 0 0; font-size: 14px;">
+        Gegner taucht auf → dein erster Schuss: <strong>{{ '%.0f'|format(calibration.reaction_ms) }} ms</strong>
+        (Median aus {{ calibration.reaction_n }} Runden).
+        {% if calibration.latency_ms is not none %}Das Radar meldet ihn {{ '%.0f'|format(calibration.latency_ms) }} ms nach dem
+        Auftauchen - um so viel liegt der Sichtzeitpunkt der übrigen Messungen zu spät.{% endif %}
+        Neu eichen im Spiel mit <code>!eichen</code>.</p>
+</div>
+{% endif %}
 {% if measured %}
 <h3 style="margin-bottom: var(--space-2);">Messwerte im Training</h3>
 <p style="color: var(--color-neutral-500); font-size: 12px; margin-bottom: var(--space-3);">

@@ -36,7 +36,8 @@ def create_blueprint(load_config, config_path) -> Blueprint:
             measured=[s for s in sessions[:20] if s["measures"]["seen_n"] or s["measures"]["kill_n"]
                       or s["measures"]["shots_n"]],
             match_cp=training_server.match_crosshair_median(cfg),
-            match_cs=training_server.match_counter_strafe_median(cfg), max_level=training_server.MAX_LEVEL,
+            match_cs=training_server.match_counter_strafe_median(cfg),
+            calibration=training_server.load_calibration(path), max_level=training_server.MAX_LEVEL,
             config=cfg)
 
     return bp
