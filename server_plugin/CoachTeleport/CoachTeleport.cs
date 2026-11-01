@@ -69,7 +69,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.14.0";
+    public override string ModuleVersion => "1.15.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -99,6 +99,7 @@ public class CoachTeleport : BasePlugin
         RegisterListener<Listeners.OnTick>(DrawCenter);
         RegisterListener<Listeners.OnTick>(AimAssist);
         RegisterListener<Listeners.OnTick>(Hunt);
+        RegisterListener<Listeners.OnTick>(SpeedLimit);
         RegisterListener<Listeners.OnTick>(MeasureTick);
         RegisterEventHandler<EventWeaponFire>((ev, _) =>
         {
@@ -685,6 +686,35 @@ public class CoachTeleport : BasePlugin
     // Ob die KI dem wirklich folgt, zeigt das Log: alle 2 s die Entfernung.
     private readonly HashSet<int> _hunters = new();
     private bool _roundKill;
+
+    // Tempolimit (1.15.0). 1.11.: "der ist rueber gespeeded" - flussig, aber zu schnell quer
+    // ueber die Map, nach dem Weg aus der Demo (der lag bei hoechstens 241 u/s). Ursache
+    // noch offen; laeuft ein Trainings-Bot ohne Weg schneller als MaxSpeed, wird er
+    // gebremst und das ins Log geschrieben (coach_speed), damit sich die Ursache finden laesst.
+    private const float MaxSpeed = 260f;  // Messer 250, mit Spielraum
+    private readonly Dictionary<int, int> _speedLogged = new();
+
+    private void SpeedLimit()
+    {
+        if (_hunters.Count == 0 && _skills.Count == 0) return;
+        foreach (var userid in _hunters.Concat(_skills.Keys).Distinct().ToList())
+        {
+            if (_replays.ContainsKey(userid)) continue;
+            var pawn = Utilities.GetPlayerFromUserid(userid)?.PlayerPawn.Value;
+            if (pawn is null || !pawn.IsValid || pawn.LifeState != (byte)LifeState_t.LIFE_ALIVE) continue;
+            var v = pawn.AbsVelocity;
+            var speed = (float)Math.Sqrt(v.X * v.X + v.Y * v.Y);
+            if (speed <= MaxSpeed) continue;
+            var f = MaxSpeed / speed;
+            pawn.Teleport(null, null, new Vector(v.X * f, v.Y * f, v.Z));
+            var now = Server.TickCount;
+            if (!_speedLogged.TryGetValue(userid, out var last) || now - last > 128)
+            {
+                _speedLogged[userid] = now;
+                Logger.LogInformation("coach_speed {Bot} {Speed:F0} u/s gebremst", userid, speed);
+            }
+        }
+    }
 
     private void OnFirstKill()
     {
