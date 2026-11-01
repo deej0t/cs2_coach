@@ -29,6 +29,10 @@ STATE_FILE = ".live_state.json"
 LOCK_FILE = ".live_state.lock"
 TOKEN_FILE = ".gsi_token"
 MATCHES_DIR = "live_matches"
+# Nur echte Matches. Am 1.11. lief der Live-Coach im !training und auf der Aim-Map mit -
+# dort sind Granaten-Hinweise Rauschen (im Duell wirft man selten), und aim_multigame
+# waere als "Match" gespeichert worden.
+MATCH_MODES = {"competitive", "premier", "scrimcomp2v2"}
 LATE_SECONDS = 35  # so viel Rundenzeit uebrig und noch keine Granate geworfen -> Hinweis
 GRENADE_NAMES = {"weapon_hegrenade": "HE", "weapon_molotov": "Molotov", "weapon_incgrenade": "Brandgranate",
                  "weapon_flashbang": "Flash", "weapon_smokegrenade": "Smoke", "weapon_decoy": "Decoy"}
@@ -166,7 +170,7 @@ def update(state: dict, payload: dict, cfg: dict) -> dict:
     if not mp:  # Hauptmenue
         return state
     map_name = mp.get("name", "")
-    if mp.get("phase") == "warmup":
+    if mp.get("phase") == "warmup" or mp.get("mode") not in MATCH_MODES:
         return state
     if not state or state.get("map") != map_name or state.get("over"):
         if mp.get("phase") == "gameover":
@@ -248,6 +252,9 @@ def save_match(config_path: Path, state: dict) -> Path | None:
 
 
 def ingest(cfg: dict, config_path: Path, payload: dict) -> None:
+    from .training_server import is_active
+    if is_active(config_path):
+        return
     with _Lock(config_path):
         before = load_state(config_path)
         state = update(dict(before), payload, cfg)

@@ -12,7 +12,8 @@ def gsi(rnd, phase="live", sid=ME, health=100, nades=("weapon_hegrenade", "weapo
         map_phase="live"):
     weapons = {f"weapon_{i}": {"name": n, "type": "Grenade", "ammo_reserve": 1} for i, n in enumerate(nades)}
     weapons["weapon_9"] = {"name": "weapon_ak47", "type": "Rifle"}
-    return {"provider": {"steamid": ME}, "map": {"name": "de_mirage", "phase": map_phase, "round": rnd - 1,
+    return {"provider": {"steamid": ME}, "map": {"name": "de_mirage", "mode": "competitive", "phase": map_phase,
+                                                  "round": rnd - 1,
                                                   "team_ct": {"score": 7}, "team_t": {"score": 6}},
             "round": {"phase": phase}, "phase_countdowns": {"phase_ends_in": str(left)},
             "player": {"steamid": sid, "state": {"health": health}, "weapons": weapons}}
@@ -83,3 +84,13 @@ def test_ingest_endpoint_checks_token(tmp_path, monkeypatch):
     finally:
         monkeypatch.delenv("CS2COACH_CONFIG")
         importlib.reload(app_module)
+
+
+def test_ignores_deathmatch_aim_maps_and_training(tmp_path, monkeypatch):
+    dm = gsi(1)
+    dm["map"].update(mode="deathmatch", name="aim_multigame")
+    assert lc.update({}, dm, CFG) == {}
+    from cs2_coach import training_server as ts
+    monkeypatch.setattr(ts, "is_active", lambda path: True)
+    lc.ingest(CFG, tmp_path / "config.yaml", gsi(1))
+    assert lc.load_state(tmp_path / "config.yaml") == {}
