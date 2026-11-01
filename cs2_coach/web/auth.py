@@ -24,7 +24,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 # page can load its own CSS; "share_card" keeps match share links public.
 # "server.*": the server leaderboard is for everyone who plays there, and the
 # CS2 server posts its log without a session (secret token in the URL instead).
-PUBLIC_ENDPOINTS = {"login", "static", "share_card", "server.page", "server.ingest"}
+PUBLIC_ENDPOINTS = {"login", "static", "share_card", "server.page", "server.ingest", "live.ingest"}
 
 # Brute-force throttle: after MAX_ATTEMPTS failures from one remote address,
 # further attempts are refused for LOCKOUT_SECONDS.

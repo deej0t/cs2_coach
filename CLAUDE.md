@@ -28,6 +28,7 @@ cs2_coach/
   rcon.py          (60) minimal Source RCON client
   ingame_coach.py (240) AI coach in the game chat: !coach <question>, !tipp, end-of-training Fazit
   training_scenarios.py (210) multi-enemy scenarios from demos: situation, retake, site hold
+  live_coach.py  (230) live coach in real matches via GSI: grenades thrown / taken to the grave, hints on /live
   training_goal.py (90) goal per training: weakest measured habit, counted per duel, judged with compare_rates
   training_server.py (460) duel training on the server: replays your lost duels with a bot (!training <map>)
 server_plugin/CoachTeleport/ C# CounterStrikeSharp plugin: `coach_tp` (teleport with view angles) for the training
@@ -43,6 +44,7 @@ server_plugin/CoachTeleport/ C# CounterStrikeSharp plugin: `coach_tp` (teleport 
   web/auth.py     (160) optional password protection
   web/daily_briefing.py (130) /daily: briefing preview + "send now" (blueprint, not in app.py)
   web/server_board.py    (50) /server (public leaderboard) + /api/serverlog/<token> (log ingest)
+  web/live_page.py       (60) /live (phone page, polls /api/live, optional speech) + /api/gsi/<token> (GSI ingest)
   web/training_page.py   (40) /training: results of the server duel training
   web/i18n.py     (830) translations
   web/templates/        Jinja2 (Nocturne design system), _partials/ for shared blocks
@@ -178,6 +180,12 @@ Each of these was wrong once and was fixed against measured demo data. Do not re
 - **Own pause, not `mp_pause_match`**: CS2's match pause brings its own centre display and the menu "verschwindet sofort, wenn man in der !pause ist". Pause = `bot_freeze 1` + `mp_ignore_round_win_conditions 1` (the round cannot end); `!weiter` = undo both + `endround` with a `redo` flag, so the same duel restarts and nothing is counted.
 - **End of training**: the map stays `FAREWELL_SECONDS` (30): big result, AI *Fazit* in the private chat (`ingame_coach.session_fazit()`, also stored in the session JSON and shown on `/training`), then `RESTORE` - only if no new training was started meanwhile. Disconnect, load timeout and the 15-min pause restore immediately (`immediate=True`).
 - Driven by the HTTP log **synchronously** in the ingest (CS2 sends the next batch only after the answer), so a kill never overtakes its `Round_Start`. State in `.training_server.json` next to the config, guarded by an O_EXCL lock file. A disconnect of the human (after map load) stops the training and restores the server (`RESTORE` + `server_restore_command`), otherwise it would stay with `sv_cheats 1`.
+
+## Live Coach in real matches (`live_coach.py`, `web/live_page.py`)
+- **Game State Integration** (Valve's official interface, own data only - no enemy positions): the user drops `gamestate_integration_cs2coach.cfg` (download on `/live`) into `game/csgo/cfg/`; the client POSTs to `/api/gsi/<token>` (public like the server-log ingest, token in URL **and** `auth.token`, `.gsi_token` next to the config). The URL points at the LAN (`live_gsi_url`, else `server_rcon_host:5001`), never through Cloudflare.
+- Why grenades: utility per round is the strongest measured win factor (d = 0.94). Target = median grenades per round in the player's **won** matches (same map if >= 5, decoys excluded like `utility_analysis._rates`).
+- Counting: a grenade that leaves the inventory during a live round while alive = thrown; grenades held at death = "mit ins Grab". **While dead GSI shows the spectated teammate** - a foreign `player.steamid` during a live round means you died. `map.round` counts finished rounds (+1 = current).
+- Hints: at freeze time (pace vs target, grenades wasted last round), once per round at <= 35 s left with grenades unused, halftime and game-over summary. Finished matches -> `live_matches/` (basis for "with vs without live coach" via `evidence.py` later). Not yet run in a real match.
 
 ## Daily Briefing (`training.py`, `briefing.py`, `sync.py`)
 - The container loop (`CS2COACH_BRIEFING_HOUR`, default 17, empty = off) runs `cs2-coach sync` once a day (GCPD download + `batch --only-outdated`), then `briefing --send` every 15 min from that hour on. `.briefing_state.json` next to the config makes sending **at most once per day** and is written only after a successful post, so a failed post is retried on the next pass. Webhook: `briefing_webhook`, else `discord_webhook`. Note goes to `CS2-Coach/Briefings/YYYY-MM-DD.md`.

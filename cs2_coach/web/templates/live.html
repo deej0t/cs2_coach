@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Live{% endblock %}
+{% block content %}
+<h2>Live-Coach</h2>
+<div class="card elev-sm" style="margin-bottom: var(--space-4); text-align: center;">
+    <div id="hint" style="font-size: 26px; font-weight: 700; line-height: 1.3; min-height: 70px;">Warte auf ein Match …</div>
+    <div id="meta" style="color: var(--color-neutral-500); font-size: 13px; margin-top: var(--space-2);"></div>
+</div>
+<div style="display: flex; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4);">
+    <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
+        <div id="thrown" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">Granaten (Halbzeit)</div></div>
+    <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
+        <div id="soll" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">Ziel bis jetzt</div></div>
+    <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
+        <div id="wasted" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">mit ins Grab</div></div>
+</div>
+<p><button id="speak" class="btn">🔊 Hinweise vorlesen</button></p>
+<div id="log" style="font-size: 13px; color: var(--color-neutral-500);"></div>
+
+<details class="card elev-sm" style="margin-top: var(--space-5);">
+    <summary style="cursor: pointer;">Einrichten (einmalig)</summary>
+    <ol style="font-size: 13px; margin-top: var(--space-3);">
+        <li><a href="{{ url_for('live.cfg_file') }}">gamestate_integration_cs2coach.cfg herunterladen</a></li>
+        <li>Nach <code>…\steamapps\common\Counter-Strike Global Offensive\game\csgo\cfg\</code> kopieren.</li>
+        <li>CS2 neu starten. Diese Seite aufs Handy oder den zweiten Bildschirm.</li>
+    </ol>
+    <p style="font-size: 12px; color: var(--color-neutral-500);">Valves offizielle Game State Integration: nur deine eigenen
+        Daten (Runde, Geld, Waffen), keine Gegner. Ziel = Median deiner Granaten pro Runde in gewonnenen Matches.
+        Empfang: <code>{{ gsi_url.rsplit('/', 1)[0] }}/…</code></p>
+</details>
+<script>
+let speak = false, lastId = 0;
+document.getElementById('speak').onclick = () => { speak = !speak;
+  document.getElementById('speak').textContent = speak ? '🔇 Vorlesen aus' : '🔊 Hinweise vorlesen';
+  if (speak) speechSynthesis.speak(new SpeechSynthesisUtterance('Vorlesen an')); };
+async function tick() {
+  try {
+    const r = await fetch('{{ url_for("live.state") }}');
+    if (r.status === 401) { document.getElementById('hint').textContent = 'Sitzung abgelaufen - neu anmelden'; return; }
+    const s = await r.json();
+    if (s.hint) {
+      document.getElementById('hint').textContent = s.hint.text;
+      if (s.hint.id !== lastId && speak && Date.now() / 1000 - s.hint.at < 20) {
+        const u = new SpeechSynthesisUtterance(s.hint.text); u.lang = 'de-DE'; speechSynthesis.speak(u); }
+      lastId = s.hint.id;
+    }
+    if (s.map) document.getElementById('meta').textContent = `${s.map} · Runde ${s.round} · Halbzeit ${s.half}`;
+    document.getElementById('thrown').textContent = s.map ? s.thrown : '–';
+    document.getElementById('soll').textContent = s.target ? (s.target * Math.max(s.rounds - 1, 0)).toFixed(0) : '–';
+    document.getElementById('wasted').textContent = s.map ? s.wasted : '–';
+    document.getElementById('log').innerHTML = (s.log || []).slice(0, -1).reverse()
+      .map(h => `<div>${h.text.replace(/</g, '&lt;')}</div>`).join('');
+  } catch (e) {}
+}
+tick(); setInterval(tick, 1500);
+</script>
+{% endblock %}

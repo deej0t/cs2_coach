@@ -1916,6 +1916,8 @@ def create_app() -> Flask:
     app.register_blueprint(_server_bp(lambda: CONFIG_PATH, load_config))
     from .training_page import create_blueprint as _training_bp
     app.register_blueprint(_training_bp(load_config, lambda: CONFIG_PATH))
+    from .live_page import create_blueprint as _live_bp
+    app.register_blueprint(_live_bp(load_config, lambda: CONFIG_PATH))
 
     @app.route("/settings")
     def settings():
