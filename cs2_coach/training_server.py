@@ -91,10 +91,11 @@ WEAPONS = {
 }
 GRENADES = {"weapon_flashbang", "weapon_smokegrenade", "weapon_hegrenade", "weapon_molotov",
             "weapon_incgrenade", "weapon_decoy"}  # Punkte pro RCON-Befehl (10 Punkte mit voller Genauigkeit waren 869 Zeichen)
+NADE_LINEUPS = 10  # so viele Lineups pro Training, die haeufigsten zuerst
 NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade", "flashbang",
             "smokegrenade", "decoy", "world", "taser", "planted_c4")
 
-MODE_COMMANDS = {"wiederholen": "wiederholen", "eichen": "eichen", "retake": "retake", "halten": "halten", "sitehold": "halten", "hold": "halten",
+MODE_COMMANDS = {"granaten": "granaten", "nades": "granaten", "wiederholen": "wiederholen", "eichen": "eichen", "retake": "retake", "halten": "halten", "sitehold": "halten", "hold": "halten",
                  "situation": "situation", "duell": "duell"}
 # Training zu mehreren: der Besitzer laedt ein, der Freund sagt zu. Mitmachen und
 # Aussteigen darf jeder - das sind die einzigen Befehle ohne Besitzer-Pruefung.
@@ -106,7 +107,7 @@ SESSIONS_DIR = "training_sessions"
 ITEMS_FILE = ".training_items.json"  # Szenarien mit mehreren Gegnern (bis ~1 MB, nicht in den Zustand)
 MODE_ALIASES = {"duell": "duell", "duel": "duell", "situation": "situation", "multi": "situation",
                 "retake": "retake", "halten": "halten", "hold": "halten", "site": "halten", "eichen": "eichen",
-                "wiederholen": "wiederholen", "repeat": "wiederholen"}
+                "wiederholen": "wiederholen", "repeat": "wiederholen", "granaten": "granaten", "nades": "granaten"}
 GREEN, RED, YELLOW, PURPLE, GREY = "#4ade80", "#f87171", "#fbbf24", "#9184d9", "#aaaaaa"
 IDLE_ROUNDS = 2  # so viele Runden ohne Treffer in Folge = pausieren
 PAUSE_TIMEOUT = 900  # Sekunden pausiert, dann endet das Training
@@ -128,7 +129,7 @@ SETUP = [
     # Mitspieler starten im Duell an deiner Stelle - durchlaessig, sonst stecken sie ineinander.
     "mp_solid_teammates 0",
 ]
-RESTORE = ["bot_kick", "bot_quota 0", "bot_freeze 0", 'bot_loadout ""', "mp_warmuptime 30",
+RESTORE = ["coach_nade_clear", "bot_kick", "bot_quota 0", "bot_freeze 0", 'bot_loadout ""', "mp_warmuptime 30",
            'mp_t_default_primary ""', 'mp_ct_default_primary ""',
            "mp_t_default_secondary weapon_glock", "mp_ct_default_secondary weapon_hkp2000",
            "mp_t_default_melee weapon_knife", "mp_ct_default_melee weapon_knife", "mp_give_player_c4 1",
@@ -878,6 +879,8 @@ class Director:
             return [f"Unbekannter Modus '{parts[1]}'. Moeglich: duell, situation, retake, halten, eichen."]
         if bsp not in self.maps():
             return [f"{bsp} ist nicht im Trainings-Pool ({', '.join(m.removeprefix('de_') for m in self.maps())})."]
+        if mode == "granaten":
+            return self._start_nades(sid, name, bsp)
         if mode not in ("duell", "wiederholen"):
             return self._start_multi(sid, name, bsp, mode)
         if not all_sc.get(bsp):
@@ -1014,6 +1017,57 @@ class Director:
                     "Mittrainieren: !einladen <Name>"]
         return []
 
+    def _start_nades(self, sid: str, name: str, bsp: str) -> list[str]:
+        """Granaten-Lineups aus den Demos ueben (grenade_lineups.py, Plugin 1.16.0). Kein Bot."""
+        from .grenade_lineups import collect, library
+        problem = self._preflight(name)
+        if problem:
+            return problem
+        self.send(_say(f"Granaten auf {bsp}: lese die Wuerfe aus deinen Demos (beim ersten Mal 1-3 Minuten)..."))
+        lineups = library(collect(self.cfg, self.path, bsp), limit=NADE_LINEUPS)
+        if not lineups:
+            return [f"Keine Granaten-Lineups auf {bsp} in deinen Demos gefunden."]
+        with _Lock(self.path):
+            if is_active(self.path):
+                return ["Es läuft schon ein Training. Erst !stop."]
+            save_state(self.path, {
+                "phase": "loading", "map": bsp, "mode": "granaten", "human": sid, "name": name,
+                "queue": list(range(len(lineups))), "bot_need": 0, "pos": 0, "results": [], "level": START_LEVEL,
+                "round": 0, "lineups": lineups, "started": datetime.now().isoformat(timespec="seconds"),
+                "t0": time.time(), "party": {}})
+        self.timer(LOAD_TIMEOUT, self._check_loaded)
+        self.send(_say(f"{len(lineups)} Lineups, die in deinen Matches am oeftesten geworfen wurden. Map wird geladen..."),
+                  "sv_hibernate_when_empty 0", f"map {bsp}")
+        return []
+
+    def _nade_commands(self, state: dict) -> list[str]:
+        from .grenade_lineups import LABELS
+        uid = state["human_uid"]
+        cmds = ["coach_nade_clear"]
+        for g in state["lineups"]:
+            weapon = {"smoke": "weapon_smokegrenade", "he": "weapon_hegrenade", "flash": "weapon_flashbang",
+                      "molotov": "weapon_molotov" if g["side"] == "T" else "weapon_incgrenade"}[g["type"]]
+            label = f"{g['side']} {LABELS[g['type']]} &#183; {g['count']}x geworfen" + (
+                f", {g['mine']}x von dir" if g["mine"] else "")
+            cmds.append(f"coach_nade_add {weapon} {g['type']} {_b64(label)} "
+                        + " ".join(f"{v:.2f}" for v in [*g["pos"], *g["ang"], *g["land"]]))
+        return cmds + [f"coach_nade_start {uid}"]
+
+    def _nade_results(self, state: dict) -> None:
+        """Ergebnis vom Plugin als 'Duelle' speichern - dann zeigt /training sie wie jedes Training."""
+        reply = self.send("coach_nade_result")[0].strip()
+        parts = reply.split()[1:] if reply.startswith("coach_nade_result") else []
+        from .grenade_lineups import LABELS
+        for i, (g, part) in enumerate(zip(state.get("lineups", []), parts)):
+            tries, best, hit = (part.split("/") + ["0", "-", "0"])[:3]
+            if tries == "0":
+                continue
+            state.setdefault("duels", []).append({
+                "n": i + 1, "source": f"{g['side']} {LABELS[g['type']]} ({g['count']}x geworfen)",
+                "opponent": "Lineup", "weapon": g["type"], "outcome": "win" if hit == "1" else "loss",
+                "tries": int(tries), "nade_dist": None if best == "-" else int(best), "export": "", "round": 0})
+            state["results"].append("win" if hit == "1" else "loss")
+
     def _start_multi(self, sid: str, name: str, bsp: str, mode: str) -> list[str]:
         """Situation, Retake oder Site halten: mehrere Gegner, alle mit ihrem echten Weg."""
         from .training_scenarios import MODES, collect
@@ -1092,6 +1146,14 @@ class Director:
             else:
                 summary = f"Eichung: zu wenige gueltige Runden (mind. {CALIB_MIN}) - nichts gespeichert."
         save_state(self.path, {})
+        if state.get("mode") == "granaten" and state.get("human_uid") is not None:
+            try:
+                self._nade_results(state)
+            except Exception as e:  # noqa: BLE001 - Ergebnis fehlt, Training endet trotzdem
+                print(f"[training] Granaten-Ergebnis: {e}", flush=True)
+            res = state.get("results", [])
+            won = sum(1 for r in res if r == "win")
+            summary = f"{why}: {won}/{len(res)} Lineups getroffen" if res else why
         session = save_session(self.path, state, why) if state.get("duels") else None
         uid = state.get("human_uid")
         if immediate or uid is None:
@@ -1293,6 +1355,8 @@ class Director:
             return {}
         if phase != "running":
             return state
+        if state.get("mode") == "granaten":
+            return state  # das Plugin fuehrt die Lineups selbst, Runden spielen keine Rolle
         if msg.startswith('World triggered "Round_Start"'):
             return self._round_start(state)
         if m := ss._ATTACK.match(msg):
@@ -1595,6 +1659,12 @@ class Director:
 
     def _add_bot(self, state: dict) -> None:
         """Genau einen Bot ins Gegnerteam holen; sein Teambeitritt startet das Training."""
+        if state.get("mode") == "granaten":
+            # Kein Bot, keine Runden: Aufwaermphase bleibt (mp_warmuptime 999), das Plugin versetzt.
+            state.update(phase="running", round=0, pos=0)
+            self.send(*self._nade_commands(state),
+                      _say("Granaten-Training: aus dem Stand werfen. !skip gibt es hier nicht - !stop beendet."))
+            return
         state["phase"] = "bot"
         bot_team = "ct" if state["team"] == "TERRORIST" else "t"
         need = state.get("bot_need", 1)

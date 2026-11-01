@@ -69,7 +69,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.15.0";
+    public override string ModuleVersion => "1.16.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -100,6 +100,12 @@ public class CoachTeleport : BasePlugin
         RegisterListener<Listeners.OnTick>(AimAssist);
         RegisterListener<Listeners.OnTick>(Hunt);
         RegisterListener<Listeners.OnTick>(SpeedLimit);
+        RegisterListener<Listeners.OnTick>(NadeTick);
+        RegisterEventHandler<EventSmokegrenadeDetonate>((ev, _) => { NadeLanded(ev.Userid, ev.X, ev.Y, ev.Z, "smoke"); return HookResult.Continue; });
+        RegisterEventHandler<EventHegrenadeDetonate>((ev, _) => { NadeLanded(ev.Userid, ev.X, ev.Y, ev.Z, "he"); return HookResult.Continue; });
+        RegisterEventHandler<EventFlashbangDetonate>((ev, _) => { NadeLanded(ev.Userid, ev.X, ev.Y, ev.Z, "flash"); return HookResult.Continue; });
+        // inferno_startburn kennt keinen Werfer - im Granaten-Training wirft nur der eine Mensch.
+        RegisterEventHandler<EventInfernoStartburn>((ev, _) => { NadeLanded(null, ev.X, ev.Y, ev.Z, "molotov"); return HookResult.Continue; });
         RegisterListener<Listeners.OnTick>(MeasureTick);
         RegisterEventHandler<EventWeaponFire>((ev, _) =>
         {
@@ -714,6 +720,133 @@ public class CoachTeleport : BasePlugin
                 Logger.LogInformation("coach_speed {Bot} {Speed:F0} u/s gebremst", userid, speed);
             }
         }
+    }
+
+    // Granaten-Training (1.16.0): Lineups aus den eigenen Demos (cs2_coach/grenade_lineups.py).
+    // Das Plugin fuehrt die Reihe selbst: versetzen mit Blickwinkel, Granate in die Hand,
+    // Landepunkt mit dem aus der Demo vergleichen, Treffer oder NadeTries Versuche ->
+    // naechstes Lineup. Der Coach liest am Ende nur das Ergebnis (coach_nade_result) -
+    // das Server-Log meldet die Detonation nicht rechtzeitig.
+    private sealed class Nade
+    {
+        public string Weapon = "", Type = "", Label = "";
+        public float[] Pos = new float[5], Land = new float[3];
+        public int Tries;
+        public float Best = -1;
+        public bool Hit;
+    }
+
+    private readonly List<Nade> _nades = new();
+    private int _nadeIdx = -1, _nadeUid = -1, _nadeWait = -1;
+    private const float NadeHit = 120f;  // Units bis zum Landepunkt der Demo
+    private const int NadeTries = 3;
+
+    private void NadeLanded(CCSPlayerController? thrower, float x, float y, float z, string type)
+    {
+        if (_nadeIdx < 0 || _nadeIdx >= _nades.Count || _nadeWait >= 0) return;
+        if (thrower is not null && (thrower.UserId ?? -1) != _nadeUid) return;
+        var n = _nades[_nadeIdx];
+        if (n.Type != type) return;
+        var dist = (float)Math.Sqrt((x - n.Land[0]) * (x - n.Land[0]) + (y - n.Land[1]) * (y - n.Land[1]));
+        n.Tries++;
+        n.Best = n.Best < 0 ? dist : Math.Min(n.Best, dist);
+        n.Hit |= dist <= NadeHit;
+        var next = n.Hit || n.Tries >= NadeTries;
+        var verdict = dist <= NadeHit ? "<font color='#4ade80'>TREFFER</font>"
+                    : $"<font color='#f87171'>{dist:F0} Units daneben</font>";
+        ShowNade(next ? (n.Hit ? "Weiter zum naechsten Lineup" : "Naechstes Lineup - das hier kommt spaeter wieder")
+                      : $"Versuch {n.Tries + 1}/{NadeTries} - gleiche Stelle", verdict);
+        if (next) _nadeIdx++;
+        _nadeWait = Server.TickCount + 3 * 64;  // 3 s Ergebnis lesen, dann neu aufstellen
+    }
+
+    private void NadeTick()
+    {
+        if (_nadeWait < 0 || Server.TickCount < _nadeWait) return;
+        _nadeWait = -1;
+        SetupNade();
+    }
+
+    private void ShowNade(string line, string verdict = "")
+    {
+        if (_nadeIdx >= _nades.Count)
+        {
+            var hits = _nades.Count(x => x.Hit);
+            _huds[_nadeUid] = ($"<font class='fontSize-xl' color='#9184d9'>GRANATEN FERTIG</font><br>{hits} von {_nades.Count} getroffen<br><font class='fontSize-s'>!stop beendet, !granaten neu</font>",
+                               Server.TickCount + 30 * 64);
+            return;
+        }
+        var n = _nades[_nadeIdx];
+        _huds[_nadeUid] = ($"<font class='fontSize-l' color='#9184d9'>Lineup {_nadeIdx + 1}/{_nades.Count} &#183; {n.Label}</font><br>"
+                           + (verdict.Length > 0 ? verdict + "<br>" : "")
+                           + $"<font class='fontSize-s'>{line}<br>Aus dem Stand werfen, nicht bewegen. Landet sie anders: Rechtsklick oder beide Tasten probieren.</font>",
+                           Server.TickCount + 30 * 64);
+    }
+
+    private void SetupNade()
+    {
+        if (_nadeIdx < 0) return;
+        var player = Utilities.GetPlayerFromUserid(_nadeUid);
+        var pawn = player?.PlayerPawn.Value;
+        if (player is null || !player.IsValid || pawn is null || !pawn.IsValid) return;
+        ShowNade("Wirf, wenn du bereit bist");
+        if (_nadeIdx >= _nades.Count) return;
+        var n = _nades[_nadeIdx];
+        pawn.Teleport(new Vector(n.Pos[0], n.Pos[1], n.Pos[2]), new QAngle(n.Pos[3], n.Pos[4], 0), new Vector(0, 0, 0));
+        player.RemoveWeapons();
+        player.GiveNamedItem("weapon_knife");
+        player.GiveNamedItem(n.Weapon);
+        player.ExecuteClientCommandFromServer($"use {n.Weapon}");
+    }
+
+    [ConsoleCommand("coach_nade_clear", "Granaten-Training leeren/beenden")]
+    [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnNadeClear(CCSPlayerController? caller, CommandInfo info)
+    {
+        _nades.Clear();
+        _nadeIdx = _nadeWait = -1;
+        if (_nadeUid >= 0) _huds.Remove(_nadeUid);
+        info.ReplyToCommand("coach_nade ok clear");
+    }
+
+    [ConsoleCommand("coach_nade_add", "Lineup: <weapon> <typ> <label_b64> x y z pitch yaw lx ly lz")]
+    [CommandHelper(minArgs: 11, usage: "<weapon> <typ> <label_b64> x y z pitch yaw lx ly lz", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnNadeAdd(CCSPlayerController? caller, CommandInfo info)
+    {
+        var ci = CultureInfo.InvariantCulture;
+        var v = new float[8];
+        for (var k = 0; k < 8; k++)
+            if (!float.TryParse(info.GetArg(4 + k), NumberStyles.Float, ci, out v[k]))
+            {
+                info.ReplyToCommand("coach_nade_add: ungueltige Zahl");
+                return;
+            }
+        _nades.Add(new Nade { Weapon = info.GetArg(1), Type = info.GetArg(2), Label = FromBase64(info.GetArg(3)) ?? "",
+                              Pos = v[..5], Land = v[5..8] });
+        info.ReplyToCommand($"coach_nade ok {_nades.Count}");
+    }
+
+    [ConsoleCommand("coach_nade_start", "Granaten-Training starten: <userid>")]
+    [CommandHelper(minArgs: 1, usage: "<userid>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnNadeStart(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (!int.TryParse(info.GetArg(1), out _nadeUid) || _nades.Count == 0)
+        {
+            info.ReplyToCommand("coach_nade_start: keine Lineups");
+            return;
+        }
+        _nadeIdx = 0;
+        SetupNade();
+        info.ReplyToCommand($"coach_nade ok start {_nades.Count}");
+    }
+
+    [ConsoleCommand("coach_nade_result", "Ergebnis: je Lineup Versuche/bester Abstand/Treffer")]
+    [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnNadeResult(CCSPlayerController? caller, CommandInfo info)
+    {
+        var ci = CultureInfo.InvariantCulture;
+        info.ReplyToCommand("coach_nade_result " + string.Join(" ", _nades.Select(n =>
+            $"{n.Tries}/{(n.Best < 0 ? "-" : n.Best.ToString("F0", ci))}/{(n.Hit ? 1 : 0)}")));
     }
 
     private void OnFirstKill()
