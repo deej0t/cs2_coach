@@ -59,6 +59,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Memory;
 using CounterStrikeSharp.API.Modules.Utils;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
@@ -68,7 +69,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.12.0";
+    public override string ModuleVersion => "1.13.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -536,7 +537,42 @@ public class CoachTeleport : BasePlugin
         }
         var delay = ms * 64 / 1000;
         _appear = new Appear(userid, delay, v, _inFreeze ? -1 : Server.TickCount + delay);
+        Hide(userid);
         info.ReplyToCommand($"coach_appear ok {userid}");
+    }
+
+    // Erste Eichung am 1.11.: der Bot stand am CT-Spawn, der auf Dust2 von der Eichstelle
+    // aus sichtbar ist, und bot_freeze 1 hielt ihn nicht fest - er lief, wurde vor dem
+    // Auftauchen getroffen und erschoss den Spieler einmal; keine Runde war gueltig.
+    // Jetzt: nur Messer, festgehalten (MoveType none), bis zum Auftauchen 150 Units
+    // HINTER dem naechsten Menschen und von ihm abgewandt - ausserhalb des Blickfelds,
+    // die Spotted-Maske braucht Sicht im Blickfeld. Dreht er sich um, ist die Runde
+    // ungueltig (sichtbar vor dem Auftauchen) und zaehlt nicht.
+    private static void Pin(CCSPlayerPawn pawn)
+    {
+        pawn.MoveType = MoveType_t.MOVETYPE_NONE;
+        Schema.SetSchemaValue(pawn.Handle, "CBaseEntity", "m_nActualMoveType", 0);
+        Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
+    }
+
+    private static void Hide(int userid)
+    {
+        var bot = Utilities.GetPlayerFromUserid(userid);
+        var pawn = bot?.PlayerPawn.Value;
+        if (bot is null || !bot.IsValid || pawn is null || !pawn.IsValid) return;
+        bot.RemoveWeapons();
+        bot.GiveNamedItem("weapon_knife");
+        var human = Utilities.GetPlayers().FirstOrDefault(p => !p.IsBot && p.TeamNum >= 2 && p.TeamNum != bot.TeamNum
+                                                              && p.PlayerPawn.Value?.AbsOrigin is not null);
+        var hp = human?.PlayerPawn.Value;
+        if (hp?.AbsOrigin is { } at)
+        {
+            var yaw = hp.EyeAngles.Y;
+            var rad = yaw * Math.PI / 180;
+            pawn.Teleport(new Vector(at.X - (float)Math.Cos(rad) * 150, at.Y - (float)Math.Sin(rad) * 150, at.Z),
+                          new QAngle(0, yaw + 180, 0), new Vector(0, 0, 0));
+        }
+        Pin(pawn);
     }
 
     private void MeasureTick()
@@ -549,6 +585,7 @@ public class CoachTeleport : BasePlugin
             {
                 bot.Teleport(new Vector(ap.Pos[0], ap.Pos[1], ap.Pos[2]), new QAngle(ap.Pos[3], ap.Pos[4], 0),
                              new Vector(0, 0, 0));
+                Pin(bot);  // stehendes Ziel - gemessen wird deine Reaktion, nicht ein Duell
                 _appearTick = Server.TickCount;
             }
         }
