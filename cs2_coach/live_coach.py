@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -266,6 +267,54 @@ def ingest(cfg: dict, config_path: Path, payload: dict) -> None:
             save_match(config_path, state)
         if state != before:
             save_state(config_path, state)
+    # KI-Hinweis nur zu Halbzeit und Matchende: Gemini braucht Sekunden bis Minuten
+    # (503 und Wiederholungen, siehe Briefing) - fuer Hinweise in der Runde zu langsam,
+    # die bleiben regelbasiert und sofort.
+    hint = state.get("hint") or {}
+    if hint.get("kind") in ("halftime", "gameover") and hint.get("id") != (before.get("hint") or {}).get("id"):
+        threading.Thread(target=ai_hint, args=(cfg, config_path, hint["id"]), daemon=True).start()
+
+
+AI_SYSTEM = """Du bist der CS2-Coach eines einzelnen Spielers, der gerade ein Match spielt.
+- Deutsch, du-Form, hoechstens 2 kurze Saetze, zusammen hoechstens 220 Zeichen - er liest es in der Halbzeit.
+- Nur aus den Fakten. Erfinde keine Zahlen. Kein Markdown, keine Emojis.
+- Ein konkreter Hinweis fuer die naechste Halbzeit bzw. das naechste Match, kein Lob ohne Inhalt.
+- Granaten sind laut seinen eigenen Daten der staerkste Sieg-Faktor; das Ziel ist der Median aus seinen Siegen."""
+
+
+def ai_facts(state: dict) -> str:
+    rows = sorted(state.get("rounds", {}).items(), key=lambda kv: int(kv[0]))
+    per_round = ", ".join(f"R{k}: {v['thrown']} geworfen" + (f"/{v['wasted']} ins Grab" if v["wasted"] else "")
+                          for k, v in rows)
+    thrown = sum(v["thrown"] for _, v in rows)
+    wasted = sum(v["wasted"] for _, v in rows)
+    target = state.get("target")
+    lines = [f"Map {state.get('map')}, {len(rows)} Runden gespielt, Halbzeit {state.get('half')}.",
+             f"Granaten geworfen: {thrown} ({thrown / max(len(rows), 1):.1f} pro Runde)"
+             + (f", Ziel aus seinen Siegen {target:.2f} pro Runde" if target else "") + ".",
+             f"Mit ins Grab genommen: {wasted}.", f"Je Runde: {per_round}."]
+    if state.get("summary"):
+        lines.append(f"Endstand {state['summary']['score']} (CT:T).")
+    return "\n".join(lines)
+
+
+def ai_hint(cfg: dict, config_path: Path, after_id: int, ask_fn=None) -> str | None:
+    from .ingame_coach import ask, clean
+    state = load_state(config_path)
+    try:
+        text = (ask_fn or ask)(cfg, AI_SYSTEM, ai_facts(state) + "\n\nGib den Hinweis.")
+    except Exception as e:  # noqa: BLE001 - ohne KI bleibt der Regel-Hinweis stehen
+        print(f"[live] KI-Hinweis: {e}", flush=True)
+        return None
+    if not text:
+        return None
+    text = clean(text, 240)
+    with _Lock(config_path):
+        state = load_state(config_path)
+        if state.get("map"):
+            _hint(state, f"Coach: {text}", "ai")
+            save_state(config_path, state)
+    return text
 
 
 def gsi_config(url: str, token: str) -> str:

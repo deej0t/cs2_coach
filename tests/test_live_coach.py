@@ -94,3 +94,20 @@ def test_ignores_deathmatch_aim_maps_and_training(tmp_path, monkeypatch):
     monkeypatch.setattr(ts, "is_active", lambda path: True)
     lc.ingest(CFG, tmp_path / "config.yaml", gsi(1))
     assert lc.load_state(tmp_path / "config.yaml") == {}
+
+
+def test_ai_hint_at_halftime_uses_only_facts(tmp_path):
+    cfg_path = tmp_path / "config.yaml"
+    st = run(gsi(1, "freezetime"), gsi(1), gsi(1, nades=("weapon_flashbang",)))
+    st["target"] = 1.85
+    lc.save_state(cfg_path, st)
+    seen = {}
+
+    def fake(cfg, system, prompt):
+        seen["prompt"] = prompt
+        return "Wirf in der zweiten Halbzeit frueher deine HE."
+
+    assert lc.ai_hint(CFG, cfg_path, 0, ask_fn=fake)
+    assert "R1: 1 geworfen" in seen["prompt"] and "1.85" in seen["prompt"]
+    hint = lc.load_state(cfg_path)["hint"]
+    assert hint["kind"] == "ai" and hint["text"].startswith("Coach: Wirf")
