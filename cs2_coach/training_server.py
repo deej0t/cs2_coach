@@ -59,13 +59,15 @@ FREEZE_TIME = 3
 # bot_difficulty 0-3. Start bei 2: auf 1 gewann der Spieler am 30.10. 28 von 29 Duellen
 # (damals allerdings vor allem, weil der Bot auf seinem Weg nicht zielen konnte).
 START_LEVEL = 3
-MAX_LEVEL = 5
+MAX_LEVEL = 7
 # Stufe 4 und 5: Zielhilfe im Plugin (coach_bot_skill <uid> <reaktion_ms> <halten_ms>).
 # Auch mit der KI-Uebernahme beim ersten Sichtkontakt gewann der Spieler am 30.10.
 # 19 von 20 Duellen auf bot_difficulty 3 ("selbst die Stufe 3 ist zu schwach"); der
 # Bot traf nur zweimal zuerst, in 15 Siegen gar nicht. 250 ms ~ menschliche
 # Reaktionszeit, 150 ms ~ sehr guter Spieler.
-AIM = {4: (250, 300), 5: (150, 800)}
+# (Reaktion ms, Halten ms, Vorzielen). Stufe 6/7 (Plugin 1.14.0) halten den Winkel auf
+# Kopfhoehe vor: auf Stufe 5 traf der Spieler am 1.11. in 16 von 19 Duellen zuerst.
+AIM = {4: (250, 300, 0), 5: (150, 800, 0), 6: (100, 1500, 1), 7: (0, 60000, 1)}
 # Start so viele Sekunden VOR deinem Tod, an den Positionen aus der Demo.
 # Rueckmeldung nach dem ersten Training: am Todesort "ist man zu schnell
 # konfrontiert" - dort laeuft das Duell schon.
@@ -702,10 +704,10 @@ def _aim_commands(state: dict, uids) -> list[str]:
     KI oder dem ersten Toten der Runde weiss der Bot, wo der naechste Mensch steht.
     Wunsch vom 30.10.: "die Bots duerfen gerne wissen wo ich bin, spaetestens nach
     dem ersten Kill"."""
-    react, hold = AIM.get(int(state.get("level", START_LEVEL)), (0, 0))
+    react, hold, pre = AIM.get(int(state.get("level", START_LEVEL)), (0, 0, 0))
     out = []
     for uid in uids:
-        out += [f"coach_bot_skill {uid} {react} {hold}", f"coach_hunt {uid} 1"]
+        out += [f"coach_bot_skill {uid} {react} {hold} {pre}", f"coach_hunt {uid} 1"]
     return out
 
 

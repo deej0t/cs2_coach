@@ -647,13 +647,14 @@ def test_cache_is_in_the_pool(tmp_path):
 
 def test_levels_above_three_turn_on_aim_assist(env):
     _, path, server, _, director = env
-    for level, expected in [(3, "coach_bot_skill 4 0 0"), (4, "coach_bot_skill 4 250 300"),
-                            (5, "coach_bot_skill 4 150 800")]:
+    for level, expected in [(3, "coach_bot_skill 4 0 0 0"), (4, "coach_bot_skill 4 250 300 0"),
+                            (5, "coach_bot_skill 4 150 800 0"), (6, "coach_bot_skill 4 100 1500 1"),
+                            (7, "coach_bot_skill 4 0 60000 1")]:
         server.sent.clear()
         ts.save_state(path, running_state(level=level))
         director().on_lines([line('World triggered "Round_Start"')])
         assert expected in server.sent
-    assert ts._difficulty({"level": 5}) == "bot_difficulty 3"  # mehr kennt CS2 nicht
+    assert ts._difficulty({"level": 7}) == "bot_difficulty 3"  # mehr kennt CS2 nicht
 
 
 def test_retake_command_uses_given_or_current_map(env, monkeypatch):

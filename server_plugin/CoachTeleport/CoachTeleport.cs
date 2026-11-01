@@ -69,7 +69,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.13.0";
+    public override string ModuleVersion => "1.14.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -404,7 +404,11 @@ public class CoachTeleport : BasePlugin
     // zu langsam. Hier: nach ReactTicks liegt das Fadenkreuz auf dem Kopf (Augenhoehe
     // aus ViewOffset, also auch geduckt richtig) und bleibt LockTicks dort.
     // Geschossen wird weiter von der KI.
-    private readonly Dictionary<int, (int ReactTicks, int LockTicks)> _skills = new();
+    // Vorzielen (1.14.0, Stufe 6/7): auch ohne Sicht liegt das Fadenkreuz auf Kopfhoehe
+    // des naechsten Gegners - wie ein Spieler, der den Winkel haelt. Gemessen am 1.11.:
+    // auf Stufe 5 traf der Spieler in 16 von 19 Duellen zuerst, der Bot reagiert erst
+    // auf die Spotted-Maske, und die meldet im Median 117 ms nach dem Auftauchen.
+    private readonly Dictionary<int, (int ReactTicks, int LockTicks, bool PreAim)> _skills = new();
     private readonly Dictionary<int, int> _sawAt = new();
 
     private void AimAssist()
@@ -419,6 +423,13 @@ public class CoachTeleport : BasePlugin
                 || pawn.LifeState != (byte)LifeState_t.LIFE_ALIVE || pawn.AbsOrigin is null) continue;
             var target = SeenEnemy(bot);
             var now = Server.TickCount;
+            if (target is null && skill.PreAim)
+            {
+                var near = NearestEnemy(bot, pawn);
+                if (near?.AbsOrigin is not null) AimAt(pawn, near);
+                _sawAt.Remove(userid);
+                continue;
+            }
             if (target?.AbsOrigin is null)
             {
                 _sawAt.Remove(userid);  // aus den Augen: naechster Sichtkontakt zaehlt neu
@@ -427,6 +438,14 @@ public class CoachTeleport : BasePlugin
             if (!_sawAt.TryGetValue(userid, out var saw)) _sawAt[userid] = saw = now;
             var since = now - saw;
             if (since < skill.ReactTicks || since >= skill.ReactTicks + skill.LockTicks) continue;
+            AimAt(pawn, target);
+        }
+    }
+
+    private static void AimAt(CCSPlayerPawn pawn, CCSPlayerPawn target)
+    {
+        {
+            if (pawn.AbsOrigin is null || target.AbsOrigin is null) return;
             var from = pawn.AbsOrigin;
             var eye = pawn.ViewOffset.Z;
             var dx = target.AbsOrigin.X - from.X;
@@ -439,7 +458,7 @@ public class CoachTeleport : BasePlugin
     }
 
     [ConsoleCommand("coach_bot_skill", "Zielhilfe: <userid> <reaktion_ms> <halten_ms> (0 0 = aus)")]
-    [CommandHelper(minArgs: 3, usage: "<userid> <reaktion_ms> <halten_ms>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    [CommandHelper(minArgs: 3, usage: "<userid> <reaktion_ms> <halten_ms> [vorzielen 0|1]", whoCanExecute: CommandUsage.SERVER_ONLY)]
     public void OnBotSkill(CCSPlayerController? caller, CommandInfo info)
     {
         if (!int.TryParse(info.GetArg(1), out var userid) || !int.TryParse(info.GetArg(2), out var react)
@@ -450,7 +469,7 @@ public class CoachTeleport : BasePlugin
         }
         _sawAt.Remove(userid);
         if (hold <= 0) _skills.Remove(userid);
-        else _skills[userid] = (Math.Max(0, react) * 64 / 1000, hold * 64 / 1000);
+        else _skills[userid] = (Math.Max(0, react) * 64 / 1000, hold * 64 / 1000, info.ArgCount > 4 && info.GetArg(4) == "1");
         info.ReplyToCommand($"coach_bot_skill ok {userid}");
     }
 

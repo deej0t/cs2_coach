@@ -123,7 +123,7 @@ def test_fazit_uses_only_training_facts(tmp_path, monkeypatch):
     assert ic.session_fazit({}, tmp_path / "config.yaml", session, ask_fn=fake_ask) == "Kurzes Fazit."
     assert "HE-Granaten pro Runde" not in seen["system"] + seen["prompt"]
     assert "deine Ausruestung: M4A4, USP-S, Flashbang" in seen["prompt"]
-    assert "/5" in seen["prompt"] and "Dancho" in seen["prompt"]
+    assert "/7" in seen["prompt"] and "Dancho" in seen["prompt"]
 
 
 def test_fazit_and_tipp_get_measurements(tmp_path, monkeypatch):
