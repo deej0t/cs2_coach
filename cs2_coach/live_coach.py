@@ -32,7 +32,10 @@ MATCHES_DIR = "live_matches"
 # Nur echte Matches. Am 1.11. lief der Live-Coach im !training und auf der Aim-Map mit -
 # dort sind Granaten-Hinweise Rauschen (im Duell wirft man selten), und aim_multigame
 # waere als "Match" gespeichert worden.
-MATCH_MODES = {"competitive", "premier", "scrimcomp2v2"}
+# Ausschliessen statt zulassen: welchen Modus-Namen GSI fuer Premier meldet, ist nicht
+# gemessen - eine Zulass-Liste koennte echte Matches verschlucken.
+SKIP_MODES = {"deathmatch", "casual", "armsrace", "gungameprogressive", "gungametrbomb", "training",
+              "custom", "survival", "coopmission"}
 LATE_SECONDS = 35  # so viel Rundenzeit uebrig und noch keine Granate geworfen -> Hinweis
 GRENADE_NAMES = {"weapon_hegrenade": "HE", "weapon_molotov": "Molotov", "weapon_incgrenade": "Brandgranate",
                  "weapon_flashbang": "Flash", "weapon_smokegrenade": "Smoke", "weapon_decoy": "Decoy"}
@@ -170,7 +173,8 @@ def update(state: dict, payload: dict, cfg: dict) -> dict:
     if not mp:  # Hauptmenue
         return state
     map_name = mp.get("name", "")
-    if mp.get("phase") == "warmup" or mp.get("mode") not in MATCH_MODES:
+    if (mp.get("phase") == "warmup" or mp.get("mode") in SKIP_MODES
+            or not map_name.startswith(("de_", "cs_"))):
         return state
     if not state or state.get("map") != map_name or state.get("over"):
         if mp.get("phase") == "gameover":
