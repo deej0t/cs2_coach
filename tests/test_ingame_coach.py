@@ -140,3 +140,16 @@ def test_fazit_and_tipp_get_measurements(tmp_path, monkeypatch):
                      ask_fn=lambda cfg, system, prompt: seen.setdefault("prompt", prompt) and "Fazit.")
     assert "Median Fadenkreuz beim Auftauchen: 12.4 Grad" in seen["prompt"]
     assert "in seinen letzten Matches (gleiche Messung): 6.3 Grad" in seen["prompt"]
+
+
+def test_fazit_corrects_reaction_with_calibration(tmp_path, monkeypatch):
+    import json as _json
+    from cs2_coach import ingame_coach as ic, training_server as ts
+    monkeypatch.setattr(ts, "match_crosshair_median", lambda cfg, last=10: None)
+    (tmp_path / ts.CALIB_FILE).write_text(_json.dumps({"latency_ms": 117, "reaction_ms": 265}))
+    session = tmp_path / "s.json"
+    session.write_text(_json.dumps({"map": "de_dust2", "duels": [{"n": 1, "outcome": "win", "react_ms": 150}]}))
+    seen = {}
+    ic.session_fazit({}, tmp_path / "config.yaml", session,
+                     ask_fn=lambda cfg, system, prompt: seen.setdefault("p", prompt) and "ok")
+    assert "korrigiert also etwa 267 ms" in seen["p"] and "265 ms" in seen["p"]

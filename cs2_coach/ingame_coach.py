@@ -240,6 +240,13 @@ def session_facts(session: dict) -> str:
         out.append(f"Median Fadenkreuz beim Auftauchen: {m['seen_err']:.1f} Grad ({m['seen_n']} Duelle).")
     if m["react_n"]:
         out.append(f"Median erster Schuss nach dem Sehen: {m['react_ms']:.0f} ms ({m['react_n']} Duelle).")
+        calib = session.get("calibration")
+        if calib and calib.get("latency_ms") is not None:
+            # Eichung 1.11.: das Radar meldet den Gegner im Median 117 ms nach dem Auftauchen,
+            # streut aber 15-234 ms - nur Mediane vergleichen, nie ein einzelnes Duell.
+            out.append(f"Geeicht: seine echte Reaktion auf einen auftauchenden Gegner ist {calib['reaction_ms']:.0f} ms; "
+                       f"die Werte oben sind ueber das Radar gemessen, im Median etwa {calib['latency_ms']:.0f} ms zu kurz "
+                       f"(korrigiert also etwa {m['react_ms'] + calib['latency_ms']:.0f} ms). Nur diesen Median vergleichen.")
     if m["kill_n"]:
         line = f"Median Fadenkreuz 0,5 s vor Kills im Training: {m['kill_err']:.1f} Grad ({m['kill_n']} Kills)"
         if session.get("match_cp") is not None:
@@ -268,6 +275,8 @@ def session_fazit(cfg: dict, config_path: Path, session_file: Path, ask_fn=None)
     session = json.loads(Path(session_file).read_text(encoding="utf-8"))
     from .training_server import match_crosshair_median
     session["match_cp"] = match_crosshair_median(cfg)
+    from .training_server import load_calibration
+    session["calibration"] = load_calibration(config_path)
     from .training_server import match_counter_strafe_median
     session["match_cs"] = match_counter_strafe_median(cfg)
     text = (ask_fn or ask)(cfg, FAZIT_SYSTEM, session_facts(session) + "\n\nSchreibe das Fazit.")
