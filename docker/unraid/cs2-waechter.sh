@@ -52,7 +52,10 @@ DRYRUN=${DRYRUN:-0}
 STEAMAPPS=${STEAMAPPS:-$GAME/../../steamapps}
 UPDCHECK=$RUN/cs2-waechter.update-check
 UPDFEHLER=$RUN/cs2-waechter.update-failed
-UPDPAUSE=${UPDPAUSE:-1800}  # hoechstens alle 30 min bei Steam nachfragen
+UPDPAUSE=${UPDPAUSE:-1800}
+# Eigene server.cfg (Hostname, Log an den Coach). Am 31.10.2026 ersetzte das nachgeholte
+# Update sie durch die leere Valve-Datei - ohne Log reagierte kein !befehl mehr.
+CFGBAK=${CFGBAK:-/boot/config/custom/cs2-server.cfg}  # hoechstens alle 30 min bei Steam nachfragen
 
 melde() { logger -t cs2-waechter "$2"; [ "$DRYRUN" = 1 ] && echo "MELDUNG: $2" || "$NOTIFY" -e "CS2-Waechter" -s "$1" -d "$2" -i "${3:-warning}"; }
 neustart() { [ "$DRYRUN" = 1 ] && { echo "DRYRUN: neustart"; return; }; date +%s > "$LETZTER"; docker restart -t 20 "$NAME" >/dev/null 2>&1; }
@@ -167,6 +170,13 @@ if [ -n "$spieler" ]; then
             neustart; exit 0
         fi
     fi
+    # --- server.cfg wiederherstellen (Update hat sie ersetzt)
+    if [ -f "$CFGBAK" ] && ! grep -q "logaddress_add_http" "$GAME/cfg/server.cfg" 2>/dev/null; then
+        if [ "$DRYRUN" = 1 ]; then echo "DRYRUN: server.cfg wiederherstellen"; else
+            cp "$CFGBAK" "$GAME/cfg/server.cfg" && chown 99:100 "$GAME/cfg/server.cfg"; fi
+        logger -t cs2-waechter "server.cfg war ohne Log-Empfaenger (CS2-Update?) - aus $CFGBAK wiederhergestellt"
+        touch "$RUN/cs2-waechter.neustart-noetig"
+    fi
     # --- Metamod wieder eintragen (CS2-Update hat gameinfo.gi ersetzt) oder neu versuchen
     if ! metamod_an; then
         if [ -f "$AUS" ]; then
@@ -183,7 +193,7 @@ if [ -n "$spieler" ]; then
     fi
     if [ -f "$RUN/cs2-waechter.neustart-noetig" ] && [ "$spieler" = 0 ]; then
         rm -f "$RUN/cs2-waechter.neustart-noetig"
-        melde "CS2-Server neu gestartet" "gameinfo.gi war nach einem CS2-Update ohne Metamod. Wieder eingetragen und neu gestartet (Server war leer)." normal
+        melde "CS2-Server neu gestartet" "Nach einem CS2-Update fehlten Metamod oder die eigene server.cfg. Wiederhergestellt und neu gestartet (Server war leer)." normal
         neustart
     fi
     exit 0
