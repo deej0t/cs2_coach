@@ -247,3 +247,14 @@ def test_calibration_round_start_sends_appear(multi):
     assert "bot_freeze 1" in server.sent
     assert any(c.startswith("coach_appear 3 ") for c in server.sent)
     assert not any(c.startswith("coach_tp 3 ") for c in server.sent)
+
+
+def test_eichen_command_starts_calibration(multi, monkeypatch):
+    """1.11.: !eichen antwortete "Unbekannter Modus" - der Test oben uebersprang den Start."""
+    director, server, timers, path = multi
+    item = {"me": [0, 0, 0, 0, 0], "me_items": [], "mates": [], "source": "Eichung",
+            "enemies": [{"name": "Ziel", "start": [800, 0, 0, 0, 180], "path": [], "items": []}]}
+    monkeypatch.setattr(ts, "calibration_items", lambda cfg, bsp, limit=10: [item] * 10)
+    assert director().command(ME, "dj", "eichen", "mirage") == []
+    state = ts.load_state(path)
+    assert state["mode"] == "eichen" and len(state["queue"]) == 10 and "map de_mirage" in server.sent

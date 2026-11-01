@@ -103,7 +103,7 @@ COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop", "pause"
 SESSIONS_DIR = "training_sessions"
 ITEMS_FILE = ".training_items.json"  # Szenarien mit mehreren Gegnern (bis ~1 MB, nicht in den Zustand)
 MODE_ALIASES = {"duell": "duell", "duel": "duell", "situation": "situation", "multi": "situation",
-                "retake": "retake", "halten": "halten", "hold": "halten", "site": "halten"}
+                "retake": "retake", "halten": "halten", "hold": "halten", "site": "halten", "eichen": "eichen"}
 GREEN, RED, YELLOW, PURPLE, GREY = "#4ade80", "#f87171", "#fbbf24", "#9184d9", "#aaaaaa"
 IDLE_ROUNDS = 2  # so viele Runden ohne Treffer in Folge = pausieren
 PAUSE_TIMEOUT = 900  # Sekunden pausiert, dann endet das Training
@@ -843,7 +843,7 @@ class Director:
         bsp = parts[0] if parts[0].startswith("de_") else f"de_{parts[0]}"
         mode = MODE_ALIASES.get(parts[1], "") if len(parts) > 1 else "duell"
         if not mode:
-            return [f"Unbekannter Modus '{parts[1]}'. Moeglich: duell, situation, retake, halten."]
+            return [f"Unbekannter Modus '{parts[1]}'. Moeglich: duell, situation, retake, halten, eichen."]
         if bsp not in self.maps():
             return [f"{bsp} ist nicht im Trainings-Pool ({', '.join(m.removeprefix('de_') for m in self.maps())})."]
         if mode != "duell":
