@@ -834,3 +834,33 @@ def test_goal_is_counted_after_each_round(env):
              '(health "73") (armor "96") (hitgroup "chest")'),
         line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "m4a1"'), line('World triggered "Round_End"')])
     assert any("Ziel &#10007; Erster Schuss gestoppt" in h and "heute 0/1" in h for h in huds(server))
+
+
+def test_repeat_queue_puts_most_lost_first():
+    S = ts.Scenario
+    scs = [S("de_mirage", 0, 0, 0, 1, 1, 1, "ak47", f"o{i}", "s", 0, "", f"e{i}.json", i) for i in range(4)]
+    sessions = [{"mode": "duell", "duels": [
+        {"export": "e0.json", "round": 0, "outcome": "loss"}, {"export": "e1.json", "round": 1, "outcome": "loss"},
+        {"export": "e1.json", "round": 1, "outcome": "loss"}, {"export": "e2.json", "round": 2, "outcome": "loss"},
+        {"export": "e2.json", "round": 2, "outcome": "win"}, {"export": "e2.json", "round": 2, "outcome": "win"},
+        {"export": "e3.json", "round": 3, "outcome": "win"}]},
+        {"mode": "retake", "duels": [{"export": "e3.json", "round": 3, "outcome": "loss"}]}]
+    # e1 zweimal verloren -> zuerst und am Ende noch einmal; e0 einmal; e2 danach gelernt; e3 nur gewonnen
+    assert ts.repeat_queue(sessions, scs) == [1, 0, 1]
+
+
+def test_wiederholen_command_without_losses_says_so(env):
+    _, path, server, _, director = env
+    assert "noch kein Duell verloren" in director().command(OWNER, "dj", "wiederholen", "mirage")[0]
+    assert not ts.is_active(path)
+
+
+def test_wiederholen_starts_with_lost_duels(env, monkeypatch):
+    cfg, path, server, _, director = env
+    monkeypatch.setattr(ts, "prepare", lambda cfg, path, chosen, parser_factory=None: {})
+    sc = director().scenarios()["de_mirage"]
+    ts.save_session(path, {"map": "de_mirage", "started": "2026-11-01T20:00:00", "duels": [
+        {"export": sc[-1].export, "round": sc[-1].round, "outcome": "loss"}]}, "Training fertig")
+    assert director().command(OWNER, "dj", "wiederholen", "mirage") == []
+    state = ts.load_state(path)
+    assert state["queue"] == [len(sc) - 1] and state["repeat"] and "map de_mirage" in server.sent

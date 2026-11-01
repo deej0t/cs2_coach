@@ -94,7 +94,7 @@ GRENADES = {"weapon_flashbang", "weapon_smokegrenade", "weapon_hegrenade", "weap
 NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade", "flashbang",
             "smokegrenade", "decoy", "world", "taser", "planted_c4")
 
-MODE_COMMANDS = {"eichen": "eichen", "retake": "retake", "halten": "halten", "sitehold": "halten", "hold": "halten",
+MODE_COMMANDS = {"wiederholen": "wiederholen", "eichen": "eichen", "retake": "retake", "halten": "halten", "sitehold": "halten", "hold": "halten",
                  "situation": "situation", "duell": "duell"}
 # Training zu mehreren: der Besitzer laedt ein, der Freund sagt zu. Mitmachen und
 # Aussteigen darf jeder - das sind die einzigen Befehle ohne Besitzer-Pruefung.
@@ -105,7 +105,8 @@ COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop", "pause"
 SESSIONS_DIR = "training_sessions"
 ITEMS_FILE = ".training_items.json"  # Szenarien mit mehreren Gegnern (bis ~1 MB, nicht in den Zustand)
 MODE_ALIASES = {"duell": "duell", "duel": "duell", "situation": "situation", "multi": "situation",
-                "retake": "retake", "halten": "halten", "hold": "halten", "site": "halten", "eichen": "eichen"}
+                "retake": "retake", "halten": "halten", "hold": "halten", "site": "halten", "eichen": "eichen",
+                "wiederholen": "wiederholen", "repeat": "wiederholen"}
 GREEN, RED, YELLOW, PURPLE, GREY = "#4ade80", "#f87171", "#fbbf24", "#9184d9", "#aaaaaa"
 IDLE_ROUNDS = 2  # so viele Runden ohne Treffer in Folge = pausieren
 PAUSE_TIMEOUT = 900  # Sekunden pausiert, dann endet das Training
@@ -638,6 +639,35 @@ def load_calibration(config_path: Path) -> dict | None:
         return None
 
 
+def repeat_queue(sessions: list[dict], scenarios: list, limit: int = MAX_SCENARIOS) -> list[int]:
+    """!wiederholen: nur Duelle, die du im Training verloren hast - die oefter verlorenen zuerst.
+
+    Netto = Niederlagen minus Siege ueber alle Duell-Trainings. Wer eine Situation
+    mindestens zweimal netto verloren hat, bekommt sie zweimal, die Wiederholung
+    am Ende statt direkt hintereinander. Einmal verloren, danach zweimal
+    gewonnen (netto < 0) = gelernt, kommt nicht mehr.
+    """
+    score: dict[tuple, list[int]] = {}
+    for sess in sessions:
+        if sess.get("mode", "duell") != "duell":
+            continue
+        for d in sess.get("duels") or []:
+            w = score.setdefault((d.get("export"), d.get("round")), [0, 0])
+            if d.get("outcome") == "loss":
+                w[0] += 1
+            elif d.get("outcome") == "win":
+                w[1] += 1
+    ranked = []
+    for i, sc in enumerate(scenarios):
+        lost, won = score.get((sc.export, sc.round), (0, 0))
+        if lost and lost - won >= 0:
+            ranked.append((lost - won, lost, -i, i))
+    ranked.sort(reverse=True)
+    first = [r[3] for r in ranked]
+    again = [r[3] for r in ranked if r[0] >= 2]
+    return (first + again)[:limit]
+
+
 def duel_tip(rnd: dict, outcome: str) -> str | None:
     """Kurzer Hinweis nach einem verlorenen Duell - nur aus dem, was das Log misst.
 
@@ -848,7 +878,7 @@ class Director:
             return [f"Unbekannter Modus '{parts[1]}'. Moeglich: duell, situation, retake, halten, eichen."]
         if bsp not in self.maps():
             return [f"{bsp} ist nicht im Trainings-Pool ({', '.join(m.removeprefix('de_') for m in self.maps())})."]
-        if mode != "duell":
+        if mode not in ("duell", "wiederholen"):
             return self._start_multi(sid, name, bsp, mode)
         if not all_sc.get(bsp):
             return [f"Keine verlorenen Duelle auf {bsp} in deinen Matches."]
@@ -863,16 +893,24 @@ class Director:
         if others:
             return [f"Erst wenn der Server leer ist - gerade online: {', '.join(others)}. "
                     "Mittrainieren: !einladen <Name>"]
-        n = min(MAX_SCENARIOS, len(all_sc[bsp]))
-        chosen = all_sc[bsp][:n]
+        if mode == "wiederholen":
+            queue = repeat_queue(load_sessions(self.path), all_sc[bsp])
+            if not queue:
+                return [f"Auf {bsp} hast du im Training noch kein Duell verloren (oder alle danach gewonnen) - "
+                        f"erst ein normales !training {bsp.removeprefix('de_')}."]
+        else:
+            queue = list(range(min(MAX_SCENARIOS, len(all_sc[bsp]))))
+        uniq = sorted(set(queue))
+        n = len(queue)
+        chosen = [all_sc[bsp][i] for i in uniq]
         demos = len({sc.demo for sc in chosen if sc.demo})
         self.send(_say(f"Training {bsp}: lese die Positionen {lead_seconds(self.cfg):g} s vor jedem Duell "
                        f"aus {demos} Demos..."))
-        pre = prepare(self.cfg, self.path, chosen)
+        pre = {uniq[k]: v for k, v in prepare(self.cfg, self.path, chosen).items()}
         with _Lock(self.path):
             if is_active(self.path):
                 return ["Es läuft schon ein Training. Erst !stop."]
-            state = {"phase": "loading", "map": bsp, "human": sid, "name": name, "queue": list(range(n)),
+            state = {"phase": "loading", "map": bsp, "human": sid, "name": name, "queue": queue, "repeat": mode == "wiederholen",
                      "pos": 0, "results": [], "level": START_LEVEL, "round": 0,
                      "pre": {str(i): v for i, v in pre.items()}, "party": self._party_state(),
                      "goal": self._goal("duell"),
@@ -884,7 +922,7 @@ class Director:
         # Neustart noetig). "map" trennt die Clients und laesst sie neu verbinden,
         # statt sie durch den Wechsel zu tragen. Ob das den Haenger vermeidet,
         # ist noch nicht belegt - darum zusaetzlich LOAD_TIMEOUT und cs2-waechter.
-        late = f", {n - len(pre)} davon am Todesort (Demo fehlt)" if len(pre) < n else ""
+        late = f", {len(uniq) - len(pre)} davon am Todesort (Demo fehlt)" if len(pre) < len(uniq) else ""
         self.send(_say(f"{n} Duelle aus deinen Matches{late}. Map wird geladen..."),
                   "sv_hibernate_when_empty 0", f"map {bsp}")
         return []
