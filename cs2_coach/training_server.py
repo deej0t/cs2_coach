@@ -1298,7 +1298,9 @@ class Director:
             if state.get("paused"):
                 return state  # pausierte Runde (endet nur durch !weiter)
             skipped = state.pop("skip", False)
-            if not skipped and not state.get("active"):
+            # Eichung: eine Runde ohne Treffer (Bot nicht aufgetaucht oder unerreichbar) ist
+            # einfach ungueltig - weiter zur naechsten Stelle statt Wiederholen und Pause.
+            if not skipped and not state.get("active") and state.get("mode") != "eichen":
                 return self._idle_round(state)
             state["idle"] = 0
             if not skipped:
