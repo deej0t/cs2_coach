@@ -389,6 +389,41 @@ def _say(text: str) -> str:
     return f"say {_safe(PREFIX + ' ' + text)[:120]}"
 
 
+WORKSHOP_MAPS = {"aim_multigame": "3245740485"}
+
+
+def workshop_maps(cfg: dict) -> dict[str, str]:
+    return dict(cfg.get("workshop_maps") or WORKSHOP_MAPS)
+
+
+def map_change_commands(status: str, target: str, cfg: dict) -> list[str]:
+    """Befehle fuer einen Mapwechsel, der den Server nicht haengen laesst.
+
+    Der Wechsel WEG von der Workshop-Map aim_multigame liess den Server zweimal
+    haengen, waehrend ein Spieler verbunden war (30.10., 2.11.; WatchDog) - ohne
+    Spieler lief er immer. Darum trennt der Coach vorher alle Menschen mit der
+    Bitte, neu zu verbinden. Ob das den Haenger sicher verhindert, ist nicht
+    belegt; der cs2-waechter startet einen haengenden Server weiterhin neu.
+    """
+    cmds = []
+    current = _current_map_from(status)
+    if current and not current.startswith(("de_", "cs_")):
+        addr = (cfg.get("server_address") or "").strip()
+        reason = f"Mapwechsel auf {target} - bitte neu verbinden" + (f": connect {addr}" if addr else "")
+        cmds += [f'kickid {uid} "{reason}"' for uid in _human_ids(status)]
+    wid = workshop_maps(cfg).get(target)
+    return cmds + ["sv_hibernate_when_empty 0", f"host_workshop_map {wid}" if wid else f"map {target}"]
+
+
+def _human_ids(status: str) -> list[str]:
+    out = []
+    for line in status.splitlines():
+        m = re.match(r"^\s*(\d+)\s+(\S+)\s+\d+\s+\d+\s+\w+\s+\d+\s+\S+\s+'(.*)'\s*$", line)
+        if m and m.group(2) != "BOT":
+            out.append(m.group(1))
+    return out
+
+
 def _humans(status: str) -> list[str]:
     """Namen der verbundenen Menschen aus der RCON-Ausgabe von ``status``."""
     out = []
@@ -933,7 +968,7 @@ class Director:
         # ist noch nicht belegt - darum zusaetzlich LOAD_TIMEOUT und cs2-waechter.
         late = f", {len(uniq) - len(pre)} davon am Todesort (Demo fehlt)" if len(pre) < len(uniq) else ""
         self.send(_say(f"{n} Duelle aus deinen Matches{late}. Map wird geladen..."),
-                  "sv_hibernate_when_empty 0", f"map {bsp}")
+                  *self._map_change(bsp))
         return []
 
     def _strangers(self, name: str) -> list[str]:
@@ -1043,7 +1078,7 @@ class Director:
                 "t0": time.time(), "party": {}})
         self.timer(LOAD_TIMEOUT, self._check_loaded)
         self.send(_say(f"{len(lineups)} Lineups, die in deinen Matches am oeftesten geworfen wurden. Map wird geladen..."),
-                  "sv_hibernate_when_empty 0", f"map {bsp}")
+                  *self._map_change(bsp))
         return []
 
     def _nade_commands(self, state: dict) -> list[str]:
@@ -1098,7 +1133,7 @@ class Director:
                 "t0": time.time(), "party": self._party_state(), "goal": self._goal(mode)})
         self.timer(LOAD_TIMEOUT, self._check_loaded)
         self.send(_say(f"{len(items)} {MODES[mode]}-Situationen, bis zu {need} Gegner. Map wird geladen..."),
-                  "sv_hibernate_when_empty 0", f"map {bsp}")
+                  *self._map_change(bsp))
         return []
 
     def _items(self) -> list[dict]:
@@ -1249,6 +1284,9 @@ class Director:
         else:
             items = self._items()[state["queue"][state["pos"]]].get("me_items") or []
         return [weapon_label(x) for x in items[1:] if x and "knife" not in x]
+
+    def _map_change(self, bsp: str) -> list[str]:
+        return map_change_commands(self.send("status")[0], bsp, self.cfg)
 
     def _current_map(self) -> str:
         return _current_map_from(self.send("status")[0])

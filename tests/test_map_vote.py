@@ -39,8 +39,15 @@ def test_vote_expires_and_pool_only(tmp_path):
     assert "gibt es hier nicht" in mv.handle({}, tmp_path / "c.yaml", s, "1", "dj", "map", "aim_x", now=300)[0]
 
 
-def test_never_from_workshop_map(tmp_path):
+def test_aim_map_is_votable_via_workshop(tmp_path):
+    s = Server()
+    assert mv.handle({}, tmp_path / "c.yaml", s, "1", "dj", "map", "aim", now=1) == []
+    assert "host_workshop_map 3245740485" in s.sent
+
+
+def test_leaving_workshop_map_disconnects_players_first(tmp_path):
     s = Server()
     s.status = s.status.replace("de_dust2", "aim_multigame")
-    assert "Workshop" in mv.handle({}, tmp_path / "c.yaml", s, "1", "dj", "map", "mirage", now=1)[0]
-    assert not any(c.startswith("map ") for c in s.sent)
+    mv.handle({"server_address": "cs2.deej0t.eu"}, tmp_path / "c.yaml", s, "1", "dj", "map", "mirage", now=1)
+    kick = next(i for i, c in enumerate(s.sent) if c.startswith("kickid 2 "))
+    assert "connect cs2.deej0t.eu" in s.sent[kick] and s.sent.index("map de_mirage") > kick
