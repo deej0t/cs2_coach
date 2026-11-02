@@ -21,7 +21,7 @@ from pathlib import Path
 
 TICKRATE = 64
 CACHE_DIR = "grenade_cache"
-CACHE_KEY = "nades-v1"
+CACHE_KEY = "nades-v1"  # Demos mit Fehler stehen nicht im Cache, kommen beim naechsten Lauf neu
 STAND_SPEED = 10    # u/s
 SAME_SPOT = 48      # Units zwischen zwei Abwurfpunkten
 SAME_LAND = 150     # Units zwischen zwei Landepunkten
@@ -56,8 +56,11 @@ def scan_demo(demo_path, me: str, parser_factory=None) -> list[dict]:
                   _event(p, "round_end", ["tick", "winner"]).iterrows())
     ticks = sorted({int(t) for t in fire["tick"]} | {int(t) - 1 for t in fire["tick"]})
     rows = p.parse_ticks(["X", "Y", "team_num"], ticks=ticks)
-    pos = {(int(r["tick"]), str(r["steamid"])): (float(r["X"]), float(r["Y"]), int(r["team_num"] or 0))
-           for _, r in rows.iterrows()}
+    # team_num ist bei Zuschauern/Reconnects NaN - fuehrte am 2.11. in 5 Demos zu
+    # "cannot convert float NaN to integer", die ganze Demo fiel weg.
+    pos = {(int(r["tick"]), str(r["steamid"])): (float(r["X"]), float(r["Y"]),
+                                                  int(r["team_num"]) if r["team_num"] == r["team_num"] else 0)
+           for _, r in rows.iterrows() if r["X"] == r["X"]}
     used, out = set(), []
     for _, f in fire.iterrows():
         t, sid, typ = int(f["tick"]), str(f["user_steamid"]), WEAPONS[str(f["weapon"])]
