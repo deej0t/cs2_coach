@@ -40,7 +40,7 @@ SESSION_HOURS = 6
 _CHAT = re.compile(ss._player("a") + r' say(?:_team)? "(?P<text>.*)"$')
 _last_command: dict[str, float] = {}
 
-HELP = ("Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !help · Besitzer: !training (Menue) · "
+HELP = ("Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !map <name> · !help · Besitzer: !training (Menue) · "
         "!retake / !halten / !situation / !wiederholen [map] · !einladen <Name> · !coach <Frage> · Eingeladen: !mitmachen")
 
 
@@ -215,6 +215,7 @@ def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, n
     """Chat-Befehle aus einem Stapel beantworten. Gibt die Zahl der Antworten zurueck."""
     from .ingame_coach import COMMANDS as COACH, handle as coach_handle
     from .training_server import COMMANDS as TRAINING, Director
+    from .map_vote import COMMANDS as MAPVOTE, handle as map_vote
     commands = parse_commands(lines)
     send = send or rcon_sender(cfg)
     if not commands or send is None:
@@ -232,6 +233,13 @@ def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, n
         if cmd in TRAINING:
             reply = Director(cfg, config_path, send).command(sid, name, cmd, arg, uid)
             _last_command[sid] = time.monotonic()
+            if reply:
+                send(*_say_commands(reply))
+                sent += 1
+            continue
+        if cmd in MAPVOTE:
+            _last_command[sid] = time.monotonic()
+            reply = map_vote(cfg, config_path, send, sid, name, cmd, arg)
             if reply:
                 send(*_say_commands(reply))
                 sent += 1

@@ -378,6 +378,12 @@ def is_active(config_path: Path) -> bool:
 # Regisseur
 # --------------------------------------------------------------------------
 
+def _current_map_from(status: str) -> str:
+    """Aktuelle Server-Map aus 'status' ("loaded spawngroup(  1)  : SV:  [1: de_mirage | ...")."""
+    m = re.search(r"spawngroup\(\s*1\)\s*:\s*SV:\s*\[1:\s*([\w-]+)", status)
+    return m.group(1) if m else ""
+
+
 def _say(text: str) -> str:
     from .server_live import PREFIX, _safe
     return f"say {_safe(PREFIX + ' ' + text)[:120]}"
@@ -1245,10 +1251,7 @@ class Director:
         return [weapon_label(x) for x in items[1:] if x and "knife" not in x]
 
     def _current_map(self) -> str:
-        """Aktuelle Server-Map aus 'status' ("loaded spawngroup(  1)  : SV:  [1: de_mirage | ...")."""
-        import re as _re
-        m = _re.search(r"spawngroup\(\s*1\)\s*:\s*SV:\s*\[1:\s*([\w-]+)", self.send("status")[0])
-        return m.group(1) if m else ""
+        return _current_map_from(self.send("status")[0])
 
     def _open_mode_maps(self, uid, mode: str) -> list[str]:
         from .training_scenarios import MODES
