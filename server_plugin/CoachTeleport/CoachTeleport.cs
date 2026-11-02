@@ -69,7 +69,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.16.0";
+    public override string ModuleVersion => "1.17.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -224,7 +224,10 @@ public class CoachTeleport : BasePlugin
             var p3 = r.Points[Math.Min(i + 2, r.Points.Count - 1)];
             var pos = new Vector(Spline(p0[0], a[0], b[0], p3[0], f), Spline(p0[1], a[1], b[1], p3[1], f),
                                  Spline(p0[2], a[2], b[2], p3[2], f));
-            var ang = new QAngle(Lerp(a[3], b[3], f), LerpAngle(a[4], b[4], f), 0);
+            // Nur die Blickrichtung zur Seite: bei Bots kippt ein Pitch das ganze Modell.
+            // 2.11.: der Gegner in der Demo schaute bis 78 Grad nach unten, der Bot "lag flach
+            // auf dem Boden" und schien zu rasen (Weg max. 211 u/s, Tempolimit griff nie).
+            var ang = new QAngle(0, LerpAngle(a[4], b[4], f), 0);
             // Geschwindigkeit wie im Original (Ableitung der Kurve), beim Anfahren
             // anteilig - damit die Laufanimation zur Bewegung passt.
             var vel = new Vector(SplineSlope(p0[0], a[0], b[0], p3[0], f) * r.Hz * pace,
@@ -965,7 +968,7 @@ public class CoachTeleport : BasePlugin
             info.ReplyToCommand($"coach_tp: kein Spieler mit userid {userid}");
             return;
         }
-        pawn.Teleport(new Vector(v[0], v[1], v[2]), new QAngle(v[3], v[4], 0), new Vector(0, 0, 0));
+        pawn.Teleport(new Vector(v[0], v[1], v[2]), new QAngle(player.IsBot ? 0 : v[3], v[4], 0), new Vector(0, 0, 0));
         info.ReplyToCommand($"coach_tp ok {userid}");
     }
 
