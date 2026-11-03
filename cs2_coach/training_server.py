@@ -1703,8 +1703,10 @@ class Director:
         if state["mode"] == "retake" and item.get("bomb"):
             # Plugin 1.22.0: Bombe liegt dort, wo sie in der Demo gelegt wurde, Timer laeuft;
             # alle Menschen bekommen ein Entschaerfungskit. Gewonnen erst mit dem Entschaerfen.
-            cmds.append(f"coach_plant {_fmt(item['bomb'])} {C4_SECONDS}")
-            state["rnd"]["bomb"] = True
+            # Nur wenn das Plugin sie wirklich gelegt hat - ein altes Plugin kennt den Befehl
+            # nicht, dann gilt wie bisher: alle Bots tot = gewonnen.
+            if "coach_plant ok" in self.send(f"coach_plant {_fmt(item['bomb'])} {C4_SECONDS}")[0]:
+                state["rnd"]["bomb"] = True
         # Mitspieler: dort, wo deine damaligen Teamkollegen standen, mit ihrer Ausruestung.
         # Mehr Freunde als Kollegen in der Demo: an deine Stelle, mit deiner Ausruestung.
         demo_mates = item.get("mates") or []
