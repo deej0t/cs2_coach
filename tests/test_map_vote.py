@@ -50,4 +50,4 @@ def test_leaving_workshop_map_disconnects_players_first(tmp_path):
     s.status = s.status.replace("de_dust2", "aim_multigame")
     mv.handle({"server_address": "cs2.deej0t.eu"}, tmp_path / "c.yaml", s, "1", "dj", "map", "mirage", now=1)
     kick = next(i for i, c in enumerate(s.sent) if c.startswith("kickid 2 "))
-    assert "connect cs2.deej0t.eu" in s.sent[kick] and s.sent.index("map de_mirage") > kick
+    assert "retry" in s.sent[kick] and "connect cs2.deej0t.eu" in s.sent[kick] and s.sent.index("map de_mirage") > kick

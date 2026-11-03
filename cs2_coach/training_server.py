@@ -421,7 +421,8 @@ def map_change_commands(status: str, target: str, cfg: dict) -> list[str]:
     current = _current_map_from(status)
     if current and not current.startswith(("de_", "cs_")):
         addr = (cfg.get("server_address") or "").strip()
-        reason = f"Mapwechsel auf {target} - bitte neu verbinden" + (f": connect {addr}" if addr else "")
+        # "retry" in der Konsole verbindet sofort neu zum letzten Server - schneller als die Adresse
+        reason = f"Mapwechsel auf {target} - Konsole: retry" + (f" (oder connect {addr})" if addr else "")
         cmds += [f'kickid {uid} "{reason}"' for uid in _human_ids(status)]
     wid = workshop_maps(cfg).get(target)
     return cmds + ["sv_hibernate_when_empty 0", f"host_workshop_map {wid}" if wid else f"map {target}"]
