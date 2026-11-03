@@ -9,6 +9,33 @@
     Start im Spiel mit <code>!training</code> (Menü: W/S wählen, E bestätigen) oder <code>!training mirage</code>.
 </p>
 
+{% if effect.since %}
+<div class="card elev-sm" style="margin-bottom: var(--space-5);">
+    <span class="card-kicker">Wirkt das Training im Match?</span>
+    <p style="font-size: 13px; color: var(--color-neutral-500); margin: var(--space-2) 0;">
+        Matches seit dem ersten Training ({{ effect.since.strftime('%d.%m.%Y') }}): {{ effect.with }} mit Training in den 24&nbsp;h davor,
+        {{ effect.without }} ohne. Nur ein belastbarer Unterschied wird als Wirkung gezählt.
+    </p>
+    <table class="table" style="font-size: 13px;">
+        <tr><th></th><th>mit Training</th><th>ohne</th><th>Ergebnis</th></tr>
+        {% for r in effect.rows %}
+        <tr>
+            <td>{{ r.name }}</td>
+            <td>{% if r.mean_with is not none %}{{ '%.1f'|format(r.mean_with) if r.unit else '%.2f'|format(r.mean_with) }}{{ r.unit }}{% else %}–{% endif %} <span style="color: var(--color-neutral-500);">({{ r.n_with }})</span></td>
+            <td>{% if r.mean_without is not none %}{{ '%.1f'|format(r.mean_without) if r.unit else '%.2f'|format(r.mean_without) }}{{ r.unit }}{% else %}–{% endif %} <span style="color: var(--color-neutral-500);">({{ r.n_without }})</span></td>
+            <td>
+            {% if not r.cmp %}<span style="color: var(--color-neutral-500);">zu wenig Matches (noch {{ r.missing }})</span>
+            {% elif r.cmp.verdict == 'solid_positive' %}<span style="color: var(--color-green);">messbar besser</span>
+            {% elif r.cmp.verdict == 'solid_negative' %}<span style="color: var(--color-red);">messbar schlechter</span>
+            {% elif r.cmp.verdict == 'solid_negligible' %}kein Unterschied (belegt)
+            {% else %}noch offen{% if r.cmp.n_needed %} (~{{ r.cmp.n_needed }} Matches){% endif %}{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
 {% if running %}
 <div class="card elev-sm" style="margin-bottom: var(--space-5); border-left: 3px solid var(--color-green);">
     <span class="card-kicker">Läuft gerade</span>
