@@ -35,7 +35,7 @@
 set -u
 NAME=${NAME:-CS2}
 PORT=${PORT:-27015}
-GAME=${GAME:-/mnt/cache/appdata/cs2/game/csgo}
+GAME=${GAME:-/mnt/ssdcache/appdata/cs2/game/csgo}
 GAMEINFO=${GAMEINFO:-$GAME/gameinfo.gi}
 RUN=${RUN:-/var/run}
 SEIT=$RUN/cs2-waechter.since
