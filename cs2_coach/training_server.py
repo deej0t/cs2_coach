@@ -1744,8 +1744,11 @@ class Director:
             # alle Menschen bekommen ein Entschaerfungskit. Gewonnen erst mit dem Entschaerfen.
             # Nur wenn das Plugin sie wirklich gelegt hat - ein altes Plugin kennt den Befehl
             # nicht, dann gilt wie bisher: alle Bots tot = gewonnen.
-            if "coach_plant ok" in self.send(f"coach_plant {_fmt(item['bomb'])} {C4_SECONDS}")[0]:
+            reply = self.send(f"coach_plant {_fmt(item['bomb'])} {C4_SECONDS}")[0]
+            if "coach_plant ok" in reply:
                 state["rnd"]["bomb"] = True
+                site = reply.split()[-1]
+                state["rnd"]["site"] = site if site in ("A", "B") else ""
         # Mitspieler: dort, wo deine damaligen Teamkollegen standen, mit ihrer Ausruestung.
         # Mehr Freunde als Kollegen in der Demo: an deine Stelle, mit deiner Ausruestung.
         demo_mates = item.get("mates") or []
@@ -1767,6 +1770,8 @@ class Director:
         body = "<br>".join([
             _font(f"{MODES[state['mode']]} {n}/{total} &#183; {html.escape(item.get('source', ''))}", PURPLE),
             _font(f"{len(active)} Gegner: {html.escape(weapons)}", RED, "l"),
+            *([_font(f"Bombe liegt auf {state['rnd'].get('site') or '?'} - entschaerfen!", YELLOW)]
+              if state["rnd"].get("bomb") else []),
             _font(f"naechster kommt von {state['direction']}", "#ffffff"),
             _font(f"Stand {_score(state)} &#183; {_level_text(state)}", GREY, "s")])
         cmds.append(hud(human, FREEZE_TIME + 4, body))
@@ -1774,7 +1779,8 @@ class Director:
         cmds.append(_say(f"Eichung {n}/{total}: der Gegner taucht gleich vor dir auf - schiess, sobald du ihn siehst."
                          if state["mode"] == "eichen" else
                          f"{MODES[state['mode']]} {n}/{total} ({item.get('source', '')}): {len(active)} Gegner, "
-                         "jeder laeuft seinen echten Weg, bis er dich sieht"))
+                         + (f"Bombe auf {state['rnd'].get('site') or '?'}, " if state["rnd"].get("bomb") else "")
+                         + "jeder laeuft seinen echten Weg, bis er dich sieht"))
         cmds += _aim_commands(state, active)
         if state["rnd"].get("bomb"):
             # coach_give leert das Inventar (RemoveWeapons) und nahm so das Kit vom Legen wieder

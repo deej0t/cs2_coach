@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.24.0";
+    public override string ModuleVersion => "1.25.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -98,6 +98,7 @@ public class CoachTeleport : BasePlugin
     {
         RegisterListener<Listeners.OnTick>(OnTick);
         RegisterListener<Listeners.OnTick>(DrawCenter);
+        RegisterListener<Listeners.OnTick>(BombHud);
         RegisterListener<Listeners.OnTick>(AimAssist);
         RegisterListener<Listeners.OnTick>(Hunt);
         RegisterListener<Listeners.OnTick>(SpeedLimit);
@@ -270,7 +271,7 @@ public class CoachTeleport : BasePlugin
 
         string? html = null;
         if (_menus.TryGetValue(userid, out var menu)) html = RenderMenu(menu);
-        else if (_huds.TryGetValue(userid, out var hud)) html = hud.Html;
+        else if (_huds.TryGetValue(userid, out var hud)) html = BombLine() is { } bl ? bl + "<br>" + hud.Html : hud.Html;
 
         if (html is null)
         {
@@ -865,20 +866,21 @@ public class CoachTeleport : BasePlugin
             info.ReplyToCommand("coach_plant: planted_c4 nicht erzeugt");
             return;
         }
-        // Naechster Bombenplatz (A=0, B=1) nach Abstand zum Zentrum der func_bomb_target
+        // Naechster Bombenplatz nach Abstand zur Mitte der func_bomb_target (Brush: Ursprung oft
+        // 0,0,0, die Grenzen dann in Weltkoordinaten - Mitte = Ursprung + (Mins+Maxs)/2).
         var site = 0;
         var best = float.MaxValue;
-        var idx = 0;
-        foreach (var t in Utilities.FindAllEntitiesByDesignerName<CBaseEntity>("func_bomb_target"))
+        foreach (var t in Utilities.FindAllEntitiesByDesignerName<CBombTarget>("func_bomb_target"))
         {
             var o = t.AbsOrigin;
-            if (o is not null)
-            {
-                var d = (o.X - v[0]) * (o.X - v[0]) + (o.Y - v[1]) * (o.Y - v[1]);
-                if (d < best) { best = d; site = idx; }
-            }
-            idx++;
+            var c = t.Collision;
+            if (o is null || c is null) continue;
+            var cx = o.X + (c.Mins.X + c.Maxs.X) / 2;
+            var cy = o.Y + (c.Mins.Y + c.Maxs.Y) / 2;
+            var d = (cx - v[0]) * (cx - v[0]) + (cy - v[1]) * (cy - v[1]);
+            if (d < best) { best = d; site = t.IsBombSiteB ? 1 : 0; }
         }
+        _bombSite = site == 1 ? "B" : "A";
         c4.BombTicking = true;
         c4.CannotBeDefused = false;
         c4.BeingDefused = false;
@@ -896,7 +898,39 @@ public class CoachTeleport : BasePlugin
         }
         foreach (var p in Utilities.GetPlayers())
             if (!p.IsBot && p.TeamNum == 3 && p.PawnIsAlive) p.GiveNamedItem("item_defuser");
-        info.ReplyToCommand($"coach_plant ok site {site}");
+        _bomb = c4;
+        info.ReplyToCommand($"coach_plant ok site {_bombSite}");
+    }
+
+    // Bomben-Countdown (1.25.0) fuer alle Menschen, ueber jeder Trainingsanzeige: Platz, Restzeit,
+    // laufende Entschaerfung. Wunsch 3.11.: "wo ist die Zeit fuer entschaerfen, a oder b".
+    private CPlantedC4? _bomb;
+    private string _bombSite = "";
+
+    private string? BombLine()
+    {
+        if (_bomb is null || !_bomb.IsValid || !_bomb.BombTicking || _bomb.HasExploded || _bomb.BombDefused) return null;
+        var left = _bomb.C4Blow - Server.CurrentTime;
+        if (left < 0) return null;
+        var color = left < 10 ? "#f87171" : "#fbbf24";
+        var defuse = _bomb.BeingDefused
+            ? $"<br><font class='fontSize-m' color='#60a5fa'>Entschaerfen: {Math.Max(0, _bomb.DefuseCountDown - Server.CurrentTime):F1} s</font>"
+            : "";
+        return $"<font class='fontSize-l' color='{color}'>BOMBE {_bombSite} &#183; {left:F1} s</font>{defuse}";
+    }
+
+    private void BombHud()
+    {
+        if (_bomb is null) return;
+        var line = BombLine();
+        if (line is null)
+        {
+            _bomb = null;
+            return;
+        }
+        foreach (var p in Utilities.GetPlayers())
+            if (!p.IsBot && p.UserId is { } uid && !_huds.ContainsKey(uid) && !_menus.ContainsKey(uid))
+                TryCenter(p, line, 1);
     }
 
     // Retake abkuerzen (1.23.0): alle T tot, Bombe tickt -> haette ein CT es noch geschafft?
