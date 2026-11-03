@@ -14,6 +14,28 @@
     <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
         <div id="wasted" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">mit ins Grab</div></div>
 </div>
+{% if summary.goal %}
+<div class="card elev-sm" style="margin-bottom: var(--space-4); border-left: 3px solid var(--color-green);">
+    <span class="card-kicker">Heute darauf achten (aus deinem Training)</span>
+    <div style="font-size: 18px; font-weight: 700; margin-top: var(--space-2);">{{ summary.goal.label }}</div>
+    <div style="font-size: 13px; color: var(--color-neutral-500);">Im Training zuletzt {{ summary.goal.before_k }} von {{ summary.goal.before_n }} Duellen ({{ summary.goal.pct }} %). Live nicht messbar - kommt nach dem Match aus der Demo.</div>
+</div>
+{% endif %}
+{% if summary.latest and summary.latest.rows %}
+<div class="card elev-sm" style="margin-bottom: var(--space-4);">
+    <span class="card-kicker">Letztes analysiertes Match ({{ summary.latest.time.strftime('%d.%m. %H:%M') }})</span>
+    <table class="table" style="font-size: 13px; margin-top: var(--space-2);">
+        <tr><th></th><th>dieses Match</th><th>Median der {{ summary.last }} davor</th></tr>
+        {% for r in summary.latest.rows %}
+        <tr><td>{{ r.name }}</td>
+            <td style="font-weight: 700; color: {{ 'var(--color-green)' if r.better == true else 'var(--color-red)' if r.better == false else 'inherit' }};">
+                {{ '%.1f'|format(r.value) if r.unit else '%.2f'|format(r.value) }}{{ r.unit }}</td>
+            <td>{% if r.base is not none %}{{ '%.1f'|format(r.base) if r.unit else '%.2f'|format(r.base) }}{{ r.unit }}{% else %}–{% endif %}</td></tr>
+        {% endfor %}
+    </table>
+    <div style="font-size: 12px; color: var(--color-neutral-500);">Grün/rot = besser/schlechter als dein Median. Ein einzelnes Match schwankt stark - das ist kein Trend.</div>
+</div>
+{% endif %}
 <p><button id="speak" class="btn">🔊 Hinweise vorlesen</button></p>
 <div id="log" style="font-size: 13px; color: var(--color-neutral-500);"></div>
 

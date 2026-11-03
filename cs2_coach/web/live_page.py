@@ -46,7 +46,9 @@ def create_blueprint(load_config, config_path) -> Blueprint:
     @bp.route("/live")
     def page():
         cfg = load_config()
-        return render_template("live.html", gsi_url=_url(cfg), config=cfg)
+        from .. import training_effect, training_server
+        summary = training_effect.live_summary(cfg, training_server.load_sessions(Path(config_path())))
+        return render_template("live.html", gsi_url=_url(cfg), config=cfg, summary=summary)
 
     @bp.route("/live/gamestate_integration_cs2coach.cfg")
     def cfg_file():

@@ -27,3 +27,15 @@ def test_groups_by_training_in_previous_24h(tmp_path):
 
 def test_no_training_no_analysis(tmp_path):
     assert te.analyse({"obsidian_vault_path": str(tmp_path)}, [])["since"] is None
+
+
+def test_live_summary_latest_vs_median(tmp_path):
+    ex = tmp_path / "CS2-Coach" / "exports"
+    ex.mkdir(parents=True)
+    for d in range(1, 5):
+        _export(ex, f"2026-11-0{d}_de_mirage_13-5_2000_coach.json", 4, 70, 30)
+    _export(ex, "2026-11-05_de_mirage_13-5_2000_coach.json", 3, 80, 50)
+    res = te.live_summary({"obsidian_vault_path": str(tmp_path)}, [])
+    rows = {r["name"]: r for r in res["latest"]["rows"]}
+    assert rows["Fadenkreuz vor Kills"]["better"] is True and rows["Counter-Strafing"]["base"] == 70
+    assert res["goal"] is None

@@ -96,3 +96,26 @@ def analyse(cfg: dict, sessions: list[dict]) -> dict:
                      "mean_with": sum(a) / len(a) if a else None, "mean_without": sum(b) / len(b) if b else None,
                      "cmp": cmp, "missing": max(0, MIN_PER_GROUP - len(a)) + max(0, MIN_PER_GROUP - len(b))})
     return {"since": since, "with": len(groups[True]), "without": len(groups[False]), "rows": rows}
+
+
+def live_summary(cfg: dict, sessions: list[dict], last: int = 10) -> dict:
+    """Fuer /live: Ziel aus dem Training (Erinnerung, keine Live-Messung) und das zuletzt
+    analysierte Match neben dem Median der Matches davor. Live misst GSI nur Granaten."""
+    from statistics import median
+    from .training_goal import pick_goal
+    goal = pick_goal(sessions)
+    if goal:
+        goal = {**goal, "pct": round(goal["before_k"] * 100 / goal["before_n"]) if goal["before_n"] else None}
+    rows = matches(cfg)
+    latest = None
+    if rows:
+        t, vals = rows[-1]
+        before = [v for _, v in rows[-1 - last:-1]]
+        latest = {"time": t, "rows": []}
+        for key, name, unit, higher in METRICS:
+            ref = [v[key] for v in before if key in v]
+            if key in vals:
+                base = median(ref) if ref else None
+                better = None if base is None or vals[key] == base else (vals[key] > base) == higher
+                latest["rows"].append({"name": name, "unit": unit, "value": vals[key], "base": base, "better": better})
+    return {"goal": goal, "latest": latest, "last": last}
