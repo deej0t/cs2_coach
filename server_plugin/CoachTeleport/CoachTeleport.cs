@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.23.0";
+    public override string ModuleVersion => "1.24.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -467,6 +467,7 @@ public class CoachTeleport : BasePlugin
             var yaw = (float)(Math.Atan2(dy, dx) * 180 / Math.PI);
             var pitch = (float)(-Math.Atan2(dz, Math.Sqrt(dx * dx + dy * dy)) * 180 / Math.PI);
             pawn.Teleport(null, new QAngle(pitch, yaw, 0), null);
+            UprightNow(pawn);
         }
     }
 
@@ -815,6 +816,19 @@ public class CoachTeleport : BasePlugin
 
     // Teleport mit Pitch kippt auch das Modell: bei -50 Grad (Smoke nach oben) lag der Spieler
     // flach (3.11.). Der Blick soll bleiben, nur die Koerper-Rotation wird wieder aufgerichtet.
+    // Zielhilfe/Pre-Aim setzen den Blick per Teleport jeden Tick - mit Pitch kippte das Bot-Modell
+    // ("Bots liegen halb oder laufen geknickt", 3.11.). Koerper sofort wieder aufrichten.
+    private static void UprightNow(CCSPlayerPawn pawn)
+    {
+        var node = pawn.CBodyComponent?.SceneNode;
+        if (node is null) return;
+        node.AbsRotation.X = 0;
+        node.AbsRotation.Z = 0;
+        node.Rotation.X = 0;
+        node.Rotation.Z = 0;
+        Utilities.SetStateChanged(pawn, "CBaseEntity", "m_CBodyComponent");
+    }
+
     private static void Upright(CCSPlayerPawn pawn)
     {
         Server.NextFrame(() =>
@@ -1216,6 +1230,7 @@ public class CoachTeleport : BasePlugin
         var yaw = (float)(Math.Atan2(dy, dx) * 180 / Math.PI);
         var pitch = (float)(-Math.Atan2(dz, Math.Sqrt(dx * dx + dy * dy)) * 180 / Math.PI);
         pawn.Teleport(null, new QAngle(pitch, yaw, 0), null);
+        UprightNow(pawn);
     }
 
     private const float RampTicks = 16f;  // 0,25 s anfahren

@@ -137,7 +137,9 @@ SETUP = [
     "mp_give_player_c4 0",
     "mp_halftime 0", "mp_match_can_clinch 0", "mp_ignore_round_win_conditions 0",
     # Mitspieler starten im Duell an deiner Stelle - durchlaessig, sonst stecken sie ineinander.
-    "mp_solid_teammates 0",
+    # 3.11.: "man sollte nicht durch einen durchgehen koennen" - Mitspieler sind fest;
+    # wer sich einen Platz teilen wuerde, steht dafuer versetzt hinter dir (_behind).
+    "mp_solid_teammates 1",
 ]
 RESTORE = ["coach_nade_clear", "sv_grenade_trajectory_prac_pipreview 0", "sv_grenade_trajectory_prac_trailtime 0",
            "bot_kick", "bot_quota 0", "bot_freeze 0", 'bot_loadout ""', "mp_warmuptime 30",
@@ -444,6 +446,16 @@ def _humans(status: str) -> list[str]:
         m = re.match(r"^\s*\d+\s+(\S+)\s+\d+\s+\d+\s+\w+\s+\d+\s+\S+\s+'(.*)'\s*$", line)
         if m and m.group(1) != "BOT":
             out.append(m.group(2))
+    return out
+
+
+def _behind(pos, target, k: int, step: float = 40.0) -> list:
+    """pos um k*step Units vom Ziel weg verschoben (dahin, wo man herkam) - Blick bleibt."""
+    out = list(pos)
+    dx, dy = pos[0] - target[0], pos[1] - target[1]
+    norm = math.hypot(dx, dy) or 1.0
+    out[0] += dx / norm * step * k
+    out[1] += dy / norm * step * k
     return out
 
 
@@ -1668,10 +1680,10 @@ class Director:
             _font(f"Gegner mit {html.escape(weapon_label(sc.weapon))}", RED, "l"),
             _font(f"kommt von {state['direction']}", "#ffffff"),
             _font(f"Stand {_score(state)} &#183; {_level_text(state)}", GREY, "s")]))
-        # Mitspieler im Duell: an deiner Stelle (mp_solid_teammates 0), mit deiner Ausruestung.
+        # Mitspieler im Duell: hinter dir versetzt (sie sind fest), mit deiner Ausruestung.
         mates = []
-        for uid in _party_uids(state):
-            mates.append(f"coach_tp {uid} {_fmt(me)}")
+        for k, uid in enumerate(_party_uids(state), 1):
+            mates.append(f"coach_tp {uid} {_fmt(_behind(me, foe, k))}")
             mates += [g.replace(f"coach_give {state['human_uid']} ", f"coach_give {uid} ", 1)
                       for g in give if g.startswith(f"coach_give {state['human_uid']} ")]
             mates.append(info.replace(f"coach_hud {state['human_uid']} ", f"coach_hud {uid} ", 1))
@@ -1738,7 +1750,8 @@ class Director:
         # Mehr Freunde als Kollegen in der Demo: an deine Stelle, mit deiner Ausruestung.
         demo_mates = item.get("mates") or []
         for k, uid in enumerate(_party_uids(state)):
-            spot = demo_mates[k] if k < len(demo_mates) else {"start": item["me"], "items": mine}
+            spot = demo_mates[k] if k < len(demo_mates) else {
+                "start": _behind(item["me"], target, k - len(demo_mates) + 1), "items": mine}
             pos = list(spot["start"])
             pos[3], pos[4] = _calc_view_angle(pos[0], pos[1], pos[2] + 64, target[0], target[1], target[2] + 64)
             cmds.append(f"coach_tp {uid} {_fmt(pos)}")
