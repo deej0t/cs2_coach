@@ -205,23 +205,39 @@ def collect(cfg: dict, config_path: Path, bsp: str | None = None, parser_factory
     return out
 
 
+SAME_HEIGHT = 24    # Units: auf der Papiertonne (Mirage T-Spawn, +56) ist ein anderes Lineup als davor
+
+
 def library(throws: list[dict], limit: int = 40) -> list[dict]:
-    """Wuerfe aus dem Stand oder Sprungwuerfe zu Lineups buendeln (gleiche Wurfart); die haeufigsten zuerst."""
+    """Wuerfe aus dem Stand oder Sprungwuerfe zu Lineups buendeln (gleiche Wurfart); die haeufigsten zuerst.
+
+    Abwurf auch nach Hoehe getrennt: am 3.11. landeten 110 Wuerfe vom Boden und 8 von der
+    Papiertonne in einer Gruppe, und ausgerechnet ein Tonnen-Wurf war der Vertreter
+    ("da steht man nicht auf der Papiertonne"). Vertreter ist jetzt der Wurf, der dem
+    Median der Gruppe am naechsten liegt - also die typische Ausfuehrung.
+    """
     groups: list[dict] = []
     for n in throws:
         st = n.get("style") or {}
         if st.get("run") or (st.get("air") and not st.get("jump")):
             continue  # Lauf- und Fallwuerfe lassen sich per Versetzen nicht nachstellen
         for g in groups:
-            if (g["type"] == n["type"] and g["side"] == n["side"] and g["style"].get("click") == st.get("click")
-                    and g["style"].get("jump") == st.get("jump") and math.dist(g["pos"][:2], n["pos"][:2]) <= SAME_SPOT
-                    and math.dist(g["land"][:2], n["land"][:2]) <= SAME_LAND):
-                g["count"] += 1
-                g["mine"] += n["me"]
-                g["won"] += bool(n["won"])
+            r = g["members"][0]
+            if (r["type"] == n["type"] and r["side"] == n["side"] and r["style"].get("click") == st.get("click")
+                    and r["style"].get("jump") == st.get("jump") and math.dist(r["pos"][:2], n["pos"][:2]) <= SAME_SPOT
+                    and abs(r["pos"][2] - n["pos"][2]) <= SAME_HEIGHT
+                    and math.dist(r["land"][:2], n["land"][:2]) <= SAME_LAND):
+                g["members"].append(n)
                 break
         else:
-            groups.append({**{k: n[k] for k in ("type", "side", "pos", "ang", "land", "flight", "map", "style", "path")},
-                           "count": 1, "mine": int(n["me"]), "won": int(bool(n["won"]))})
-    groups.sort(key=lambda g: (-g["count"], -g["won"]))
-    return groups[:limit]
+            groups.append({"members": [n]})
+    out = []
+    for g in groups:
+        ms = g["members"]
+        mid = [sorted(m[key][i] for m in ms)[len(ms) // 2] for key, i in (("pos", 0), ("pos", 1), ("pos", 2),
+                                                                         ("ang", 0), ("ang", 1))]
+        rep = min(ms, key=lambda m: math.dist(m["pos"], mid[:3]) + 10 * math.dist(m["ang"], mid[3:]))
+        out.append({**{k: rep[k] for k in ("type", "side", "pos", "ang", "land", "flight", "map", "style", "path")},
+                    "count": len(ms), "mine": sum(bool(m["me"]) for m in ms), "won": sum(bool(m["won"]) for m in ms)})
+    out.sort(key=lambda g: (-g["count"], -g["won"]))
+    return out[:limit]
