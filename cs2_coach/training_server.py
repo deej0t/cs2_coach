@@ -996,6 +996,22 @@ class Director:
     def _party_state(self) -> dict:
         return {sid: {"name": n, "uid": None} for sid, n in load_party(self.path)["joined"].items()}
 
+    def _bomb_eval(self, state: dict) -> None:
+        """Alle T tot, Bombe tickt: haette es zum Entschaerfen gereicht? Nicht warten (Plugin 1.23.0)."""
+        p = self.send("coach_bomb_eval")[0].split()
+        if len(p) < 3 or p[0] != "coach_bomb_eval":
+            return  # altes Plugin oder keine Bombe: wie bisher entschaerfen lassen
+        left, need = float(p[1]), float(p[2])
+        who = " ".join(p[3:]) or "ihr"
+        if need <= left:
+            state["outcome"] = "win"
+            self.send(_say(f"Alle T tot - {who} haette entschaerft: {left - need:.1f} s Reserve "
+                           f"({left:.1f} s Zeit, {need:.1f} s gebraucht)."), "endround")
+        else:
+            state["outcome"] = "loss"  # das Plugin zuendet die Bombe sofort
+            self.send(_say(f"Alle T tot, aber zu spaet: {who} haette {need - left:.1f} s mehr gebraucht "
+                           f"({need:.1f} s gebraucht, {left:.1f} s Zeit)."))
+
     def _blocked(self, others: list[str]) -> list[str]:
         invited = [o for o in others if o in load_party(self.path)["invited"]]
         rest = [o for o in others if o not in invited]
@@ -1496,6 +1512,8 @@ class Director:
                     rnd["bots_dead"] = rnd.get("bots_dead", 0) + 1
                     if rnd["bots_dead"] >= len(active) and not rnd.get("bomb"):
                         state["outcome"] = "win"
+                    elif rnd["bots_dead"] >= len(active):
+                        self._bomb_eval(state)
             return state
         if msg.startswith('World triggered "Round_End"'):
             if not state.get("round"):

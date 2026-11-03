@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.22.0";
+    public override string ModuleVersion => "1.23.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -883,6 +883,53 @@ public class CoachTeleport : BasePlugin
         foreach (var p in Utilities.GetPlayers())
             if (!p.IsBot && p.TeamNum == 3 && p.PawnIsAlive) p.GiveNamedItem("item_defuser");
         info.ReplyToCommand($"coach_plant ok site {site}");
+    }
+
+    // Retake abkuerzen (1.23.0): alle T tot, Bombe tickt -> haette ein CT es noch geschafft?
+    // Benoetigt = Laufweg des naechsten lebenden CT (Luftlinie x 1,2 bei 250 u/s) + 5 s mit Kit
+    // (10 ohne); laeuft schon eine Entschaerfung, deren Restzeit. Reicht die Zeit nicht, zuendet
+    // die Bombe sofort. Antwort: coach_bomb_eval <uebrig_s> <benoetigt_s> <name>. Wunsch 3.11.
+    [ConsoleCommand("coach_bomb_eval", "Retake auswerten: reicht die Zeit zum Entschaerfen?")]
+    [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnBombEval(CCSPlayerController? caller, CommandInfo info)
+    {
+        var c4 = Utilities.FindAllEntitiesByDesignerName<CPlantedC4>("planted_c4").FirstOrDefault(c => c.IsValid);
+        if (c4 is null || c4.AbsOrigin is null || !c4.BombTicking)
+        {
+            info.ReplyToCommand("coach_bomb_eval none");
+            return;
+        }
+        var left = c4.C4Blow - Server.CurrentTime;
+        var need = float.MaxValue;
+        var who = "";
+        foreach (var p in Utilities.GetPlayers())
+        {
+            var pawn = p.PlayerPawn.Value;
+            if (p.IsBot || p.TeamNum != 3 || !p.PawnIsAlive || pawn is null || pawn.AbsOrigin is null) continue;
+            float t;
+            if (c4.BeingDefused && c4.BombDefuser.Value?.Index == pawn.Index)
+                t = c4.DefuseCountDown - Server.CurrentTime;
+            else
+            {
+                var o = pawn.AbsOrigin;
+                var d = (float)Math.Sqrt((o.X - c4.AbsOrigin.X) * (o.X - c4.AbsOrigin.X)
+                                         + (o.Y - c4.AbsOrigin.Y) * (o.Y - c4.AbsOrigin.Y)
+                                         + (o.Z - c4.AbsOrigin.Z) * (o.Z - c4.AbsOrigin.Z));
+                var kit = true;
+                try { kit = pawn.ItemServices is { } items && new CCSPlayer_ItemServices(items.Handle).HasDefuser; }
+                catch (Exception) { }
+                t = Math.Max(0, d - 60) * 1.2f / 250f + (kit ? 5f : 10f);  // 60 u: Reichweite zum Entschaerfen
+            }
+            if (t < need) { need = t; who = p.PlayerName; }
+        }
+        if (need == float.MaxValue)
+        {
+            info.ReplyToCommand("coach_bomb_eval none");
+            return;
+        }
+        if (need > left) c4.C4Blow = Server.CurrentTime;  // haette nicht gereicht: sofort zuenden
+        var ci = CultureInfo.InvariantCulture;
+        info.ReplyToCommand($"coach_bomb_eval {left.ToString("F1", ci)} {need.ToString("F1", ci)} {who}");
     }
 
     private sealed class Nade

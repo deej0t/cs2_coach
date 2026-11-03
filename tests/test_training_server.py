@@ -74,6 +74,8 @@ class FakeServer:
                 out.append(self.path_reply)
             elif c.startswith("coach_path"):
                 out.append("coach_path ok")
+            elif c == "coach_bomb_eval":
+                out.append(getattr(self, "bomb_reply", ""))
             else:
                 out.append("")
         return out
@@ -884,6 +886,25 @@ def test_retake_with_bomb_is_won_only_by_defusing(env):
     assert ts.load_state(path).get("outcome") is None
     director().on_lines([line('Team "CT" triggered "SFUI_Notice_Bomb_Defused" (CT "1") (T "0")')])
     assert ts.load_state(path)["outcome"] == "win"
+
+
+def test_retake_ends_early_when_defuse_would_make_it(env):
+    """3.11.: alle T tot -> nicht warten; reicht die Zeit, gewonnen mit Reserve im Chat."""
+    _, path, server, _, director = env
+    server.bomb_reply = "coach_bomb_eval 20.0 8.5 dj"
+    ts.save_state(path, running_state(mode="retake", rnd={"active_bots": [4], "bomb": True}))
+    director().on_lines([line(f'{DJ} [0 0 0] killed {BOT} [1 1 1] with "m4a1"')])
+    assert ts.load_state(path)["outcome"] == "win" and "endround" in server.sent
+    assert any("11.5 s Reserve" in c for c in server.sent)
+
+
+def test_retake_too_late_is_a_loss_with_missing_time(env):
+    _, path, server, _, director = env
+    server.bomb_reply = "coach_bomb_eval 3.0 7.2 dj"
+    ts.save_state(path, running_state(mode="retake", rnd={"active_bots": [4], "bomb": True}))
+    director().on_lines([line(f'{DJ} [0 0 0] killed {BOT} [1 1 1] with "m4a1"')])
+    assert ts.load_state(path)["outcome"] == "loss"
+    assert any("4.2 s mehr gebraucht" in c for c in server.sent)
 
 
 def test_retake_bomb_explodes_is_a_loss(env):
