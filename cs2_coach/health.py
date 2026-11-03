@@ -365,6 +365,68 @@ def _export_dir(cfg: dict) -> Path | None:
     return Path(vault) / cfg.get("coach_subfolder", "CS2-Coach") / "exports"
 
 
+HOST_FILE = "host_status.json"          # geschrieben von docker/unraid/host-status.sh (cron */5)
+SMART_BASELINE = ".host_smart_baseline.json"
+HOST_STALE = 20 * 60
+
+
+def check_host(config_path: Path, now: float | None = None) -> list[Check]:
+    """Last und SMART vom Unraid-Host (der Container sieht beides nicht selbst).
+
+    3.11.2026: der Server galt als "haengend", tatsaechlich lag die Last ueber 200,
+    weil sabnzbd direkt aufs Parity-Array entpackte. Gemeldet wird deshalb die
+    15-Minuten-Last mit den Containern und Platten, die gerade am meisten arbeiten.
+    SMART: neu ersetzte Sektoren gegenueber dem ersten Messwert je Platte (sdb
+    hatte am 1.11. schon 8) = Warnung, wartende/unlesbare Sektoren = Fehler.
+    """
+    folder = Path(config_path).parent
+    try:
+        data = json.loads((folder / HOST_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [Check("host_load", "Server-Last", SKIP, "Kein Host-Status (host-status.sh nicht eingerichtet).")]
+    now = now or time.time()
+    age = now - data.get("time", 0)
+    if age > HOST_STALE:
+        return [Check("host_load", "Server-Last", WARN,
+                      f"Host-Status {age / 60:.0f} min alt - Cron laeuft nicht, oder der Server war ueberlastet.")]
+    cores = data.get("cores") or 1
+    l1, l5, l15 = (data.get("load") or [0, 0, 0])[:3]
+    busy = [f"{d} {u}%" for d, u in sorted((data.get("disks") or {}).items(), key=lambda kv: -kv[1]) if u >= 80]
+    top = ", ".join(f"{n} {c}%" for n, c in (data.get("top") or [])[:3])
+    detail = (f"Last {l1:.0f}/{l5:.0f}/{l15:.0f} bei {cores} Kernen. Platten voll ausgelastet: "
+              f"{', '.join(busy) or 'keine'}. Meiste CPU: {top or '-'}.")
+    state = FAIL if l15 > 4 * cores else WARN if l15 > cores else OK
+    out = [Check("host_load", "Server-Last", state, detail if state != OK else f"Last {l15:.1f} bei {cores} Kernen.")]
+
+    base_path = folder / SMART_BASELINE
+    try:
+        base = json.loads(base_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        base = {}
+    problems, warnings = [], []
+    for disk, v in (data.get("smart") or {}).items():
+        if disk not in base:
+            base[disk] = v.get("realloc", 0)  # erster Messwert = Ausgangslage, nie wieder ueberschrieben
+        if v.get("pending", 0) or v.get("uncorrectable", 0):
+            problems.append(f"{disk}: {v.get('pending', 0)} wartende, {v.get('uncorrectable', 0)} unlesbare Sektoren")
+        elif v.get("realloc", 0) > base[disk]:
+            warnings.append(f"{disk}: ersetzte Sektoren {base[disk]} -> {v['realloc']}")
+    try:
+        base_path.write_text(json.dumps(base), encoding="utf-8")
+    except OSError:
+        pass
+    if problems:
+        out.append(Check("host_smart", "Festplatten (SMART)", FAIL, "; ".join(problems) + ". Platte tauschen planen."))
+    elif warnings:
+        out.append(Check("host_smart", "Festplatten (SMART)", WARN, "; ".join(warnings) + " - Platte beobachten."))
+    else:
+        known = ", ".join(f"{d} {v.get('realloc', 0)}" for d, v in sorted((data.get("smart") or {}).items())
+                          if v.get("realloc", 0))
+        out.append(Check("host_smart", "Festplatten (SMART)", OK,
+                         "Keine neuen ersetzten Sektoren" + (f" (bekannt: {known})." if known else ".")))
+    return out
+
+
 def run_checks(cfg: dict, config_path: Path) -> list[Check]:
     checks = [check_public_url(cfg), check_updates(), check_steam(),
               check_writable(Path(config_path).parent), check_ups(cfg), check_game_server(cfg)]
@@ -373,6 +435,7 @@ def run_checks(cfg: dict, config_path: Path) -> list[Check]:
         "Demos": Path(cfg["demo_folder"]) if cfg.get("demo_folder") else None,
     })
     checks += [check_demos(cfg), check_exports(cfg)]
+    checks += check_host(config_path)
     return checks
 
 

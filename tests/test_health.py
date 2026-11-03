@@ -348,3 +348,28 @@ def test_game_server_ok():
     c = check_game_server({"server_address": "cs2.deej0t.eu"}, resolve=lambda h: "1.2.3.4",
                           public_ip=lambda: "1.2.3.4", query=lambda h, p: seen.append(p) or "Welcome")
     assert c.state == "ok" and "Welcome" in c.message and seen == [27015]
+
+
+def test_host_load_and_smart(tmp_path):
+    import json as _json
+    from cs2_coach import health as h
+    cfg = tmp_path / "config.yaml"
+    assert h.check_host(cfg)[0].state == h.SKIP
+
+    def write(load, realloc=8, pending=0, t=1000.0):
+        (tmp_path / h.HOST_FILE).write_text(_json.dumps({
+            "time": t, "cores": 24, "load": [load, load, load], "disks": {"sdd": 96, "sdb": 10},
+            "top": [["sabnzbd", 155], ["plex", 89]], "smart": {"sdb": {"realloc": realloc, "pending": pending,
+                                                                       "uncorrectable": 0}}}))
+
+    write(3)
+    load, smart = h.check_host(cfg, now=1010)
+    assert load.state == h.OK and smart.state == h.OK and "sdb 8" in smart.message
+    write(210)
+    load, _ = h.check_host(cfg, now=1010)
+    assert load.state == h.FAIL and "sdd 96%" in load.message and "sabnzbd 155%" in load.message
+    write(3, realloc=12)
+    assert h.check_host(cfg, now=1010)[1].state == h.WARN  # 8 -> 12 gegenueber dem ersten Messwert
+    write(3, pending=2)
+    assert h.check_host(cfg, now=1010)[1].state == h.FAIL
+    assert h.check_host(cfg, now=1000 + 30 * 60)[0].state == h.WARN  # Datei veraltet
