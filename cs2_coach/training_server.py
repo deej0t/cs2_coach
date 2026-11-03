@@ -55,7 +55,7 @@ STATE_FILE = ".training_server.json"
 LOCK_FILE = ".training_server.lock"
 MAX_SCENARIOS = 20
 MIN_DISTANCE = 150  # naeher = Messer/Nahkampf-Zufall, kein Duell
-FREEZE_TIME = 3
+FREEZE_TIME = 2  # Wunsch 3.11.: 2 s stehen bleiben, bevor die Runde laeuft
 # bot_difficulty 0-3. Start bei 2: auf 1 gewann der Spieler am 30.10. 28 von 29 Duellen
 # (damals allerdings vor allem, weil der Bot auf seinem Weg nicht zielen konnte).
 START_LEVEL = 3
@@ -154,7 +154,7 @@ FAREWELL_SECONDS = 30
 _TEAM = re.compile(r'^"(?P<aname>.*?)<(?P<auid>-?\d+)><(?P<asid>[^>]*)>" switched from team <[^>]*> to <(?P<to>[^>]+)>')
 # Nach einem Mapwechsel steht nur "Loading map" im Log, kein "Started map".
 _LOADING = re.compile(r'^Loading map "(?P<map>[^"]+)"')
-C4_SECONDS = 39  # mp_c4timer 40, das Retake beginnt 1 s nach dem Legen
+C4_SECONDS = 39 + FREEZE_TIME  # mp_c4timer 40, Retake 1 s nach dem Legen; gelegt zu Beginn der Freeze-Zeit
 SETUP_WAIT = 8  # Sekunden nach "Loading map": erst dann ist die server.cfg durch
 LOAD_TIMEOUT = 120  # Map bis dahin nicht geladen = Training verwerfen
 
@@ -1445,7 +1445,15 @@ class Director:
             return state
         if state.get("mode") == "granaten":
             return state  # das Plugin fuehrt die Lineups selbst, Runden spielen keine Rolle
+        # Aufstellen schon beim Beginn der Freeze-Zeit: "Round_Start" loggt CS2 erst an ihrem
+        # Ende, dann lief die Runde sofort nach dem Versetzen los. Wege, Messung und Eichung
+        # startet das Plugin ohnehin erst mit round_freeze_end.
+        if msg.startswith("Starting Freeze period"):
+            state["froze"] = True
+            return self._round_start(state)
         if msg.startswith('World triggered "Round_Start"'):
+            if state.pop("froze", False):
+                return state
             return self._round_start(state)
         if "SFUI_Notice_Bomb_Defused" in msg and not state.get("outcome"):
             state["outcome"] = "win"

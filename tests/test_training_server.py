@@ -898,3 +898,14 @@ def test_retake_moves_owner_to_ct(env):
     ts.save_state(path, running_state(mode="retake", phase="team", team=None))
     director().on_lines([line('"dj<2><[U:1:58996800]>" switched from team <Unassigned> to <TERRORIST>')])
     assert "coach_team 2 ct" in server.sent and ts.load_state(path).get("team") is None
+
+
+def test_round_is_set_up_at_freeze_start_not_twice(env):
+    """3.11.: 2 s stehen bleiben nach dem Versetzen - aufstellen bei 'Starting Freeze period'."""
+    _, path, server, _, director = env
+    ts.save_state(path, running_state())
+    director().on_lines([line("Starting Freeze period")])
+    n = sum(c.startswith("coach_tp ") for c in server.sent)
+    assert n >= 1
+    director().on_lines([line('World triggered "Round_Start"')])
+    assert sum(c.startswith("coach_tp ") for c in server.sent) == n
