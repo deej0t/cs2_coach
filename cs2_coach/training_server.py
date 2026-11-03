@@ -154,6 +154,7 @@ FAREWELL_SECONDS = 30
 _TEAM = re.compile(r'^"(?P<aname>.*?)<(?P<auid>-?\d+)><(?P<asid>[^>]*)>" switched from team <[^>]*> to <(?P<to>[^>]+)>')
 # Nach einem Mapwechsel steht nur "Loading map" im Log, kein "Started map".
 _LOADING = re.compile(r'^Loading map "(?P<map>[^"]+)"')
+C4_SECONDS = 39  # mp_c4timer 40, das Retake beginnt 1 s nach dem Legen
 SETUP_WAIT = 8  # Sekunden nach "Loading map": erst dann ist die server.cfg durch
 LOAD_TIMEOUT = 120  # Map bis dahin nicht geladen = Training verwerfen
 
@@ -1401,6 +1402,12 @@ class Director:
                 if state.get("team") and to != state["team"]:
                     self.send(f"coach_team {uid} {_side(state['team'])}")
                 return state
+            if (ss.steam64(m.group("asid")) == state["human"] and phase in ("setup", "team")
+                    and state.get("mode") in ("retake", "halten") and to != "CT"):
+                # Retake und Site halten spielst du als CT (so stammen sie aus der Demo); am 3.11.
+                # waren alle Menschen T und die Bots CT. Der Wechsel erzeugt eine neue Teamzeile.
+                self.send(f"coach_team {uid} ct")
+                return state
             if ss.steam64(m.group("asid")) == state["human"] and phase in ("setup", "team"):
                 # Gemessen 30.10.: Team gewaehlt 2 s bevor das Setup lief - in "setup"
                 # nur merken, _setup holt dann den Bot, statt auf einen zweiten Wechsel zu warten.
@@ -1440,6 +1447,12 @@ class Director:
             return state  # das Plugin fuehrt die Lineups selbst, Runden spielen keine Rolle
         if msg.startswith('World triggered "Round_Start"'):
             return self._round_start(state)
+        if "SFUI_Notice_Bomb_Defused" in msg and not state.get("outcome"):
+            state["outcome"] = "win"
+            return state
+        if "SFUI_Notice_Target_Bombed" in msg and not state.get("outcome"):
+            state["outcome"] = "loss"
+            return state
         if m := ss._ATTACK.match(msg):
             rnd = state.setdefault("rnd", {})
             if ss.steam64(m.group("asid")) in _human_sids(state):
@@ -1472,7 +1485,7 @@ class Director:
                         state["outcome"] = "win"
                 elif int(m.group("vuid")) in active:
                     rnd["bots_dead"] = rnd.get("bots_dead", 0) + 1
-                    if rnd["bots_dead"] >= len(active):
+                    if rnd["bots_dead"] >= len(active) and not rnd.get("bomb"):
                         state["outcome"] = "win"
             return state
         if msg.startswith('World triggered "Round_End"'):
@@ -1687,6 +1700,11 @@ class Director:
                 cmds.append(f"coach_give {uid} {e['items'][0] if e['items'][0] in guns else guns[-1]} "
                             + " ".join(guns))
         state["rnd"]["active_bots"] = active
+        if state["mode"] == "retake" and item.get("bomb"):
+            # Plugin 1.22.0: Bombe liegt dort, wo sie in der Demo gelegt wurde, Timer laeuft;
+            # alle Menschen bekommen ein Entschaerfungskit. Gewonnen erst mit dem Entschaerfen.
+            cmds.append(f"coach_plant {_fmt(item['bomb'])} {C4_SECONDS}")
+            state["rnd"]["bomb"] = True
         # Mitspieler: dort, wo deine damaligen Teamkollegen standen, mit ihrer Ausruestung.
         # Mehr Freunde als Kollegen in der Demo: an deine Stelle, mit deiner Ausruestung.
         demo_mates = item.get("mates") or []

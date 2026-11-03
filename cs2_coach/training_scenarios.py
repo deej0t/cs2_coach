@@ -43,7 +43,7 @@ PATH_AFTER = {"retake": 10, "halten": 12}  # Sekunden Weg ab Start; Situation: b
 TICKRATE = 64
 PATH_HZ = 16
 CT = 3
-SCAN_VERSION = 2  # 2: mit deinen damaligen Mitspielern ("mates") fuer das Training zu mehreren
+SCAN_VERSION = 3  # 2: mit deinen damaligen Mitspielern ("mates"); 3: Retake mit Bombenposition
 MAX_MATES = 4
 MAX_NEW_SCANS = 15  # beim ersten Mal nicht ewig lesen: Retakes brauchten 92 s fuer 20 (30.10.)
 
@@ -85,6 +85,14 @@ def scan_demo(demo_path, me: str, lead: float, parser_factory=None) -> dict[str,
 
     deaths = event("player_death", ["tick", "user_steamid", "attacker_steamid"])
     plants = event("bomb_planted", ["tick", "site", "user_steamid"])
+    # Wo die Bombe lag = wo der Leger stand (3.11.: "!retake mit Bomben legen")
+    try:
+        bp = p.parse_event("bomb_planted", player=["X", "Y", "Z"])
+        bombs = {int(r["tick"]): [round(float(r["user_X"]), 1), round(float(r["user_Y"]), 1),
+                                  round(float(r["user_Z"]), 1)] for _, r in bp.iterrows()}
+    except Exception:  # noqa: BLE001 - aeltere Parser/Demos ohne Plant
+        bombs = {}
+    bomb_at = {}
     hurts = event("player_hurt", ["tick", "user_steamid", "attacker_steamid"])
     freeze = sorted(int(t) for t in event("round_freeze_end", ["tick"])["tick"])
 
@@ -101,6 +109,8 @@ def scan_demo(demo_path, me: str, lead: float, parser_factory=None) -> dict[str,
         anchors.append(("situation", max(t - int(lead * TICKRATE), round_start(t)), t, str(d["attacker_steamid"])))
     for _, pl in plants.iterrows():
         t = int(pl["tick"]) + RETAKE_DELAY * TICKRATE
+        if int(pl["tick"]) in bombs:
+            bomb_at[t] = bombs[int(pl["tick"])]
         anchors.append(("retake", t, t + PATH_AFTER["retake"] * TICKRATE, None))
     mine = hurts[(hurts["user_steamid"].astype(str) == me) | (hurts["attacker_steamid"].astype(str) == me)]
     seen = set()
@@ -166,7 +176,8 @@ def scan_demo(demo_path, me: str, lead: float, parser_factory=None) -> dict[str,
             mates.append((dist, {"name": str(r["name"]), "start": _point(r), "items": _inventory(r)}))
         mates = [m for _, m in sorted(mates, key=lambda x: x[0])[:MAX_MATES]]
         out[mode].append({"mode": mode, "round": round_no(start), "tick": start, "me": _point(me_row),
-                          "me_items": _inventory(me_row), "enemies": enemies, "mates": mates})
+                          "me_items": _inventory(me_row), "enemies": enemies, "mates": mates,
+                          **({"bomb": bomb_at[start]} if mode == "retake" and start in bomb_at else {})})
     return out
 
 

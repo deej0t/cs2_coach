@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.21.0";
+    public override string ModuleVersion => "1.22.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -827,6 +827,62 @@ public class CoachTeleport : BasePlugin
             node.Rotation.Z = 0;
             Utilities.SetStateChanged(pawn, "CBaseEntity", "m_CBodyComponent");
         });
+    }
+
+    // Retake mit Bombe (1.22.0): gelegte C4 an der Stelle aus der Demo, Timer laeuft. Wunsch 3.11.
+    // Wie das Retakes-Plugin von B3none: planted_c4 erzeugen, GameRules.BombPlanted setzen.
+    [ConsoleCommand("coach_plant", "Gelegte Bombe: x y z <sekunden>")]
+    [CommandHelper(minArgs: 4, usage: "x y z <sekunden>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnPlant(CCSPlayerController? caller, CommandInfo info)
+    {
+        var ci = CultureInfo.InvariantCulture;
+        var v = new float[4];
+        for (var k = 0; k < 4; k++)
+            if (!float.TryParse(info.GetArg(1 + k), NumberStyles.Float, ci, out v[k]))
+            {
+                info.ReplyToCommand("coach_plant: ungueltige Zahl");
+                return;
+            }
+        foreach (var old in Utilities.FindAllEntitiesByDesignerName<CPlantedC4>("planted_c4"))
+            if (old.IsValid) old.Remove();
+        var c4 = Utilities.CreateEntityByName<CPlantedC4>("planted_c4");
+        if (c4 is null)
+        {
+            info.ReplyToCommand("coach_plant: planted_c4 nicht erzeugt");
+            return;
+        }
+        // Naechster Bombenplatz (A=0, B=1) nach Abstand zum Zentrum der func_bomb_target
+        var site = 0;
+        var best = float.MaxValue;
+        var idx = 0;
+        foreach (var t in Utilities.FindAllEntitiesByDesignerName<CBaseEntity>("func_bomb_target"))
+        {
+            var o = t.AbsOrigin;
+            if (o is not null)
+            {
+                var d = (o.X - v[0]) * (o.X - v[0]) + (o.Y - v[1]) * (o.Y - v[1]);
+                if (d < best) { best = d; site = idx; }
+            }
+            idx++;
+        }
+        c4.BombTicking = true;
+        c4.CannotBeDefused = false;
+        c4.BeingDefused = false;
+        c4.HasExploded = false;
+        c4.BombSite = site;
+        c4.SourceSoundscapeHash = 2005810340;
+        c4.C4Blow = Server.CurrentTime + v[3];
+        c4.Teleport(new Vector(v[0], v[1], v[2]), new QAngle(0, 0, 0), new Vector(0, 0, 0));
+        c4.DispatchSpawn();
+        var rules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+        if (rules is not null)
+        {
+            rules.BombPlanted = true;
+            rules.BombDefused = false;
+        }
+        foreach (var p in Utilities.GetPlayers())
+            if (!p.IsBot && p.TeamNum == 3 && p.PawnIsAlive) p.GiveNamedItem("item_defuser");
+        info.ReplyToCommand($"coach_plant ok site {site}");
     }
 
     private sealed class Nade

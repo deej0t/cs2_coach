@@ -874,3 +874,27 @@ def test_invited_but_not_joined_is_told_and_annehmen_works(env):
     assert "schreib !mitmachen" in director().command(OWNER, "dj", "training", "mirage")[0]
     assert "trainiert mit" in director().command(DANCHO_SID, "Dancho", "annehmen", "", 3)[0]
     assert director().command(OWNER, "dj", "training", "mirage") == []
+
+
+def test_retake_with_bomb_is_won_only_by_defusing(env):
+    """3.11.: Retake mit gelegter Bombe - alle Bots tot reicht nicht, entschaerfen muss man."""
+    _, path, server, _, director = env
+    ts.save_state(path, running_state(mode="retake", rnd={"active_bots": [4], "bomb": True}))
+    director().on_lines([line(f'{DJ} [0 0 0] killed {BOT} [1 1 1] with "m4a1"')])
+    assert ts.load_state(path).get("outcome") is None
+    director().on_lines([line('Team "CT" triggered "SFUI_Notice_Bomb_Defused" (CT "1") (T "0")')])
+    assert ts.load_state(path)["outcome"] == "win"
+
+
+def test_retake_bomb_explodes_is_a_loss(env):
+    _, path, server, _, director = env
+    ts.save_state(path, running_state(mode="retake", rnd={"active_bots": [4], "bomb": True}))
+    director().on_lines([line('Team "TERRORIST" triggered "SFUI_Notice_Target_Bombed" (CT "0") (T "1")')])
+    assert ts.load_state(path)["outcome"] == "loss"
+
+
+def test_retake_moves_owner_to_ct(env):
+    _, path, server, _, director = env
+    ts.save_state(path, running_state(mode="retake", phase="team", team=None))
+    director().on_lines([line('"dj<2><[U:1:58996800]>" switched from team <Unassigned> to <TERRORIST>')])
+    assert "coach_team 2 ct" in server.sent and ts.load_state(path).get("team") is None
