@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.20.0";
+    public override string ModuleVersion => "1.21.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -813,6 +813,22 @@ public class CoachTeleport : BasePlugin
                             + $"{(t.Jump ? 1 : 0)} {(t.Duck ? 1 : 0)} {t.Speed.ToString("F0", ci)} {t.Team}");
     }
 
+    // Teleport mit Pitch kippt auch das Modell: bei -50 Grad (Smoke nach oben) lag der Spieler
+    // flach (3.11.). Der Blick soll bleiben, nur die Koerper-Rotation wird wieder aufgerichtet.
+    private static void Upright(CCSPlayerPawn pawn)
+    {
+        Server.NextFrame(() =>
+        {
+            var node = pawn.IsValid ? pawn.CBodyComponent?.SceneNode : null;
+            if (node is null) return;
+            node.AbsRotation.X = 0;
+            node.AbsRotation.Z = 0;
+            node.Rotation.X = 0;
+            node.Rotation.Z = 0;
+            Utilities.SetStateChanged(pawn, "CBaseEntity", "m_CBodyComponent");
+        });
+    }
+
     private sealed class Nade
     {
         public string Weapon = "", Type = "", Label = "", Keys = "";
@@ -890,6 +906,7 @@ public class CoachTeleport : BasePlugin
         var n = _nades[_nadeIdx];
         DrawNade(n);
         pawn.Teleport(new Vector(n.Pos[0], n.Pos[1], n.Pos[2]), new QAngle(n.Pos[3], n.Pos[4], 0), new Vector(0, 0, 0));
+        Upright(pawn);
         player.RemoveWeapons();
         player.GiveNamedItem("weapon_knife");
         player.GiveNamedItem(n.Weapon);
@@ -1132,6 +1149,7 @@ public class CoachTeleport : BasePlugin
             return;
         }
         pawn.Teleport(new Vector(v[0], v[1], v[2]), new QAngle(player.IsBot ? 0 : v[3], v[4], 0), new Vector(0, 0, 0));
+        if (!player.IsBot) Upright(pawn);
         info.ReplyToCommand($"coach_tp ok {userid}");
     }
 
