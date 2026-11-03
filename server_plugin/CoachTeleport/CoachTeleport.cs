@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.18.0";
+    public override string ModuleVersion => "1.19.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -759,8 +759,8 @@ public class CoachTeleport : BasePlugin
         var next = n.Hit || n.Tries >= NadeTries;
         var verdict = dist <= NadeHit ? "<font color='#4ade80'>TREFFER</font>"
                     : $"<font color='#f87171'>{dist:F0} Units daneben</font>";
-        ShowNade(next ? (n.Hit ? "Weiter zum naechsten Lineup" : "Naechstes Lineup - das hier kommt spaeter wieder")
-                      : $"Versuch {n.Tries + 1}/{NadeTries} - gleiche Stelle", verdict);
+        ShowNade(next ? (n.Hit ? "weiter zum naechsten" : "naechstes Lineup")
+                      : $"Versuch {n.Tries + 1}/{NadeTries}", verdict);
         if (next) _nadeIdx++;
         _nadeWait = Server.TickCount + 3 * 64;  // 3 s Ergebnis lesen, dann neu aufstellen
     }
@@ -772,20 +772,27 @@ public class CoachTeleport : BasePlugin
         SetupNade();
     }
 
+    // Einblendung (1.19.0): drei kurze Zeilen statt Textblock - "das Overlay ist nicht huebsch" (3.11.).
+    // Zeile 1 klein/grau: was und welches Lineup. Zeile 2 gross: Wurfart. Zeile 3: Tasten oder Ergebnis.
     private void ShowNade(string line, string verdict = "")
     {
         if (_nadeIdx >= _nades.Count)
         {
             var hits = _nades.Count(x => x.Hit);
-            _huds[_nadeUid] = ($"<font class='fontSize-xl' color='#9184d9'>GRANATEN FERTIG</font><br>{hits} von {_nades.Count} getroffen<br><font class='fontSize-s'>!stop beendet, !granaten neu</font>",
+            _huds[_nadeUid] = ($"<font class='fontSize-xl' color='#9184d9'>FERTIG</font><br>"
+                               + $"<font class='fontSize-l' color='#ffffff'>{hits} von {_nades.Count} getroffen</font><br>"
+                               + "<font class='fontSize-s' color='#aaaaaa'>!granaten neu &#183; !stop beenden</font>",
                                Server.TickCount + 30 * 64);
             return;
         }
         var n = _nades[_nadeIdx];
-        _huds[_nadeUid] = ($"<font class='fontSize-l' color='#9184d9'>Lineup {_nadeIdx + 1}/{_nades.Count} &#183; {n.Label}</font><br>"
-                           + $"<font class='fontSize-m' color='#fbbf24'>{n.Keys}</font><br>"
-                           + (verdict.Length > 0 ? verdict + "<br>" : "")
-                           + $"<font class='fontSize-s'>{line}<br>Gelbes Kreuz = Ziel, gruene Linie = Flug aus der Demo, rotes Kreuz = Landung. Maus nicht bewegen.</font>",
+        var parts = n.Keys.Split('|');
+        var style = parts[0];
+        var keys = parts.Length > 1 ? parts[1] : "";
+        var third = verdict.Length > 0 ? $"<font class='fontSize-l'>{verdict}</font><br><font class='fontSize-s' color='#aaaaaa'>{line}</font>"
+                                       : $"<font class='fontSize-s' color='#ffffff'>{keys}</font>";
+        _huds[_nadeUid] = ($"<font class='fontSize-s' color='#aaaaaa'>{_nadeIdx + 1}/{_nades.Count} &#183; {n.Label}</font><br>"
+                           + $"<font class='fontSize-xl' color='#fbbf24'>{style}</font><br>" + third,
                            Server.TickCount + 30 * 64);
     }
 

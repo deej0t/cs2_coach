@@ -21,7 +21,7 @@ from pathlib import Path
 
 TICKRATE = 64
 CACHE_DIR = "grenade_cache"
-CACHE_KEY = "nades-v2"  # v2: Abwurf beim Loslassen, Wurfart, Flugbahn  # Demos mit Fehler stehen nicht im Cache, kommen beim naechsten Lauf neu
+CACHE_KEY = "nades-v3"  # v2: Abwurf beim Loslassen, Wurfart, Flugbahn  # Demos mit Fehler stehen nicht im Cache, kommen beim naechsten Lauf neu
 STAND_SPEED = 10    # u/s
 SAME_SPOT = 48      # Units zwischen zwei Abwurfpunkten
 SAME_LAND = 150     # Units zwischen zwei Landepunkten
@@ -122,12 +122,14 @@ def scan_demo(demo_path, me: str, parser_factory=None) -> list[dict]:
         airborne = bool(me_row["is_airborne"])
         speed = math.hypot(vx, vy)
         # Stand vor dem Sprung = wo man hingestellt wird
-        ground = me_row
+        ground = None
         for k in range(t0 - 1, max(t0 - 64, 1) - 1, -1):
             r = state.get((k, sid))
             if r is not None and not bool(r["is_airborne"]):
                 ground = r
                 break
+        if ground is None:
+            continue  # kein Bodenkontakt in der Sekunde davor: sonst stuende man in der Luft (3.11.: Z -112 statt -168)
         team = int(me_row["team_num"]) if me_row["team_num"] == me_row["team_num"] else 0
         winner = next((w for e, w in ends if e >= t0), "")
         path = [[round(px), round(py), round(pz)] for k, (pt, px, py, pz) in enumerate(t["pts"])
@@ -147,7 +149,8 @@ def nade_keys(style: dict) -> str:
     """Tasten-Anzeige: "[LEERTASTE] + [LINKSKLICK] loslassen"."""
     click = {"left": "[LINKSKLICK]", "right": "[RECHTSKLICK]", "both": "[LINKS+RECHTS]"}[style.get("click", "left")]
     if style.get("jump"):
-        return f"{click} halten, [LEERTASTE] und im Sprung loslassen"
+        # CS2: der Sprungwurf landet nur gleich, wenn Springen und Loslassen im selben Moment passieren
+        return f"{click} halten, dann [LEERTASTE] und loslassen GLEICHZEITIG (Jumpthrow-Bind)"
     if style.get("duck"):
         return f"[STRG] halten, {click} loslassen"
     return f"{click} loslassen"

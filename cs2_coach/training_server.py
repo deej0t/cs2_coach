@@ -1091,9 +1091,9 @@ class Director:
             weapon = {"smoke": "weapon_smokegrenade", "he": "weapon_hegrenade", "flash": "weapon_flashbang",
                       "molotov": "weapon_molotov" if g["side"] == "T" else "weapon_incgrenade"}[g["type"]]
             style = g.get("style") or {}
-            label = f"{g['side']} {LABELS[g['type']]} &#183; {g['count']}x geworfen" + (
-                f", {g['mine']}x von dir" if g["mine"] else "")
-            keys = f"{style_text(style)} &#183; {nade_keys(style)}" if style else "Wurfart unbekannt"
+            label = f"{LABELS[g['type']].upper()} &#183; {g['side']} &#183; {g['count']}x geworfen" + (
+                f" ({g['mine']}x von dir)" if g["mine"] else "")
+            keys = f"{style_text(style).upper()}|{nade_keys(style)}" if style else "WURFART UNBEKANNT|"
             cmds.append(f"coach_nade_add {weapon} {g['type']} {_b64(label)} {_b64(keys)} "
                         + " ".join(f"{v:.2f}" for v in [*g["pos"], *g["ang"], *g["land"]]))
             path = g.get("path") or []
