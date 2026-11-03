@@ -1776,6 +1776,12 @@ class Director:
                          f"{MODES[state['mode']]} {n}/{total} ({item.get('source', '')}): {len(active)} Gegner, "
                          "jeder laeuft seinen echten Weg, bis er dich sieht"))
         cmds += _aim_commands(state, active)
+        if state["rnd"].get("bomb"):
+            # coach_give leert das Inventar (RemoveWeapons) und nahm so das Kit vom Legen wieder
+            # weg - 3.11. jede Runde "Begin_Bomb_Defuse_Without_Kit". Kit in die Ausruestung.
+            humans = {str(u) for u in [human, *_party_uids(state)]}
+            cmds = [c + " item_defuser" if c.startswith("coach_give ") and c.split()[1] in humans else c
+                    for c in cmds]
         replies = self.send(*cmds)
         failed = [r.strip() for c, r in zip(cmds, replies) if c.startswith("coach_tp ") and "coach_tp ok" not in r]
         if failed and not state.get("tp_warned"):
