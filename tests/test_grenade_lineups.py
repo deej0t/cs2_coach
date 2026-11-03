@@ -9,39 +9,53 @@ ME, MATE = "1", "2"
 
 
 class FakeDemo:
+    """Zwei Smokes aus dem Stand: ME bei Tick 100 von x=10, MATE bei Tick 500 von x=30 (gleiches Lineup),
+    beide mit 675 u/s (Linksklick), Landung bei x=1000/1050. Dazu ein Laufwurf von ME bei Tick 800."""
+
     def __init__(self, path):
         pass
 
+    def parse_grenades(self):
+        rows = []
+        for eid, sid, t0, x0, v in [(1, ME, 100, 10.0, 675.0), (2, MATE, 500, 30.0, 675.0), (3, ME, 800, 0.0, 900.0)]:
+            for k in range(6):
+                rows.append({"grenade_type": "CSmokeGrenadeProjectile", "grenade_entity_id": eid, "steamid": sid,
+                             "tick": t0 + k, "x": x0 + v * k / 64, "y": 0.0, "z": 64.0})
+        return pd.DataFrame(rows)
+
     def parse_event(self, name, player=None):
-        if name == "weapon_fire":
-            return pd.DataFrame({"tick": [100, 500, 900], "user_steamid": [ME, MATE, ME],
-                                 "weapon": ["weapon_smokegrenade", "weapon_smokegrenade", "weapon_ak47"],
-                                 "user_X": [10.0, 30.0, 0.0], "user_Y": [0.0, 0.0, 0.0], "user_Z": [0.0, 0.0, 0.0],
-                                 "user_pitch": [-10.0, -10.0, 0.0], "user_yaw": [90.0, 90.0, 0.0]})
         if name == "smokegrenade_detonate":
-            return pd.DataFrame({"tick": [300, 700], "user_steamid": [ME, MATE], "x": [1000.0, 1050.0],
-                                 "y": [0.0, 0.0], "z": [0.0, 0.0]})
+            return pd.DataFrame({"tick": [300, 700, 950], "user_steamid": [ME, MATE, ME], "x": [1000.0, 1050.0, 500.0],
+                                 "y": [0.0, 0.0, 0.0], "z": [0.0, 0.0, 0.0]})
         if name == "round_end":
             return pd.DataFrame({"tick": [1000], "winner": ["T"]})
         return pd.DataFrame(columns=["tick", "user_steamid", "x", "y", "z"])
 
     def parse_ticks(self, props, ticks):
-        return pd.DataFrame([{"tick": t, "steamid": sid, "X": 10.0 if sid == ME else 30.0, "Y": 0.0, "team_num": 2}
-                             for t in ticks for sid in (ME, MATE)])
+        rows = []
+        for t in ticks:
+            for sid, x in ((ME, 10.0), (MATE, 30.0)):
+                run = sid == ME and t >= 790  # ME laeuft beim dritten Wurf (250 u/s)
+                rows.append({"tick": t, "steamid": sid, "X": x + (t * 250 / 64 if run else 0), "Y": 0.0, "Z": 0.0,
+                             "pitch": -10.0, "yaw": 90.0, "team_num": 2, "is_airborne": False, "ducking": False})
+        return pd.DataFrame(rows)
 
 
-def test_throws_paired_with_landing_and_grouped():
+def test_throws_from_trajectory_with_style():
     throws = gl.scan_demo("x.dem", ME, parser_factory=FakeDemo)
-    assert len(throws) == 2 and throws[0]["land"] == [1000.0, 0.0, 0.0] and throws[0]["speed"] == 0
-    assert throws[0]["won"] is True and throws[0]["me"] and throws[0]["flight"] == 3.12
+    assert len(throws) == 3
+    a = throws[0]
+    assert a["land"] == [1000.0, 0.0, 0.0] and a["style"]["click"] == "left" and not a["style"]["run"]
+    assert a["won"] is True and a["me"] and a["path"][-1] == [1000, 0, 0]
+    assert throws[2]["style"]["run"]  # 250 u/s beim Loslassen
     lib = gl.library([{**t, "map": "de_mirage"} for t in throws])
-    assert len(lib) == 1 and lib[0]["count"] == 2 and lib[0]["mine"] == 1  # 20 Units / 50 Units auseinander
+    assert len(lib) == 1 and lib[0]["count"] == 2 and lib[0]["mine"] == 1  # Laufwurf faellt raus
 
 
-def test_running_throws_are_not_lineups():
-    t = {"type": "he", "side": "T", "pos": [0, 0, 0], "ang": [0, 0], "land": [9, 9, 9], "flight": 1, "map": "m",
-         "speed": 200, "me": True, "won": True}
-    assert gl.library([t]) == []
+def test_style_texts():
+    assert gl.style_text({"click": "left", "jump": True}) == "Sprungwurf + Linksklick"
+    assert "[LEERTASTE]" in gl.nade_keys({"click": "left", "jump": True})
+    assert gl.nade_keys({"click": "both"}) == "[LINKS+RECHTS] loslassen"
 
 
 def test_grenade_mode_sends_lineups_without_bot(tmp_path, monkeypatch):

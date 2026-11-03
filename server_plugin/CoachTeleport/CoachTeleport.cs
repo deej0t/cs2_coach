@@ -62,6 +62,7 @@ using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Memory;
 using CounterStrikeSharp.API.Modules.Utils;
 using Microsoft.Extensions.Logging;
+using System.Drawing;
 using System.Globalization;
 
 namespace CoachTeleport;
@@ -69,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.17.0";
+    public override string ModuleVersion => "1.18.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -732,7 +733,8 @@ public class CoachTeleport : BasePlugin
     // das Server-Log meldet die Detonation nicht rechtzeitig.
     private sealed class Nade
     {
-        public string Weapon = "", Type = "", Label = "";
+        public string Weapon = "", Type = "", Label = "", Keys = "";
+        public readonly List<float[]> Path = new();
         public float[] Pos = new float[5], Land = new float[3];
         public int Tries;
         public float Best = -1;
@@ -781,8 +783,9 @@ public class CoachTeleport : BasePlugin
         }
         var n = _nades[_nadeIdx];
         _huds[_nadeUid] = ($"<font class='fontSize-l' color='#9184d9'>Lineup {_nadeIdx + 1}/{_nades.Count} &#183; {n.Label}</font><br>"
+                           + $"<font class='fontSize-m' color='#fbbf24'>{n.Keys}</font><br>"
                            + (verdict.Length > 0 ? verdict + "<br>" : "")
-                           + $"<font class='fontSize-s'>{line}<br>Aus dem Stand werfen, nicht bewegen. Landet sie anders: Rechtsklick oder beide Tasten probieren.</font>",
+                           + $"<font class='fontSize-s'>{line}<br>Gelbes Kreuz = Ziel, gruene Linie = Flug aus der Demo, rotes Kreuz = Landung. Maus nicht bewegen.</font>",
                            Server.TickCount + 30 * 64);
     }
 
@@ -795,6 +798,7 @@ public class CoachTeleport : BasePlugin
         ShowNade("Wirf, wenn du bereit bist");
         if (_nadeIdx >= _nades.Count) return;
         var n = _nades[_nadeIdx];
+        DrawNade(n);
         pawn.Teleport(new Vector(n.Pos[0], n.Pos[1], n.Pos[2]), new QAngle(n.Pos[3], n.Pos[4], 0), new Vector(0, 0, 0));
         player.RemoveWeapons();
         player.GiveNamedItem("weapon_knife");
@@ -809,24 +813,93 @@ public class CoachTeleport : BasePlugin
         _nades.Clear();
         _nadeIdx = _nadeWait = -1;
         if (_nadeUid >= 0) _huds.Remove(_nadeUid);
+        ClearBeams();
         info.ReplyToCommand("coach_nade ok clear");
     }
 
-    [ConsoleCommand("coach_nade_add", "Lineup: <weapon> <typ> <label_b64> x y z pitch yaw lx ly lz")]
-    [CommandHelper(minArgs: 11, usage: "<weapon> <typ> <label_b64> x y z pitch yaw lx ly lz", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    [ConsoleCommand("coach_nade_add", "Lineup: <weapon> <typ> <label_b64> <keys_b64> x y z pitch yaw lx ly lz")]
+    [CommandHelper(minArgs: 12, usage: "<weapon> <typ> <label_b64> <keys_b64> x y z pitch yaw lx ly lz", whoCanExecute: CommandUsage.SERVER_ONLY)]
     public void OnNadeAdd(CCSPlayerController? caller, CommandInfo info)
     {
         var ci = CultureInfo.InvariantCulture;
         var v = new float[8];
         for (var k = 0; k < 8; k++)
-            if (!float.TryParse(info.GetArg(4 + k), NumberStyles.Float, ci, out v[k]))
+            if (!float.TryParse(info.GetArg(5 + k), NumberStyles.Float, ci, out v[k]))
             {
                 info.ReplyToCommand("coach_nade_add: ungueltige Zahl");
                 return;
             }
         _nades.Add(new Nade { Weapon = info.GetArg(1), Type = info.GetArg(2), Label = FromBase64(info.GetArg(3)) ?? "",
-                              Pos = v[..5], Land = v[5..8] });
+                              Keys = FromBase64(info.GetArg(4)) ?? "", Pos = v[..5], Land = v[5..8] });
         info.ReplyToCommand($"coach_nade ok {_nades.Count}");
+    }
+
+    [ConsoleCommand("coach_nade_path", "Flugbahn eines Lineups: <index> x y z [x y z ...]")]
+    [CommandHelper(minArgs: 4, usage: "<index> x y z ...", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnNadePath(CCSPlayerController? caller, CommandInfo info)
+    {
+        var ci = CultureInfo.InvariantCulture;
+        if (!int.TryParse(info.GetArg(1), out var idx) || idx < 0 || idx >= _nades.Count)
+        {
+            info.ReplyToCommand("coach_nade_path: ungueltiger Index");
+            return;
+        }
+        for (var k = 2; k + 2 < info.ArgCount; k += 3)
+            if (float.TryParse(info.GetArg(k), NumberStyles.Float, ci, out var x)
+                && float.TryParse(info.GetArg(k + 1), NumberStyles.Float, ci, out var y)
+                && float.TryParse(info.GetArg(k + 2), NumberStyles.Float, ci, out var z))
+                _nades[idx].Path.Add(new[] { x, y, z });
+        info.ReplyToCommand($"coach_nade_path ok {idx} {_nades[idx].Path.Count}");
+    }
+
+    // Markierungen in der Welt (1.18.0): Flugbahn aus der Demo (gruen), Landepunkt (rotes Kreuz),
+    // Zielpunkt vor dir in Blickrichtung (gelbes Kreuz). Wunsch vom 3.11.: "anzeigen, wie die
+    // Lineups aussehen bzw. wo man zielt und wirft".
+    private readonly List<CBeam> _beams = new();
+
+    private void Beam(float ax, float ay, float az, float bx, float by, float bz, Color color, float width)
+    {
+        var beam = Utilities.CreateEntityByName<CBeam>("beam");
+        if (beam is null) return;
+        beam.Render = color;
+        beam.Width = width;
+        beam.Teleport(new Vector(ax, ay, az), new QAngle(0, 0, 0), new Vector(0, 0, 0));
+        beam.EndPos.X = bx;
+        beam.EndPos.Y = by;
+        beam.EndPos.Z = bz;
+        beam.DispatchSpawn();
+        _beams.Add(beam);
+    }
+
+    private void Cross(float x, float y, float z, float size, Color color)
+    {
+        Beam(x - size, y, z, x + size, y, z, color, 1.5f);
+        Beam(x, y - size, z, x, y + size, z, color, 1.5f);
+        Beam(x, y, z - size, x, y, z + size, color, 1.5f);
+    }
+
+    private void ClearBeams()
+    {
+        foreach (var b in _beams)
+            if (b.IsValid) b.Remove();
+        _beams.Clear();
+    }
+
+    private void DrawNade(Nade n)
+    {
+        ClearBeams();
+        for (var k = 0; k + 1 < n.Path.Count; k++)
+            Beam(n.Path[k][0], n.Path[k][1], n.Path[k][2], n.Path[k + 1][0], n.Path[k + 1][1], n.Path[k + 1][2],
+                 Color.FromArgb(255, 74, 222, 128), 1.2f);
+        Cross(n.Land[0], n.Land[1], n.Land[2] + 4, 24, Color.FromArgb(255, 248, 113, 113));
+        // Zielpunkt: 300 Units vor den Augen in der Blickrichtung der Demo
+        var pitch = n.Pos[3] * Math.PI / 180;
+        var yaw = n.Pos[4] * Math.PI / 180;
+        var d = 300f;
+        var ex = n.Pos[0] + (float)(Math.Cos(pitch) * Math.Cos(yaw)) * d;
+        var ey = n.Pos[1] + (float)(Math.Cos(pitch) * Math.Sin(yaw)) * d;
+        var ez = n.Pos[2] + 64 - (float)Math.Sin(pitch) * d;
+        Cross(ex, ey, ez, 3, Color.FromArgb(255, 251, 191, 36));
     }
 
     [ConsoleCommand("coach_nade_start", "Granaten-Training starten: <userid>")]

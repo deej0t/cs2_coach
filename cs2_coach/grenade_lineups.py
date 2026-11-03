@@ -21,7 +21,7 @@ from pathlib import Path
 
 TICKRATE = 64
 CACHE_DIR = "grenade_cache"
-CACHE_KEY = "nades-v1"  # Demos mit Fehler stehen nicht im Cache, kommen beim naechsten Lauf neu
+CACHE_KEY = "nades-v2"  # v2: Abwurf beim Loslassen, Wurfart, Flugbahn  # Demos mit Fehler stehen nicht im Cache, kommen beim naechsten Lauf neu
 STAND_SPEED = 10    # u/s
 SAME_SPOT = 48      # Units zwischen zwei Abwurfpunkten
 SAME_LAND = 150     # Units zwischen zwei Landepunkten
@@ -39,14 +39,34 @@ def _event(p, name: str, columns: list[str], **kw):
     return df if hasattr(df, "iterrows") else pd.DataFrame(columns=columns)
 
 
+GRENADE_CLASSES = (("smoke", "smoke"), ("hegrenade", "he"), ("flash", "flash"), ("molotov", "molotov"),
+                   ("incendiary", "molotov"))
+# Wurfstaerke aus der Anfangsgeschwindigkeit der Granate (CS2: 750 * (0,7 * Staerke + 0,3) u/s
+# plus 1,25 x Spielergeschwindigkeit): Linksklick 750, beide Tasten ~490, Rechtsklick 225.
+CLICK_LIMITS = ((620, "left"), (350, "both"), (0, "right"))
+RUN_SPEED = 30      # u/s waagerecht beim Loslassen: darueber ein Laufwurf - per Versetzen nicht nachstellbar
+PATH_STEP = 4       # Ticks zwischen zwei Punkten der Flugbahn (16/s)
+MAX_PATH = 60
+
+
+def _kind(cls: str) -> str | None:
+    c = cls.lower()
+    return next((k for key, k in GRENADE_CLASSES if key in c), None)
+
+
 def scan_demo(demo_path, me: str, parser_factory=None) -> list[dict]:
+    """Jeder Wurf: Abwurf beim LOSLASSEN (erster Punkt der Flugbahn), Wurfart, Flugbahn, Landung.
+
+    v1 nahm Position und Blick aus weapon_fire - das feuert beim Ziehen des Stifts,
+    nicht beim Loslassen ("die Positionen sind etwas schlecht", 3.11.).
+    """
     if parser_factory is None:
         from demoparser2 import DemoParser as parser_factory
     p = parser_factory(str(demo_path))
-    fire = _event(p, "weapon_fire", ["tick", "user_steamid", "weapon"], player=["X", "Y", "Z", "pitch", "yaw"])
-    fire = fire[fire["weapon"].astype(str).isin(WEAPONS)]
-    if fire.empty:
+    g = p.parse_grenades()
+    if not hasattr(g, "iterrows") or g.empty:
         return []
+    g = g[g["x"] == g["x"]].sort_values(["grenade_entity_id", "tick"])
     lands = []
     for name, typ in DETONATE.items():
         for _, r in _event(p, name, ["tick", "user_steamid", "x", "y", "z"]).iterrows():
@@ -54,32 +74,93 @@ def scan_demo(demo_path, me: str, parser_factory=None) -> list[dict]:
     lands.sort()
     ends = sorted((int(r["tick"]), str(r["winner"])) for _, r in
                   _event(p, "round_end", ["tick", "winner"]).iterrows())
-    ticks = sorted({int(t) for t in fire["tick"]} | {int(t) - 1 for t in fire["tick"]})
-    rows = p.parse_ticks(["X", "Y", "team_num"], ticks=ticks)
-    # team_num ist bei Zuschauern/Reconnects NaN - fuehrte am 2.11. in 5 Demos zu
-    # "cannot convert float NaN to integer", die ganze Demo fiel weg.
-    pos = {(int(r["tick"]), str(r["steamid"])): (float(r["X"]), float(r["Y"]),
-                                                  int(r["team_num"]) if r["team_num"] == r["team_num"] else 0)
-           for _, r in rows.iterrows() if r["X"] == r["X"]}
+
+    # Flugbahnen: Entity-IDs werden in einem Match wiederverwendet -> bei Luecken trennen
+    tracks, cur, last = [], None, None
+    for row in g.itertuples(index=False):
+        key = (row.grenade_entity_id, str(row.steamid))
+        if cur is None or key != cur["key"] or row.tick - last > 8:
+            cur = {"key": key, "kind": _kind(str(row.grenade_type)), "pts": []}
+            tracks.append(cur)
+        cur["pts"].append((int(row.tick), float(row.x), float(row.y), float(row.z)))
+        last = row.tick
+    tracks = [t for t in tracks if t["kind"] and len(t["pts"]) >= 3]
+    if not tracks:
+        return []
+    ticks = set()
+    for t in tracks:
+        t0 = t["pts"][0][0]
+        ticks |= {t0 - 1, t0 - 2} | set(range(max(t0 - 64, 1), t0, 4))
+    # Nicht velocity_X/Y/Z: die lieferten am 3.11. Werte bis 300.000 - Geschwindigkeit wie im
+    # Parser aus dem Positionsdelta zum Vortick.
+    props = ["X", "Y", "Z", "pitch", "yaw", "team_num", "is_airborne", "ducking"]
+    rows = p.parse_ticks(props, ticks=sorted(ticks))
+    state = {(int(r["tick"]), str(r["steamid"])): r for _, r in rows.iterrows()}
+
     used, out = set(), []
-    for _, f in fire.iterrows():
-        t, sid, typ = int(f["tick"]), str(f["user_steamid"]), WEAPONS[str(f["weapon"])]
-        land = next((l for l in lands if l[0] > t and l[0] <= t + MAX_FLIGHT * TICKRATE and l[1] == sid
-                     and l[2] == typ and l not in used), None)
+    for t in tracks:
+        sid = t["key"][1]
+        t0, x0, y0, z0 = t["pts"][0]
+        me_row = state.get((t0 - 1, sid))
+        if me_row is None or me_row["X"] != me_row["X"]:
+            continue
+        land = next((l for l in lands if t0 <= l[0] <= t0 + MAX_FLIGHT * TICKRATE and l[1] == sid
+                     and l[2] == t["kind"] and l not in used), None)
         if land is None:
-            continue  # nie detoniert (z. B. Molotov in der Luft, Runde vorbei)
+            continue
         used.add(land)
-        here, before = pos.get((t, sid)), pos.get((t - 1, sid))
-        speed = math.dist(here[:2], before[:2]) * TICKRATE if here and before else None
-        team = here[2] if here else 0
-        winner = next((w for e, w in ends if e >= t), "")
-        out.append({"type": typ, "me": sid == me, "side": "CT" if team == 3 else "T",
-                    "pos": [round(float(f["user_X"]), 1), round(float(f["user_Y"]), 1), round(float(f["user_Z"]), 1)],
-                    "ang": [round(float(f["user_pitch"]), 2), round(float(f["user_yaw"]), 2)],
-                    "land": [round(c, 1) for c in land[3]], "speed": round(speed) if speed is not None else None,
+        prev = state.get((t0 - 2, sid))
+        if prev is None or prev["X"] != prev["X"]:
+            continue
+        vx, vy, vz = ((float(me_row[k]) - float(prev[k])) * TICKRATE for k in ("X", "Y", "Z"))
+        t1, x1, y1, z1 = t["pts"][1]
+        dt = max(t1 - t0, 1) / TICKRATE
+        throw = math.dist((x0, y0, z0), (x1, y1, z1)) / dt
+        own = math.dist(((x1 - x0) / dt - 1.25 * vx, (y1 - y0) / dt - 1.25 * vy), (0, 0)) if throw else 0
+        own = math.hypot(own, (z1 - z0) / dt - 1.25 * vz)
+        click = next(c for limit, c in CLICK_LIMITS if own >= limit)
+        airborne = bool(me_row["is_airborne"])
+        speed = math.hypot(vx, vy)
+        # Stand vor dem Sprung = wo man hingestellt wird
+        ground = me_row
+        for k in range(t0 - 1, max(t0 - 64, 1) - 1, -1):
+            r = state.get((k, sid))
+            if r is not None and not bool(r["is_airborne"]):
+                ground = r
+                break
+        team = int(me_row["team_num"]) if me_row["team_num"] == me_row["team_num"] else 0
+        winner = next((w for e, w in ends if e >= t0), "")
+        path = [[round(px), round(py), round(pz)] for k, (pt, px, py, pz) in enumerate(t["pts"])
+                if k % PATH_STEP == 0 and pt <= land[0]][:MAX_PATH] + [[round(c) for c in land[3]]]
+        out.append({"type": t["kind"], "me": sid == me, "side": "CT" if team == 3 else "T",
+                    "pos": [round(float(ground["X"]), 1), round(float(ground["Y"]), 1), round(float(ground["Z"]), 1)],
+                    "ang": [round(float(me_row["pitch"]), 2), round(float(me_row["yaw"]), 2)],
+                    "land": [round(c, 1) for c in land[3]], "speed": round(speed),
+                    "style": {"click": click, "jump": airborne and vz > 0, "air": airborne,
+                              "duck": bool(me_row["ducking"]), "run": speed > RUN_SPEED and not airborne},
                     "won": {"CT": team == 3, "T": team == 2}.get(winner.upper()),
-                    "flight": round((land[0] - t) / TICKRATE, 2)})
+                    "flight": round((land[0] - t0) / TICKRATE, 2), "path": path})
     return out
+
+
+def nade_keys(style: dict) -> str:
+    """Tasten-Anzeige: "[LEERTASTE] + [LINKSKLICK] loslassen"."""
+    click = {"left": "[LINKSKLICK]", "right": "[RECHTSKLICK]", "both": "[LINKS+RECHTS]"}[style.get("click", "left")]
+    if style.get("jump"):
+        return f"{click} halten, [LEERTASTE] und im Sprung loslassen"
+    if style.get("duck"):
+        return f"[STRG] halten, {click} loslassen"
+    return f"{click} loslassen"
+
+
+def style_text(style: dict) -> str:
+    """"Sprungwurf + Linksklick" - so, wie man es im Spiel macht."""
+    click = {"left": "Linksklick", "right": "Rechtsklick", "both": "beide Maustasten"}[style.get("click", "left")]
+    if style.get("jump"):
+        return f"Sprungwurf + {click}"
+    if style.get("duck"):
+        return f"geduckt + {click}"
+    return f"im Stand + {click}"
 
 
 def collect(cfg: dict, config_path: Path, bsp: str | None = None, parser_factory=None, log=print,
@@ -122,20 +203,22 @@ def collect(cfg: dict, config_path: Path, bsp: str | None = None, parser_factory
 
 
 def library(throws: list[dict], limit: int = 40) -> list[dict]:
-    """Wuerfe aus dem Stand zu Lineups buendeln; die haeufigsten zuerst."""
+    """Wuerfe aus dem Stand oder Sprungwuerfe zu Lineups buendeln (gleiche Wurfart); die haeufigsten zuerst."""
     groups: list[dict] = []
     for n in throws:
-        if n.get("speed") is None or n["speed"] > STAND_SPEED:
-            continue
+        st = n.get("style") or {}
+        if st.get("run") or (st.get("air") and not st.get("jump")):
+            continue  # Lauf- und Fallwuerfe lassen sich per Versetzen nicht nachstellen
         for g in groups:
-            if (g["type"] == n["type"] and g["side"] == n["side"] and math.dist(g["pos"][:2], n["pos"][:2]) <= SAME_SPOT
+            if (g["type"] == n["type"] and g["side"] == n["side"] and g["style"].get("click") == st.get("click")
+                    and g["style"].get("jump") == st.get("jump") and math.dist(g["pos"][:2], n["pos"][:2]) <= SAME_SPOT
                     and math.dist(g["land"][:2], n["land"][:2]) <= SAME_LAND):
                 g["count"] += 1
                 g["mine"] += n["me"]
                 g["won"] += bool(n["won"])
                 break
         else:
-            groups.append({**{k: n[k] for k in ("type", "side", "pos", "ang", "land", "flight", "map")},
+            groups.append({**{k: n[k] for k in ("type", "side", "pos", "ang", "land", "flight", "map", "style", "path")},
                            "count": 1, "mine": int(n["me"]), "won": int(bool(n["won"]))})
     groups.sort(key=lambda g: (-g["count"], -g["won"]))
     return groups[:limit]

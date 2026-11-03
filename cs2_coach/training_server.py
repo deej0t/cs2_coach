@@ -129,7 +129,8 @@ SETUP = [
     # Mitspieler starten im Duell an deiner Stelle - durchlaessig, sonst stecken sie ineinander.
     "mp_solid_teammates 0",
 ]
-RESTORE = ["coach_nade_clear", "bot_kick", "bot_quota 0", "bot_freeze 0", 'bot_loadout ""', "mp_warmuptime 30",
+RESTORE = ["coach_nade_clear", "sv_grenade_trajectory_prac_pipreview 0", "sv_grenade_trajectory_prac_trailtime 0",
+           "bot_kick", "bot_quota 0", "bot_freeze 0", 'bot_loadout ""', "mp_warmuptime 30",
            'mp_t_default_primary ""', 'mp_ct_default_primary ""',
            "mp_t_default_secondary weapon_glock", "mp_ct_default_secondary weapon_hkp2000",
            "mp_t_default_melee weapon_knife", "mp_ct_default_melee weapon_knife", "mp_give_player_c4 1",
@@ -1082,16 +1083,22 @@ class Director:
         return []
 
     def _nade_commands(self, state: dict) -> list[str]:
-        from .grenade_lineups import LABELS
+        from .grenade_lineups import LABELS, nade_keys, style_text
         uid = state["human_uid"]
-        cmds = ["coach_nade_clear"]
-        for g in state["lineups"]:
+        # Granaten-Kamera (Bild im Bild) und Flugbahn des eigenen Wurfs, Wunsch vom 3.11.
+        cmds = ["coach_nade_clear", "sv_grenade_trajectory_prac_pipreview 1", "sv_grenade_trajectory_prac_trailtime 4"]
+        for i, g in enumerate(state["lineups"]):
             weapon = {"smoke": "weapon_smokegrenade", "he": "weapon_hegrenade", "flash": "weapon_flashbang",
                       "molotov": "weapon_molotov" if g["side"] == "T" else "weapon_incgrenade"}[g["type"]]
+            style = g.get("style") or {}
             label = f"{g['side']} {LABELS[g['type']]} &#183; {g['count']}x geworfen" + (
                 f", {g['mine']}x von dir" if g["mine"] else "")
-            cmds.append(f"coach_nade_add {weapon} {g['type']} {_b64(label)} "
+            keys = f"{style_text(style)} &#183; {nade_keys(style)}" if style else "Wurfart unbekannt"
+            cmds.append(f"coach_nade_add {weapon} {g['type']} {_b64(label)} {_b64(keys)} "
                         + " ".join(f"{v:.2f}" for v in [*g["pos"], *g["ang"], *g["land"]]))
+            path = g.get("path") or []
+            for j in range(0, len(path), 12):
+                cmds.append(f"coach_nade_path {i} " + " ".join(f"{c:.0f}" for pt in path[j:j + 12] for c in pt))
         return cmds + [f"coach_nade_start {uid}"]
 
     def _nade_results(self, state: dict) -> None:
