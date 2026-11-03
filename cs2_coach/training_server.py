@@ -99,7 +99,17 @@ MODE_COMMANDS = {"granaten": "granaten", "nades": "granaten", "wiederholen": "wi
                  "situation": "situation", "duell": "duell"}
 # Training zu mehreren: der Besitzer laedt ein, der Freund sagt zu. Mitmachen und
 # Aussteigen darf jeder - das sind die einzigen Befehle ohne Besitzer-Pruefung.
-PARTY_COMMANDS = {"einladen", "ausladen", "mitmachen", "aussteigen"}
+# 3.11.: ein Eingeladener schrieb "!annehmen" statt "!mitmachen" und blockierte so jedes Training
+JOIN_ALIASES = {"annehmen", "accept", "join", "dabei"}
+PARTY_COMMANDS = {"einladen", "ausladen", "mitmachen", "aussteigen", *JOIN_ALIASES}
+# Namen mit Ersatzzeichen ("Łυкαѕ") sollen mit "lukas" auffindbar sein
+_LOOKALIKE = str.maketrans("łυкαѕоеросхуіοντιмнтвьз", "lukasoepocxyiovtimhtbbz")
+
+
+def _fold(text: str) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFKD", text.lower().translate(_LOOKALIKE))
+    return "".join(c for c in t if not unicodedata.combining(c))
 PARTY_FILE = ".training_party.json"
 COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop", "pause", "weiter", "menu", "menue",
             *MODE_COMMANDS, *PARTY_COMMANDS}
@@ -850,6 +860,8 @@ class Director:
 
     def command(self, sid: str, name: str, cmd: str, arg: str, uid: int | None = None) -> list[str]:
         """Antwortzeilen fuer einen Trainingsbefehl."""
+        if cmd in JOIN_ALIASES:
+            cmd = "mitmachen"
         if cmd in ("mitmachen", "aussteigen"):
             return self._join(sid, name, cmd, uid)
         if sid not in _admins(self.cfg):
@@ -939,8 +951,7 @@ class Director:
             return ["Trainings-Plugin nicht geladen (nach einem CS2-Update?). Training gerade nicht möglich."]
         others = self._strangers(name)
         if others:
-            return [f"Erst wenn der Server leer ist - gerade online: {', '.join(others)}. "
-                    "Mittrainieren: !einladen <Name>"]
+            return self._blocked(others)
         if mode == "wiederholen":
             queue = repeat_queue(load_sessions(self.path), all_sc[bsp])
             if not queue:
@@ -983,6 +994,17 @@ class Director:
     def _party_state(self) -> dict:
         return {sid: {"name": n, "uid": None} for sid, n in load_party(self.path)["joined"].items()}
 
+    def _blocked(self, others: list[str]) -> list[str]:
+        invited = [o for o in others if o in load_party(self.path)["invited"]]
+        rest = [o for o in others if o not in invited]
+        out = []
+        if invited:
+            out.append(f"{', '.join(invited)}: du bist eingeladen - schreib !mitmachen (oder !aussteigen).")
+        if rest:
+            out.append(f"Erst wenn der Server leer ist - gerade online: {', '.join(rest)}. "
+                       "Mittrainieren: !einladen <Name>")
+        return out
+
     def _invite(self, name: str, cmd: str, arg: str, uid) -> list[str]:
         party = load_party(self.path)
         target = arg.strip().lower()
@@ -1012,7 +1034,7 @@ class Director:
                 if "coach_menu ok" in self.send(menu(uid, "Mitspieler einladen", items))[0]:
                     return []
             return [f"Wen? !einladen <Name> - online: {', '.join(cands[:6])}"]
-        hits = [h for h in online if target in h.lower()]
+        hits = [h for h in online if target in h.lower()] or [h for h in online if _fold(target) in _fold(h)]
         exact = [h for h in hits if h.lower() == target]
         hits = exact or hits
         if len(hits) != 1:
@@ -1058,8 +1080,7 @@ class Director:
             return ["Trainings-Plugin nicht geladen (nach einem CS2-Update?). Training gerade nicht möglich."]
         others = self._strangers(name)
         if others:
-            return [f"Erst wenn der Server leer ist - gerade online: {', '.join(others)}. "
-                    "Mittrainieren: !einladen <Name>"]
+            return self._blocked(others)
         return []
 
     def _start_nades(self, sid: str, name: str, bsp: str, own: bool = False) -> list[str]:

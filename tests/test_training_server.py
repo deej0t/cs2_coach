@@ -864,3 +864,13 @@ def test_wiederholen_starts_with_lost_duels(env, monkeypatch):
     assert director().command(OWNER, "dj", "wiederholen", "mirage") == []
     state = ts.load_state(path)
     assert state["queue"] == [len(sc) - 1] and state["repeat"] and "map de_mirage" in server.sent
+
+
+def test_invited_but_not_joined_is_told_and_annehmen_works(env):
+    """3.11.: der Eingeladene schrieb !annehmen statt !mitmachen - jedes Training blieb blockiert."""
+    _, path, server, _, director = env
+    server.status = STATUS_TWO
+    director().command(OWNER, "dj", "einladen", "danch")
+    assert "schreib !mitmachen" in director().command(OWNER, "dj", "training", "mirage")[0]
+    assert "trainiert mit" in director().command(DANCHO_SID, "Dancho", "annehmen", "", 3)[0]
+    assert director().command(OWNER, "dj", "training", "mirage") == []
