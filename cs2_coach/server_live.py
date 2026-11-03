@@ -211,6 +211,44 @@ def rcon_sender(cfg: dict):
     return lambda *c: rcon.command(host, cfg.get("server_rcon_port") or 27015, password, *c)
 
 
+# CS2 hat kein MOTD-Fenster mehr (motd.txt zeigt der Client nicht an) - daher eine
+# private Chat-Begruessung nach dem Verbinden, per Plugin coach_chat.
+_JOIN = re.compile(ss._player("a") + r" entered the game")
+WELCOME_DELAY = 8  # s: beim "entered the game" laedt der Client noch, der Chat kaeme zu frueh
+
+
+def welcome_lines(cfg: dict, name: str) -> list[str]:
+    custom = cfg.get("server_welcome")
+    if custom:
+        return [str(x).replace("{name}", name) for x in custom]
+    url = (cfg.get("public_url") or "").strip().rstrip("/").removeprefix("https://").removeprefix("http://")
+    out = [f"Willkommen im deej0t Coach Lab, {name}!",
+           "!help alle Befehle · !top Bestenliste · !rank dein Rang · !map <name> Mapwechsel"]
+    if url:
+        out.append(f"Stats & Bestenliste: {url}/server")
+    return out
+
+
+def joins(lines: list[str]) -> list[tuple[str, str]]:
+    """(userid, name) jedes Menschen, der gerade ins Spiel kam."""
+    out = []
+    for raw in lines:
+        m = ss._LINE.match(raw)
+        j = _JOIN.match(m.group(2)) if m else None
+        if j and j.group("asid") != "BOT":
+            out.append((j.group("auid"), j.group("aname")))
+    return out
+
+
+def welcome(cfg: dict, people: list[tuple[str, str]], send=None) -> None:
+    from .ingame_coach import chat_line
+    send = send or rcon_sender(cfg)
+    if send is None:
+        return
+    for uid, name in people:
+        send(*[chat_line(uid, line) for line in welcome_lines(cfg, _safe(name))])
+
+
 def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, now=None) -> int:
     """Chat-Befehle aus einem Stapel beantworten. Gibt die Zahl der Antworten zurueck."""
     from .ingame_coach import COMMANDS as COACH, handle as coach_handle
@@ -377,6 +415,9 @@ def on_batch(cfg: dict, config_path: Path, body: bytes) -> None:
     has_command = any(" say" in ln and '"!' in ln for ln in lines)
     game_over = any("Game Over:" in ln for ln in lines)
     week_due = bool(_webhook(cfg)) and not _week_marked(config_path)
+    people = joins(lines) if " entered the game" in "".join(lines) else []
+    if people:
+        threading.Timer(WELCOME_DELAY, lambda: welcome(cfg, people)).start()
     if not (has_command or game_over or week_due):
         return  # haeufigster Fall: nichts zu tun, ohne das Log zu lesen
 

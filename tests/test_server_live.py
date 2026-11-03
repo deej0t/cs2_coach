@@ -132,3 +132,16 @@ def test_player_of_the_week(tmp_path):
     assert "Spieler der Woche (KW 44)**: **dj**" in text
     key, text = sl.weekly_summary(ss.read_logs(cfg_path), CFG, now=datetime(2026, 11, 9, 18, 0))
     assert key == "week-2026-W45" and text is None  # in der Woche danach niemand gespielt
+
+
+def test_welcome_on_join_is_private_and_skips_bots():
+    import base64
+    lines = ['11/03/2026 - 14:00:00.000 - "dj<2><[U:1:59009500]><>" entered the game',
+             '11/03/2026 - 14:00:01.000 - "Orlow<3><BOT><>" entered the game']
+    people = sl.joins(lines)
+    assert people == [("2", "dj")]
+    sent = []
+    sl.welcome({"public_url": "https://cs2-coach.deej0t.eu"}, people, send=lambda *c: sent.extend(c))
+    assert all(c.startswith("coach_chat 2 ") for c in sent)
+    text = " ".join(base64.b64decode(c.split()[2]).decode() for c in sent)
+    assert "dj" in text and "!help" in text and "cs2-coach.deej0t.eu/server" in text
