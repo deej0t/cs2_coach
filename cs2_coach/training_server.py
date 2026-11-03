@@ -1095,8 +1095,9 @@ class Director:
     def _nade_commands(self, state: dict) -> list[str]:
         from .grenade_lineups import LABELS, nade_keys, style_text
         uid = state["human_uid"]
-        # Granaten-Kamera (Bild im Bild) und Flugbahn des eigenen Wurfs, Wunsch vom 3.11.
-        cmds = ["coach_nade_clear", "sv_grenade_trajectory_prac_pipreview 1", "sv_grenade_trajectory_prac_trailtime 4"]
+        # Flugbahn des eigenen Wurfs. Die Granaten-Kamera (pipreview) bleibt aus: sie zeigte als
+        # schwarze Scheibe mitten im Bild den eigenen Koerper von oben (3.11., Screenshot).
+        cmds = ["coach_nade_clear", "sv_grenade_trajectory_prac_trailtime 4"]
         for i, g in enumerate(state["lineups"]):
             weapon = {"smoke": "weapon_smokegrenade", "he": "weapon_hegrenade", "flash": "weapon_flashbang",
                       "molotov": "weapon_molotov" if g["side"] == "T" else "weapon_incgrenade"}[g["type"]]
