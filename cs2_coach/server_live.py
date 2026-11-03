@@ -216,6 +216,7 @@ def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, n
     from .ingame_coach import COMMANDS as COACH, handle as coach_handle
     from .training_server import COMMANDS as TRAINING, Director
     from .map_vote import COMMANDS as MAPVOTE, handle as map_vote
+    from .own_lineups import COMMANDS as OWN, handle as own_lineups
     commands = parse_commands(lines)
     send = send or rcon_sender(cfg)
     if not commands or send is None:
@@ -236,6 +237,11 @@ def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, n
             if reply:
                 send(*_say_commands(reply))
                 sent += 1
+            continue
+        if cmd in OWN:
+            _last_command[sid] = time.monotonic()
+            send(*_say_commands(own_lineups(config_path, send, name, cmd, arg, uid)))
+            sent += 1
             continue
         if cmd in MAPVOTE:
             _last_command[sid] = time.monotonic()

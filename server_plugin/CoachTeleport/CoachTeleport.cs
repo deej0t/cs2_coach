@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.19.0";
+    public override string ModuleVersion => "1.20.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -108,6 +108,8 @@ public class CoachTeleport : BasePlugin
         // inferno_startburn kennt keinen Werfer - im Granaten-Training wirft nur der eine Mensch.
         RegisterEventHandler<EventInfernoStartburn>((ev, _) => { NadeLanded(null, ev.X, ev.Y, ev.Z, "molotov"); return HookResult.Continue; });
         RegisterListener<Listeners.OnTick>(MeasureTick);
+        RegisterListener<Listeners.OnTick>(GroundTick);
+        RegisterEventHandler<EventGrenadeThrown>((ev, _) => { Thrown(ev.Userid, ev.Weapon); return HookResult.Continue; });
         RegisterEventHandler<EventWeaponFire>((ev, _) =>
         {
             if (_inFreeze || ev.Userid is not { } shooter || shooter.IsBot) return HookResult.Continue;
@@ -731,6 +733,86 @@ public class CoachTeleport : BasePlugin
     // Landepunkt mit dem aus der Demo vergleichen, Treffer oder NadeTries Versuche ->
     // naechstes Lineup. Der Coach liest am Ende nur das Ergebnis (coach_nade_result) -
     // das Server-Log meldet die Detonation nicht rechtzeitig.
+    // Eigene Lineups aufnehmen (1.20.0): beim Loslassen (grenade_thrown) Stand, Blick, Wurfart
+    // merken, bei der Detonation die Landung. Der Coach holt den letzten Wurf mit coach_nade_last
+    // ab, wenn der Spieler !speichern schreibt. Sprungwurf -> Stand = letzte Bodenposition.
+    private sealed class Throw
+    {
+        public string Type = "";
+        public float[] Pos = new float[5];
+        public float[]? Land;
+        public float Strength = 1, Speed;
+        public bool Jump, Duck;
+        public int Team;
+    }
+
+    private readonly Dictionary<int, Throw> _throws = new();
+    private readonly Dictionary<int, (float[] Pos, int Tick)> _ground = new();
+
+    private void GroundTick()
+    {
+        if (Server.TickCount % 2 != 0) return;
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p.IsBot || p.UserId is not { } uid) continue;
+            var pawn = p.PlayerPawn.Value;
+            if (pawn is null || !pawn.IsValid || pawn.AbsOrigin is null || (pawn.Flags & 1) == 0) continue;
+            _ground[uid] = (new[] { pawn.AbsOrigin.X, pawn.AbsOrigin.Y, pawn.AbsOrigin.Z }, Server.TickCount);
+        }
+    }
+
+    private void Thrown(CCSPlayerController? player, string weapon)
+    {
+        if (player is null || player.IsBot || player.UserId is not { } uid) return;
+        var pawn = player.PlayerPawn.Value;
+        if (pawn is null || !pawn.IsValid || pawn.AbsOrigin is null) return;
+        var w = weapon.ToLowerInvariant();
+        var type = w.Contains("smoke") ? "smoke" : w.Contains("flash") ? "flash" : w.Contains("hegrenade") ? "he"
+                 : w.Contains("molotov") || w.Contains("incgrenade") ? "molotov" : "";
+        if (type == "") return;
+        var air = (pawn.Flags & 1) == 0;
+        var o = pawn.AbsOrigin;
+        var pos = new[] { o.X, o.Y, o.Z };
+        if (air && _ground.TryGetValue(uid, out var g) && Server.TickCount - g.Tick <= 64) pos = g.Pos;
+        float strength = 1;
+        try
+        {
+            var active = pawn.WeaponServices?.ActiveWeapon.Value;
+            if (active is not null && active.IsValid) strength = new CBaseCSGrenade(active.Handle).ThrowStrength;
+        }
+        catch (Exception) { }
+        var v = pawn.AbsVelocity;
+        _throws[uid] = new Throw
+        {
+            Type = type, Pos = new[] { pos[0], pos[1], pos[2], pawn.EyeAngles.X, pawn.EyeAngles.Y },
+            Strength = strength, Jump = air, Team = player.TeamNum, Duck = (pawn.Flags & 2) != 0,
+            Speed = v is null ? 0 : (float)Math.Sqrt(v.X * v.X + v.Y * v.Y),
+        };
+    }
+
+    private void RecordLanding(CCSPlayerController? thrower, float x, float y, float z, string type)
+    {
+        // inferno_startburn kennt keinen Werfer: dann der juengste offene Molotov
+        var t = thrower?.UserId is { } uid ? _throws.GetValueOrDefault(uid)
+              : _throws.Values.LastOrDefault(k => k.Type == type && k.Land is null);
+        if (t is not null && t.Type == type && t.Land is null) t.Land = new[] { x, y, z };
+    }
+
+    [ConsoleCommand("coach_nade_last", "Letzter Wurf eines Spielers: <userid>")]
+    [CommandHelper(minArgs: 1, usage: "<userid>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnNadeLast(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (!int.TryParse(info.GetArg(1), out var uid) || !_throws.TryGetValue(uid, out var t) || t.Land is null)
+        {
+            info.ReplyToCommand("coach_nade_last none");
+            return;
+        }
+        var ci = CultureInfo.InvariantCulture;
+        var nums = string.Join(" ", t.Pos.Concat(t.Land).Select(f => f.ToString("F2", ci)));
+        info.ReplyToCommand($"coach_nade_last {t.Type} {nums} {t.Strength.ToString("F2", ci)} "
+                            + $"{(t.Jump ? 1 : 0)} {(t.Duck ? 1 : 0)} {t.Speed.ToString("F0", ci)} {t.Team}");
+    }
+
     private sealed class Nade
     {
         public string Weapon = "", Type = "", Label = "", Keys = "";
@@ -748,6 +830,7 @@ public class CoachTeleport : BasePlugin
 
     private void NadeLanded(CCSPlayerController? thrower, float x, float y, float z, string type)
     {
+        RecordLanding(thrower, x, y, z, type);
         if (_nadeIdx < 0 || _nadeIdx >= _nades.Count || _nadeWait >= 0) return;
         if (thrower is not null && (thrower.UserId ?? -1) != _nadeUid) return;
         var n = _nades[_nadeIdx];

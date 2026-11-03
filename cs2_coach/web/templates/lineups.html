@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — Lineups{% endblock %}
+
+{% block content %}
+<h2>Granaten-Lineups</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-4);">
+    Im Spiel werfen, gut gelandet: <code>!speichern &lt;Name&gt;</code>. Üben: <code>!granaten meine</code>,
+    Liste: <code>!lineups</code>, entfernen: <code>!loeschen &lt;Name&gt;</code>.
+    Dünne Linien = häufigste Würfe aus deinen Demos ({{ demo_count }}; nur bereits gelesene Demos - <code>!granaten {{ short }}</code> liest den Rest).
+</p>
+
+<div style="display:flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-4);">
+    {% for m in maps %}
+    <a class="btn {{ 'btn-primary' if m == bsp else 'btn-ghost' }}" href="{{ url_for('lineups_page.page', map=m) }}">{{ m.removeprefix('de_') }}</a>
+    {% endfor %}
+</div>
+
+{% set colors = {'smoke': '#cbd5e1', 'flash': '#fbbf24', 'he': '#f87171', 'molotov': '#fb923c'} %}
+<div style="display:flex; gap: var(--space-5); flex-wrap: wrap; align-items: flex-start;">
+    <svg viewBox="0 0 1024 1024" style="width: min(100%, 720px); background: #0b0d12; border-radius: 8px;">
+        <image href="{{ url_for('static', filename='radars/' ~ short ~ '.png') }}" width="1024" height="1024"/>
+        {% for l in lines %}
+        <g opacity="{{ 1 if l.own else 0.55 }}">
+            <title>{{ l.label }} · {{ l.title }}{% if l.style %} · {{ l.style }}{% endif %}</title>
+            <line x1="{{ l.x1 }}" y1="{{ l.y1 }}" x2="{{ l.x2 }}" y2="{{ l.y2 }}" stroke="{{ colors[l.type] }}"
+                  stroke-width="{{ 4 if l.own else 2 }}" {% if not l.own %}stroke-dasharray="6 5"{% endif %}/>
+            <circle cx="{{ l.x1 }}" cy="{{ l.y1 }}" r="{{ 7 if l.own else 4 }}" fill="{{ colors[l.type] }}"/>
+            <circle cx="{{ l.x2 }}" cy="{{ l.y2 }}" r="{{ 14 if l.own else 9 }}" fill="none" stroke="{{ colors[l.type] }}" stroke-width="3"/>
+        </g>
+        {% endfor %}
+    </svg>
+
+    <div class="card elev-sm" style="min-width: 260px; flex: 1;">
+        <span class="card-kicker">Eigene Lineups auf {{ short }}</span>
+        <p style="font-size: 12px; color: var(--color-neutral-500);">
+            {% for t, c in colors.items() %}<span style="color: {{ c }};">●</span> {{ labels[t] }}&nbsp; {% endfor %}
+        </p>
+        {% for g in own %}
+        <div style="display:flex; justify-content: space-between; align-items: center; padding: 6px 0; border-top: 1px solid var(--color-neutral-800);">
+            <span><span style="color: {{ colors[g.type] }};">●</span> <b>{{ g.name }}</b>
+                <span style="color: var(--color-neutral-500); font-size: 12px;">{{ g.side }} {{ labels[g.type] }}</span></span>
+            <form method="post" action="{{ url_for('lineups_page.delete') }}" onsubmit="return confirm('{{ g.name }} löschen?')">
+                <input type="hidden" name="map" value="{{ bsp }}"><input type="hidden" name="name" value="{{ g.name }}">
+                <button class="btn btn-ghost" style="padding: 2px 8px;">✕</button>
+            </form>
+        </div>
+        {% else %}
+        <p style="font-size: 13px;">Noch keine. Im Spiel werfen, dann <code>!speichern &lt;Name&gt;</code>.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

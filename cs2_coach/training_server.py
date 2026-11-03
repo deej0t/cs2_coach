@@ -858,10 +858,13 @@ class Director:
             return self._invite(name, cmd, arg, uid)
         if cmd in MODE_COMMANDS:
             mode = MODE_COMMANDS[cmd]
-            target = arg.lower().split()[0] if arg.strip() else self._current_map()
+            words = arg.lower().split()
+            own = [w for w in words if w in ("meine", "eigene", "own")]
+            words = [w for w in words if w not in own]
+            target = words[0] if words else self._current_map()
             target = target if target.startswith("de_") else f"de_{target}"
             if target in self.maps():
-                return self._start(sid, name, f"{target} {mode}")
+                return self._start(sid, name, f"{target} {mode} {' '.join(own)}".strip())
             if uid is not None:
                 return self._open_mode_maps(uid, mode)
             return [f"Auf welcher Map? z. B. !{cmd} mirage"]
@@ -922,7 +925,7 @@ class Director:
         if bsp not in self.maps():
             return [f"{bsp} ist nicht im Trainings-Pool ({', '.join(m.removeprefix('de_') for m in self.maps())})."]
         if mode == "granaten":
-            return self._start_nades(sid, name, bsp)
+            return self._start_nades(sid, name, bsp, own=bool(set(parts[2:]) & {"meine", "eigene", "own"}))
         if mode not in ("duell", "wiederholen"):
             return self._start_multi(sid, name, bsp, mode)
         if not all_sc.get(bsp):
@@ -1059,14 +1062,20 @@ class Director:
                     "Mittrainieren: !einladen <Name>"]
         return []
 
-    def _start_nades(self, sid: str, name: str, bsp: str) -> list[str]:
-        """Granaten-Lineups aus den Demos ueben (grenade_lineups.py, Plugin 1.16.0). Kein Bot."""
+    def _start_nades(self, sid: str, name: str, bsp: str, own: bool = False) -> list[str]:
+        """Granaten-Lineups ueben: aus den Demos oder die eigenen (own_lineups.py). Kein Bot."""
         from .grenade_lineups import collect, library
         problem = self._preflight(name)
         if problem:
             return problem
-        self.send(_say(f"Granaten auf {bsp}: lese die Wuerfe aus deinen Demos (beim ersten Mal 1-3 Minuten)..."))
-        lineups = library(collect(self.cfg, self.path, bsp), limit=NADE_LINEUPS)
+        if own:
+            from .own_lineups import load
+            lineups = load(self.path).get(bsp, [])
+            if not lineups:
+                return [f"Keine eigenen Lineups auf {bsp}. Werfen, dann !speichern <Name>."]
+        else:
+            self.send(_say(f"Granaten auf {bsp}: lese die Wuerfe aus deinen Demos (beim ersten Mal 1-3 Minuten)..."))
+            lineups = library(collect(self.cfg, self.path, bsp), limit=NADE_LINEUPS)
         if not lineups:
             return [f"Keine Granaten-Lineups auf {bsp} in deinen Demos gefunden."]
         with _Lock(self.path):
@@ -1078,7 +1087,8 @@ class Director:
                 "round": 0, "lineups": lineups, "started": datetime.now().isoformat(timespec="seconds"),
                 "t0": time.time(), "party": {}})
         self.timer(LOAD_TIMEOUT, self._check_loaded)
-        self.send(_say(f"{len(lineups)} Lineups, die in deinen Matches am oeftesten geworfen wurden. Map wird geladen..."),
+        what = "eigene Lineups" if own else "Lineups, die in deinen Matches am oeftesten geworfen wurden"
+        self.send(_say(f"{len(lineups)} {what}. Map wird geladen..."),
                   *self._map_change(bsp))
         return []
 
@@ -1091,8 +1101,9 @@ class Director:
             weapon = {"smoke": "weapon_smokegrenade", "he": "weapon_hegrenade", "flash": "weapon_flashbang",
                       "molotov": "weapon_molotov" if g["side"] == "T" else "weapon_incgrenade"}[g["type"]]
             style = g.get("style") or {}
-            label = f"{LABELS[g['type']].upper()} &#183; {g['side']} &#183; {g['count']}x geworfen" + (
-                f" ({g['mine']}x von dir)" if g["mine"] else "")
+            label = (f"{LABELS[g['type']].upper()} &#183; {g['side']} &#183; {g['name']}" if g.get("name") else
+                     f"{LABELS[g['type']].upper()} &#183; {g['side']} &#183; {g['count']}x geworfen" + (
+                         f" ({g['mine']}x von dir)" if g["mine"] else ""))
             keys = f"{style_text(style).upper()}|{nade_keys(style)}" if style else "WURFART UNBEKANNT|"
             cmds.append(f"coach_nade_add {weapon} {g['type']} {_b64(label)} {_b64(keys)} "
                         + " ".join(f"{v:.2f}" for v in [*g["pos"], *g["ang"], *g["land"]]))
@@ -1111,7 +1122,8 @@ class Director:
             if tries == "0":
                 continue
             state.setdefault("duels", []).append({
-                "n": i + 1, "source": f"{g['side']} {LABELS[g['type']]} ({g['count']}x geworfen)",
+                "n": i + 1, "source": f"{g['side']} {LABELS[g['type']]} "
+                + (f"'{g['name']}'" if g.get("name") else f"({g['count']}x geworfen)"),
                 "opponent": "Lineup", "weapon": g["type"], "outcome": "win" if hit == "1" else "loss",
                 "tries": int(tries), "nade_dist": None if best == "-" else int(best), "export": "", "round": 0})
             state["results"].append("win" if hit == "1" else "loss")
