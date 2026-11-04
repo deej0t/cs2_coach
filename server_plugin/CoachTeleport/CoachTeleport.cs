@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.26.0";
+    public override string ModuleVersion => "1.27.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -871,6 +871,7 @@ public class CoachTeleport : BasePlugin
         // Naechster Bombenplatz nach Abstand zur Mitte der func_bomb_target (Brush: Ursprung oft
         // 0,0,0, die Grenzen dann in Weltkoordinaten - Mitte = Ursprung + (Mins+Maxs)/2).
         var site = 0;
+        var siteIndex = 0;
         var best = float.MaxValue;
         foreach (var t in Utilities.FindAllEntitiesByDesignerName<CBombTarget>("func_bomb_target"))
         {
@@ -880,7 +881,7 @@ public class CoachTeleport : BasePlugin
             var cx = o.X + (c.Mins.X + c.Maxs.X) / 2;
             var cy = o.Y + (c.Mins.Y + c.Maxs.Y) / 2;
             var d = (cx - v[0]) * (cx - v[0]) + (cy - v[1]) * (cy - v[1]);
-            if (d < best) { best = d; site = t.IsBombSiteB ? 1 : 0; }
+            if (d < best) { best = d; site = t.IsBombSiteB ? 1 : 0; siteIndex = (int)t.Index; }
         }
         _bombSite = site == 1 ? "B" : "A";
         c4.BombTicking = true;
@@ -901,6 +902,14 @@ public class CoachTeleport : BasePlugin
         foreach (var p in Utilities.GetPlayers())
             if (!p.IsBot && p.TeamNum == 3 && p.PawnIsAlive) p.GiveNamedItem("item_defuser");
         _bomb = c4;
+        // Ohne das Ereignis wissen die Bots nichts von der Bombe: am 4.11. standen CT-Bots neben ihr
+        // und entschaerften nicht. Werfer = irgendein lebender T (wie im Retakes-Plugin).
+        var planter = Utilities.GetPlayers().FirstOrDefault(p => p.TeamNum == 2 && p.PawnIsAlive);
+        if (planter is not null)
+        {
+            var ev = new EventBombPlanted(true) { Userid = planter, Site = siteIndex };
+            ev.FireEvent(false);
+        }
         info.ReplyToCommand($"coach_plant ok site {_bombSite}");
     }
 
@@ -975,6 +984,16 @@ public class CoachTeleport : BasePlugin
         var ci = CultureInfo.InvariantCulture;
         info.ReplyToCommand("coach_defuse_samples " + string.Join(" ", _defuseSamples.Select(f => f.ToString("F2", ci))));
         _defuseSamples.Clear();
+    }
+
+    [ConsoleCommand("coach_unplant", "Gelegte Bombe entfernen (Pause)")]
+    [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnUnplant(CCSPlayerController? caller, CommandInfo info)
+    {
+        foreach (var old in Utilities.FindAllEntitiesByDesignerName<CPlantedC4>("planted_c4"))
+            if (old.IsValid) old.Remove();
+        _bomb = null;
+        info.ReplyToCommand("coach_unplant ok");
     }
 
     // Retake abkuerzen (1.23.0): alle T tot, Bombe tickt -> haette ein CT es noch geschafft?

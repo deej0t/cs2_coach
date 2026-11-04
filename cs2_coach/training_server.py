@@ -817,7 +817,10 @@ def _aim_commands(state: dict, uids) -> list[str]:
     react, hold, pre = AIM.get(int(state.get("level", START_LEVEL)), (0, 0, 0))
     out = []
     for uid in uids:
-        out += [f"coach_bot_skill {uid} {react} {hold} {pre}", f"coach_hunt {uid} 1"]
+        # Post-Plant: die CT-Bots sollen zur Bombe, nicht dich jagen (4.11.: sie standen an der
+        # Bombe und entschaerften nicht)
+        hunt = 0 if state.get("mode") == "postplant" else 1
+        out += [f"coach_bot_skill {uid} {react} {hold} {pre}", f"coach_hunt {uid} {hunt}"]
     return out
 
 
@@ -1623,6 +1626,8 @@ class Director:
         """
         stamp = time.time()
         state.update(paused=True, paused_at=stamp)
+        if (state.get("rnd") or {}).get("bomb"):
+            self.send("coach_unplant")  # sonst explodiert sie in der Pause (4.11.); !weiter legt neu
         self.send("bot_freeze 1", "mp_ignore_round_win_conditions 1",
                   hud(state.get("human_uid"), PAUSE_TIMEOUT, _font("PAUSE", YELLOW, "xl") + "<br>"
                       + _font(why, "#ffffff") + "<br>"
