@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.25.0";
+    public override string ModuleVersion => "1.26.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -99,6 +99,8 @@ public class CoachTeleport : BasePlugin
         RegisterListener<Listeners.OnTick>(OnTick);
         RegisterListener<Listeners.OnTick>(DrawCenter);
         RegisterListener<Listeners.OnTick>(BombHud);
+        RegisterListener<Listeners.OnTick>(TrailTick);
+        RegisterEventHandler<EventBombBegindefuse>((ev, _) => { DefuseSample(ev.Userid); return HookResult.Continue; });
         RegisterListener<Listeners.OnTick>(AimAssist);
         RegisterListener<Listeners.OnTick>(Hunt);
         RegisterListener<Listeners.OnTick>(SpeedLimit);
@@ -933,6 +935,48 @@ public class CoachTeleport : BasePlugin
                 TryCenter(p, line, 1);
     }
 
+    // Laufzeit-Eichung (1.26.0): wer zu entschaerfen beginnt, wo war er 2 und 3 s vorher? Faktor =
+    // tatsaechliche Zeit x 250 / (Luftlinie - 60) - der Coach nimmt den Median statt der geschaetzten 1,2.
+    private readonly Dictionary<int, List<(float T, float X, float Y, float Z)>> _trail = new();
+    private readonly List<float> _defuseSamples = new();
+
+    private void TrailTick()
+    {
+        if (_bomb is null || Server.TickCount % 16 != 0) return;
+        var now = Server.CurrentTime;
+        foreach (var p in Utilities.GetPlayers())
+        {
+            var pawn = p.PlayerPawn.Value;
+            if (p.IsBot || p.UserId is not { } uid || pawn?.AbsOrigin is null || !p.PawnIsAlive) continue;
+            var list = _trail.TryGetValue(uid, out var l) ? l : _trail[uid] = new();
+            list.Add((now, pawn.AbsOrigin.X, pawn.AbsOrigin.Y, pawn.AbsOrigin.Z));
+            list.RemoveAll(s => now - s.T > 6);
+        }
+    }
+
+    private void DefuseSample(CCSPlayerController? player)
+    {
+        if (player is null || player.IsBot || player.UserId is not { } uid || _bomb?.AbsOrigin is not { } b) return;
+        if (!_trail.TryGetValue(uid, out var list)) return;
+        var now = Server.CurrentTime;
+        foreach (var lag in new[] { 2f, 3f })
+        {
+            var s = list.OrderBy(x => Math.Abs(now - lag - x.T)).FirstOrDefault();
+            if (s == default || Math.Abs(now - lag - s.T) > 0.4f) continue;
+            var d = (float)Math.Sqrt((s.X - b.X) * (s.X - b.X) + (s.Y - b.Y) * (s.Y - b.Y) + (s.Z - b.Z) * (s.Z - b.Z));
+            if (d > 300) _defuseSamples.Add((now - s.T) * 250f / (d - 60));
+        }
+    }
+
+    [ConsoleCommand("coach_defuse_samples", "Gemessene Lauf-Faktoren abholen (und leeren)")]
+    [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnDefuseSamples(CCSPlayerController? caller, CommandInfo info)
+    {
+        var ci = CultureInfo.InvariantCulture;
+        info.ReplyToCommand("coach_defuse_samples " + string.Join(" ", _defuseSamples.Select(f => f.ToString("F2", ci))));
+        _defuseSamples.Clear();
+    }
+
     // Retake abkuerzen (1.23.0): alle T tot, Bombe tickt -> haette ein CT es noch geschafft?
     // Benoetigt = Laufweg des naechsten lebenden CT (Luftlinie x 1,2 bei 250 u/s) + 5 s mit Kit
     // (10 ohne); laeuft schon eine Entschaerfung, deren Restzeit. Reicht die Zeit nicht, zuendet
@@ -948,6 +992,8 @@ public class CoachTeleport : BasePlugin
             return;
         }
         var left = c4.C4Blow - Server.CurrentTime;
+        var factor = info.ArgCount > 1 && float.TryParse(info.GetArg(1), NumberStyles.Float, CultureInfo.InvariantCulture, out var f)
+                     && f > 0.8f && f < 3f ? f : 1.2f;  // vom Coach gemessen, sonst geschaetzt
         var need = float.MaxValue;
         var who = "";
         foreach (var p in Utilities.GetPlayers())
@@ -966,7 +1012,7 @@ public class CoachTeleport : BasePlugin
                 var kit = true;
                 try { kit = pawn.ItemServices is { } items && new CCSPlayer_ItemServices(items.Handle).HasDefuser; }
                 catch (Exception) { }
-                t = Math.Max(0, d - 60) * 1.2f / 250f + (kit ? 5f : 10f);  // 60 u: Reichweite zum Entschaerfen
+                t = Math.Max(0, d - 60) * factor / 250f + (kit ? 5f : 10f);  // 60 u: Reichweite zum Entschaerfen
             }
             if (t < need) { need = t; who = p.PlayerName; }
         }

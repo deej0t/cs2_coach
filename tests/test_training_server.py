@@ -930,3 +930,21 @@ def test_round_is_set_up_at_freeze_start_not_twice(env):
     assert n >= 1
     director().on_lines([line('World triggered "Round_Start"')])
     assert sum(c.startswith("coach_tp ") for c in server.sent) == n
+
+
+def test_defuse_factor_needs_enough_measured_runs(tmp_path):
+    cfg = tmp_path / "c.yaml"
+    (tmp_path / ts.DEFUSE_FILE).write_text(json.dumps([1.4] * 19), encoding="utf-8")
+    assert ts.defuse_factor(cfg) is None
+    (tmp_path / ts.DEFUSE_FILE).write_text(json.dumps([1.4] * 19 + [1.6]), encoding="utf-8")
+    assert ts.defuse_factor(cfg) == 1.4
+
+
+def test_postplant_win_by_bomb_and_by_killing_all(env):
+    _, path, server, _, director = env
+    ts.save_state(path, running_state(mode="postplant", rnd={"active_bots": [4], "bomb": True, "post": True}))
+    director().on_lines([line('Team "TERRORIST" triggered "SFUI_Notice_Target_Bombed" (CT "0") (T "1")')])
+    assert ts.load_state(path)["outcome"] == "win"
+    ts.save_state(path, running_state(mode="postplant", rnd={"active_bots": [4], "bomb": True, "post": True}))
+    director().on_lines([line(f'{DJ} [0 0 0] killed {BOT} [1 1 1] with "m4a1"')])
+    assert ts.load_state(path)["outcome"] == "win"

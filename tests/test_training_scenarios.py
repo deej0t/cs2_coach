@@ -171,7 +171,7 @@ def test_mode_menu_after_map(multi):
     assert [i[1] for i in m["items"]] == ["!training mirage duell", "!training mirage situation",
                                           "!training mirage retake", "!training mirage halten", "!training mirage eichen",
                                           "!training mirage wiederholen",
-                                          "!training mirage granaten",
+                                          "!training mirage granaten", "!training mirage postplant",
                                           "!training"]
 
 

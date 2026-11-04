@@ -95,7 +95,7 @@ NADE_LINEUPS = 10  # so viele Lineups pro Training, die haeufigsten zuerst
 NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade", "flashbang",
             "smokegrenade", "decoy", "world", "taser", "planted_c4")
 
-MODE_COMMANDS = {"granaten": "granaten", "nades": "granaten", "wiederholen": "wiederholen", "eichen": "eichen", "retake": "retake", "halten": "halten", "sitehold": "halten", "hold": "halten",
+MODE_COMMANDS = {"granaten": "granaten", "nades": "granaten", "wiederholen": "wiederholen", "eichen": "eichen", "retake": "retake", "postplant": "postplant", "afterplant": "postplant", "halten": "halten", "sitehold": "halten", "hold": "halten",
                  "situation": "situation", "duell": "duell"}
 # Training zu mehreren: der Besitzer laedt ein, der Freund sagt zu. Mitmachen und
 # Aussteigen darf jeder - das sind die einzigen Befehle ohne Besitzer-Pruefung.
@@ -116,7 +116,7 @@ COMMANDS = {"training", "train", "skip", "leichter", "schwerer", "stop", "pause"
 SESSIONS_DIR = "training_sessions"
 ITEMS_FILE = ".training_items.json"  # Szenarien mit mehreren Gegnern (bis ~1 MB, nicht in den Zustand)
 MODE_ALIASES = {"duell": "duell", "duel": "duell", "situation": "situation", "multi": "situation",
-                "retake": "retake", "halten": "halten", "hold": "halten", "site": "halten", "eichen": "eichen",
+                "retake": "retake", "postplant": "postplant", "halten": "halten", "hold": "halten", "site": "halten", "eichen": "eichen",
                 "wiederholen": "wiederholen", "repeat": "wiederholen", "granaten": "granaten", "nades": "granaten"}
 GREEN, RED, YELLOW, PURPLE, GREY = "#4ade80", "#f87171", "#fbbf24", "#9184d9", "#aaaaaa"
 IDLE_ROUNDS = 2  # so viele Runden ohne Treffer in Folge = pausieren
@@ -447,6 +447,19 @@ def _humans(status: str) -> list[str]:
         if m and m.group(1) != "BOT":
             out.append(m.group(2))
     return out
+
+
+DEFUSE_FILE = ".defuse_calibration.json"
+DEFUSE_MIN = 20  # so viele gemessene Laeufe, bevor der Faktor 1,2 (geschaetzt) ersetzt wird
+
+
+def defuse_factor(config_path: Path) -> float | None:
+    """Gemessener Umweg-Faktor (Median) fuer 'haette es zum Entschaerfen gereicht', sonst None."""
+    try:
+        vals = json.loads((Path(config_path).parent / DEFUSE_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return _median(vals) if len(vals) >= DEFUSE_MIN else None
 
 
 def _behind(pos, target, k: int, step: float = 40.0) -> list:
@@ -1008,9 +1021,21 @@ class Director:
     def _party_state(self) -> dict:
         return {sid: {"name": n, "uid": None} for sid, n in load_party(self.path)["joined"].items()}
 
+    def _collect_defuse_samples(self) -> None:
+        reply = self.send("coach_defuse_samples")[0].split()
+        if not reply or reply[0] != "coach_defuse_samples" or len(reply) < 2:
+            return
+        f = Path(self.path).parent / DEFUSE_FILE
+        try:
+            old = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            old = []
+        f.write_text(json.dumps((old + [float(x) for x in reply[1:]])[-200:]), encoding="utf-8")
+
     def _bomb_eval(self, state: dict) -> None:
         """Alle T tot, Bombe tickt: haette es zum Entschaerfen gereicht? Nicht warten (Plugin 1.23.0)."""
-        p = self.send("coach_bomb_eval")[0].split()
+        factor = defuse_factor(self.path)
+        p = self.send("coach_bomb_eval" + (f" {factor:.2f}" if factor else ""))[0].split()
         if len(p) < 3 or p[0] != "coach_bomb_eval":
             return  # altes Plugin oder keine Bombe: wie bisher entschaerfen lassen
         left, need = float(p[1]), float(p[2])
@@ -1432,10 +1457,11 @@ class Director:
                     self.send(f"coach_team {uid} {_side(state['team'])}")
                 return state
             if (ss.steam64(m.group("asid")) == state["human"] and phase in ("setup", "team")
-                    and state.get("mode") in ("retake", "halten") and to != "CT"):
+                    and state.get("mode") in ("retake", "halten", "postplant")
+                    and to != ("TERRORIST" if state.get("mode") == "postplant" else "CT")):
                 # Retake und Site halten spielst du als CT (so stammen sie aus der Demo); am 3.11.
                 # waren alle Menschen T und die Bots CT. Der Wechsel erzeugt eine neue Teamzeile.
-                self.send(f"coach_team {uid} ct")
+                self.send(f"coach_team {uid} {'t' if state.get('mode') == 'postplant' else 'ct'}")
                 return state
             if ss.steam64(m.group("asid")) == state["human"] and phase in ("setup", "team"):
                 # Gemessen 30.10.: Team gewaehlt 2 s bevor das Setup lief - in "setup"
@@ -1484,11 +1510,12 @@ class Director:
             if state.pop("froze", False):
                 return state
             return self._round_start(state)
+        post = (state.get("rnd") or {}).get("post")  # Post-Plant: du bist T, die Bombe ist deine
         if "SFUI_Notice_Bomb_Defused" in msg and not state.get("outcome"):
-            state["outcome"] = "win"
+            state["outcome"] = "loss" if post else "win"
             return state
         if "SFUI_Notice_Target_Bombed" in msg and not state.get("outcome"):
-            state["outcome"] = "loss"
+            state["outcome"] = "win" if post else "loss"
             return state
         if m := ss._ATTACK.match(msg):
             rnd = state.setdefault("rnd", {})
@@ -1522,7 +1549,7 @@ class Director:
                         state["outcome"] = "win"
                 elif int(m.group("vuid")) in active:
                     rnd["bots_dead"] = rnd.get("bots_dead", 0) + 1
-                    if rnd["bots_dead"] >= len(active) and not rnd.get("bomb"):
+                    if rnd["bots_dead"] >= len(active) and (not rnd.get("bomb") or rnd.get("post")):
                         state["outcome"] = "win"
                     elif rnd["bots_dead"] >= len(active):
                         self._bomb_eval(state)
@@ -1540,6 +1567,8 @@ class Director:
             if not skipped and not state.get("active") and state.get("mode") != "eichen":
                 return self._idle_round(state)
             state["idle"] = 0
+            if state.get("mode") in ("retake", "postplant"):
+                self._collect_defuse_samples()
             if not skipped:
                 outcome = state.get("outcome") or "draw"
                 state.setdefault("rnd", {}).update(self._measure(state))
@@ -1739,7 +1768,7 @@ class Director:
                 cmds.append(f"coach_give {uid} {e['items'][0] if e['items'][0] in guns else guns[-1]} "
                             + " ".join(guns))
         state["rnd"]["active_bots"] = active
-        if state["mode"] == "retake" and item.get("bomb"):
+        if state["mode"] in ("retake", "postplant") and item.get("bomb"):
             # Plugin 1.22.0: Bombe liegt dort, wo sie in der Demo gelegt wurde, Timer laeuft;
             # alle Menschen bekommen ein Entschaerfungskit. Gewonnen erst mit dem Entschaerfen.
             # Nur wenn das Plugin sie wirklich gelegt hat - ein altes Plugin kennt den Befehl
@@ -1747,6 +1776,7 @@ class Director:
             reply = self.send(f"coach_plant {_fmt(item['bomb'])} {C4_SECONDS}")[0]
             if "coach_plant ok" in reply:
                 state["rnd"]["bomb"] = True
+                state["rnd"]["post"] = state["mode"] == "postplant"
                 site = reply.split()[-1]
                 state["rnd"]["site"] = site if site in ("A", "B") else ""
         # Mitspieler: dort, wo deine damaligen Teamkollegen standen, mit ihrer Ausruestung.
@@ -1770,8 +1800,10 @@ class Director:
         body = "<br>".join([
             _font(f"{MODES[state['mode']]} {n}/{total} &#183; {html.escape(item.get('source', ''))}", PURPLE),
             _font(f"{len(active)} Gegner: {html.escape(weapons)}", RED, "l"),
-            *([_font(f"Bombe liegt auf {state['rnd'].get('site') or '?'} - entschaerfen!", YELLOW)]
+            *([_font(f"Bombe liegt auf {state['rnd'].get('site') or '?'} - "
+                     + ("verteidigen!" if state["rnd"].get("post") else "entschaerfen!"), YELLOW)]
               if state["rnd"].get("bomb") else []),
+            *([_font(f"du spielst {html.escape(item['as'])}", GREY, "s")] if item.get("as") else []),
             _font(f"naechster kommt von {state['direction']}", "#ffffff"),
             _font(f"Stand {_score(state)} &#183; {_level_text(state)}", GREY, "s")])
         cmds.append(hud(human, FREEZE_TIME + 4, body))
@@ -1782,7 +1814,7 @@ class Director:
                          + (f"Bombe auf {state['rnd'].get('site') or '?'}, " if state["rnd"].get("bomb") else "")
                          + "jeder laeuft seinen echten Weg, bis er dich sieht"))
         cmds += _aim_commands(state, active)
-        if state["rnd"].get("bomb"):
+        if state["rnd"].get("bomb") and not state["rnd"].get("post"):
             # coach_give leert das Inventar (RemoveWeapons) und nahm so das Kit vom Legen wieder
             # weg - 3.11. jede Runde "Begin_Bomb_Defuse_Without_Kit". Kit in die Ausruestung.
             humans = {str(u) for u in [human, *_party_uids(state)]}

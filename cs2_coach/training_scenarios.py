@@ -29,21 +29,23 @@ from pathlib import Path
 
 MODES = {"duell": "Duell", "situation": "Situation", "retake": "Retake", "halten": "Site halten",
          "eichen": "Reaktion eichen", "wiederholen": "Verlorene wiederholen",
-         "granaten": "Granaten-Lineups"}
-MULTI = ("situation", "retake", "halten")
+         "granaten": "Granaten-Lineups", "postplant": "Post-Plant"}
+MULTI = ("situation", "retake", "halten", "postplant")
 MODE_HELP = {"duell": "nur dein Killer", "situation": "alle Gegner in der Naehe",
              "retake": "Bombe liegt, du bist CT", "halten": "du haeltst als CT, mehrere Ts kommen",
              "eichen": "10 Runden, Gegner taucht auf", "wiederholen": "nur was du im Training verlierst",
-             "granaten": "Wuerfe aus deinen Demos"}
+             "granaten": "Wuerfe aus deinen Demos", "postplant": "Bombe liegt, du bist T und haeltst"}
 MAX_ENEMIES = 5
 NEAR = 2500  # Units: Gegner, die zur Situation gehoeren (der Killer immer)
 HOLD_LEAD = 5
 RETAKE_DELAY = 1
-PATH_AFTER = {"retake": 10, "halten": 12}  # Sekunden Weg ab Start; Situation: bis zu deinem Tod
+PATH_AFTER = {"retake": 10, "halten": 12, "postplant": 10}  # Sekunden Weg ab Start; Situation: bis zu deinem Tod
 TICKRATE = 64
 PATH_HZ = 16
-CT = 3
-SCAN_VERSION = 3  # 2: mit deinen damaligen Mitspielern ("mates"); 3: Retake mit Bombenposition
+CT, T = 3, 2
+# 2: mit deinen damaligen Mitspielern ("mates"); 3: Retake mit Bombenposition;
+# 4: jeder Plant (auch wenn du tot warst - du spielst dann einen lebenden CT) + Post-Plant
+SCAN_VERSION = 4
 MAX_MATES = 4
 MAX_NEW_SCANS = 15  # beim ersten Mal nicht ewig lesen: Retakes brauchten 92 s fuer 20 (30.10.)
 
@@ -112,6 +114,7 @@ def scan_demo(demo_path, me: str, lead: float, parser_factory=None) -> dict[str,
         if int(pl["tick"]) in bombs:
             bomb_at[t] = bombs[int(pl["tick"])]
         anchors.append(("retake", t, t + PATH_AFTER["retake"] * TICKRATE, None))
+        anchors.append(("postplant", t, t + PATH_AFTER["postplant"] * TICKRATE, None))
     mine = hurts[(hurts["user_steamid"].astype(str) == me) | (hurts["attacker_steamid"].astype(str) == me)]
     seen = set()
     for _, h in mine.sort_values("tick").iterrows():
@@ -137,10 +140,24 @@ def scan_demo(demo_path, me: str, lead: float, parser_factory=None) -> dict[str,
         if rows is None:
             continue
         me_row = _row(rows, me)
+        pov = me  # aus wessen Sicht du spielst
+        if mode in ("retake", "postplant"):
+            # 4.11.: nur Plants mit dir lebend als CT waren zu wenige Retakes. Jetzt jeder Plant:
+            # lebst du auf der passenden Seite, bist du es, sonst der lebende Spieler am naechsten
+            # zur Bombe (Retake CT, Post-Plant T).
+            want = CT if mode == "retake" else T
+            if me_row is None or not bool(me_row["is_alive"]) or int(me_row["team_num"]) != want:
+                bomb = bomb_at.get(start)
+                alive = [r for _, r in rows.iterrows() if r["team_num"] == r["team_num"]
+                         and int(r["team_num"]) == want and bool(r["is_alive"])]
+                if not alive or bomb is None:
+                    continue
+                me_row = min(alive, key=lambda r: math.dist((float(r["X"]), float(r["Y"])), bomb[:2]))
+                pov = str(me_row["steamid"])
         if me_row is None or not bool(me_row["is_alive"]):
             continue
         my_team = int(me_row["team_num"])
-        if mode in ("retake", "halten") and my_team != CT:
+        if mode == "halten" and my_team != CT:
             continue
         cands = []
         for _, r in rows.iterrows():
@@ -149,7 +166,7 @@ def scan_demo(demo_path, me: str, lead: float, parser_factory=None) -> dict[str,
                 continue
             sid = str(r["steamid"])
             dist = math.dist((float(r["X"]), float(r["Y"])), (float(me_row["X"]), float(me_row["Y"])))
-            if mode != "retake" and dist > NEAR and sid != focus:
+            if mode not in ("retake", "postplant") and dist > NEAR and sid != focus:
                 continue
             cands.append((sid != focus, dist, sid, r))
         if not cands or (mode == "halten" and len(cands) < 2):
@@ -170,14 +187,15 @@ def scan_demo(demo_path, me: str, lead: float, parser_factory=None) -> dict[str,
         mates = []
         for _, r in rows.iterrows():
             team = int(r["team_num"]) if r["team_num"] == r["team_num"] else 0
-            if team != my_team or str(r["steamid"]) == me or not bool(r["is_alive"]):
+            if team != my_team or str(r["steamid"]) == pov or not bool(r["is_alive"]):
                 continue
             dist = math.dist((float(r["X"]), float(r["Y"])), (float(me_row["X"]), float(me_row["Y"])))
             mates.append((dist, {"name": str(r["name"]), "start": _point(r), "items": _inventory(r)}))
         mates = [m for _, m in sorted(mates, key=lambda x: x[0])[:MAX_MATES]]
         out[mode].append({"mode": mode, "round": round_no(start), "tick": start, "me": _point(me_row),
                           "me_items": _inventory(me_row), "enemies": enemies, "mates": mates,
-                          **({"bomb": bomb_at[start]} if mode == "retake" and start in bomb_at else {})})
+                          **({"bomb": bomb_at[start]} if mode in ("retake", "postplant") and start in bomb_at else {}),
+                          **({"as": str(me_row["name"])} if pov != me else {})})
     return out
 
 
