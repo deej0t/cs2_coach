@@ -123,7 +123,7 @@ if d[4:5] == b"A":
 if d[4:5] != b"I":
     print(-1); sys.exit(0)
 p = d[6:].split(b"\x00", 4)
-print(p[4][2] if len(p) > 4 and len(p[4]) > 2 else -1)
+print(p[4][2] - p[4][4] if len(p) > 4 and len(p[4]) > 4 else -1)  # Menschen = Spieler - Bots
 EOF
 }
 
