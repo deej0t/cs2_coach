@@ -1648,7 +1648,12 @@ def _process_economy(
         if sid != target_steam_id:
             continue
         tick = int(row.get("tick", 0))
-        val = int(row.get("current_equip_value", 0))
+        raw = row.get("current_equip_value", 0)
+        if raw is None or raw != raw:
+            # NaN: Spieler in diesem Tick nicht im Spiel (Reconnect) - die Demo
+            # match730_003848861317981012387 brach daran jeden Sync ab (5.11.)
+            continue
+        val = int(raw)
         # Map tick to round index
         for ri, ft in enumerate(freeze_ticks[:n_rounds]):
             if tick == ft:

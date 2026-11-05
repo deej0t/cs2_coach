@@ -96,6 +96,20 @@ fi
 # "briefing --send" verschickt hoechstens einmal am Tag (.briefing_state.json
 # neben der Config) und wird nach einem Fehlschlag beim naechsten Durchlauf
 # erneut versucht; ein Neustart des Containers schickt nichts doppelt.
+# Demo-Sync (GCPD-Download + Analyse neuer Demos) alle CS2COACH_SYNC_INTERVAL Sekunden,
+# Standard 2 h, 0 = aus. Bis 5.11. lief er nur einmal am Tag vor dem Briefing (17 Uhr) -
+# Valve stellt Demos irgendwann am Tag bereit, also musste man in der WebUI selbst
+# "Synchronisieren" druecken.
+SYNC_INTERVAL="${CS2COACH_SYNC_INTERVAL-7200}"
+if [ "$SYNC_INTERVAL" -gt 0 ] 2>/dev/null; then
+    echo "Demo-Sync aktiv: alle $((SYNC_INTERVAL / 60)) min"
+    (sleep 600
+     while true; do
+        (cd /app && python -m cs2_coach sync) || true
+        sleep "$SYNC_INTERVAL"
+     done) &
+fi
+
 BRIEFING_HOUR="${CS2COACH_BRIEFING_HOUR-17}"
 if [ -n "$BRIEFING_HOUR" ] && [ "$BRIEFING_HOUR" -ge 0 ] 2>/dev/null; then
     echo "Briefing aktiv: taeglich ab ${BRIEFING_HOUR} Uhr"
