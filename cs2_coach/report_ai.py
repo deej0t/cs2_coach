@@ -31,14 +31,43 @@ SYSTEM = """Du bist der persoenliche CS2-Coach eines Spielers und schreibst die 
 - Vergleiche mit SEINEM Normalwert (Median der Matches davor), nicht mit Profis: was war in diesem Match anders als sonst - besser und schlechter?
 - K/D, ADR, KAST und Survival steigen einfach mit gewonnenen Runden. Erklaere damit nicht das Ergebnis, nenne sie hoechstens als Folge.
 - Schliesse mit genau einer konkreten Sache fuer das naechste Match, bevorzugt aus den Trainingszielen.
-- Keine Floskeln ("Kopf hoch", "weiter so", "insgesamt"). Beginne nicht mit dem Ergebnis oder der Map."""
+- Keine Floskeln ("Kopf hoch", "weiter so", "insgesamt", "konzentriere dich voll"). Beginne nicht mit dem Ergebnis, der Map oder "Dein".
+- Nutze den Rundenverlauf (Serien, Seiten, fruehe Tode, Opening-Duelle), damit man merkt, dass es um GENAU dieses Match geht.
+- Klingt nicht wie die FRUEHEREN NACHBESPRECHUNGEN: andere Satzanfaenge, anderer Aufbau, andere Schwerpunkte."""
 
 
 def _fmt(v: float) -> str:
     return f"{v:.2f}" if abs(v) < 10 else f"{v:.1f}"
 
 
-def facts(data: dict, history: list[dict], goals: list[str]) -> str:
+def _timeline(data: dict) -> list[str]:
+    """Rundenverlauf in Worten: Seiten, laengste Serien, fruehe Tode, Mehrfach-Kills."""
+    rounds = data.get("round_timeline") or []
+    if not rounds:
+        return []
+    out = []
+    for side in ("CT", "T"):
+        rs = [r for r in rounds if r.get("side") == side]
+        if rs:
+            out.append(f"Als {side}: {sum(1 for r in rs if r.get('won'))} von {len(rs)} Runden gewonnen.")
+    best = worst = cur = 0
+    last = None
+    for r in rounds:
+        won = bool(r.get("won"))
+        cur = cur + 1 if won == last else 1
+        last = won
+        if won:
+            best = max(best, cur)
+        else:
+            worst = max(worst, cur)
+    out.append(f"Laengste Siegesserie {best}, laengste Niederlagenserie {worst} Runden.")
+    early = sum(1 for r in rounds if r.get("died_early"))
+    multi = sum(1 for r in rounds if (r.get("player_kills") or 0) >= 3)
+    out.append(f"Frueh gestorben in {early} Runden, 3+ Kills in {multi} Runden.")
+    return out
+
+
+def facts(data: dict, history: list[dict], goals: list[str], previous: list[str] | None = None) -> str:
     """Faktenblock fuer die KI. history = Exporte VOR diesem Match, aelteste zuerst."""
     from .findings import evaluate
     m = data.get("match") or {}
@@ -55,8 +84,15 @@ def facts(data: dict, history: list[dict], goals: list[str]) -> str:
         note = " [haengt am Rundengewinn]" if f.key in OUTCOME else ""
         lines.append(f"- {f.label}: {_fmt(f.value)}{f.unit}{base}, {sev.get(f.severity, f.severity)}{note}."
                      + (f" Tipp: {f.advice}" if f.is_issue and f.key not in OUTCOME else ""))
+    p = data.get("player") or {}
+    if "opening_kills" in p:
+        lines.append(f"Opening-Duelle: {p.get('opening_kills', 0)} gewonnen, {p.get('opening_deaths', 0)} verloren; "
+                     f"Trade-Kills {p.get('trade_kills', 0)}.")
+    lines += _timeline(data)
     if goals:
         lines.append("Trainingsziele (belegt aus seinen Matches): " + "; ".join(goals) + ".")
+    if previous:
+        lines.append("FRUEHERE NACHBESPRECHUNGEN (nicht so klingen):\n" + "\n---\n".join(previous))
     return "\n".join(lines)
 
 
@@ -101,12 +137,13 @@ def generate_pending(cfg: dict, config_path: Path, log=print, limit: int = PER_S
     except Exception:  # noqa: BLE001 - Ziele sind nur Beiwerk
         goals = []
     made = 0
+    previous = [t for t in (load(config_path, g.name) for g in reversed(files)) if t][:2]
     for f in todo:
         if f.name not in datas:
             continue
         idx = [g.name for g in files].index(f.name)
         history = [datas[g.name] for g in files[:idx] if g.name in datas]
-        text = ask(cfg, facts(datas[f.name], history, goals), log=log, system=SYSTEM,
+        text = ask(cfg, facts(datas[f.name], history, goals, previous), log=log, system=SYSTEM,
                    instruction="Schreibe die Nachbesprechung zu diesem Match.", max_len=MAX_LEN)
         if not text:
             continue
@@ -114,5 +151,6 @@ def generate_pending(cfg: dict, config_path: Path, log=print, limit: int = PER_S
         out.parent.mkdir(exist_ok=True)
         out.write_text(text, encoding="utf-8")
         made += 1
+        previous = [text, *previous][:2]
         log(f"KI-Nachbesprechung: {f.name}")
     return made
