@@ -116,6 +116,12 @@ def sync(ctx):
     folder = (cfg.get("demo_folder") or "").strip()
     if folder and Path(folder).is_dir():
         ctx.invoke(batch, demo_dir=folder, player=None, steamid=None, only_outdated=True)
+    # KI-Nachbesprechung fuer neue Matches (report_ai.py) - nach der Analyse, im Hintergrund-Takt
+    from .report_ai import generate_pending
+    try:
+        generate_pending(cfg, ctx.obj["config_path"], log=lambda m: console.print(f"  {m}"))
+    except Exception as e:  # noqa: BLE001 - der Sync selbst ist wichtiger
+        console.print(f"  KI-Nachbesprechung fehlgeschlagen: {e}")
 
 
 @cli.command()

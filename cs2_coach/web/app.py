@@ -21,6 +21,7 @@ from demoparser2 import DemoParser
 
 from ..parser import parse_demo, MatchResult
 from ..coach import generate_report
+from ..report_ai import load as _report_ai_load
 from ..obsidian import export_match, export_sort_key, is_own_player
 from ..maps import MAP_RADAR_DATA, game_to_radar
 from .. import findings as findings_mod
@@ -919,7 +920,7 @@ def create_app() -> Flask:
             }
         return render_template("export_detail.html", data=data, analysis=analysis,
                                filename=filename, demo_path=demo_path,
-                               player_avg=avg,
+                               player_avg=avg, ai_report=_report_ai_load(CONFIG_PATH, filename),
                                kill_map_data=_build_kill_map_data_from_export(data),
                                config=cfg)
 

@@ -611,6 +611,12 @@
 {% endif %}
 
 <!-- ══════ Coach Report (rendered) ══════ -->
+{% if ai_report %}
+<div class="card elev-sm" style="margin-bottom: var(--space-4); border-left: 3px solid #9184d9;">
+    <span class="card-kicker">Nachbesprechung (KI, aus deinen Messwerten)</span>
+    {% for para in ai_report.split('\n\n') %}<p style="margin: var(--space-2) 0 0; line-height: 1.55;">{{ para }}</p>{% endfor %}
+</div>
+{% endif %}
 {% if data.report %}
 <div class="card-kicker" style="margin-bottom:8px;">{{ _('Coach-Report') }}</div>
 <div id="ed-report-rendered"></div>

@@ -127,24 +127,27 @@ def _unknown_numbers(text: str, facts: str) -> list[str]:
 RETRY_WAITS = (30, 120)
 
 
-def ask_ai(cfg: dict, facts: str, log=print, sleep=None) -> str | None:
+def ask_ai(cfg: dict, facts: str, log=print, sleep=None, system: str | None = None,
+           instruction: str = "Schreibe die Einleitung fuer heute.", max_len: int | None = None) -> str | None:
     """KI-Text oder None, wenn nicht verfuegbar oder nicht an die Fakten gebunden."""
     import time
 
     from .ai_chat import call_gemini, call_ollama
 
     sleep = sleep or time.sleep
-    prompt = facts + "\n\nSchreibe die Einleitung fuer heute."
+    system = system or SYSTEM
+    max_len = max_len or MAX_INTRO
+    prompt = facts + "\n\n" + instruction
     text = ""
     for wait in (0, *RETRY_WAITS):
         if wait:
             log(f"KI nicht verfuegbar ({text[:80]}), neuer Versuch in {wait} s.")
             sleep(wait)
         if cfg.get("ai_provider") == "gemini" and cfg.get("gemini_api_key"):
-            text = call_gemini(prompt, SYSTEM, cfg["gemini_api_key"],
+            text = call_gemini(prompt, system, cfg["gemini_api_key"],
                                cfg.get("ai_model") or "gemini-2.0-flash")
         else:
-            text = call_ollama(prompt, SYSTEM, cfg.get("ollama_url", "http://localhost:11434"),
+            text = call_ollama(prompt, system, cfg.get("ollama_url", "http://localhost:11434"),
                                cfg.get("ai_model") or "llama3.1:8b")
         if text and not text.startswith("**Fehler"):
             break
@@ -152,7 +155,7 @@ def ask_ai(cfg: dict, facts: str, log=print, sleep=None) -> str | None:
         log(f"KI nicht verfuegbar: {(text or 'leere Antwort')[:120]}")
         return None
     text = text.strip()
-    if len(text) > MAX_INTRO:
+    if len(text) > max_len:
         log(f"KI-Text verworfen, zu lang ({len(text)} Zeichen).")
         return None
     unknown = _unknown_numbers(text, facts)
