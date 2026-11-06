@@ -101,7 +101,7 @@ def facts(data: dict, history: list[dict], goals: list[str]) -> str:
     if worse:
         lines.append("Schlechter als sonst: " + ", ".join(f.label for _, f in sorted(worse, key=lambda x: -x[0])) + ".")
     # Fokus legt der Coach fest, nicht die KI: groesster Rueckschritt, sonst das erste Trainingsziel
-    focus = max(worse, key=lambda x: x[0])[1] if worse else None
+    focus = focus_of(worse)
     if focus is not None:
         lines.append(f"FOKUS FUERS NAECHSTE MATCH: {focus.label} - {focus.advice}")
     elif goals:
@@ -119,6 +119,63 @@ def instruction(previous: list[str]) -> str:
         text += ("\n\nFRUEHERE NACHBESPRECHUNGEN (andere Matches - nicht so klingen, keine Zahlen daraus):\n"
                  + "\n---\n".join(previous))
     return text
+
+
+def focus_of(worse: list) -> object | None:
+    """Fokus = groesster Rueckschritt gegenueber dem eigenen Median (ohne rundenabhaengige Werte)."""
+    return max(worse, key=lambda x: x[0])[1] if worse else None
+
+
+def worse_of(data: dict, history: list[dict]) -> list:
+    from .findings import evaluate
+    past: dict[str, list[float]] = {}
+    for h in history[-LOOKBACK:]:
+        for f in evaluate(h.get("player") or {}):
+            past.setdefault(f.key, []).append(f.value)
+    out = []
+    for f in evaluate(data.get("player") or {}):
+        ref = past.get(f.key) or []
+        if len(ref) >= 3 and f.key not in OUTCOME and median(ref):
+            rel = (f.value - median(ref)) / abs(median(ref)) * (-1 if f.key in LOWER_BETTER else 1)
+            if rel <= -0.05:
+                out.append((-rel, f))
+    return out
+
+
+FOCUS_FILE = "focus.json"
+
+
+def load_focus(config_path: Path) -> dict:
+    """Fokus aus dem neuesten Match: {export, map, key, label, advice} - fuer Training und Briefing."""
+    try:
+        return json.loads((Path(config_path).parent / DIR / FOCUS_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _notify(cfg: dict, config_path: Path, data: dict, text: str, focus, log) -> None:
+    """Nachbesprechung aufs Handy: Discord (briefing_webhook/discord_webhook) und Telegram."""
+    m = data.get("match") or {}
+    head = f"**Nachbesprechung {m.get('map', '')} {m.get('score_own', '')}:{m.get('score_enemy', '')}** ({m.get('date', '')})"
+    task = ""
+    if focus is not None:
+        bsp = "de_" + str(m.get("map", "")).lower()
+        task = f"\n\nHausaufgabe: {focus.label} - auf dem Server `!training {bsp.removeprefix('de_')}` " \
+               "(deine verlorenen Duelle aus diesem Match kommen zuerst)."
+    msg = f"{head}\n{text}{task}"
+    hook = cfg.get("briefing_webhook") or cfg.get("discord_webhook") or ""
+    try:
+        import requests
+        if hook:
+            requests.post(hook, json={"content": msg[:1900]}, timeout=15)
+        token = (cfg.get("telegram_bot_token") or "").strip()
+        if token:
+            from . import telegram
+            chat = telegram.find_chat_id(token, config_path)
+            if chat:
+                telegram.send(token, chat, telegram.to_html(msg))
+    except Exception as e:  # noqa: BLE001 - die Nachbesprechung steht trotzdem auf der Seite
+        log(f"Nachbesprechung nicht verschickt: {e}")
 
 
 def path_for(config_path: Path, export_name: str) -> Path:
@@ -141,7 +198,8 @@ def _exports(cfg: dict) -> list[Path]:
                   key=export_sort_key)
 
 
-def generate_pending(cfg: dict, config_path: Path, log=print, limit: int = PER_SYNC, ask=None) -> int:
+def generate_pending(cfg: dict, config_path: Path, log=print, limit: int = PER_SYNC, ask=None,
+                     notify: bool = True) -> int:
     """KI-Nachbesprechung fuer die neuesten Matches ohne eine. Gibt die Zahl der neuen zurueck."""
     from .briefing import ask_ai
     from .findings import training_priorities
@@ -177,5 +235,14 @@ def generate_pending(cfg: dict, config_path: Path, log=print, limit: int = PER_S
         out.write_text(text, encoding="utf-8")
         made += 1
         previous = [text, *previous][:2]
+        if f.name == files[-1].name:  # nur das neueste Match bestimmt die Hausaufgabe
+            focus = focus_of(worse_of(datas[f.name], history))
+            m = datas[f.name].get("match") or {}
+            (out.parent / FOCUS_FILE).write_text(json.dumps(
+                {"export": f.name, "map": "de_" + str(m.get("map", "")).lower(),
+                 **({"key": focus.key, "label": focus.label, "advice": focus.advice} if focus else {})}),
+                encoding="utf-8")
+            if notify:
+                _notify(cfg, config_path, datas[f.name], text, focus, log)
         log(f"KI-Nachbesprechung: {f.name}")
     return made

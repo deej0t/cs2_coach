@@ -36,10 +36,23 @@ def _rate(key: str, duels: list[dict]) -> tuple[int, int]:
     return sum(marks), len(marks)
 
 
-def pick_goal(sessions: list[dict]) -> dict | None:
-    """Ziel mit der niedrigsten Quote in den letzten Trainings (neueste zuerst uebergeben)."""
+# Befund aus dem Match (findings key) -> Trainingsziel, das der Server messen kann
+FROM_MATCH = {"counter_strafe": "stopped", "crosshair_placement": "aim"}
+
+
+def pick_goal(sessions: list[dict], match_focus: str = "") -> dict | None:
+    """Ziel mit der niedrigsten Quote in den letzten Trainings (neueste zuerst uebergeben).
+
+    Ist der Fokus deines letzten Matches messbar (Counter-Strafing, Fadenkreuz), wird er
+    das Ziel - Match und Training haengen zusammen (Wunsch 7.11.).
+    """
     measured = [s for s in sessions if any(f in d for d in s.get("duels", []) for _, f, _ in GOALS.values())]
     duels = [d for s in measured[:LOOKBACK] for d in s.get("duels", [])]
+    key = FROM_MATCH.get(match_focus)
+    if key:
+        k, n = _rate(key, duels)
+        if n >= MIN_BEFORE:
+            return {"key": key, "label": GOALS[key][0], "before_k": k, "before_n": n, "from_match": True}
     best = None
     for key, (label, _, _) in GOALS.items():
         k, n = _rate(key, duels)

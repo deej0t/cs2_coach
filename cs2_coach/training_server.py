@@ -990,7 +990,12 @@ class Director:
                 return [f"Auf {bsp} hast du im Training noch kein Duell verloren (oder alle danach gewonnen) - "
                         f"erst ein normales !training {bsp.removeprefix('de_')}."]
         else:
-            queue = list(range(min(MAX_SCENARIOS, len(all_sc[bsp]))))
+            # Duelle aus deinem letzten Match auf dieser Map zuerst (Hausaufgabe nach dem Match)
+            from .obsidian import export_sort_key
+            scs = all_sc[bsp]
+            latest = max((s.export for s in scs if s.export), key=lambda e: export_sort_key(Path(e)), default="")
+            order = sorted(range(len(scs)), key=lambda i: scs[i].export != latest)
+            queue = order[:MAX_SCENARIOS]
         uniq = sorted(set(queue))
         n = len(queue)
         chosen = [all_sc[bsp][i] for i in uniq]
@@ -1353,7 +1358,8 @@ class Director:
             return None
         from .training_goal import pick_goal
         try:
-            return pick_goal(load_sessions(self.path))
+            from .report_ai import load_focus
+            return pick_goal(load_sessions(self.path), load_focus(self.path).get("key", ""))
         except Exception as e:  # noqa: BLE001 - ohne Ziel laeuft das Training trotzdem
             print(f"[training] Ziel: {e}", flush=True)
             return None
@@ -1485,7 +1491,7 @@ class Director:
                         state.update(bot_uid=bots[0], phase="running", round=0, pos=0)
                         goal = state.get("goal")
                         self.send(_say("Los geht's. Alles Weitere im Menue: !menu (W/S waehlen, E bestaetigen)."),
-                                  *([_say(f"Ziel heute: {goal['label']} (bisher "
+                                  *([_say(f"Ziel heute{' (aus deinem letzten Match)' if goal.get('from_match') else ''}: {goal['label']} (bisher "
                                           f"{goal['before_k'] * 100 // goal['before_n']} %)")] if goal else []),
                                   "mp_warmup_end")
                 else:
