@@ -26,7 +26,10 @@ def test_weekly_once_per_week_with_focus(tmp_path):
 
     monday = date(2026, 11, 9)
     assert weekly.run(cfg, tmp_path / "c.yaml", log=lambda m: None, today=monday, ask=ask, send=False)
-    assert "2 Matches, 1 gewonnen" in seen[0] and "FOKUS FUER DIESE WOCHE: Counter-Strafing" in seen[0]
+    assert "2 Matches, 1 gewonnen" in seen[0] and "Fokus: Counter-Strafing" in seen[0]
+    text = (tmp_path / "report_ai" / "week-2026-W45.txt").read_text(encoding="utf-8")
+    assert "2 Matches · 1 Siege (50 %)" in text and "Fokus diese Woche: Counter-Strafing" in text
+    assert "📉 **Schlechter:** Counter-Strafing 85,0 % → 61,0 %" in text
     assert not weekly.run(cfg, tmp_path / "c.yaml", log=lambda m: None, today=monday, ask=ask, send=False)
 
 
