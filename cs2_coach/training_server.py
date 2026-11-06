@@ -406,11 +406,13 @@ def _say(text: str) -> str:
 WORKSHOP_MAPS = {"aim_multigame": "3245740485"}
 
 
-def workshop_maps(cfg: dict) -> dict[str, str]:
-    return dict(cfg.get("workshop_maps") or WORKSHOP_MAPS)
+def workshop_maps(cfg: dict, config_path: Path | None = None) -> dict[str, str]:
+    """Vorgegebene (config workshop_maps, sonst aim_multigame) plus per !workshop hinzugefuegte."""
+    from .workshop import load
+    return {**(cfg.get("workshop_maps") or WORKSHOP_MAPS), **load(config_path)}
 
 
-def map_change_commands(status: str, target: str, cfg: dict) -> list[str]:
+def map_change_commands(status: str, target: str, cfg: dict, config_path: Path | None = None) -> list[str]:
     """Befehle fuer einen Mapwechsel, der den Server nicht haengen laesst.
 
     Der Wechsel WEG von der Workshop-Map aim_multigame liess den Server zweimal
@@ -426,7 +428,7 @@ def map_change_commands(status: str, target: str, cfg: dict) -> list[str]:
         # "retry" in der Konsole verbindet sofort neu zum letzten Server - schneller als die Adresse
         reason = f"Mapwechsel auf {target} - Konsole: retry" + (f" (oder connect {addr})" if addr else "")
         cmds += [f'kickid {uid} "{reason}"' for uid in _human_ids(status)]
-    wid = workshop_maps(cfg).get(target)
+    wid = workshop_maps(cfg, config_path).get(target)
     return cmds + ["sv_hibernate_when_empty 0", f"host_workshop_map {wid}" if wid else f"map {target}"]
 
 
@@ -1384,7 +1386,7 @@ class Director:
         return [weapon_label(x) for x in items[1:] if x and "knife" not in x]
 
     def _map_change(self, bsp: str) -> list[str]:
-        return map_change_commands(self.send("status")[0], bsp, self.cfg)
+        return map_change_commands(self.send("status")[0], bsp, self.cfg, self.path)
 
     def _current_map(self) -> str:
         return _current_map_from(self.send("status")[0])

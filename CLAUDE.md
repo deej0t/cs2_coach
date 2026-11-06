@@ -32,6 +32,7 @@ cs2_coach/
   death_review.py (150) every own death from the demos: traded, mate distance, opening, round won (cache death_cache/)
   own_lineups.py  (100) own grenade lineups: !speichern <Name> after a landed throw (plugin coach_nade_last), !lineups, !loeschen, practice with !granaten meine; /lineups shows them + demo lineups on the radar (web/lineups_page.py)
   training_effect.py (110) does server training show in real matches? matches since the first training, with vs without a training in the 24 h before (crosshair, counter-strafe, grenades/round), card on /training
+  workshop.py     (90) !workshop <ID|link> [name] (owner/admins): store a workshop map in .workshop_maps.json (title via GetPublishedFileDetails), switch to it (host_workshop_map downloads it); then votable with !map <name>
   map_vote.py     (80) !map <name> + !ja: map change by majority of connected humans (pool maps only)
   live_coach.py  (230) live coach in real matches via GSI: grenades thrown / taken to the grave, hints on /live
   training_goal.py (90) goal per training: weakest measured habit, counted per duel, judged with compare_rates

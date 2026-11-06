@@ -40,7 +40,7 @@ SESSION_HOURS = 6
 _CHAT = re.compile(ss._player("a") + r' say(?:_team)? "(?P<text>.*)"$')
 _last_command: dict[str, float] = {}
 
-HELP = ("Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !map <name> · !help · Besitzer: !training (Menue) · "
+HELP = ("Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !map <name> · !workshop · !help · Besitzer: !training (Menue) · "
         "!retake / !halten / !situation / !wiederholen [map] · !einladen <Name> · !coach <Frage> · Eingeladen: !mitmachen")
 
 
@@ -255,6 +255,7 @@ def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, n
     from .training_server import COMMANDS as TRAINING, Director
     from .map_vote import COMMANDS as MAPVOTE, handle as map_vote
     from .own_lineups import COMMANDS as OWN, handle as own_lineups
+    from .workshop import COMMANDS as WORKSHOP, handle as workshop
     commands = parse_commands(lines)
     send = send or rcon_sender(cfg)
     if not commands or send is None:
@@ -275,6 +276,13 @@ def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, n
             if reply:
                 send(*_say_commands(reply))
                 sent += 1
+            continue
+        if cmd in WORKSHOP:
+            _last_command[sid] = time.monotonic()
+            reply = workshop(cfg, config_path, send, sid, name, arg)
+            if reply:
+                send(*_say_commands(reply))
+            sent += 1
             continue
         if cmd in OWN:
             _last_command[sid] = time.monotonic()

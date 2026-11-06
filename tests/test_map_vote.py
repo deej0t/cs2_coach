@@ -51,3 +51,23 @@ def test_leaving_workshop_map_disconnects_players_first(tmp_path):
     mv.handle({"server_address": "cs2.deej0t.eu"}, tmp_path / "c.yaml", s, "1", "dj", "map", "mirage", now=1)
     kick = next(i for i, c in enumerate(s.sent) if c.startswith("kickid 2 "))
     assert "retry" in s.sent[kick] and "connect cs2.deej0t.eu" in s.sent[kick] and s.sent.index("map de_mirage") > kick
+
+
+def test_workshop_command_adds_map_and_loads_it(tmp_path):
+    from cs2_coach import workshop
+
+    class R:
+        def json(self):
+            return {"response": {"publishedfiledetails": [{"title": "Prefire Mirage 2026", "consumer_app_id": 730}]}}
+
+    s = Server()
+    cfg_path = tmp_path / "c.yaml"
+    out = workshop.handle({"steam_id": "1"}, cfg_path, s, "1", "dj",
+                          "https://steamcommunity.com/sharedfiles/filedetails/?id=3070244462", post=lambda *a, **k: R())
+    assert out == [] and "host_workshop_map 3070244462" in s.sent
+    assert workshop.load(cfg_path) == {"prefire_mirage_2026": "3070244462"}
+    # danach per Abstimmung erreichbar
+    s2 = Server()
+    mv.handle({}, cfg_path, s2, "1", "dj", "map", "prefire_mirage_2026", now=1)
+    assert "host_workshop_map 3070244462" in s2.sent
+    assert "nur der Server-Besitzer" in workshop.handle({"steam_id": "1"}, cfg_path, s, "2", "x", "123456")[0]
