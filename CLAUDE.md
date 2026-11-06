@@ -33,6 +33,8 @@ cs2_coach/
   own_lineups.py  (100) own grenade lineups: !speichern <Name> after a landed throw (plugin coach_nade_last), !lineups, !loeschen, practice with !granaten meine; /lineups shows them + demo lineups on the radar (web/lineups_page.py)
   training_effect.py (110) does server training show in real matches? matches since the first training, with vs without a training in the 24 h before (crosshair, counter-strafe, grenades/round), card on /training
   workshop.py     (90) !workshop <ID|link> [name] (owner/admins): store a workshop map in .workshop_maps.json (title via GetPublishedFileDetails), switch to it (host_workshop_map downloads it); then votable with !map <name>
+  report_ai.py   (260) AI match review per export (facts = findings vs own median of the 10 before + round timeline; coach fixes better/worse/focus, AI only phrases; numbers checked), focus.json = homework -> training goal + duel order; sent to Discord/Telegram after sync
+  weekly.py       (110) weekly review: last week vs the 4 weeks before + trainings + training_effect verdicts, AI-phrased, sent once per week from Monday (report_ai/week-<id>.txt)
   map_vote.py     (80) !map <name> + !ja: map change by majority of connected humans (pool maps only)
   live_coach.py  (230) live coach in real matches via GSI: grenades thrown / taken to the grave, hints on /live
   training_goal.py (90) goal per training: weakest measured habit, counted per duel, judged with compare_rates

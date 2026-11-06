@@ -122,6 +122,12 @@ def sync(ctx):
         generate_pending(cfg, ctx.obj["config_path"], log=lambda m: console.print(f"  {m}"))
     except Exception as e:  # noqa: BLE001 - der Sync selbst ist wichtiger
         console.print(f"  KI-Nachbesprechung fehlgeschlagen: {e}")
+    # Wochenrueckblick (weekly.py): einmal pro Woche, ab Montag beim ersten Sync
+    from .weekly import run as weekly_run
+    try:
+        weekly_run(cfg, ctx.obj["config_path"], log=lambda m: console.print(f"  {m}"))
+    except Exception as e:  # noqa: BLE001
+        console.print(f"  Wochenrueckblick fehlgeschlagen: {e}")
 
 
 @cli.command()

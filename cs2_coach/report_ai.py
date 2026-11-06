@@ -165,7 +165,11 @@ def _notify(cfg: dict, config_path: Path, data: dict, text: str, focus, log) -> 
                 if focus.key == "utility" else
                 f"\n\nHausaufgabe: {focus.label} - auf dem Server `!training {short}` "
                 "(deine verlorenen Duelle aus diesem Match kommen zuerst).")
-    msg = f"{head}\n{text}{task}"
+    _send_text(cfg, config_path, f"{head}\n{text}{task}", log)
+
+
+def _send_text(cfg: dict, config_path: Path, msg: str, log) -> None:
+    """Text an Discord (briefing_webhook/discord_webhook) und Telegram - Fehler nur ins Log."""
     hook = cfg.get("briefing_webhook") or cfg.get("discord_webhook") or ""
     try:
         import requests
@@ -178,7 +182,7 @@ def _notify(cfg: dict, config_path: Path, data: dict, text: str, focus, log) -> 
             if chat:
                 telegram.send(token, chat, msg)  # send() wandelt selbst in HTML um
     except Exception as e:  # noqa: BLE001 - die Nachbesprechung steht trotzdem auf der Seite
-        log(f"Nachbesprechung nicht verschickt: {e}")
+        log(f"Nicht verschickt: {e}")
 
 
 def path_for(config_path: Path, export_name: str) -> Path:
