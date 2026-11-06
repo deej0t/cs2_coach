@@ -160,8 +160,11 @@ def _notify(cfg: dict, config_path: Path, data: dict, text: str, focus, log) -> 
     task = ""
     if focus is not None:
         bsp = "de_" + str(m.get("map", "")).lower()
-        task = f"\n\nHausaufgabe: {focus.label} - auf dem Server `!training {bsp.removeprefix('de_')}` " \
-               "(deine verlorenen Duelle aus diesem Match kommen zuerst)."
+        short = bsp.removeprefix("de_")
+        task = (f"\n\nHausaufgabe: {focus.label} - auf dem Server `!granaten {short}`."
+                if focus.key == "utility" else
+                f"\n\nHausaufgabe: {focus.label} - auf dem Server `!training {short}` "
+                "(deine verlorenen Duelle aus diesem Match kommen zuerst).")
     msg = f"{head}\n{text}{task}"
     hook = cfg.get("briefing_webhook") or cfg.get("discord_webhook") or ""
     try:
