@@ -176,7 +176,7 @@ def _notify(cfg: dict, config_path: Path, data: dict, text: str, focus, log) -> 
             from . import telegram
             chat = telegram.find_chat_id(token, config_path)
             if chat:
-                telegram.send(token, chat, telegram.to_html(msg))
+                telegram.send(token, chat, msg)  # send() wandelt selbst in HTML um
     except Exception as e:  # noqa: BLE001 - die Nachbesprechung steht trotzdem auf der Seite
         log(f"Nachbesprechung nicht verschickt: {e}")
 
