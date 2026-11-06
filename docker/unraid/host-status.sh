@@ -36,7 +36,11 @@ mv "$TMP" "$OUT"
 # Verlauf (6.11.: nach einem Haenger 04:15-07:20 gab es keine Messwerte - nur die letzte
 # Momentaufnahme). Eine Zeile pro Lauf, die letzten 1000 (~3,5 Tage bei */5).
 LOG="${OUT%.json}.log"
-echo "$(date '+%F %T') load $l1 $l5 $l15 | disks $disks | top $top | D-state $(ps -eo stat= | grep -c '^D')" >> "$LOG"
+# Temperaturen (6.11. "wie sieht es mit dem Airflow aus"): CPU real (Tdie, Tctl hat beim 1920X
+# +27 Grad Versatz), Chipsatz, und die Platten aus Unraids disks.ini - schlafende Platten weckt das nicht.
+temps="$(sensors 2>/dev/null | awk '/^Tdie:/{c=$2} /^Chipset Temperature:/{h=$3} END{printf "cpu %s chipset %s", c, h}')"
+temps="$temps $(awk -F'"' '/^\[/{n=$2} /^temp=/{if ($2 != "*") printf "%s %s ", n, $2}' /var/local/emhttp/disks.ini 2>/dev/null)"
+echo "$(date '+%F %T') load $l1 $l5 $l15 | disks $disks | top $top | D-state $(ps -eo stat= | grep -c '^D') | temp $temps" >> "$LOG"
 tail -n 1000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
 # Bei Ueberlast zusaetzlich die Prozesse ins Syslog (wird nach /boot gespiegelt, ueberlebt einen Neustart)
 if awk -v l="$l5" -v c="$cores" 'BEGIN{exit !(l > c*2)}'; then
