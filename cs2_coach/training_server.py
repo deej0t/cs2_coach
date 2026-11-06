@@ -1301,6 +1301,9 @@ class Director:
             won = sum(1 for r in res if r == "win")
             summary = f"{why}: {won}/{len(res)} Lineups getroffen" if res else why
         session = save_session(self.path, state, why) if state.get("duels") else None
+        lines_p = player_lines(state)
+        if lines_p:
+            self.send(*[_say(x) for x in lines_p])
         uid = state.get("human_uid")
         if immediate or uid is None:
             self._restore()
@@ -1521,6 +1524,8 @@ class Director:
             if state.pop("froze", False):
                 return state
             return self._round_start(state)
+        if state.get("round"):
+            _tally(state, msg)
         post = (state.get("rnd") or {}).get("post")  # Post-Plant: du bist T, die Bombe ist deine
         if "SFUI_Notice_Bomb_Defused" in msg and not state.get("outcome"):
             state["outcome"] = "loss" if post else "win"
@@ -1879,6 +1884,48 @@ def sessions_dir(config_path: Path) -> Path:
     return Path(config_path).parent / SESSIONS_DIR
 
 
+_DEFUSED = re.compile(ss._player("a") + r' triggered "Defused_The_Bomb"')
+
+
+def _tally(state: dict, msg: str) -> None:
+    """Werte pro Mensch im Training (du und Mitspieler) - Wunsch 6.11.: bisher zaehlte alles nur fuer dich."""
+    humans = _human_sids(state)
+
+    def row(sid, name):
+        return state.setdefault("pstats", {}).setdefault(
+            sid, {"name": name, "kills": 0, "deaths": 0, "hits": 0, "head": 0, "defuses": 0})
+
+    if m := ss._KILL.match(msg):
+        a, v = ss.steam64(m.group("asid")), ss.steam64(m.group("vsid"))
+        if a in humans and v not in humans:
+            row(a, m.group("aname"))["kills"] += 1
+        if v in humans:
+            row(v, m.group("vname"))["deaths"] += 1
+    elif m := ss._ATTACK.match(msg):
+        a = ss.steam64(m.group("asid"))
+        if a in humans and ss.steam64(m.group("vsid")) not in humans:
+            r = row(a, m.group("aname"))
+            r["hits"] += 1
+            r["head"] += m.group("hitgroup") == "head"
+    elif m := _DEFUSED.match(msg):
+        a = ss.steam64(m.group("asid"))
+        if a in humans:
+            row(a, m.group("aname"))["defuses"] += 1
+
+
+def player_lines(state: dict) -> list[str]:
+    """Chat-Zeilen pro Spieler am Ende - nur zu mehreren, allein steht alles schon in deiner Bilanz."""
+    stats = state.get("pstats") or {}
+    if len(stats) < 2:
+        return []
+    out = []
+    for r in sorted(stats.values(), key=lambda r: (-r["kills"], r["deaths"])):
+        head = f" · {round(r['head'] * 100 / r['hits'])} % Kopf" if r["hits"] else ""
+        defu = f" · {r['defuses']}x entschaerft" if r["defuses"] else ""
+        out.append(f"{r['name']}: {r['kills']} Kills · {r['deaths']} Tode{head}{defu}")
+    return out
+
+
 def save_session(config_path: Path, state: dict, why: str) -> Path:
     """Ein Training als JSON neben der Config ablegen (Grundlage fuer /training)."""
     folder = sessions_dir(config_path)
@@ -1889,7 +1936,8 @@ def save_session(config_path: Path, state: dict, why: str) -> Path:
         "map": state.get("map"), "started": started, "ended": datetime.now().isoformat(timespec="seconds"),
         "why": why, "level_end": state.get("level"), "duels": state.get("duels", []),
         "mode": state.get("mode", "duell"), "goal": state.get("goal"), "goal_progress": state.get("goal_progress"),
-        "party": sorted(p.get("name", "") for p in (state.get("party") or {}).values())},
+        "party": sorted(p.get("name", "") for p in (state.get("party") or {}).values()),
+        "players": state.get("pstats") or {}},
         ensure_ascii=False, indent=1), encoding="utf-8")
     return path
 

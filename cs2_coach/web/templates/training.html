@@ -154,6 +154,12 @@
         {% elif s.goal_progress.verdict == 'schlechter' %}<span style="color: var(--color-red);">messbar schlechter</span>
         {% else %}<span style="color: var(--color-neutral-500);">noch kein belastbarer Unterschied</span>{% endif %}</p>
     {% endif %}
+    {% if s.players and s.players|length > 1 %}
+    <p style="margin: var(--space-3) 0 0; font-size: 13px;"><strong>Mitspieler:</strong>
+    {% for r in s.players.values()|sort(attribute='kills', reverse=true) %}
+        {{ r.name }} {{ r.kills }}/{{ r.deaths }}{% if r.hits %} · {{ (r.head * 100 / r.hits)|round|int }} % Kopf{% endif %}{% if r.defuses %} · {{ r.defuses }}× entschärft{% endif %}{% if not loop.last %} &nbsp;|&nbsp; {% endif %}
+    {% endfor %}</p>
+    {% endif %}
     {% if s.fazit %}
     <p style="margin: var(--space-3) 0 0; font-size: 13px; border-left: 3px solid var(--color-accent); padding-left: var(--space-3);">
         <strong>Fazit des Coaches:</strong> {{ s.fazit }}</p>

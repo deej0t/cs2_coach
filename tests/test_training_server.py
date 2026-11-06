@@ -948,3 +948,18 @@ def test_postplant_win_by_bomb_and_by_killing_all(env):
     ts.save_state(path, running_state(mode="postplant", rnd={"active_bots": [4], "bomb": True, "post": True}))
     director().on_lines([line(f'{DJ} [0 0 0] killed {BOT} [1 1 1] with "m4a1"')])
     assert ts.load_state(path)["outcome"] == "win"
+
+
+def test_per_player_stats_in_coop(env):
+    """6.11.: zu mehreren bekommt jeder seine eigene Bilanz."""
+    _, path, server, _, director = env
+    ts.save_state(path, running_state(round=3, party={DANCHO_SID: {"name": "Dancho", "uid": 3}}))
+    director().on_lines([
+        line(f'{DANCHO} [0 0 0] attacked {BOT} [1 1 1] with "ak47" (damage "100") (damage_armor "0") (health "0") (armor "0") (hitgroup "head")'),
+        line(f'{DANCHO} [0 0 0] killed {BOT} [1 1 1] with "ak47" (headshot)'),
+        line(f'{BOT} [1 1 1] killed {DJ} [0 0 0] with "m4a1"'),
+        line('"Dancho<3><[U:1:12345]><CT>" triggered "Defused_The_Bomb"')])
+    st = ts.load_state(path)
+    lines = ts.player_lines(st)
+    assert lines[0] == "Dancho: 1 Kills · 0 Tode · 100 % Kopf · 1x entschaerft"
+    assert lines[1].startswith("dj: 0 Kills · 1 Tode")
