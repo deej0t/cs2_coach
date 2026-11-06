@@ -32,3 +32,15 @@ cat > "$TMP" <<EOF
 {"time": $(date +%s), "cores": $cores, "load": [$l1, $l5, $l15], "disks": {$disks}, "top": [$top], "smart": {$smart}}
 EOF
 mv "$TMP" "$OUT"
+
+# Verlauf (6.11.: nach einem Haenger 04:15-07:20 gab es keine Messwerte - nur die letzte
+# Momentaufnahme). Eine Zeile pro Lauf, die letzten 1000 (~3,5 Tage bei */5).
+LOG="${OUT%.json}.log"
+echo "$(date '+%F %T') load $l1 $l5 $l15 | disks $disks | top $top | D-state $(ps -eo stat= | grep -c '^D')" >> "$LOG"
+tail -n 1000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
+# Bei Ueberlast zusaetzlich die Prozesse ins Syslog (wird nach /boot gespiegelt, ueberlebt einen Neustart)
+if awk -v l="$l5" -v c="$cores" 'BEGIN{exit !(l > c*2)}'; then
+    logger -t host-status "Ueberlast: load $l1 $l5 $l15 bei $cores Kernen; top: $top; D-state: $(ps -eo stat=,comm= | awk '$1 ~ /^D/ {print $2}' | sort | uniq -c | sort -rn | head -5 | tr '
+' ' '); cpu: $(ps -eo pcpu=,comm= --sort=-pcpu | head -5 | tr -s ' ' | tr '
+' ',')"
+fi
