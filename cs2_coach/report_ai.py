@@ -23,14 +23,16 @@ LOOKBACK = 10
 MAX_LEN = 900
 PER_SYNC = 5  # so viele neue Matches pro Sync (jede Anfrage kostet bis zu 2,5 min bei 503)
 OUTCOME = {"adr", "kd", "kast", "survival"}  # steigen mit dem Rundengewinn
+LOWER_BETTER = {"crosshair_placement"}
 
 SYSTEM = """Du bist der persoenliche CS2-Coach eines Spielers und schreibst die Nachbesprechung zu EINEM Match.
 
 - Deutsch, per du, direkt wie ein Trainer im Gespraech. 4 bis 6 Saetze, hoechstens 700 Zeichen. Kein Markdown, keine Aufzaehlung.
-- Nur was in den FAKTEN steht. Jede Zahl, die du nennst, muss genau so in den FAKTEN stehen.
+- Nur was in den FAKTEN steht. Jede Zahl, die du nennst, muss genau so in den FAKTEN stehen - immer als Ziffern, nie ausgeschrieben. Erfinde keine Spielstaende oder Rundennummern.
 - Vergleiche mit SEINEM Normalwert (Median der Matches davor), nicht mit Profis: was war in diesem Match anders als sonst - besser und schlechter?
 - K/D, ADR, KAST und Survival steigen einfach mit gewonnenen Runden. Erklaere damit nicht das Ergebnis, nenne sie hoechstens als Folge.
-- Schliesse mit genau einer konkreten Sache fuer das naechste Match, bevorzugt aus den Trainingszielen.
+- Schliesse mit dem FOKUS FUERS NAECHSTE MATCH aus den Fakten - genau diesem, mit seinem Tipp in eigenen Worten.
+- "Besser als sonst" und "Schlechter als sonst" stehen in den Fakten. Lobe nichts, was dort als schlechter steht, und umgekehrt.
 - Keine Floskeln ("Kopf hoch", "weiter so", "insgesamt", "konzentriere dich voll"). Beginne nicht mit dem Ergebnis, der Map oder "Dein".
 - Nutze den Rundenverlauf (Serien, Seiten, fruehe Tode, Opening-Duelle), damit man merkt, dass es um GENAU dieses Match geht.
 - Klingt nicht wie die FRUEHEREN NACHBESPRECHUNGEN: andere Satzanfaenge, anderer Aufbau, andere Schwerpunkte."""
@@ -67,7 +69,7 @@ def _timeline(data: dict) -> list[str]:
     return out
 
 
-def facts(data: dict, history: list[dict], goals: list[str], previous: list[str] | None = None) -> str:
+def facts(data: dict, history: list[dict], goals: list[str]) -> str:
     """Faktenblock fuer die KI. history = Exporte VOR diesem Match, aelteste zuerst."""
     from .findings import evaluate
     m = data.get("match") or {}
@@ -78,9 +80,14 @@ def facts(data: dict, history: list[dict], goals: list[str], previous: list[str]
         for f in evaluate(h.get("player") or {}):
             past.setdefault(f.key, []).append(f.value)
     sev = {"ok": "im gruenen Bereich", "warning": "auffaellig", "critical": "deutlich schwach"}
+    better, worse = [], []  # (relative Abweichung, Finding)
     for f in evaluate(data.get("player") or {}):
         ref = past.get(f.key) or []
         base = f" (dein Median der letzten {len(ref)}: {_fmt(median(ref))}{f.unit})" if len(ref) >= 3 else ""
+        if len(ref) >= 3 and f.key not in OUTCOME and median(ref):
+            rel = (f.value - median(ref)) / abs(median(ref)) * (-1 if f.key in LOWER_BETTER else 1)
+            if abs(rel) >= 0.05:
+                (better if rel > 0 else worse).append((abs(rel), f))
         note = " [haengt am Rundengewinn]" if f.key in OUTCOME else ""
         lines.append(f"- {f.label}: {_fmt(f.value)}{f.unit}{base}, {sev.get(f.severity, f.severity)}{note}."
                      + (f" Tipp: {f.advice}" if f.is_issue and f.key not in OUTCOME else ""))
@@ -89,11 +96,29 @@ def facts(data: dict, history: list[dict], goals: list[str], previous: list[str]
         lines.append(f"Opening-Duelle: {p.get('opening_kills', 0)} gewonnen, {p.get('opening_deaths', 0)} verloren; "
                      f"Trade-Kills {p.get('trade_kills', 0)}.")
     lines += _timeline(data)
+    if better:
+        lines.append("Besser als sonst: " + ", ".join(f.label for _, f in sorted(better, key=lambda x: -x[0])) + ".")
+    if worse:
+        lines.append("Schlechter als sonst: " + ", ".join(f.label for _, f in sorted(worse, key=lambda x: -x[0])) + ".")
+    # Fokus legt der Coach fest, nicht die KI: groesster Rueckschritt, sonst das erste Trainingsziel
+    focus = max(worse, key=lambda x: x[0])[1] if worse else None
+    if focus is not None:
+        lines.append(f"FOKUS FUERS NAECHSTE MATCH: {focus.label} - {focus.advice}")
+    elif goals:
+        lines.append(f"FOKUS FUERS NAECHSTE MATCH: {goals[0]}")
     if goals:
         lines.append("Trainingsziele (belegt aus seinen Matches): " + "; ".join(goals) + ".")
-    if previous:
-        lines.append("FRUEHERE NACHBESPRECHUNGEN (nicht so klingen):\n" + "\n---\n".join(previous))
     return "\n".join(lines)
+
+
+def instruction(previous: list[str]) -> str:
+    """Fruehere Texte gehen in die Anweisung, nicht in die Fakten - ihre Zahlen gehoeren zu
+    anderen Matches und duerfen die Zahlenpruefung nicht bestehen."""
+    text = "Schreibe die Nachbesprechung zu diesem Match."
+    if previous:
+        text += ("\n\nFRUEHERE NACHBESPRECHUNGEN (andere Matches - nicht so klingen, keine Zahlen daraus):\n"
+                 + "\n---\n".join(previous))
+    return text
 
 
 def path_for(config_path: Path, export_name: str) -> Path:
@@ -143,8 +168,8 @@ def generate_pending(cfg: dict, config_path: Path, log=print, limit: int = PER_S
             continue
         idx = [g.name for g in files].index(f.name)
         history = [datas[g.name] for g in files[:idx] if g.name in datas]
-        text = ask(cfg, facts(datas[f.name], history, goals, previous), log=log, system=SYSTEM,
-                   instruction="Schreibe die Nachbesprechung zu diesem Match.", max_len=MAX_LEN)
+        text = ask(cfg, facts(datas[f.name], history, goals), log=log, system=SYSTEM,
+                   instruction=instruction(previous), max_len=MAX_LEN)
         if not text:
             continue
         out = path_for(config_path, f.name)
