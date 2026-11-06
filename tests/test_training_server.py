@@ -963,3 +963,14 @@ def test_per_player_stats_in_coop(env):
     lines = ts.player_lines(st)
     assert lines[0] == "Dancho: 1 Kills · 0 Tode · 100 % Kopf · 1x entschaerft"
     assert lines[1].startswith("dj: 0 Kills · 1 Tode")
+
+
+def test_warmup_is_five_duels_then_lineups(env, monkeypatch):
+    _, path, server, _, director = env
+    assert ts.MODE_COMMANDS["warmup"] == "warmup"
+    called = {}
+    monkeypatch.setattr(ts.Director, "_start_nades",
+                        lambda self, sid, name, bsp, own=False, limit=10: called.update(limit=limit) or [])
+    ts.save_state(path, running_state(round=1, queue=[0], then="granaten", outcome="win", active=True))
+    director().on_lines([line('World triggered "Round_End"')])
+    assert called.get("limit") == ts.WARMUP_LINEUPS

@@ -92,10 +92,12 @@ WEAPONS = {
 GRENADES = {"weapon_flashbang", "weapon_smokegrenade", "weapon_hegrenade", "weapon_molotov",
             "weapon_incgrenade", "weapon_decoy"}  # Punkte pro RCON-Befehl (10 Punkte mit voller Genauigkeit waren 869 Zeichen)
 NADE_LINEUPS = 10  # so viele Lineups pro Training, die haeufigsten zuerst
+# !warmup <map> (Wunsch 6.11.): 5 Duelle (die aus deinem letzten Match zuerst), dann 3 Lineups
+WARMUP_DUELS, WARMUP_LINEUPS = 5, 3
 NON_GUNS = ("knife", "bayonet", "hegrenade", "inferno", "molotov", "incgrenade", "flashbang",
             "smokegrenade", "decoy", "world", "taser", "planted_c4")
 
-MODE_COMMANDS = {"granaten": "granaten", "nades": "granaten", "wiederholen": "wiederholen", "eichen": "eichen", "retake": "retake", "postplant": "postplant", "afterplant": "postplant", "halten": "halten", "sitehold": "halten", "hold": "halten",
+MODE_COMMANDS = {"warmup": "warmup", "aufwaermen": "warmup", "granaten": "granaten", "nades": "granaten", "wiederholen": "wiederholen", "eichen": "eichen", "retake": "retake", "postplant": "postplant", "afterplant": "postplant", "halten": "halten", "sitehold": "halten", "hold": "halten",
                  "situation": "situation", "duell": "duell"}
 # Training zu mehreren: der Besitzer laedt ein, der Freund sagt zu. Mitmachen und
 # Aussteigen darf jeder - das sind die einzigen Befehle ohne Besitzer-Pruefung.
@@ -117,7 +119,7 @@ SESSIONS_DIR = "training_sessions"
 ITEMS_FILE = ".training_items.json"  # Szenarien mit mehreren Gegnern (bis ~1 MB, nicht in den Zustand)
 MODE_ALIASES = {"duell": "duell", "duel": "duell", "situation": "situation", "multi": "situation",
                 "retake": "retake", "postplant": "postplant", "halten": "halten", "hold": "halten", "site": "halten", "eichen": "eichen",
-                "wiederholen": "wiederholen", "repeat": "wiederholen", "granaten": "granaten", "nades": "granaten"}
+                "wiederholen": "wiederholen", "repeat": "wiederholen", "granaten": "granaten", "nades": "granaten", "warmup": "warmup"}
 GREEN, RED, YELLOW, PURPLE, GREY = "#4ade80", "#f87171", "#fbbf24", "#9184d9", "#aaaaaa"
 IDLE_ROUNDS = 2  # so viele Runden ohne Treffer in Folge = pausieren
 PAUSE_TIMEOUT = 900  # Sekunden pausiert, dann endet das Training
@@ -970,7 +972,7 @@ class Director:
             return [f"{bsp} ist nicht im Trainings-Pool ({', '.join(m.removeprefix('de_') for m in self.maps())})."]
         if mode == "granaten":
             return self._start_nades(sid, name, bsp, own=bool(set(parts[2:]) & {"meine", "eigene", "own"}))
-        if mode not in ("duell", "wiederholen"):
+        if mode not in ("duell", "wiederholen", "warmup"):
             return self._start_multi(sid, name, bsp, mode)
         if not all_sc.get(bsp):
             return [f"Keine verlorenen Duelle auf {bsp} in deinen Matches."]
@@ -995,7 +997,7 @@ class Director:
             scs = all_sc[bsp]
             latest = max((s.export for s in scs if s.export), key=lambda e: export_sort_key(Path(e)), default="")
             order = sorted(range(len(scs)), key=lambda i: scs[i].export != latest)
-            queue = order[:MAX_SCENARIOS]
+            queue = order[:WARMUP_DUELS if mode == "warmup" else MAX_SCENARIOS]
         uniq = sorted(set(queue))
         n = len(queue)
         chosen = [all_sc[bsp][i] for i in uniq]
@@ -1006,7 +1008,7 @@ class Director:
         with _Lock(self.path):
             if is_active(self.path):
                 return ["Es läuft schon ein Training. Erst !stop."]
-            state = {"phase": "loading", "map": bsp, "human": sid, "name": name, "queue": queue, "repeat": mode == "wiederholen",
+            state = {"phase": "loading", "map": bsp, "human": sid, "name": name, "queue": queue, "repeat": mode == "wiederholen", "then": "granaten" if mode == "warmup" else "",
                      "pos": 0, "results": [], "level": START_LEVEL, "round": 0,
                      "pre": {str(i): v for i, v in pre.items()}, "party": self._party_state(),
                      "goal": self._goal("duell"),
@@ -1148,7 +1150,7 @@ class Director:
             return self._blocked(others)
         return []
 
-    def _start_nades(self, sid: str, name: str, bsp: str, own: bool = False) -> list[str]:
+    def _start_nades(self, sid: str, name: str, bsp: str, own: bool = False, limit: int = NADE_LINEUPS) -> list[str]:
         """Granaten-Lineups ueben: aus den Demos oder die eigenen (own_lineups.py). Kein Bot."""
         from .grenade_lineups import collect, library
         problem = self._preflight(name)
@@ -1161,7 +1163,7 @@ class Director:
                 return [f"Keine eigenen Lineups auf {bsp}. Werfen, dann !speichern <Name>."]
         else:
             self.send(_say(f"Granaten auf {bsp}: lese die Wuerfe aus deinen Demos (beim ersten Mal 1-3 Minuten)..."))
-            lineups = library(collect(self.cfg, self.path, bsp), limit=NADE_LINEUPS)
+            lineups = library(collect(self.cfg, self.path, bsp), limit=limit)
         if not lineups:
             return [f"Keine Granaten-Lineups auf {bsp} in deinen Demos gefunden."]
         with _Lock(self.path):
@@ -1608,6 +1610,12 @@ class Director:
             state["pos"] = state.get("pos", 0) + 1
             if state["pos"] >= len(state["queue"]):
                 self._stop(state, "Training fertig")
+                if state.get("then") == "granaten":
+                    # Warmup Teil 2: direkt die Lineups, die Farewell-Rueckkehr entfaellt (neues Training)
+                    msgs = self._start_nades(state["human"], state.get("name", ""), state["map"],
+                                             limit=WARMUP_LINEUPS)
+                    if msgs:
+                        self.send(*[_say(x) for x in msgs])
                 return {}
             self.send(f'bot_loadout "{self._scenario(state).weapon}"')
         return state
