@@ -19,8 +19,8 @@ SYSTEM = """Du bist der persoenliche CS2-Coach eines Spielers und schreibst sein
 - Deutsch, per du, 4 bis 6 Saetze, hoechstens 800 Zeichen, kein Markdown, keine Aufzaehlung.
 - Nur was in den FAKTEN steht; jede Zahl genau so wie dort, als Ziffern.
 - Vergleiche die Woche mit den 4 Wochen davor: was hat sich bewegt, was nicht?
-- Sag nur dann, dass das Training wirkt, wenn bei TRAINING WIRKUNG "messbar besser" steht.
-- Schliesse mit dem FOKUS FUER DIESE WOCHE aus den Fakten.
+- Sag nur dann, dass das Training wirkt, wenn bei "Ob das Server-Training im Match wirkt" "messbar besser" steht. Diese Zeilen sind KEIN Fokus.
+- Schliesse mit genau dem einen FOKUS FUER DIESE WOCHE aus den Fakten (steht keiner da: mit keinem).
 - Keine Floskeln."""
 
 
@@ -77,9 +77,9 @@ def facts(cfg: dict, config_path: Path, today: date) -> tuple[str, str] | None:
                 "solid_negligible": "kein Unterschied", "undecided": "noch offen"}
     eff = analyse(cfg, sessions)
     for r in eff.get("rows", []):
-        lines.append(f"TRAINING WIRKUNG {r['name']}: "
+        lines.append(f"Ob das Server-Training im Match wirkt ({r['name']}): "
                      + (verdicts.get(r["cmp"].verdict, "noch offen") if r["cmp"] else "zu wenige Matches") + ".")
-    focus = worst[1] if worst and worst[0] < -0.03 else ""
+    focus = worst[1] if worst and worst[0] < 0 else ""
     if focus:
         lines.append(f"FOKUS FUER DIESE WOCHE: {focus}.")
     return "\n".join(lines), focus
