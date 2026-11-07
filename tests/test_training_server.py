@@ -974,3 +974,12 @@ def test_warmup_is_five_duels_then_lineups(env, monkeypatch):
     ts.save_state(path, running_state(round=1, queue=[0], then="granaten", outcome="win", active=True))
     director().on_lines([line('World triggered "Round_End"')])
     assert called.get("limit") == ts.WARMUP_LINEUPS
+
+
+def test_by_mode_sums_rounds_per_mode_and_map():
+    from cs2_coach.training_server import by_mode
+    rows = by_mode([{"mode": "retake", "map": "de_mirage", "won": 3, "played": 5},
+                    {"mode": "retake", "map": "de_mirage", "won": 1, "played": 4},
+                    {"mode": "duell", "map": "de_dust2", "won": 2, "played": 2},
+                    {"mode": "granaten", "map": "de_mirage", "won": 0, "played": 0}])
+    assert [(r["mode"], r["trainings"], r["won"], r["played"]) for r in rows] == [("Retake", 2, 4, 9), ("Duell", 1, 2, 2)]

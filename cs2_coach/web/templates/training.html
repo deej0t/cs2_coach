@@ -68,6 +68,21 @@
     </div>
 </div>
 
+{% if by_mode %}
+<h3 style="margin-bottom: var(--space-2);">Bilanz pro Modus</h3>
+<div class="card elev-sm" style="margin-bottom: var(--space-5); padding: 0; overflow-x: auto;">
+<table class="table" style="width: 100%;">
+    <thead><tr><th>Modus</th><th>Map</th><th>Trainings</th><th>Runden</th><th>gewonnen</th></tr></thead>
+    <tbody>
+    {% for b in by_mode %}
+    <tr><td>{{ b.mode }}</td><td>{{ b.map }}</td><td>{{ b.trainings }}</td><td>{{ b.won }}/{{ b.played }}</td>
+        <td>{{ b.won * 100 // b.played }} %</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
 {% if hardest %}
 <h3 style="margin-bottom: var(--space-2);">Situationen, die du am öftesten verlierst</h3>
 <p style="color: var(--color-neutral-500); font-size: 12px; margin-bottom: var(--space-3);">

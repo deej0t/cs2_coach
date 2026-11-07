@@ -1966,6 +1966,20 @@ def load_sessions(config_path: Path) -> list[dict]:
     return out
 
 
+def by_mode(sessions: list[dict]) -> list[dict]:
+    """Bilanz pro Modus und Map (Wunsch: Retake-Bestenliste) - gewonnene Runden ueber alle Trainings."""
+    from .training_scenarios import MODES
+    agg: dict = {}
+    for s in sessions:
+        mode = s.get("mode") or "duell"
+        a = agg.setdefault((mode, s.get("map") or ""), {"mode": MODES.get(mode, mode), "map": s.get("map") or "",
+                                                       "trainings": 0, "won": 0, "played": 0})
+        a["trainings"] += 1
+        a["won"] += s["won"]
+        a["played"] += s["played"]
+    return sorted((a for a in agg.values() if a["played"]), key=lambda a: (-a["played"], a["mode"]))
+
+
 def hardest(sessions: list[dict], limit: int = 8) -> list[dict]:
     """Situationen, die du am oeftesten verloren hast (ueber alle Trainings)."""
     agg: dict[tuple, dict] = {}

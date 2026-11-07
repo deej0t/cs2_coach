@@ -31,6 +31,7 @@ def create_blueprint(load_config, config_path) -> Blueprint:
         cfg = load_config()
         return render_template(
             "training.html", sessions=sessions[:20], hardest=training_server.hardest(sessions),
+            by_mode=training_server.by_mode(sessions),
             running=training_server.state_summary(path), total=total, won=won,
             weapon_label=training_server.weapon_label, aim_side=training_server.aim_side,
             measured=[s for s in sessions[:20] if s["measures"]["seen_n"] or s["measures"]["kill_n"]
