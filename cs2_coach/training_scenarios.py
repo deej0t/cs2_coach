@@ -27,11 +27,11 @@ import json
 import math
 from pathlib import Path
 
-MODES = {"duell": "Duell", "situation": "Situation", "retake": "Retake", "halten": "Site halten",
+MODES = {"warmup": "Warmup", "duell": "Duell", "situation": "Situation", "retake": "Retake", "halten": "Site halten",
          "eichen": "Reaktion eichen", "wiederholen": "Verlorene wiederholen",
          "granaten": "Granaten-Lineups", "postplant": "Post-Plant"}
 MULTI = ("situation", "retake", "halten", "postplant")
-MODE_HELP = {"duell": "nur dein Killer", "situation": "alle Gegner in der Naehe",
+MODE_HELP = {"warmup": "5 Duelle, dann 3 Lineups", "duell": "nur dein Killer", "situation": "alle Gegner in der Naehe",
              "retake": "Bombe liegt, du bist CT", "halten": "du haeltst als CT, mehrere Ts kommen",
              "eichen": "10 Runden, Gegner taucht auf", "wiederholen": "nur was du im Training verlierst",
              "granaten": "Wuerfe aus deinen Demos", "postplant": "Bombe liegt, du bist T und haeltst"}
