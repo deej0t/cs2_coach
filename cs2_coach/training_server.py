@@ -532,7 +532,8 @@ _STAT_KEYS = {"seen": "seen_ms", "err": "seen_err", "dpitch": "dpitch", "dyaw": 
               "react": "react_ms", "hit": "hit_ms", "peek": "peek_ms", "fspeed": "first_speed",
               "appear_seen": "appear_seen_ms", "appear_shot": "appear_shot_ms"}
 MEASURE_KEYS = ("seen_err", "dpitch", "dyaw", "react_ms", "hit_ms", "peek_ms", "kill_errs",
-                "shots", "stopped", "first_speed", "appear_seen_ms", "appear_shot_ms")
+                "shots", "stopped", "first_speed", "appear_seen_ms", "appear_shot_ms", "react_true_ms", "react_slow_ms")
+SLOW_MS = 150  # so viel langsamer als deine geeichte Reaktion gilt als zu spaet geschossen
 STOPPED_SPEED = 80  # u/s, wie COUNTER_STRAFE_SPEED_THRESHOLD im Parser (gegen inaccuracy_move geeicht)
 # Unabhaengig vom Sichtzeitpunkt - zaehlen auch, wenn der Gegner schon beim Freeze-Ende sichtbar war.
 _ALWAYS = ("kill_errs", "shots", "stopped", "first_speed", "appear_seen_ms", "appear_shot_ms")
@@ -596,7 +597,9 @@ def measure_line(m: dict) -> str:
     if "seen_err" in m:
         parts.append(f"Fadenkreuz {m['seen_err']:.0f}° ({aim_side(m.get('dpitch', 0), m.get('dyaw', 0))})"
                      if m["seen_err"] >= 3 else f"Fadenkreuz {m['seen_err']:.0f}°")
-    if "react_ms" in m:
+    if "react_true_ms" in m:
+        parts.append(f"Reaktion {m['react_true_ms']:.0f} ms")
+    elif "react_ms" in m:
         parts.append(f"Reaktion {m['react_ms']:.0f} ms" if m["react_ms"] >= 0 else "vorgeschossen")
     if m.get("first_speed", 0) > STOPPED_SPEED:
         parts.append(f"1. Schuss in Bewegung ({m['first_speed']:.0f} u/s)")
@@ -752,14 +755,27 @@ def repeat_queue(sessions: list[dict], scenarios: list, limit: int = MAX_SCENARI
     return (first + again)[:limit]
 
 
+def with_reaction(m: dict, calib: dict | None) -> dict:
+    """Reaktion bewerten, sobald !eichen gelaufen ist (7.11.: Radar 124 ms spaet, du 250 ms).
+
+    react_ms zaehlt ab der Spotted-Maske, die im Median latency_ms nach dem Auftauchen
+    anschlaegt - korrigiert ist es react_ms + latency_ms. react_slow_ms = wie viel
+    langsamer als deine geeichte Reaktion (Gegner taucht unerwartet auf).
+    """
+    if m.get("react_ms", -1) < 0 or not calib or calib.get("latency_ms") is None or calib.get("reaction_ms") is None:
+        return m
+    m["react_true_ms"] = m["react_ms"] + calib["latency_ms"]
+    m["react_slow_ms"] = m["react_true_ms"] - calib["reaction_ms"]
+    return m
+
+
 def duel_tip(rnd: dict, outcome: str) -> str | None:
     """Kurzer Hinweis nach einem verlorenen Duell - nur aus dem, was das Log misst.
 
     Aus dem Log: Treffer, Trefferzone, wer zuerst getroffen hat. Vom Plugin
     (1.10.0): wer wen zuerst sah und wo dein Fadenkreuz war, als er auftauchte.
-    Die Reaktionszeit wird angezeigt, aber noch nicht bewertet - ab wann sie
-    "langsam" ist, haengt davon ab, wie frueh die Spotted-Maske anschlaegt, und
-    das ist noch nicht gegen echte Duelle kalibriert. Ein verlorenes Duell ohne
+    Die Reaktionszeit zaehlt erst nach !eichen (with_reaction): zu spaet = SLOW_MS
+    langsamer als deine geeichte Reaktion. Ein verlorenes Duell ohne
     Treffer zaehlt nicht (Leerlauf), kommt hier also nicht an.
     """
     if outcome != "loss":
@@ -773,6 +789,10 @@ def duel_tip(rnd: dict, outcome: str) -> str | None:
     if rnd.get("seen_err", 0) >= 10:
         return (f"Als er auftauchte, war dein Fadenkreuz {rnd['seen_err']:.0f}° daneben "
                 f"({aim_side(rnd.get('dpitch', 0), rnd.get('dyaw', 0))}) - dorthin vorzielen, wo er rauskommt.")
+    if rnd.get("react_slow_ms", 0) >= SLOW_MS:
+        return (f"Dein erster Schuss kam {rnd['react_true_ms']:.0f} ms nach seinem Auftauchen, geeicht bist du "
+                f"{rnd['react_true_ms'] - rnd['react_slow_ms']:.0f} ms - du warst nicht schussbereit. "
+                "Fadenkreuz auf die Ecke, Finger an der Maus.")
     hits, head = rnd.get("you_hits", 0), rnd.get("you_head", 0)
     if hits and not head:
         return f"Keiner deiner {hits} Treffer am Kopf - Fadenkreuz auf Kopfhoehe halten."
@@ -1383,7 +1403,8 @@ class Director:
     def _measure(self, state: dict) -> dict:
         """Messwerte der Runde vom Plugin; altes Plugin oder keine Antwort = leer."""
         try:
-            return parse_stats(self.send(f"coach_stats {state['human_uid']}")[0])
+            return with_reaction(parse_stats(self.send(f"coach_stats {state['human_uid']}")[0]),
+                                 load_calibration(self.path))
         except Exception as e:  # noqa: BLE001 - ohne Messung zaehlt das Duell trotzdem
             print(f"[training] coach_stats: {e}", flush=True)
             return {}

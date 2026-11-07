@@ -5,8 +5,8 @@ der Spieler es im Spiel zaehlen ("heute 6 von 9"). Ob er sich verbessert, sagt
 nicht der Rohunterschied, sondern evidence.compare_rates (Konfidenzintervall),
 wie ueberall im Coach.
 
-Die Reaktionszeit ist bewusst kein Ziel: wie frueh die Spotted-Maske anschlaegt,
-ist erst nach !eichen bekannt. Die Grenzen (80 u/s, 10 Grad, 250 ms) sind
+Die Reaktionszeit ist erst ein Ziel, seit !eichen gelaufen ist (react_slow_ms,
+training_server.with_reaction) - ohne Eichung fehlt das Feld und zaehlt nicht. Die Grenzen (80 u/s, 10 Grad, 250 ms) sind
 dieselben wie in den Tipps (training_server.duel_tip).
 """
 
@@ -19,6 +19,7 @@ GOALS = {
     "stopped": ("Erster Schuss gestoppt (Counter-Strafe)", "first_speed", lambda v: v <= 80),
     "aim": ("Fadenkreuz beim Auftauchen unter 10°", "seen_err", lambda v: v < 10),
     "cover": ("Nicht offen stehen: du siehst ihn zuerst", "peek_ms", lambda v: v < 250),
+    "fast": ("Schussbereit: Reaktion hoechstens 150 ms ueber deiner Eichung", "react_slow_ms", lambda v: v < 150),
 }
 MIN_BEFORE = 8  # so viele gemessene Duelle braucht ein Ziel als Ausgangswert
 LOOKBACK = 3    # die letzten so vielen Trainings mit Messwerten

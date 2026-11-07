@@ -983,3 +983,14 @@ def test_by_mode_sums_rounds_per_mode_and_map():
                     {"mode": "duell", "map": "de_dust2", "won": 2, "played": 2},
                     {"mode": "granaten", "map": "de_mirage", "won": 0, "played": 0}])
     assert [(r["mode"], r["trainings"], r["won"], r["played"]) for r in rows] == [("Retake", 2, 4, 9), ("Duell", 1, 2, 2)]
+
+
+def test_reaction_is_judged_only_after_calibration():
+    from cs2_coach.training_server import duel_tip, with_reaction
+    assert "react_slow_ms" not in with_reaction({"react_ms": 400.0}, None)
+    calib = {"latency_ms": 125.0, "reaction_ms": 250.0}
+    m = with_reaction({"react_ms": 400.0}, calib)
+    assert (m["react_true_ms"], m["react_slow_ms"]) == (525.0, 275.0)
+    assert "525 ms" in duel_tip(m, "loss") and "250 ms" in duel_tip(m, "loss")
+    assert "react_slow_ms" not in with_reaction({"react_ms": -50.0}, calib)  # vorgeschossen
+    assert duel_tip(with_reaction({"react_ms": 200.0}, calib), "loss") is None
