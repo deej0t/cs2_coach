@@ -45,6 +45,10 @@ if [ ! -f "$SEIT" ]; then
     exit 0
 fi
 dauer=$(( jetzt - $(cat "$SEIT") ))
+# Kurz nach dem Booten schneller eingreifen: am 08.11. fand der Treiber die USV beim
+# Start nicht ("No matching HID UPS found", USB noch nicht bereit) - NUT war 6 min blind.
+uptime_s=$(cut -d. -f1 /proc/uptime)
+[ "$uptime_s" -lt 900 ] && GRENZE=${GRENZE_BOOT:-60}
 [ "$dauer" -ge "$GRENZE" ] || exit 0
 if [ -f "$LETZTER" ] && [ $(( jetzt - $(cat "$LETZTER") )) -lt "$PAUSE" ]; then
     exit 0
