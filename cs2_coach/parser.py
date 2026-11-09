@@ -1049,7 +1049,10 @@ def _own_side_for_round(round_idx: int, starting_side: str) -> str:
 
     starting_side must be "T" or "CT" (the player's side in the first half).
     CS2 MR12: first 12 rounds on starting side, next 12 on swapped side.
-    Overtime MR3: swap every 3 rounds from starting side again.
+    Overtime MR3: the first OT half stays on the second-half side, then
+    swaps every 3 rounds. Measured 2026-11-08 (Anubis 16:14): the player was
+    CT in rounds 13-27 and T in 28-30; the old "back to the starting side"
+    rule flipped all six OT rounds and turned the win into a 14:16 loss.
     """
     start_side = starting_side if starting_side in ("T", "CT") else "T"
     swap_side = "CT" if start_side == "T" else "T"
@@ -1060,7 +1063,7 @@ def _own_side_for_round(round_idx: int, starting_side: str) -> str:
         return swap_side
     # Overtime
     ot_idx = round_idx - _MR12_HALF * 2
-    return start_side if (ot_idx // _OT_HALF) % 2 == 0 else swap_side
+    return swap_side if (ot_idx // _OT_HALF) % 2 == 0 else start_side
 
 
 def _is_own_round(round_idx: int, starting_side: str, winner: str) -> bool:
