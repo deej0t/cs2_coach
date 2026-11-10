@@ -298,18 +298,22 @@ class MatchResult:
 
     @property
     def rating(self) -> float:
-        s = self.player_stats
-        impact = (s.kills * 1.0 + s.assists * 0.3) / max(s.rounds_played, 1)
-        survival = 1 - (s.deaths / max(s.rounds_played, 1))
-        adr_norm = min(s.adr / 100.0, 1.5)
-        opening_bonus = (s.opening_kills - s.opening_deaths) * 0.05
-        clutch_bonus = s.clutch_wins * 0.03
-        util_bonus = min(s.utility_per_round * 0.02, 0.06)
-        return round(
-            0.28 * impact + 0.22 * survival + 0.32 * adr_norm
-            + 0.08 + opening_bonus + clutch_bonus + util_bonus,
-            2,
-        )
+        return player_rating(self.player_stats)
+
+
+def player_rating(s: "PlayerStats") -> float:
+    """Eigene Formel (kein HLTV-Rating) - nur innerhalb einer Lobby vergleichbar."""
+    impact = (s.kills * 1.0 + s.assists * 0.3) / max(s.rounds_played, 1)
+    survival = 1 - (s.deaths / max(s.rounds_played, 1))
+    adr_norm = min(s.adr / 100.0, 1.5)
+    opening_bonus = (s.opening_kills - s.opening_deaths) * 0.05
+    clutch_bonus = s.clutch_wins * 0.03
+    util_bonus = min(s.utility_per_round * 0.02, 0.06)
+    return round(
+        0.28 * impact + 0.22 * survival + 0.32 * adr_norm
+        + 0.08 + opening_bonus + clutch_bonus + util_bonus,
+        2,
+    )
 
 
 # -- Konstanten --

@@ -793,6 +793,33 @@ def _economy_section(r: MatchResult) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _lobby_verdict(r: MatchResult, rating: float) -> str:
+    """Bewertung gegen die 9 anderen im selben Match statt gegen feste Grenzen.
+
+    Die Rating-Formel ist selbstgebaut und nicht auf 1.0 = Durchschnitt geeicht:
+    ueber 132 Matches lag der Median des Spielers bei 0.83, 90 Matches unter 0.9 -
+    darunter 38 Siege. Mit der festen Grenze 0.9 hiess es in zwei von drei
+    Matches "Du warst eine Belastung fuer dein Team", auch wenn er der Beste war.
+    """
+    from .parser import player_rating
+    me = r.player_stats
+    others = [p for p in r.all_players if p is not me and p.steam_id != me.steam_id and p.rounds_played > 0]
+    if len(others) < 5:
+        return f"Rating **{rating}** (eigene Formel, ohne Lobby-Vergleich)."
+    place = 1 + sum(1 for p in others if player_rating(p) > rating)
+    team = [p for p in others if p.team == me.team]
+    team_place = 1 + sum(1 for p in team if player_rating(p) > rating)
+    head = (f"Rating **{rating}** — Platz **{place} von {len(others) + 1}** in der Lobby, "
+            f"Platz {team_place} von {len(team) + 1} in deinem Team.")
+    if team_place == 1:
+        return head + " Du warst der stärkste Spieler deines Teams."
+    if team_place == 2 or place <= 3:
+        return head + " Du hast zu den Besten im Match gehört."
+    if team_place == len(team) + 1:
+        return head + " Diesmal hast du in deinem Team am wenigsten beigetragen – die Fokus-Bereiche unten sind der Hebel."
+    return head + " Solides Mittelfeld in deinem Team."
+
+
 def _overall_verdict(r: MatchResult) -> str:
     s = r.player_stats
     rating = r.rating
@@ -818,25 +845,7 @@ def _overall_verdict(r: MatchResult) -> str:
     if s.avg_recoil_index > 5:
         weaknesses.append("[[Spray-Control]]")
 
-    if rating >= 1.2:
-        lines.append(
-            f"Rating **{rating}** — Starke Performance. "
-            "Aber ein gutes Match macht noch keine Konstanz. "
-            "Wiederhole das über 10 Spiele, dann reden wir."
-        )
-    elif rating >= 0.9:
-        lines.append(
-            f"Rating **{rating}** — Durchschnitt. Reicht zum Mithalten, "
-            "nicht zum Tragen. Du musst nicht der Star sein, aber du musst "
-            "Impact in den entscheidenden Runden haben."
-        )
-    else:
-        lines.append(
-            f"Rating **{rating}** — Unter dem Durchschnitt. Klartext: "
-            "Du warst eine Belastung für dein Team in diesem Match. "
-            "Das ist kein Flame, sondern ein Weckruf. "
-            "Die gute Nachricht: Jeder dieser Punkte ist trainierbar."
-        )
+    lines.append(_lobby_verdict(r, rating))
 
     if weaknesses:
         lines.append(
