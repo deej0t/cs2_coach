@@ -77,6 +77,32 @@ def tell(send, uid, text: str, max_lines: int = MAX_LINES) -> None:
 # Fakten
 # --------------------------------------------------------------------------
 
+def measure_lines(exports: list[dict], last_n: int = 10) -> str:
+    """Alle Messwerte (findings.evaluate): letztes Match und Median der letzten 10.
+
+    Bis 10.11. kannte !coach nur die Briefing-Ziele (Granaten, Accuracy) - nach
+    Counter-Strafing oder Fadenkreuz gefragt, hatte er keine Zahl.
+    """
+    from statistics import median
+
+    from .findings import evaluate
+    # match.datetime "YYYY-MM-DD HH:MM" sortiert richtig (nicht der Dateiname, siehe export_sort_key)
+    ordered = sorted(exports, key=lambda d: (d.get("match") or {}).get("datetime")
+                     or (d.get("match") or {}).get("date", ""))[-last_n:]
+    vals: dict[str, list] = {}
+    for d in ordered:
+        for f in evaluate(d.get("player") or {}):
+            vals.setdefault(f.key, []).append(f)
+    if not vals:
+        return ""
+    out = [f"Messwerte (letztes Match / Median der letzten {len(ordered)}):"]
+    for fs in vals.values():
+        last, unit = fs[-1], fs[-1].unit
+        out.append(f"- {last.label}: {last.value:.1f}{unit} / {median(f.value for f in fs):.1f}{unit}"
+                   + (f" - {last.advice}" if last.is_issue and last.advice else ""))
+    return "\n".join(out)
+
+
 def player_facts(cfg: dict, config_path: Path, now: float | None = None) -> str:
     """Dieselben Fakten wie im Tages-Briefing (Ziele, Schwerpunkte, letzte Matches)."""
     now = time.time() if now is None else now
@@ -100,7 +126,7 @@ def player_facts(cfg: dict, config_path: Path, now: float | None = None) -> str:
     else:
         plan = current_plan(exports, Path(config_path).parent / ".training_state.json",
                             datetime.now().strftime("%Y-%m-%d %H:%M"))
-        facts = build_facts(exports, plan, "")[0]
+        facts = build_facts(exports, plan, "")[0] + "\n\n" + measure_lines(exports)
     _facts_cache[key] = (now, facts)
     return facts
 

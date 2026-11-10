@@ -153,3 +153,14 @@ def test_fazit_corrects_reaction_with_calibration(tmp_path, monkeypatch):
     ic.session_fazit({}, tmp_path / "config.yaml", session,
                      ask_fn=lambda cfg, system, prompt: seen.setdefault("p", prompt) and "ok")
     assert "korrigiert also etwa 267 ms" in seen["p"] and "265 ms" in seen["p"]
+
+
+def test_measure_lines_include_counter_strafing():
+    """!coach kannte bis 10.11. kein Counter-Strafing."""
+    from cs2_coach.ingame_coach import measure_lines
+    exports = [{"match": {"datetime": f"2026-11-0{i} 20:00"},
+                "player": {"counter_strafe_score": 70 + i, "counter_strafe_pct": 70 + i, "crosshair_placement": {"median_degrees": 3.0},
+                           "adr": 80, "kd": 1.0, "kast_pct": 70, "utility_per_round": 1.2,
+                           "survival_rate": 30, "accuracy": 22}} for i in range(1, 4)]
+    text = measure_lines(exports)
+    assert "Counter" in text and "73.0" in text
