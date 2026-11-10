@@ -71,3 +71,10 @@ def test_workshop_command_adds_map_and_loads_it(tmp_path):
     mv.handle({}, cfg_path, s2, "1", "dj", "map", "prefire_mirage_2026", now=1)
     assert "host_workshop_map 3070244462" in s2.sent
     assert "nur der Server-Besitzer" in workshop.handle({"steam_id": "1"}, cfg_path, s, "2", "x", "123456")[0]
+
+
+def test_map_change_resets_sv_cheats():
+    """aim_botz schaltet sv_cheats selbst ein; CS2 setzt es beim Mapwechsel nicht zurueck (09.11.)."""
+    from cs2_coach.training_server import map_change_commands
+    cmds = map_change_commands("", "de_mirage", {})
+    assert cmds.index("sv_cheats 0") < cmds.index("map de_mirage")

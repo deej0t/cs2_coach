@@ -431,7 +431,11 @@ def map_change_commands(status: str, target: str, cfg: dict, config_path: Path |
         reason = f"Mapwechsel auf {target} - Konsole: retry" + (f" (oder connect {addr})" if addr else "")
         cmds += [f'kickid {uid} "{reason}"' for uid in _human_ids(status)]
     wid = workshop_maps(cfg, config_path).get(target)
-    return cmds + ["sv_hibernate_when_empty 0", f"host_workshop_map {wid}" if wid else f"map {target}"]
+    # sv_cheats 0: aim_botz schaltet es beim Laden selbst ein, und CS2 setzt es beim
+    # Mapwechsel nicht zurueck - am 09.11. lief danach aim_multigame mit Cheats (Training
+    # setzt sv_cheats 1 erst nach dem Laden in seinem Setup, also kein Konflikt).
+    return cmds + ["sv_cheats 0", "sv_hibernate_when_empty 0",
+                   f"host_workshop_map {wid}" if wid else f"map {target}"]
 
 
 def _human_ids(status: str) -> list[str]:
