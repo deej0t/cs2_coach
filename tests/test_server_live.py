@@ -145,3 +145,12 @@ def test_welcome_on_join_is_private_and_skips_bots():
     assert all(c.startswith("coach_chat 2 ") for c in sent)
     text = " ".join(base64.b64decode(c.split()[2]).decode() for c in sent)
     assert "dj" in text and "!help" in text and "cs2-coach.deej0t.eu/server" in text
+
+
+def test_map_settings_on_match_start():
+    """12.11.: aim_multigame endete nach 16 Siegen - der Coach setzt bei jedem Spielstart mehr Runden."""
+    from cs2_coach.server_live import map_settings
+    lines = ['11/12/2026 - 20:41:46.980 - World triggered "Match_Start" on "aim_multigame"']
+    assert map_settings({}, lines) == ["mp_maxrounds 60"]
+    assert map_settings({}, ['World triggered "Match_Start" on "de_mirage"']) == []
+    assert map_settings({"map_settings": {"aim_multigame": ["mp_maxrounds 90"]}}, lines) == ["mp_maxrounds 90"]

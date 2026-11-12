@@ -409,6 +409,23 @@ def handle_posts(cfg: dict, config_path: Path, lines: list[str], post=None, now=
     return sent
 
 
+# Einstellungen je Map, gesetzt bei jedem Spielstart (Match_Start). Wunsch 12.11.: aim_multigame
+# setzt selbst mp_maxrounds 30 - nach 16 Siegen war ein Spiel vorbei (4-7 min). Ueberschreibbar
+# in config.yaml: map_settings: {aim_multigame: ["mp_maxrounds 60"]}
+MAP_SETTINGS = {"aim_multigame": ["mp_maxrounds 60"]}
+_MATCH_START = re.compile(r'World triggered "Match_Start" on "(?P<map>[^"]+)"')
+
+
+def map_settings(cfg: dict, lines: list[str]) -> list[str]:
+    """Befehle fuer jede Map, die in diesem Stapel ein Spiel beginnt."""
+    table = cfg.get("map_settings") or MAP_SETTINGS
+    out = []
+    for ln in lines:
+        if (m := _MATCH_START.search(ln)) and table.get(m.group("map")):
+            out += [c for c in table[m.group("map")] if c not in out]
+    return out
+
+
 def on_batch(cfg: dict, config_path: Path, body: bytes) -> None:
     """Nach dem Speichern eines Stapels im Hintergrund: Befehle beantworten, Meldungen senden."""
     lines = body.decode("utf-8", errors="replace").replace("\r", "").split("\n")
@@ -420,6 +437,9 @@ def on_batch(cfg: dict, config_path: Path, body: bytes) -> None:
             Director(cfg, config_path, send).on_lines(lines)
         except Exception as e:  # noqa: BLE001
             print(f"[training] {e}", flush=True)
+    if (cmds := map_settings(cfg, lines)) and (send_map := rcon_sender(cfg)):
+        # kurz warten: das Map-Skript setzt seine Werte beim Spielstart selbst
+        threading.Timer(2, lambda: send_map(*cmds)).start()
     from . import server_aim
     if server_aim.due(config_path, lines) and (send_aim := rcon_sender(cfg)):
         threading.Thread(target=server_aim.on_lines, args=(config_path, lines, send_aim), daemon=True).start()
