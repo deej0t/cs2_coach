@@ -140,6 +140,29 @@
     Bots, Selbstmorde und Fallschaden zählen nicht für die Elo.
 </p>
 
+{% if aim.rows %}
+<h2>Aim-Werte</h2>
+<div class="card" style="overflow-x: auto;">
+<table>
+    <thead><tr><th class="l">Spieler</th><th>Kills</th><th>K/D</th><th>HS</th>
+        <th title="Winkel zwischen Fadenkreuz und Gegner 0,5 s vor dem Kill - Median, niedriger ist besser">Fadenkreuz</th>
+        <th title="Anteil der Schuesse, bei denen man stand (hoechstens 80 u/s)">Counter-Strafing</th>
+        <th title="Treffer pro Schuss, ohne Granaten und Messer">Accuracy</th><th>Spiele</th></tr></thead>
+    <tbody>
+    {% for r in aim.rows %}
+    <tr><td class="l">{{ r.name }}</td><td>{{ r.kills }}</td><td>{{ r.kd }}</td>
+        <td>{{ r.hs ~ ' %' if r.hs is not none else '–' }}</td>
+        <td>{% if r.cp is not none %}{{ r.cp }}°{% else %}<span class="sub">ab {{ 10 }} Kills</span>{% endif %}</td>
+        <td>{{ r.cs ~ ' %' if r.cs is not none else '–' }}</td>
+        <td>{{ r.acc ~ ' %' if r.acc is not none else '–' }}</td><td>{{ r.games }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<p class="sub">Aus den Server-Demos ({{ aim.demos }}), gerechnet wie die Match-Analyse. Kills gegen Bots zählen mit.
+    Neue Spiele erscheinen ein paar Minuten nach Mapwechsel oder wenn der letzte Spieler geht.</p>
+{% endif %}
+
 {% if board.records %}
 <h2>Rekorde</h2>
 <div class="records">

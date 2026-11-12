@@ -1,0 +1,2 @@
+# server-demos: GOTV-Demos vom CS2-Server zum Coach (cs2_coach/server_aim.py)
+*/2 * * * * bash /boot/config/custom/server-demos.sh >/dev/null 2>&1

@@ -420,6 +420,9 @@ def on_batch(cfg: dict, config_path: Path, body: bytes) -> None:
             Director(cfg, config_path, send).on_lines(lines)
         except Exception as e:  # noqa: BLE001
             print(f"[training] {e}", flush=True)
+    from . import server_aim
+    if server_aim.due(config_path, lines) and (send_aim := rcon_sender(cfg)):
+        threading.Thread(target=server_aim.on_lines, args=(config_path, lines, send_aim), daemon=True).start()
     has_command = any(" say" in ln and '"!' in ln for ln in lines)
     game_over = any("Game Over:" in ln for ln in lines)
     week_due = bool(_webhook(cfg)) and not _week_marked(config_path)

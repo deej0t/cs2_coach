@@ -16,7 +16,7 @@ from pathlib import Path
 
 from flask import Blueprint, abort, redirect, render_template, request, session, url_for
 
-from .. import server_live, server_stats
+from .. import server_aim, server_live, server_stats
 from . import auth
 
 
@@ -44,8 +44,9 @@ def create_blueprint(config_path, load_config=None) -> Blueprint:
         if address:
             connect = {"address": address,
                        "url": f"steam://connect/{address if ':' in address else address + ':27015'}"}
+        server_aim.start_background(path)  # neue Server-Demos auswerten (Thread, eine zur Zeit)
         return render_template("server_board.html", board=board, setup=setup, is_admin=is_admin,
-                               connect=connect)
+                               connect=connect, aim=server_aim.board(path))
 
     @bp.route("/server/reset", methods=["POST"])
     def reset():
