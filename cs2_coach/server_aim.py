@@ -128,14 +128,25 @@ def analyse_pending(config_path: Path, parse=None, log=print) -> int:
     base = Path(config_path).parent
     out = base / RESULT_DIR
     done = 0
+    try:
+        from importlib.metadata import version as _v
+        version = _v("demoparser2")
+    except Exception:  # noqa: BLE001
+        version = "?"
     for dem in sorted((base / DEMO_DIR).glob("*.dem")):
         target = out / f"{dem.stem}.json"
+        failed = out / f"{dem.stem}.failed"
         if not target.exists():
+            if failed.exists() and failed.read_text(encoding="utf-8") == version:
+                continue  # mit dieser Parser-Version schon gescheitert - erst nach einem Update neu
             try:
                 r = parse(str(dem))
-            except Exception as e:  # noqa: BLE001 - kaputte/abgebrochene Demo: beiseite legen
+            except Exception as e:  # noqa: BLE001
+                # Demo behalten: am 12.11. scheiterte demoparser2 an JEDER neuen Demo
+                # (CS2-Build 14197, IllegalPathOp) - nach dem Parser-Update klappt es.
                 log(f"[server_aim] {dem.name}: {e}")
-                dem.rename(dem.with_suffix(".kaputt"))
+                out.mkdir(exist_ok=True)
+                failed.write_text(version, encoding="utf-8")
                 continue
             players = [_row(p) for p in r.all_players if _human_sid(str(p.steam_id)) and (p.kills or p.deaths)]
             out.mkdir(exist_ok=True)
@@ -144,6 +155,7 @@ def analyse_pending(config_path: Path, parse=None, log=print) -> int:
                 "time": datetime.fromtimestamp(dem.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
                 "players": players}, ensure_ascii=False), encoding="utf-8")
             done += 1
+        failed.unlink(missing_ok=True)
         dem.unlink()  # nur die Werte bleiben (eine Stunde Demo = 50-150 MB)
     return done
 

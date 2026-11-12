@@ -72,3 +72,24 @@ def test_inactive_gotv_is_switched_on_and_retried_soon(tmp_path):
     server_aim.maybe_record(path, [HUMAN_LINE], send, now=1000)
     assert "tv_enable_dynamic 1" in sent and sent[-1] == "tv_enable 1"
     assert server_aim.due(path, [HUMAN_LINE], now=1011)  # nach 10 s nochmal, nicht erst nach 60
+
+
+def test_failed_demo_is_kept_and_retried_after_parser_update(tmp_path, monkeypatch):
+    """12.11.: demoparser2 scheiterte nach dem CS2-Update an jeder neuen Demo."""
+    import importlib.metadata
+    path = _cfg(tmp_path)
+    demos = tmp_path / server_aim.DEMO_DIR
+    demos.mkdir()
+    (demos / "coach_a.dem").write_bytes(b"x")
+    calls = []
+
+    def broken(_):
+        calls.append(1)
+        raise RuntimeError("IllegalPathOp")
+    monkeypatch.setattr(importlib.metadata, "version", lambda name: "0.42.1")
+    assert server_aim.analyse_pending(path, parse=broken, log=lambda *a: None) == 0
+    assert server_aim.analyse_pending(path, parse=broken, log=lambda *a: None) == 0
+    assert len(calls) == 1 and (demos / "coach_a.dem").exists()  # gleiche Version: nicht nochmal
+    monkeypatch.setattr(importlib.metadata, "version", lambda name: "0.42.2")
+    ok = lambda _: SimpleNamespace(map_name="m", all_players=[_player("76561198019262528", "dj", 3, [2.0])])  # noqa: E731
+    assert server_aim.analyse_pending(path, parse=ok) == 1 and not (demos / "coach_a.dem").exists()
