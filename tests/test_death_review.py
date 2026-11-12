@@ -28,7 +28,8 @@ class FakeDemo:
             for sid, team, x, alive in [(ME, 3, 0, True), (MATE, 3, 400 if t < 1000 else 3000, t < 1100),
                                         (K1, 2, 900, True), (K2, 2, 1500, True)]:
                 rows.append({"tick": t, "steamid": sid, "X": float(x), "Y": 0.0, "Z": 0.0,
-                             "team_num": team, "is_alive": alive})
+                             "team_num": team, "is_alive": alive,
+                             "inventory": ["AK-47", "Molotov", "Smoke Grenade", "Decoy Grenade"] if t == 299 else []})
         return pd.DataFrame(rows)
 
 
@@ -36,6 +37,7 @@ def test_classifies_each_death():
     a, b = dr.scan_demo("x.dem", ME, parser_factory=FakeDemo)
     assert (a["traded"], a["mate_dist"], a["opening"], a["won"], a["second"]) == (True, 400, True, True, 3.1)
     assert (b["traded"], b["alone"], b["opening"], b["won"]) == (False, True, False, False)
+    assert (a["nades"], b["nades"]) == (2, 0)  # Molotov + Smoke, Decoy zaehlt nicht
 
 
 def test_summary_compares_wins_and_losses():

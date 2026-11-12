@@ -7,6 +7,7 @@ Strafing, Reaktion) - Entscheidungen misst er nicht. Hier pro Tod:
 - opening: erster Tod der Runde ueberhaupt
 - second: Rundensekunde (ab Freeze-Ende)
 - won: hat dein Team die Runde trotzdem gewonnen?
+- nades: Granaten, die du beim Tod noch hattest ("mit ins Grab", ohne Decoy)
 
 Ausgewertet wird aus der Demo (demoparser2), je Demo zwischengespeichert in
 death_cache/ neben der Config - wie die Trainings-Szenarien.
@@ -21,13 +22,21 @@ from pathlib import Path
 TICKRATE = 64
 TRADE_SECONDS = 5
 CACHE_DIR = "death_cache"
-CACHE_KEY = "deaths-v1"
+CACHE_KEY = "deaths-v2"  # v2: nades = Granaten im Inventar beim Tod (12.11.)
 
 
 def _event(p, name: str, columns: list[str]):
     import pandas as pd
     df = p.parse_event(name)
     return df if hasattr(df, "iterrows") else pd.DataFrame(columns=columns)
+
+
+_NADES = ("grenade", "molotov", "incendiary", "flashbang")
+
+
+def _is_nade(name: str) -> bool:
+    n = name.lower()
+    return any(k in n for k in _NADES) and "decoy" not in n
 
 
 def scan_demo(demo_path, me: str, parser_factory=None) -> list[dict]:
@@ -45,6 +54,11 @@ def scan_demo(demo_path, me: str, parser_factory=None) -> list[dict]:
     ticks = sorted({int(t) for t in mine["tick"]})
     rows = p.parse_ticks(["X", "Y", "Z", "team_num", "is_alive"], ticks=ticks)
     by_tick = {int(t): g for t, g in rows.groupby("tick")}
+    # Inventar einen Tick vor dem Tod (im Todestick ist es schon geleert)
+    inv = p.parse_ticks(["inventory"], ticks=[t - 1 for t in ticks])
+    inv = inv[inv["steamid"].astype(str) == me]
+    nades_at = {int(r["tick"]) + 1: sum(1 for w in (r["inventory"] if r["inventory"] is not None else [])
+                                         if _is_nade(str(w))) for _, r in inv.iterrows()}
     out = []
     for _, d in mine.iterrows():
         t = int(d["tick"])
@@ -73,7 +87,8 @@ def scan_demo(demo_path, me: str, parser_factory=None) -> list[dict]:
         won = {"CT": team == 3, "T": team == 2, "3": team == 3, "2": team == 2}.get(winner.upper())
         out.append({"tick": t, "second": round((t - start) / TICKRATE, 1), "traded": traded,
                     "mate_dist": round(dist) if dist is not None else None, "alone": not len(mates),
-                    "opening": len(first) == 1, "won": won, "side": "CT" if team == 3 else "T"})
+                    "opening": len(first) == 1, "won": won, "side": "CT" if team == 3 else "T",
+                    "nades": nades_at.get(t)})
     return out
 
 
