@@ -107,7 +107,10 @@ def maybe_stop(lines: list[str], send) -> bool:
     from .training_server import _humans
     if _humans((send("status") or [""])[0]):
         return False
-    send("tv_stoprecord")
+    # GOTV ganz aus, solange niemand spielt: am 12.11. hing der Server beim Wechsel in den
+    # Ruhemodus (Map-Neuladen), waehrend GOTV lief - ob es daran lag, ist nicht belegt.
+    # maybe_record schaltet es beim naechsten Spieler wieder ein ("not active").
+    send("tv_stoprecord", "tv_enable 0")
     return True
 
 

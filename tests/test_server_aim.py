@@ -37,7 +37,7 @@ def test_stop_when_last_human_leaves(tmp_path):
         sent.extend(c)
         return ["---------players--------\n  0      BOT    0    0     active      0 'Rex'\n#end"] if c == ("status",) else [""]
     assert server_aim.maybe_stop([LEAVE_LINE], send)
-    assert sent == ["status", "tv_stoprecord"]
+    assert sent == ["status", "tv_stoprecord", "tv_enable 0"]
 
 
 def _player(sid, name, kills, errors):
