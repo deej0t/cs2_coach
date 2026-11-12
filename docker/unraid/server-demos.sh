@@ -9,6 +9,12 @@
 set -u
 SRC=${SRC:-/mnt/ssdcache/appdata/cs2/game/csgo}
 DST=${DST:-/mnt/user/appdata/cs2-coach/data/server_demos}
+# NIE etwas unter /mnt/user anlegen, solange die Shares nicht eingehaengt sind: cron laeuft
+# schon beim Booten, und findet Unraid unter /mnt/user bereits Ordner, haengt es die Shares
+# gar nicht ein (getxattr-Fehler). Am 12.11. lief der Server so zweimal ohne Shares, alle
+# Container mit leeren Ordnern im RAM - verursacht von genau dieser Zeile (mkdir -p).
+mountpoint -q /mnt/user || exit 0
+[ -d "$(dirname "$DST")" ] || exit 0
 mkdir -p "$DST"
 find "$SRC" -maxdepth 1 -name 'coach_*.dem' -mmin +5 -print0 | while IFS= read -r -d '' f; do
     mv "$f" "$DST/" && logger -t server-demos "$(basename "$f") ($(du -h "$DST/$(basename "$f")" | cut -f1)) an den Coach"

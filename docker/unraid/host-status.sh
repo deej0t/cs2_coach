@@ -9,6 +9,8 @@
 # Absturz. Cron: /boot/config/plugins/dynamix/host-status.cron (*/5).
 
 OUT=${OUT:-/mnt/user/appdata/cs2-coach/data/host_status.json}
+# Nichts unter /mnt/user schreiben, bevor die Shares eingehaengt sind (siehe server-demos.sh, 12.11.)
+case "$OUT" in /mnt/user/*) mountpoint -q /mnt/user || exit 0;; esac
 TMP="$OUT.tmp"
 
 read -r l1 l5 l15 _ < /proc/loadavg
