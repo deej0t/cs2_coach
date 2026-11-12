@@ -250,8 +250,30 @@ def test_map_not_loaded_in_time_is_discarded(env):
     director().command(OWNER, "dj", "training", "mirage")
     sec, check = timers.pop()
     assert sec == ts.LOAD_TIMEOUT
+    state = ts.load_state(path)
+    state["t0"] -= ts.LOAD_TIMEOUT  # die Zeit ist um
+    ts.save_state(path, state)
     check()
     assert not ts.is_active(path) and "sv_cheats 0" in server.sent
+
+
+def test_stale_load_timer_does_not_kill_a_fresh_training(env):
+    """12.11.: der Timer eines frueheren Trainings brach ein frisch gestartetes !retake nach 1 s ab."""
+    _, path, server, timers, director = env
+    director().command(OWNER, "dj", "training", "mirage")
+    _, check = timers.pop()
+    check()  # feuert, waehrend das Training erst Sekunden alt ist
+    assert ts.is_active(path) and "Map nicht geladen" not in " ".join(server.sent)
+
+
+def test_farewell_does_not_restore_while_a_new_training_is_read_in(env, tmp_path):
+    """12.11.: !warmup -> Granaten las 35 s Wuerfe ein, der 30-s-Abschied lud derweil die Map neu."""
+    _, path, server, timers, director = env
+    with ts._Starting(path):
+        director()._restore_if_idle()
+    assert "sv_cheats 0" not in server.sent
+    director()._restore_if_idle()
+    assert "sv_cheats 0" in server.sent
 
 
 def test_stale_loading_state_ignores_server_restart(env):

@@ -386,6 +386,29 @@ def save_state(config_path: Path, state: dict) -> None:
     path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
 
 
+class _Starting:
+    """Marke "ein Training wird gerade eingelesen" (Szenarien/Wuerfe aus den Demos, bis ~1 min)."""
+    FILE, STALE = ".training_starting", 300
+
+    def __init__(self, config_path: Path):
+        self.file = Path(config_path).parent / self.FILE
+
+    def __enter__(self):
+        self.file.write_text(str(time.time()), encoding="utf-8")
+        return self
+
+    def __exit__(self, *exc):
+        self.file.unlink(missing_ok=True)
+
+    @classmethod
+    def running(cls, config_path: Path) -> bool:
+        f = Path(config_path).parent / cls.FILE
+        try:
+            return time.time() - f.stat().st_mtime < cls.STALE
+        except OSError:
+            return False
+
+
 def is_active(config_path: Path) -> bool:
     return (Path(config_path).parent / STATE_FILE).exists()
 
@@ -1175,6 +1198,14 @@ class Director:
         return []
 
     def _start_nades(self, sid: str, name: str, bsp: str, own: bool = False, limit: int = NADE_LINEUPS) -> list[str]:
+        with _Starting(self.path):
+            return self._start_nades_impl(sid, name, bsp, own, limit)
+
+    def _start_multi(self, sid: str, name: str, bsp: str, mode: str) -> list[str]:
+        with _Starting(self.path):
+            return self._start_multi_impl(sid, name, bsp, mode)
+
+    def _start_nades_impl(self, sid: str, name: str, bsp: str, own: bool = False, limit: int = NADE_LINEUPS) -> list[str]:
         """Granaten-Lineups ueben: aus den Demos oder die eigenen (own_lineups.py). Kein Bot."""
         from .grenade_lineups import collect, library
         problem = self._preflight(name)
@@ -1240,7 +1271,7 @@ class Director:
                 "tries": int(tries), "nade_dist": None if best == "-" else int(best), "export": "", "round": 0})
             state["results"].append("win" if hit == "1" else "loss")
 
-    def _start_multi(self, sid: str, name: str, bsp: str, mode: str) -> list[str]:
+    def _start_multi_impl(self, sid: str, name: str, bsp: str, mode: str) -> list[str]:
         """Situation, Retake oder Site halten: mehrere Gegner, alle mit ihrem echten Weg."""
         from .training_scenarios import MODES, collect
         problem = self._preflight(name)
@@ -1282,7 +1313,9 @@ class Director:
         """
         with _Lock(self.path):
             state = load_state(self.path)
-            if state.get("phase") != "loading":
+            if state.get("phase") != "loading" or time.time() - state.get("t0", 0) < LOAD_TIMEOUT - 5:
+                # 12.11.: der Timer eines frueheren Trainings brach ein frisch gestartetes
+                # Retake nach 1 s ab - nur das Training, das selbst so lange laedt, verwerfen
                 return
             save_state(self.path, {})
         try:
@@ -1354,7 +1387,9 @@ class Director:
         self.send(*RESTORE, restore)
 
     def _restore_if_idle(self) -> None:
-        if not is_active(self.path):  # hat er inzwischen ein neues Training gestartet?
+        # hat er inzwischen ein neues Training gestartet - oder liest gerade eins ein? (12.11.: der
+        # Granaten-Teil von !warmup las 35 s lang Wuerfe ein, der Abschied lud derweil die Map neu)
+        if not is_active(self.path) and not _Starting.running(self.path):
             self._restore()
 
     def _fazit(self, uid, session: Path) -> None:
