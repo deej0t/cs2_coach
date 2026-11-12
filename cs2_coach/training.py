@@ -3,7 +3,8 @@
 Die Auswertung sagt, was Siege von Niederlagen trennt. Ob es etwas bringt,
 das zu trainieren, sagt sie nicht. Dieses Modul schliesst die Luecke:
 
-- Ziele kommen aus belastbaren Befunden, nicht aus festen Schwellen. Das
+- Ziele kommen aus belastbaren Befunden, nicht aus festen Schwellen - und
+  nur, wenn die Kennzahl Siege belastbar von Niederlagen trennt. Das
   sind zum einen die Granatentypen, deren Wurfrate Siege belastbar von
   Niederlagen trennt (throw_relevance), zum anderen die offenen
   Trainingsziele aus findings.training_priorities().
@@ -25,7 +26,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .evidence import compare_groups, compare_rates
-from .findings import RULES_BY_KEY, SOLID_POSITIVE, evaluate, training_priorities
+from .findings import RULES_BY_KEY, SOLID_POSITIVE, build_relevance, evaluate, training_priorities
 from .utility_analysis import GRENADE_TYPES, _rates, throw_relevance
 
 #: Ab so vielen Matches seit dem Start wird ein Vergleich gerechnet.
@@ -89,8 +90,13 @@ def _candidate_goals(exports: list[dict]) -> list[Goal]:
     have_utility = any(g.key.startswith("util_") for g in goals)
     matches = [{"result": (e.get("match") or {}).get("result", ""),
                 "player": e.get("player") or {}, "date": _when(e)} for e in exports]
+    # Nur was Siege belastbar von Niederlagen trennt (12.11.: Accuracy stand auf Platz 2,
+    # obwohl sie in Siegen und Niederlagen gleich war, 24.2 gegen 24.2 %).
+    separates = {r.key for r in build_relevance(matches) if r.verdict == SOLID_POSITIVE}
     for t in training_priorities(matches):
         if have_utility and t.key == "utility":
+            continue
+        if t.key not in separates:
             continue
         rule = RULES_BY_KEY.get(t.key)
         wins = [v for e in exports if (e.get("match") or {}).get("result") == "Sieg"
