@@ -84,18 +84,37 @@ update_erzwingen() {
     return 1
 }
 
+# Gamedata (Offsets/Signaturen) aus dem main-Zweig von CounterStrikeSharp: Fixes fuer ein
+# CS2-Update landen dort Stunden vor dem naechsten Release. Am 12.11. (CS2 1.41.9.7)
+# kam "fix: Game Update 1.41.9.7" um 12:57, der Waechter hatte um 12:34 mit dem alten
+# Release 1.0.379 probiert -> Segfault beim Mapstart, Metamod wieder aus.
+gamedata_aktualisieren() {
+    local ziel="$GAME/addons/counterstrikesharp/gamedata/gamedata.json"
+    curl -sfLo "$1/gamedata.json" https://raw.githubusercontent.com/roflmuffin/CounterStrikeSharp/main/configs/addons/counterstrikesharp/gamedata/gamedata.json &&
+    python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$1/gamedata.json" &&
+    cp "$1/gamedata.json" "$ziel"
+}
+
+CSSVERSUCHT=${CSSVERSUCHT:-/boot/config/custom/cs2-css-versucht}
+# Download-URL des neuesten CounterStrikeSharp-Release (mit Runtime) auf stdout.
+css_release() {
+    curl -sf https://api.github.com/repos/roflmuffin/CounterStrikeSharp/releases/latest |
+        python3 -c 'import json,sys; print(next(a["browser_download_url"] for a in json.load(sys.stdin)["assets"] if a["name"].startswith("counterstrikesharp-with-runtime-linux")))'
+}
+
 # Neueste Builds holen. Eigene Plugins (plugins/CoachTeleport) und configs
 # bleiben, weil nur die Dateien aus den Archiven ueberschrieben werden.
 plugins_aktualisieren() {
     local tmp; tmp=$(mktemp -d) || return 1
     local mms css
     mms=$(curl -sf https://mms.alliedmods.net/mmsdrop/2.0/mmsource-latest-linux) || { rm -rf "$tmp"; return 1; }
-    css=$(curl -sf https://api.github.com/repos/roflmuffin/CounterStrikeSharp/releases/latest |
-          python3 -c 'import json,sys; print(next(a["browser_download_url"] for a in json.load(sys.stdin)["assets"] if a["name"].startswith("counterstrikesharp-with-runtime-linux")))') || { rm -rf "$tmp"; return 1; }
+    css=$(css_release) || { rm -rf "$tmp"; return 1; }
+    echo "$css" > "$CSSVERSUCHT"
     curl -sfLo "$tmp/mms.tar.gz" "https://mms.alliedmods.net/mmsdrop/2.0/$mms" &&
     curl -sfLo "$tmp/css.zip" "$css" &&
     tar xzf "$tmp/mms.tar.gz" -C "$GAME" &&
     python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$tmp/css.zip" "$GAME" &&
+    gamedata_aktualisieren "$tmp" &&
     chown -R 99:100 "$GAME/addons"
     local ok=$?
     rm -rf "$tmp"
@@ -180,7 +199,16 @@ if [ -n "$spieler" ]; then
     # --- Metamod wieder eintragen (CS2-Update hat gameinfo.gi ersetzt) oder neu versuchen
     if ! metamod_an; then
         if [ -f "$AUS" ]; then
-            [ $(( jetzt - $(cat "$AUS") )) -ge "$RETRY" ] || exit 0
+            # Frueher als nach RETRY, sobald CounterStrikeSharp ein neues Release hat (12.11.: der
+            # Fix fuer 1.41.9.7 kam als Code, das Release v1.0.380 scheiterte im Build) -
+            # hoechstens alle 30 min bei GitHub nachsehen (60 Anfragen/h ohne Token).
+            if [ $(( jetzt - $(cat "$AUS") )) -lt "$RETRY" ]; then
+                [ $(( jetzt - $(stat -c %Y "$RUN/cs2-waechter.release-check" 2>/dev/null || echo 0) )) -ge 1800 ] || exit 0
+                touch "$RUN/cs2-waechter.release-check"
+                neu=$(css_release) || exit 0
+                [ -n "$neu" ] && [ "$neu" != "$(cat "$CSSVERSUCHT" 2>/dev/null)" ] || exit 0
+                logger -t cs2-waechter "Neues CounterStrikeSharp-Release $neu - neuer Versuch vor Ablauf der Pause"
+            fi
             [ "$spieler" = 0 ] || exit 0
             plugins_aktualisieren || { date +%s > "$AUS"; exit 0; }
             rm -f "$AUS"
