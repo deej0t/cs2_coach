@@ -64,3 +64,11 @@ def test_analyse_keeps_humans_deletes_demo_and_board_takes_median_over_all_kills
     dj = rows[0]
     # Median ueber alle 11 Kills (6x 1.0, 5x 9.0) = 1.0, nicht Mittel der Demo-Mediane (5.0)
     assert (dj["kills"], dj["cp"], dj["cs"], dj["acc"], dj["games"]) == (12, 1.0, 80, 25, 2)
+
+
+def test_inactive_gotv_is_switched_on_and_retried_soon(tmp_path):
+    path, sent = _cfg(tmp_path), []
+    send = lambda *c: sent.extend(c) or ["GOTV[0] not active."]  # noqa: E731
+    server_aim.maybe_record(path, [HUMAN_LINE], send, now=1000)
+    assert "tv_enable_dynamic 1" in sent and sent[-1] == "tv_enable 1"
+    assert server_aim.due(path, [HUMAN_LINE], now=1011)  # nach 10 s nochmal, nicht erst nach 60

@@ -88,6 +88,13 @@ def maybe_record(config_path: Path, lines: list[str], send, now: float | None = 
     _save_state(config_path, state)
     name = "coach_" + datetime.fromtimestamp(now).strftime("%Y%m%d-%H%M%S")
     reply = (send(f"tv_record {name}") or [""])[0]
+    if "not active" in reply:
+        # Jeder Mapwechsel setzt tv_enable zurueck, die server.cfg setzt es zu spaet wieder:
+        # "SourceTV not active". Mit tv_enable_dynamic startet GOTV beim Umschalten sofort
+        # (gemessen 12.11.); aufgenommen wird beim naechsten Versuch eine Minute spaeter.
+        send("tv_enable_dynamic 1", "tv_enable 0", "tv_delay 0", "tv_enable 1")
+        state["tried"] = now - RECORD_EVERY + 10
+        _save_state(config_path, state)
     if "Already" not in reply:
         print(f"[server_aim] tv_record {name}: {reply.strip()[:120]}", flush=True)
     return reply

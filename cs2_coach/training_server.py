@@ -1510,7 +1510,8 @@ class Director:
                 state.update(team=to, human_uid=uid)
                 if phase == "team":
                     self._add_bot(state)
-            elif m.group("asid") == "BOT" and phase in ("bot", "running"):
+            elif m.group("asid") == "BOT" and phase in ("bot", "running") and to in ("CT", "TERRORIST"):
+                # nur Spieler-Teams: der GOTV-Bot (server_aim, "Coach-Aufnahme") geht zu den Zuschauern
                 bots = state.setdefault("bot_uids", [])
                 need = state.get("bot_need", 1)
                 if uid in bots:
