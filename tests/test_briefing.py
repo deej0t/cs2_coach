@@ -65,7 +65,7 @@ def test_progress_is_compared_after_enough_matches(tmp_path):
 
     later = [_export(i, i % 2 == 0, 12 + i % 2, day="2026-10") for i in range(5, 5 + training.MIN_AFTER)]
     plan = training.current_plan(_history() + later, state, "2026-10-20 12:00")
-    g = [g for g in plan["goals"] if g.key == "util_h"][0]
+    g = [g for g in plan["goals"] + plan["achieved"] if g.key == "util_h"][0]
     assert g.matches_since == training.MIN_AFTER
     assert g.change is not None
     assert g.change["n_a"] == training.MIN_AFTER and g.change["n_b"] == 40
@@ -309,3 +309,14 @@ def test_loop_log_has_no_already_sent_noise(tmp_path, monkeypatch):
     result = CliRunner().invoke(cli, ["briefing", "--send"])
     assert result.exit_code == 0, result.output
     assert briefing.ALREADY_SENT not in result.output
+
+
+def test_achieved_goal_leaves_active_list():
+    """Flashes 12.11.: Ziel 0.64, letzte Matches 1.14, belastbar besser -> erreicht."""
+    g = training.Goal(key="util_f", label="Flashes pro Runde", unit="/Runde", higher_is_better=True,
+                      target=0.64, why="", recent=1.14, change={"verdict": "solid_positive"})
+    assert training.is_achieved(g)
+    g.recent = 0.5
+    assert not training.is_achieved(g) and training.gap(g) > 0
+    g.recent, g.change = 1.14, {"verdict": "undecided"}
+    assert not training.is_achieved(g)

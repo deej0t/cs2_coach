@@ -230,7 +230,11 @@ def render(plan: dict, exports: list[dict], new: list[dict], first: bool, now,
         for g in goals:
             block += _goal_block(g, rounds) + [""]
         out.append("\n".join(block).rstrip())
-
+    if plan.get("achieved"):
+        out.append("✅ **Erreicht:** " + " · ".join(
+            f"{g.label} ({g.recent:g} statt Ziel {g.target:g})".replace(".", ",") for g in plan["achieved"])
+            + " – bleibt dran, ist aber kein Ziel mehr.")
+    if goals:
         before, during = _exercises(goals, main_map)
         how = [f"**🕔 Vor dem ersten Match** · offline `map de_{main_map}`, 10-15 Min"]
         how += [f"• {b}" for b in before]

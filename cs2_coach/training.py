@@ -109,6 +109,25 @@ def _candidate_goals(exports: list[dict]) -> list[Goal]:
     return goals
 
 
+def gap(g: Goal) -> float:
+    """Relativer Abstand der letzten Matches zum Zielwert (0 = erreicht)."""
+    if g.recent is None or not g.target:
+        return 0.0
+    d = (g.target - g.recent) if g.higher_is_better else (g.recent - g.target)
+    return max(d / abs(g.target), 0.0)
+
+
+def is_achieved(g: Goal) -> bool:
+    """Erreicht = seit dem Start belastbar besser UND die letzten Matches am Zielwert.
+
+    Wunsch 12.11.: das Flash-Ziel (0.64/Runde) stand weiter im Briefing, obwohl
+    die letzten 5 Matches 1.14 hatten und es seit dem Start belastbar besser war.
+    Faellt der Wert wieder unter das Ziel, ist es automatisch wieder aktiv; der
+    Startzeitpunkt bleibt, damit der Vergleich weiter stimmt.
+    """
+    return bool(g.change and g.change.get("verdict") == SOLID_POSITIVE and g.recent is not None and gap(g) == 0)
+
+
 def _load(state_path: Path) -> dict:
     try:
         return json.loads(Path(state_path).read_text(encoding="utf-8"))
@@ -162,5 +181,10 @@ def current_plan(exports: list[dict], state_path: Path, now: str) -> dict:
         c = compare_rates(a.count("Sieg"), len(a), b.count("Sieg"), len(b))
         win_change = asdict(c) if c else {"n_after": len(a), "note": f"{len(a)} Matches seit Start"}
 
-    return {"goals": goals, "win_change": win_change,
+    active, achieved = [], []
+    for g in goals:
+        (achieved if is_achieved(g) else active).append(g)
+    # Groesster Abstand zum Zielwert zuerst - das erste Ziel ist auch der Fokus der Nachbesprechung
+    active.sort(key=lambda g: -gap(g))
+    return {"goals": active, "achieved": achieved, "win_change": win_change,
             "ended": {k: v for k, v in known.items() if "ended" in v}}

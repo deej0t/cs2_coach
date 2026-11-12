@@ -87,6 +87,9 @@ def build_facts(exports: list[dict], plan: dict, last_match: str) -> tuple[str, 
                          f"({c['n_a']} gegen {c['n_b']} Matches) - {verdict}.")
         else:
             lines.append(f"  Fortschritt seit {g.since}: zu wenige Matches ({g.note})")
+    for g in plan.get("achieved", []):
+        lines.append(f"- ERREICHT: {g.label} - letzte {RECENT} Matches {_num(g.recent)}{g.unit}, "
+                     f"Zielwert {_num(g.target)}{g.unit}, seit {g.since} belastbar besser. Kein aktives Ziel mehr.")
     w = plan.get("win_change")
     if w and "verdict" in w:
         verdict = {"solid_positive": "belastbar hoeher", "solid_negative": "belastbar niedriger"}.get(
