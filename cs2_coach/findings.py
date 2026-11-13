@@ -133,7 +133,10 @@ RULES: list[Rule] = [
         # Schema 5. Ad-hoc-Messung 2026-11-13 ueber 133 Matches: 2,57 Grad in
         # Siegen gegen 2,95 in Niederlagen, d = +0,36 [+0,02...+0,70],
         # unentschieden. Die Messung 0,5 s vor dem Kill trennte gar nicht
-        # (d = -0,03). Schwellen sind Platzhalter, observe_only greift.
+        # (d = -0,03). Mit dem Parser (Abtastung ab Freeze-Ende) nach der
+        # Neuanalyse aller 138: 2,58 gegen 2,76, d = +0,20 [-0,14...+0,54] -
+        # die Spur ist schwaecher als ad hoc. Schwellen sind Platzhalter,
+        # observe_only greift.
         key="first_sight",
         label="Fadenkreuz beim ersten Sehen",
         path=("first_sight", "median_degrees"),
