@@ -1,138 +1,165 @@
-{# Fokus-Dashboard (cs2_coach/dashboard.py). Erwartet: d = dashboard.build(...)
+{# Startseite (cs2_coach/dashboard.py). Erwartet: d = dashboard.build(...)
 
-   Oben, was heute zaehlt (letztes Match, Ziel, naechster Schritt), darunter
-   Messung ohne Urteilsfarben. Bewertet wird nur das Ziel - mit dem
-   evidence-Urteil aus training.current_plan, wie im Tages-Briefing.
+   Oben das Premier-Rating in der Farbe seiner Stufe - Anzeige und
+   Motivation, kein Ratschlag (es steigt durch Siege). Bewertet wird nur
+   die Mission, mit dem evidence-Urteil aus training.current_plan.
 #}
+{% set p = d.premier %}
+{% set accent = p.color if p else '#9184d9' %}
 <style>
-    .fd-row { display: grid; grid-template-columns: 3fr 2fr; gap: var(--space-4); margin-bottom: var(--space-4); }
-    .fd-row.half { grid-template-columns: 1fr 1fr; }
-    .fd-big { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
-    .fd-sub { font-size: 12px; color: var(--color-neutral-500); }
-    .fd-stats { display: flex; gap: var(--space-5); flex-wrap: wrap; margin: var(--space-3) 0; }
-    .fd-stats b { display: block; font-size: 18px; }
-    .fd-quote { border-left: 3px solid var(--color-accent); padding: 6px 0 6px 12px; color: var(--color-neutral-300);
-                font-size: 14px; line-height: 1.5; margin: var(--space-3) 0; }
-    .fd-track { height: 10px; border-radius: 5px; background: var(--color-neutral-800); overflow: hidden; margin: 8px 0 4px; }
-    .fd-fill { height: 100%; border-radius: 5px; background: var(--color-accent); }
-    .fd-checks { display: flex; gap: 6px; flex-wrap: wrap; margin-top: var(--space-3); }
-    .fd-check { border: 1px solid var(--color-divider); border-radius: 6px; padding: 3px 8px; font-size: 12px; }
-    .fd-check.ok { border-color: var(--color-accent); color: var(--color-accent); }
-    .fd-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-4); }
-    .fd-form { display: flex; align-items: flex-end; gap: 3px; height: 150px; margin-top: var(--space-3); }
-    .fd-form div { flex: 1; border-radius: 3px 3px 0 0; min-height: 4px; }
-    .fd-form .w { background: var(--color-green); opacity: .75; }
-    .fd-form .l { background: var(--color-red); opacity: .6; }
-    .fd-form .d { background: var(--color-neutral-500); }
-    @media (max-width: 900px) { .fd-row, .fd-row.half { grid-template-columns: 1fr; } }
+    .pd-kicker { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--color-neutral-500); }
+    .pd-meta { font-size: 13px; color: var(--color-neutral-400); line-height: 1.7; }
+    .pd-meta b { color: var(--color-text); }
+    .pd-chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+    .pd-chip.up { background: #22c55e22; color: #4ade80; }
+    .pd-chip.down { background: #ef444422; color: #f87171; }
+    .pd-hero { display: grid; grid-template-columns: 300px 1fr; gap: var(--space-5); align-items: center;
+               border-radius: 16px; padding: var(--space-5); margin-bottom: var(--space-4);
+               background: radial-gradient(120% 140% at 0% 0%, {{ accent }}33 0%, transparent 55%), var(--color-surface);
+               border: 1px solid {{ accent }}55; }
+    .pd-rating { font-size: 64px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; margin: 6px 0 10px;
+                 color: {{ accent }}; text-shadow: 0 0 28px {{ accent }}66; }
+    .pd-next { height: 6px; border-radius: 3px; background: var(--color-neutral-800); margin-top: 8px; overflow: hidden; }
+    .pd-row { display: grid; grid-template-columns: 3fr 2fr; gap: var(--space-4); margin-bottom: var(--space-4); }
+    .pd-last { border-radius: 14px; padding: var(--space-5); border: 1px solid var(--color-divider);
+               background-color: var(--color-surface); background-repeat: no-repeat; background-position: right center; background-size: 55%; }
+    .pd-last-title { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 8px; }
+    .pd-quote { border-left: 3px solid {{ accent }}; padding: 4px 0 4px 12px; color: var(--color-neutral-300);
+                font-size: 14px; line-height: 1.55; margin-top: var(--space-3); max-width: 560px; }
+    .pd-goal { border-radius: 14px; padding: var(--space-5); border: 1px solid var(--color-divider);
+               background: var(--color-surface); display: grid; grid-template-columns: 110px 1fr; gap: var(--space-4); align-items: center; }
+    .pd-check { border: 1px solid var(--color-divider); border-radius: 6px; padding: 2px 7px; font-size: 11px; margin: 0 4px 4px 0; display: inline-block; }
+    .pd-check.ok { border-color: var(--color-accent); color: var(--color-accent); }
+    .pd-tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-3); margin-bottom: var(--space-2); }
+    .pd-tile { display: block; border-radius: 12px; padding: 12px; min-height: 96px; color: var(--color-text); text-decoration: none;
+               border: 1px solid var(--color-divider); background-color: var(--color-surface); background-size: cover; background-position: center; }
+    .pd-tile:hover { border-color: var(--color-accent); }
+    .pd-tile-map { font-size: 12px; color: var(--color-neutral-400); }
+    .pd-tile-score { font-size: 18px; font-weight: 700; margin-top: 2px; }
+    .pd-tile-ch { font-size: 15px; font-weight: 700; margin-top: 10px; }
+    .pd-tile-ch.up { color: #4ade80; } .pd-tile-ch.down { color: #f87171; }
+    .pd-res { font-size: 10px; padding: 1px 5px; border-radius: 4px; vertical-align: middle; background: var(--color-neutral-800); }
+    .pd-res.S { color: #4ade80; } .pd-res.N { color: #f87171; }
+    .pd-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin: var(--space-4) 0; }
+    @media (max-width: 900px) {
+        .pd-hero, .pd-row { grid-template-columns: 1fr; }
+        .pd-tiles { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 500px) { .pd-tiles { grid-template-columns: repeat(2, 1fr); } .pd-rating { font-size: 52px; } }
 </style>
 
-<div class="fd-row">
+{# ── Premier-Rating ── #}
+{% if p %}
+<div class="pd-hero">
+    <div>
+        <div class="pd-kicker">Premier-Rating · {{ p.tier }}</div>
+        <div class="pd-rating">{{ p.value }}</div>
+        <span class="pd-chip {{ 'up' if p.change > 0 else 'down' if p.change < 0 }}">{{ p.change_txt }} {{ _('letztes Match') }}</span>
+        <div class="pd-meta" style="margin-top:10px;">
+            {{ _('Letzte') }} {{ p.n }} Matches: <b>{{ p.delta }}</b><br>
+            {{ _('Höchstwert') }}: <b>{{ p.peak }}</b>
+            {% if p.next %}<br>{{ _('Noch') }} <b>{{ p.next.missing }}</b> {{ _('bis') }} {{ p.next.name }} ({{ p.next.at }}){% endif %}
+        </div>
+        {% if p.next %}
+        <div class="pd-next"><div style="height:100%;width:{{ p.next.fill }}%;background:linear-gradient(90deg,{{ p.color }},{{ p.next.color }});"></div></div>
+        {% endif %}
+    </div>
+    <div>
+        <div class="pd-kicker" style="margin-bottom:6px;">{{ _('Verlauf') }} · {{ _('letzte') }} {{ p.n }} Premier-Matches</div>
+        <svg viewBox="0 0 {{ p.w }} {{ p.h }}" style="width:100%;height:{{ p.h }}px;display:block;overflow:visible;"
+             role="img" aria-label="{{ _('Premier-Rating der letzten') }} {{ p.n }} Matches">
+            <defs><linearGradient id="pd-area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="{{ p.color }}" stop-opacity=".35"/><stop offset="1" stop-color="{{ p.color }}" stop-opacity="0"/>
+            </linearGradient></defs>
+            {% for r in p.refs %}
+            <line x1="0" x2="{{ p.w }}" y1="{{ r.y }}" y2="{{ r.y }}" stroke="var(--color-neutral-600)" stroke-dasharray="3 4" stroke-width="1"/>
+            <text x="2" y="{{ r.y - 5 }}" font-size="10" fill="var(--color-neutral-500)">{{ r.label }}</text>
+            {% endfor %}
+            <polygon points="{{ p.area }}" fill="url(#pd-area)"/>
+            <polyline points="{{ p.line }}" fill="none" stroke="{{ p.color }}" stroke-width="2" stroke-linejoin="round"/>
+            {% for dot in p.dots %}
+            <g><circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="9" fill="transparent"><title>{{ dot.title }}</title></circle>
+               <circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="{{ 5 if dot.last else 3 }}" fill="{{ p.color if dot.last else 'var(--color-surface)' }}"
+                       stroke="{{ p.color }}" stroke-width="2" pointer-events="none"/></g>
+            {% endfor %}
+        </svg>
+    </div>
+</div>
+{% endif %}
+
+<div class="pd-row">
     {# ── Letztes Match ── #}
     {% set m = d.last %}
-    <div class="card elev-sm">
-        <span class="card-kicker">{{ _('Letztes Match') }} · {{ m.date }}</span>
-        <div style="display:flex;align-items:center;gap:var(--space-3);margin-top:6px;">
-            <span class="fd-big">{{ m.map }} {{ m.score }}</span>
-            {% if m.result == 'Sieg' %}<span class="tag tag-win">{{ _('Sieg') }}</span>
-            {% elif m.result == 'Niederlage' %}<span class="tag tag-loss">{{ _('Niederlage') }}</span>
-            {% else %}<span class="tag tag-draw">{{ m.result }}</span>{% endif %}
+    <div class="pd-last" {% if m.radar %}style="background-image:linear-gradient(90deg, var(--color-surface) 45%, color-mix(in srgb, var(--color-surface) 40%, transparent)), url('{{ url_for('static', filename='radars/' ~ m.radar ~ '.png') }}');"{% endif %}>
+        <div class="pd-kicker">{{ _('Letztes Match') }} · {{ m.date }}</div>
+        <div class="pd-last-title">{{ m.map }} {{ m.score }}
+            {% if m.change is not none %}<span class="pd-chip {{ 'up' if m.change > 0 else 'down' if m.change < 0 }}" style="vertical-align:middle;font-size:14px;">{{ m.change_txt }}</span>
+            {% elif m.result %}<span class="pd-chip" style="vertical-align:middle;font-size:14px;background:var(--color-neutral-800);">{{ m.result }}</span>{% endif %}
         </div>
-        <div class="fd-stats">
-            {% if m.rating is not none %}<span class="fd-sub">Rating<b style="color:var(--color-text);">{{ m.rating }}</b></span>{% endif %}
-            {% if m.adr is not none %}<span class="fd-sub">ADR<b style="color:var(--color-text);">{{ m.adr }}</b></span>{% endif %}
-            {% if m.kd is not none %}<span class="fd-sub">K/D<b style="color:var(--color-text);">{{ m.kd }}</b></span>{% endif %}
-            {% if m.early %}<span class="fd-sub" title="{{ _('Full-Buy-Runden mit Granate in den ersten 35 s') }}">{{ _('Frühe Granate') }}<b style="color:var(--color-text);">{{ m.early[0] }}/{{ m.early[1] }}</b></span>{% endif %}
+        <div class="pd-meta">
+            {% if m.kd is not none %}K/D <b>{{ m.kd }}</b>{% endif %}{% if m.adr is not none %} · ADR <b>{{ m.adr }}</b>{% endif %}
+            {% if m.early %} · <span title="{{ _('Full-Buy-Runden mit Granate in den ersten 35 s') }}">{{ _('Frühe Granate') }} <b>{{ m.early[0] }}/{{ m.early[1] }}</b></span>{% endif %}
         </div>
-        {% if d.intro %}<div class="fd-quote">{{ d.intro }}</div>{% endif %}
-        <a href="{{ url_for('view_export', filename=m.file) }}" style="font-size:13px;">{{ _('Ganze Analyse') }} →</a>
+        {% if m.intro %}<div class="pd-quote">{{ m.intro }}</div>{% endif %}
+        <div style="margin-top:var(--space-3);font-size:13px;"><a href="{{ url_for('view_export', filename=m.file) }}">{{ _('Ganze Analyse') }} →</a></div>
     </div>
 
-    {# ── Ziel ── #}
-    <div class="card elev-sm">
-        <span class="card-kicker">{{ _('Dein Ziel') }}</span>
-        {% set g = d.goal %}
-        {% if g %}
-        <div style="font-size:17px;font-weight:600;margin-top:6px;">{{ g.label }}</div>
-        {% if g.recent is not none %}
-        <div style="margin-top:var(--space-3);"><span class="fd-big">{{ g.recent|round|int if g.unit == '%' else g.recent }}{{ ' %' if g.unit == '%' else g.unit }}</span>
-            <span class="fd-sub">{{ _('zuletzt (5 Matches)') }} · {{ _('Ziel') }} {{ g.target|round|int if g.unit == '%' else g.target }}{{ ' %' if g.unit == '%' else g.unit }}</span></div>
-        <div class="fd-track" role="img" aria-label="{{ g.fill }} % {{ _('vom Ziel') }}"><div class="fd-fill" style="width:{{ g.fill }}%;"></div></div>
-        {% endif %}
-        {% if g.checks %}
-        <div class="fd-checks">
-            {% for c in g.checks %}<span class="fd-check {{ 'ok' if c.ok }}" title="{{ c.map }}">⏱️ {{ c.k }}/{{ c.n }}{{ ' ✓' if c.ok }}</span>{% endfor %}
+    {# ── Mission ── #}
+    {% set g = d.goal %}
+    <div class="pd-goal">
+        {% if g and g.recent is not none %}
+        {% set circ = 289.0 %}
+        <svg viewBox="0 0 110 110" width="110" height="110" role="img" aria-label="{{ g.fill }} {{ _('Prozent vom Ziel') }}">
+            <circle cx="55" cy="55" r="46" fill="none" stroke="var(--color-neutral-800)" stroke-width="10"/>
+            <circle cx="55" cy="55" r="46" fill="none" stroke="var(--color-accent)" stroke-width="10" stroke-linecap="round"
+                    stroke-dasharray="{{ (circ * g.fill / 100)|round(1) }} {{ circ }}" transform="rotate(-90 55 55)"/>
+            <text x="55" y="53" text-anchor="middle" font-size="22" font-weight="800" fill="var(--color-text)">{{ g.recent|round|int }}{{ '%' if g.unit == '%' else '' }}</text>
+            <text x="55" y="70" text-anchor="middle" font-size="10" fill="var(--color-neutral-500)">{{ _('Ziel') }} {{ g.target|round|int if g.unit == '%' else g.target }}{{ '%' if g.unit == '%' else '' }}</text>
+        </svg>
+        {% else %}<div></div>{% endif %}
+        <div>
+            <div class="pd-kicker">{{ _('Deine Mission') }}</div>
+            {% if g %}
+            <div style="font-size:17px;font-weight:700;margin:4px 0;">{{ g.label }}</div>
+            <div class="pd-meta">
+                {% if g.early %}{{ _('Im Full Buy eine Granate in den ersten 35 s.') }}<br>{% endif %}
+                {% if g.checks %}<b>{{ g.hits }} {{ _('von') }} {{ g.checks|length }}</b> {{ _('der letzten Matches am Ziel') }}<br>{% endif %}
+                {% if g.verdict == 'solid_positive' %}<span style="color:#4ade80;">✅ {{ _('seit') }} {{ g.since }} {{ _('belastbar besser') }}</span>
+                {% elif g.verdict == 'solid_negative' %}<span style="color:#f87171;">⚠️ {{ _('seit') }} {{ g.since }} {{ _('belastbar schlechter') }}</span>
+                {% elif g.verdict %}{{ _('Seit') }} {{ g.since }} {{ _('noch kein belastbarer Unterschied') }}
+                {% else %}<span style="font-size:12px;">{{ g.note }}</span>{% endif %}
+            </div>
+            <div style="margin-top:8px;">
+                {% for c in g.checks %}<span class="pd-check {{ 'ok' if c.ok }}">{{ c.map }} {{ c.k }}/{{ c.n }}{{ ' ✓' if c.ok }}</span>{% endfor %}
+            </div>
+            {% else %}
+            <div class="pd-meta" style="margin-top:4px;">{{ _('Gerade trennt keine Kennzahl deine Siege belastbar von den Niederlagen - deshalb keine Mission.') }}
+                <a href="{{ url_for('coaching') }}">{{ _('Empfehlungen') }}</a></div>
+            {% endif %}
         </div>
-        {% endif %}
-        <div class="fd-sub" style="margin-top:var(--space-3);">
-            {% if g.verdict == 'solid_positive' %}<span style="color:var(--color-green);">✅ {{ _('Seit dem Start belastbar besser') }}</span>
-            {% elif g.verdict == 'solid_negative' %}<span style="color:var(--color-red);">⚠️ {{ _('Seit dem Start belastbar schlechter') }}</span>
-            {% elif g.verdict %}{{ _('Seit dem Start noch kein belastbarer Unterschied') }}
-            {% else %}{{ g.note or '' }}{% endif %}
-            {% if g.since %} · {{ _('seit') }} {{ g.since }}{% endif %}
-        </div>
-        {% if g.early %}<div class="fd-sub" style="margin-top:6px;">{{ _('Im Full Buy eine Granate in den ersten 35 s - solange du lebst.') }}</div>{% endif %}
-        {% if g.others %}<div class="fd-sub" style="margin-top:6px;">{{ _('Weitere Ziele') }}: {{ g.others|join(', ') }}</div>{% endif %}
-        {% if g.achieved %}<div class="fd-sub" style="margin-top:6px;">{{ _('Erreicht') }}: {{ g.achieved|join(', ') }}</div>{% endif %}
-        {% else %}
-        <p class="fd-sub" style="margin-top:6px;">{{ _('Gerade trennt keine Kennzahl deine Siege belastbar von den Niederlagen - deshalb kein Ziel. Details unter') }} <a href="{{ url_for('coaching') }}">{{ _('Empfehlungen') }}</a>.</p>
-        {% endif %}
-    </div>
-</div>
-
-{# ── Vor dem naechsten Match ── #}
-<div class="fd-actions">
-    <a class="btn btn-primary" href="{{ url_for('live.page') }}"><i data-lucide="radio" style="width:15px;height:15px;"></i> {{ _('Live-Coach öffnen') }}</a>
-    <a class="btn btn-secondary" href="{{ url_for('warmup') }}"><i data-lucide="timer" style="width:15px;height:15px;"></i> Warm-up</a>
-    <a class="btn btn-secondary" href="{{ url_for('briefing') }}"><i data-lucide="clipboard-list" style="width:15px;height:15px;"></i> {{ _('Map-Vorbereitung') }}</a>
-    <a class="btn btn-secondary" href="{{ url_for('daily.page') }}"><i data-lucide="send" style="width:15px;height:15px;"></i> {{ _('Tages-Briefing') }}</a>
-</div>
-
-<div class="fd-row half">
-    {# ── Form ── #}
-    <div class="card elev-sm">
-        <span class="card-kicker">{{ _('Form') }} · {{ _('letzte') }} {{ d.form|length }}</span>
-        <div class="fd-sub" style="margin-top:4px;">{{ d.form_wins }} {{ _('Siege') }}, {{ d.form_losses }} {{ _('Niederlagen') }} · {{ _('Balkenhöhe = Rating') }}</div>
-        {% set ratings = d.form|map(attribute='rating')|select('number')|list %}
-        {% set top = (ratings|max) if ratings else 1 %}
-        <div class="fd-form">
-            {% for f in d.form %}
-            <div class="{{ 'w' if f.result == 'Sieg' else ('l' if f.result == 'Niederlage' else 'd') }}"
-                 style="height:{{ (((f.rating or 0) / top) * 100)|round|int if top else 10 }}%;"
-                 title="{{ f.title }} · {{ f.result }} · Rating {{ f.rating }}"></div>
-            {% endfor %}
-        </div>
-    </div>
-    {# ── Maps ── #}
-    <div class="card elev-sm">
-        <span class="card-kicker">Maps · {{ d.total }} Matches</span>
-        <table class="table" style="margin-top:6px;"><tbody>
-            {% for s in d.maps[:6] %}
-            <tr><td>{{ s.map }}</td><td class="fd-sub">{{ s.n }} {{ _('Spiele') }}</td>
-                <td>{{ s.w }}–{{ s.l }}</td><td class="fd-sub" style="text-align:right;">{{ s.pct }} %</td></tr>
-            {% endfor %}
-        </tbody></table>
-        <a href="{{ url_for('maps') }}" style="font-size:13px;">{{ _('Alle Maps') }} →</a>
     </div>
 </div>
 
 {# ── Letzte Matches ── #}
-<div class="card elev-sm" style="margin-bottom:var(--space-4);">
-    <span class="card-kicker">{{ _('Letzte Matches') }}</span>
-    <table class="table" style="margin-top:6px;">
-        <thead><tr><th>{{ _('Datum') }}</th><th>Map</th><th>Score</th><th></th><th>Rating</th><th>ADR</th>
-            <th title="{{ _('Full-Buy-Runden mit Granate in den ersten 35 s') }}">{{ _('Früh') }}</th><th></th></tr></thead>
-        <tbody>
-        {% for r in d.recent %}
-        <tr>
-            <td class="fd-sub">{{ r.date }}</td><td>{{ r.map }}</td><td>{{ r.score }}</td>
-            <td>{% if r.result == 'Sieg' %}<span class="tag tag-win">{{ _('Sieg') }}</span>{% elif r.result == 'Niederlage' %}<span class="tag tag-loss">{{ _('Niederlage') }}</span>{% else %}<span class="tag tag-draw">{{ r.result }}</span>{% endif %}</td>
-            <td>{{ r.rating if r.rating is not none else '–' }}</td><td>{{ r.adr if r.adr is not none else '–' }}</td>
-            <td>{% if r.early %}{{ r.early[0] }}/{{ r.early[1] }}{% else %}<span class="fd-sub">–</span>{% endif %}</td>
-            <td style="text-align:right;"><a href="{{ url_for('view_export', filename=r.file) }}">Details</a></td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    <a href="{{ url_for('exports') }}" style="font-size:13px;">{{ _('Alle') }} {{ d.total }} Matches →</a>
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+    <span class="pd-kicker">{{ _('Letzte Matches') }}</span>
+    <a href="{{ url_for('exports') }}" style="font-size:13px;">{{ _('Alle') }} {{ d.total }} →</a>
+</div>
+<div class="pd-tiles">
+    {% for t in d.tiles %}
+    {% set res = 'S' if t.result == 'Sieg' else ('N' if t.result == 'Niederlage' else 'U') %}
+    <a class="pd-tile" href="{{ url_for('view_export', filename=t.file) }}"
+       {% if t.radar %}style="background-image:linear-gradient(180deg, rgba(18,18,28,.7), rgba(18,18,28,.96)), url('{{ url_for('static', filename='radars/' ~ t.radar ~ '.png') }}');"{% endif %}>
+        <div class="pd-tile-map">{{ t.map }}</div>
+        <div class="pd-tile-score">{{ t.score }} <span class="pd-res {{ res }}">{{ res }}</span></div>
+        <div class="pd-tile-ch {{ 'up' if t.change and t.change > 0 else 'down' if t.change and t.change < 0 }}">{{ t.change_txt or '' }}</div>
+    </a>
+    {% endfor %}
+</div>
+
+<div class="pd-actions">
+    <a class="btn btn-primary" href="{{ url_for('live.page') }}"><i data-lucide="radio" style="width:15px;height:15px;"></i> {{ _('Live-Coach öffnen') }}</a>
+    <a class="btn btn-secondary" href="{{ url_for('warmup') }}"><i data-lucide="timer" style="width:15px;height:15px;"></i> Warm-up</a>
+    <a class="btn btn-secondary" href="{{ url_for('briefing') }}"><i data-lucide="clipboard-list" style="width:15px;height:15px;"></i> {{ _('Map-Vorbereitung') }}</a>
+    <a class="btn btn-secondary" href="{{ url_for('daily.page') }}"><i data-lucide="send" style="width:15px;height:15px;"></i> {{ _('Tages-Briefing') }}</a>
 </div>

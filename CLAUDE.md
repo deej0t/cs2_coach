@@ -20,7 +20,7 @@ cs2_coach/
   evidence.py     (190) effect size + CI for any two-group comparison
   utility_analysis.py (120) throw relevance per grenade type
   zones.py         (90) duels per callout across all matches (map/side/place vs rest, compare_rates + Bonferroni); measurement only, no UI
-  dashboard.py    (150) start page: last match + AI review intro, current goal with progress (training.current_plan), form, maps, 5 last matches - measurement only (_partials/dashboard_focus.html); the old dashboard's fixed-threshold alerts and "Gold Nova" benchmarks are gone
+  dashboard.py    (230) start page: Premier rating in its tier colour with the last-30 curve (display/motivation only - it is outcome, never advice), last match + AI review intro, goal as "Mission" (training.current_plan, same verdict as the briefing), last 6 matches as radar tiles (_partials/dashboard_focus.html). Premier = `player.rank.new` >= 1000 (map ranks in competitive are 0-18). The old dashboard's fixed-threshold alerts and "Gold Nova" benchmarks are gone
   match_compare.py (190) export detail card: this match vs own last 30 (median, percentile, top 5) + grenades of both teams (_partials/match_compare.html)
   export_version.py   (190) schema/metrics versioning of exports
   health.py       (300) system status checks + Discord alert on state change
