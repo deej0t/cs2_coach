@@ -9,18 +9,18 @@
       "payload": null,
       "kind": "json",
       "value": {
-        "client_name": "SourceTV Demo",
-        "addons": "",
-        "allow_clientside_particles": "true",
         "game_directory": "/opt/srcds/cs2/csgo_v2000884/csgo",
+        "fullpackets_version": "2",
+        "allow_clientside_particles": "true",
         "map_name": "de_inferno",
-        "demo_version_name": "valve_demo_2",
-        "demo_version_guid": "8e9d71ab-04a1-4c01-bb61-acfede27c046",
-        "allow_clientside_entities": "true",
-        "patch_version": "14175",
         "server_name": "Valve Counter-Strike 2 eu_west Server (srcds223-fra2.272.208)",
+        "demo_version_guid": "8e9d71ab-04a1-4c01-bb61-acfede27c046",
+        "patch_version": "14175",
+        "addons": "",
+        "client_name": "SourceTV Demo",
+        "demo_version_name": "valve_demo_2",
         "demo_file_stamp": "PBDEMS2\u0000",
-        "fullpackets_version": "2"
+        "allow_clientside_entities": "true"
       }
     },
     {
@@ -7579,19 +7579,20 @@
       "rows": 24888
     },
     {
-      "key": "b9fc652299c5f349",
+      "key": "35f0b1b1a62fb3f9",
       "method": "parse_event",
       "payload": {
         "name": "player_death",
         "player": [
           "X",
           "Y",
-          "Z"
+          "Z",
+          "last_place_name"
         ],
         "other": []
       },
       "kind": "frame",
-      "file": "b9fc652299c5f349.parquet",
+      "file": "35f0b1b1a62fb3f9.parquet",
       "rows": 37
     },
     {

@@ -129,6 +129,18 @@ def test_fadenkreuz_beim_ersten_sehen(player):
     assert player.first_sight_median == pytest.approx(3.10, abs=0.01)
 
 
+def test_callouts_an_den_kill_positionen(result):
+    """Schema 5: Callout aus dem Nav-Mesh je Kill - Grundlage der Zonen-Auswertung.
+
+    Fehlte last_place_name in der Aufzeichnung, faende der Parser das
+    Event gar nicht und alle Kill-Positionen fehlten - daher auch die Anzahl.
+    """
+    kp = result.kill_positions
+    assert len(kp) == 37
+    assert all(k["attacker_place"] and k["victim_place"] for k in kp)
+    assert {k["victim_place"] for k in kp} >= {"BombsiteA", "TopofMid"}
+
+
 def test_spray_zaehlt_treffer_nicht_kills(player):
     """Frueher burst_kills/spray_kills benannt, gezaehlt wurden Treffer.
 

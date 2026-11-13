@@ -1465,14 +1465,26 @@ def _process_first_sight(parser: DemoParser, player_lookup: dict[str, "PlayerSta
                     _angular_error(ox, oy, oz, oyaw, opitch, ex, ey, ez))
 
 
+def _place(value) -> str:
+    """Callout-Name oder "" (NaN, None und leere Namen gibt es bei Welt-Toden)."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return ""
+    return str(value).strip()
+
+
 def _extract_kill_positions(
     parser: DemoParser, player_lookup: dict[str, "PlayerStats"],
     round_ticks: list[int],
 ) -> list[dict]:
-    """Extract attacker/victim XY positions for each kill (2D map visualization)."""
+    """Extract attacker/victim XY positions for each kill (2D map visualization).
+
+    Dazu der Callout beider Spieler (``last_place_name`` aus dem Nav-Mesh der
+    Map, z.B. "Connector") - Grundlage fuer Duelle je Zone ueber alle
+    Matches. Keine eigenen Kartenpolygone noetig.
+    """
     df = _get_enriched_event_df(
         parser, "player_death",
-        ["X", "Y", "Z"],
+        ["X", "Y", "Z", "last_place_name"],
     )
     if df is None:
         return []
@@ -1512,6 +1524,8 @@ def _extract_kill_positions(
             "weapon": str(row.get("weapon", "")),
             "headshot": bool(row.get("headshot", False)),
             "round": round_num,
+            "attacker_place": _place(row.get("attacker_last_place_name")),
+            "victim_place": _place(row.get("user_last_place_name")),
         })
 
     return positions

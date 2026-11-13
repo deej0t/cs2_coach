@@ -107,6 +107,9 @@ def _compact_kill_positions(positions: list[dict], target_id: str) -> list[dict]
             # (demo_gototick) und das Replay des Ausschnitts.
             "tk": kp.get("tick", 0),
             "e": kp["victim_name"] if is_kill else kp["attacker_name"],
+            # Callouts (Schema 5): p = wo du standest, ep = wo der Gegner stand
+            "p": kp.get("attacker_place" if is_kill else "victim_place", ""),
+            "ep": kp.get("victim_place" if is_kill else "attacker_place", ""),
         })
     return compact
 
