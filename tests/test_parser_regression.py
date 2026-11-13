@@ -175,3 +175,16 @@ def test_granatenschaden_und_wurfzeitpunkt(player, result):
     assert own_he == [(2, 17.2), (5, 8.5), (7, 9.1)]
     assert all(u["seconds"] is not None and u["seconds"] >= 0
                for u in result.utility_positions)
+
+
+def test_kaufart_und_todeszeitpunkt_je_runde(result):
+    """Schema 6: Grundlage von "fruehe Granate im Full Buy".
+
+    Kaufart wie in der Economy-Auswertung (Ausruestungswert bei Freeze-Ende),
+    Todessekunde ab Freeze-Ende - dieselbe Uhr wie "s" an den Granaten.
+    """
+    tl = result.round_timeline
+    assert [e.get("buy") for e in tl].count("fullbuy") == 7
+    assert tl[0]["buy"] == "pistol" and tl[12]["buy"] == "pistol"
+    assert tl[3]["death_s"] == 16.9
+    assert tl[1]["death_s"] is None and not tl[1]["player_died"]

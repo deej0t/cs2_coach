@@ -574,10 +574,18 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
     )
 
     # 14) Economy Performance
+    round_buy: dict[int, str] = {}
     economy_performance = _process_economy(
         parser, kills_df, hurt_df, rounds_df,
         freeze_ticks, round_ticks, target_steam_id, target_team, player_lookup,
+        round_buy=round_buy,
     )
+    # Kaufart je Runde in die Timeline (Schema 6): Grundlage der Kennzahl
+    # "fruehe Granate im Full Buy" (utility_analysis.early_utility)
+    for entry in round_timeline:
+        buy = round_buy.get(entry["round"] - 1)
+        if buy:
+            entry["buy"] = buy
 
     return MatchResult(
         map_name=_clean_map_name(map_name),
@@ -1661,6 +1669,7 @@ def _build_round_timeline(
         player_kills = 0
         player_died = False
         player_death_pct = None
+        player_death_tick = None
 
         for _, kill in rk.iterrows():
             tick = int(kill.get("tick", start))
@@ -1683,6 +1692,7 @@ def _build_round_timeline(
                 })
                 player_died = True
                 player_death_pct = elapsed_pct
+                player_death_tick = tick
 
         # Bomb events
         if bomb_plant_df is not None:
@@ -1719,6 +1729,10 @@ def _build_round_timeline(
             "player_kills": player_kills,
             "player_died": player_died,
             "died_early": player_death_pct is not None and player_death_pct < 33,
+            # Sekunde des eigenen Todes ab Freeze-Ende (Schema 6), gleiche Uhr
+            # wie "s" an den Granaten
+            "death_s": (round((player_death_tick - start) / _TICKRATE, 1)
+                        if player_death_tick is not None else None),
         })
 
     return timeline
@@ -1735,8 +1749,12 @@ def _process_economy(
     freeze_ticks: list[int], round_ticks: list[int],
     target_steam_id: str, target_team: str,
     player_lookup: dict[str, PlayerStats],
+    round_buy: dict[int, str] | None = None,
 ) -> dict:
-    """Classify rounds by economy and compute per-category performance."""
+    """Classify rounds by economy and compute per-category performance.
+
+    ``round_buy`` wird, falls uebergeben, mit Rundenindex -> Kategorie gefuellt.
+    """
     if not target_steam_id or rounds_df is None or not freeze_ticks:
         return {}
 
@@ -1787,6 +1805,8 @@ def _process_economy(
         else:
             cat = "fullbuy"
         categories[cat].append(ri)
+        if round_buy is not None:
+            round_buy[ri] = cat
 
     # Compute per-category stats
     kills_sorted = kills_df.sort_values("tick").reset_index(drop=True) if kills_df is not None else None
