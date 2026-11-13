@@ -8,11 +8,11 @@
 </div>
 <div style="display: flex; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4);">
     <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
+        <div id="early" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">Frühe Granate (Full Buys)</div></div>
+    <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
+        <div id="soll" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">Ziel (aus deinen Siegen)</div></div>
+    <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
         <div id="thrown" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">Granaten (Halbzeit)</div></div>
-    <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
-        <div id="soll" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">Ziel bis jetzt</div></div>
-    <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
-        <div id="wasted" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">mit ins Grab</div></div>
 </div>
 {% if summary.goal %}
 <div class="card elev-sm" style="margin-bottom: var(--space-4); border-left: 3px solid var(--color-green);">
@@ -67,9 +67,9 @@ async function tick() {
       lastId = s.hint.id;
     }
     if (s.map) document.getElementById('meta').textContent = `${s.map} · Runde ${s.round} · Halbzeit ${s.half}`;
+    document.getElementById('early').textContent = s.map ? (s.early + '/' + s.full_buys) : '–';
+    document.getElementById('soll').textContent = s.target ? Math.round(s.target) + ' %' : '–';
     document.getElementById('thrown').textContent = s.map ? s.thrown : '–';
-    document.getElementById('soll').textContent = s.target ? (s.target * Math.max(s.rounds - 1, 0)).toFixed(0) : '–';
-    document.getElementById('wasted').textContent = s.map ? s.wasted : '–';
     document.getElementById('log').innerHTML = (s.log || []).slice(0, -1).reverse()
       .map(h => `<div>${h.text.replace(/</g, '&lt;')}</div>`).join('');
   } catch (e) {}

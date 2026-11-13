@@ -39,8 +39,10 @@ def create_blueprint(load_config, config_path) -> Blueprint:
     def state():
         st = live_coach.load_state(Path(config_path()))
         thrown, rounds, wasted = live_coach.half_stats(st) if st else (0, 0, 0)
+        early, full_buys = live_coach.early_stats(st) if st else (0, 0)
         return jsonify({"map": st.get("map"), "round": st.get("round"), "half": st.get("half"),
                         "target": st.get("target"), "thrown": thrown, "rounds": rounds, "wasted": wasted,
+                        "early": early, "full_buys": full_buys,
                         "hint": st.get("hint"), "log": st.get("log", [])[-6:], "over": st.get("over", False)})
 
     @bp.route("/live")
