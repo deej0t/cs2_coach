@@ -183,6 +183,9 @@ def _player_to_json(p: PlayerStats, is_target: bool,
     d = {
         "name": p.name,
         "steam_id": p.steam_id,
+        # Startseite ("T"/"CT"), Schema 5 - trennt im Scoreboard die Teams.
+        # Ohne Kill-Ereignis bleibt die Roster-Nummer stehen; Leser pruefen.
+        "team": p.team,
         "kills": p.kills,
         "deaths": p.deaths,
         "assists": p.assists,

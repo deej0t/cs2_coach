@@ -1,0 +1,99 @@
+{# Dieses Match gegen die eigenen letzten Matches (cs2_coach/match_compare.py).
+
+   Erwartet: mc = match_compare.build(...)
+
+   Nur Messung, kein Urteil: der Prozentrang sagt, wie ungewoehnlich ein
+   Wert fuer dich war, nicht ob er wichtig ist. Deshalb neutrale Farben
+   statt Gruen/Rot - ob eine Kennzahl Siege trennt, steht auf /coaching.
+#}
+{% if mc and (mc.top or mc.utility) %}
+<style>
+    .mc-meter { position:relative; width:110px; height:6px; border-radius:3px;
+                background:var(--color-neutral-800); display:inline-block; vertical-align:middle; }
+    .mc-meter .mc-mid { position:absolute; left:50%; top:-3px; width:1px; height:12px;
+                        background:var(--color-neutral-600); }
+    .mc-meter .mc-dot { position:absolute; top:50%; width:10px; height:10px; margin:-5px 0 0 -5px;
+                        border-radius:50%; background:var(--color-accent);
+                        box-shadow:0 0 0 2px var(--color-surface); }
+    .mc-top { display:flex; flex-wrap:wrap; gap:var(--space-2); margin-bottom:var(--space-3); }
+    .mc-chip { border:1px solid var(--color-divider); border-radius:8px; padding:6px 10px; font-size:12px; }
+    .mc-chip b { font-size:14px; }
+    .mc-bar { height:14px; border-radius:0 4px 4px 0; }
+    .mc-sub { font-size:11px; color:var(--color-neutral-500); }
+</style>
+<div class="grid-2" style="margin-bottom:var(--space-5);">
+    {% if mc.top %}
+    <div class="card elev-sm">
+        <span class="card-kicker">{{ _('Dieses Match gegen deine letzten') }} {{ mc.n }}</span>
+        <div class="mc-sub" style="margin:4px 0 var(--space-3);">
+            {{ _('Am weitesten von deinem Normalfall weg, nach oben wie nach unten:') }}
+        </div>
+        <div class="mc-top">
+            {% for r in mc.top %}
+            <div class="mc-chip" title="{{ r.meaning }} {{ r.how }}">
+                {{ r.label }} <b>{{ r.value }}{{ r.unit }}</b><br>
+                <span class="mc-sub">{{ _('besser als in') }} {{ r.better_pct }} % {{ _('deiner Matches') }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <details>
+            <summary class="mc-sub" style="cursor:pointer;">{{ _('Alle Kennzahlen') }}</summary>
+            <table class="table" style="margin-top:var(--space-2);"><tbody>
+                {% for r in mc.rows %}
+                <tr title="{{ r.meaning }} {{ r.how }}{% if r.median is not none %} {{ _('Dein Median') }}: {{ r.median }}{{ r.unit }} ({{ r.n }} Matches).{% endif %}">
+                    <td>
+                        <abbr title="{{ r.meaning }} {{ r.how }}">{{ r.label }}</abbr>
+                        {% if r.outcome_driven %}<span class="mc-sub" style="color:var(--color-yellow);"
+                            title="{{ _('Steigt auch dann, wenn schlicht die Runde gewonnen wurde.') }}">{{ _('ergebnisabhaengig') }}</span>{% endif %}
+                    </td>
+                    <td style="white-space:nowrap;">{{ r.value }}{{ r.unit }}</td>
+                    <td class="mc-sub" style="white-space:nowrap;">
+                        {% if r.median is not none %}{{ _('Median') }} {{ r.median }}{{ r.unit }}{% else %}{{ _('zu wenig Matches') }}{% endif %}
+                    </td>
+                    <td style="white-space:nowrap;text-align:right;">
+                        {% if r.better_pct is not none %}
+                        <span class="mc-meter" role="img" aria-label="{{ _('besser als in') }} {{ r.better_pct }} %">
+                            <span class="mc-mid"></span>
+                            <span class="mc-dot" style="left:{{ r.better_pct }}%;"></span>
+                        </span>
+                        <span class="mc-sub" style="display:inline-block;width:38px;text-align:right;">{{ r.better_pct }} %</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody></table>
+        </details>
+        <div class="mc-sub" style="margin-top:var(--space-3);">
+            {{ _('Nur Messung: wie ungewoehnlich der Wert fuer dich war. Ob eine Kennzahl bei dir Siege von Niederlagen trennt, steht unter') }}
+            <a href="{{ url_for('coaching') }}">{{ _('Empfehlungen') }}</a>.
+        </div>
+    </div>
+    {% endif %}
+    {% if mc.utility %}
+    {% set u = mc.utility %}
+    <div class="card elev-sm">
+        <span class="card-kicker">{{ _('Granaten beider Teams') }}</span>
+        <div class="mc-sub" style="margin:4px 0 var(--space-3);">
+            {{ _('Granaten pro Runde sind dein am deutlichsten gemessener Siegfaktor.') }}
+        </div>
+        <table class="table"><tbody>
+            <tr>
+                <td style="white-space:nowrap;">{{ _('Dein Team') }}</td>
+                <td style="width:100%;"><div class="mc-bar" style="width:{{ u.own_width }}%;background:var(--color-accent);"
+                         title="{{ u.own }} {{ _('Granaten') }}, {{ u.own_per_round }} {{ _('pro Runde') }}"></div></td>
+                <td style="white-space:nowrap;text-align:right;">{{ u.own }} <span class="mc-sub">({{ u.own_per_round }}/{{ _('Runde') }})</span></td>
+            </tr>
+            <tr>
+                <td>{{ _('Gegner') }}</td>
+                <td style="width:100%;"><div class="mc-bar" style="width:{{ u.enemy_width }}%;background:var(--color-neutral-500);"
+                         title="{{ u.enemy }} {{ _('Granaten') }}, {{ u.enemy_per_round }} {{ _('pro Runde') }}"></div></td>
+                <td style="white-space:nowrap;text-align:right;">{{ u.enemy }} <span class="mc-sub">({{ u.enemy_per_round }}/{{ _('Runde') }})</span></td>
+            </tr>
+        </tbody></table>
+        <div class="mc-sub" style="margin-top:var(--space-2);">
+            {{ _('Davon du') }}: {{ u.mine }} · {{ u.rounds }} {{ _('Runden') }}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}

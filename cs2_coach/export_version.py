@@ -49,7 +49,7 @@ SCHEMA_FEATURES = {
     2: "Detonationsorte der eigenen Granaten (Utility-Karte)",
     3: "Ticks an den Kill-Positionen (Sprung in die Demo, 2D-Replay)",
     4: "HE- und Feuerschaden sowie Wurfzeitpunkt der Granaten",
-    5: "Fadenkreuz beim ersten Sehen eines Gegners",
+    5: "Fadenkreuz beim ersten Sehen eines Gegners, Startseite aller Spieler",
 }
 
 #: Was die jeweilige Metrik-Version korrigiert hat. Fehlt sie, sind die

@@ -918,8 +918,13 @@ def create_app() -> Flask:
                 "kast": round(sum(e.get("kast", 0) for e in all_exports) / n, 1),
                 "hs_pct": round(sum(e.get("hs_pct", 0) for e in all_exports) / n, 1),
             }
+        from ..match_compare import build as _match_compare
+        try:
+            mc = _match_compare(export_dir, filename, data)
+        except Exception:  # noqa: BLE001 - Zusatzkarte, darf die Seite nicht kippen
+            mc = None
         return render_template("export_detail.html", data=data, analysis=analysis,
-                               filename=filename, demo_path=demo_path,
+                               filename=filename, demo_path=demo_path, mc=mc,
                                player_avg=avg, ai_report=_report_ai_load(CONFIG_PATH, filename),
                                kill_map_data=_build_kill_map_data_from_export(data),
                                config=cfg)
