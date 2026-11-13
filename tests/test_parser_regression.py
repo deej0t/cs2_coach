@@ -117,6 +117,18 @@ def test_crosshair_median_statt_mittel(player):
     assert sum(buckets) == player.crosshair_placement_kills
 
 
+def test_fadenkreuz_beim_ersten_sehen(player):
+    """Schema 5: Winkelfehler, wenn ein Gegner neu in Sicht kommt.
+
+    Die Messung faengt Parser-Fehler ab wie die uebrigen auch - fehlte die
+    Aufzeichnung des parse_ticks-Aufrufs, bliebe die Liste still leer.
+    Deshalb ist hier die Anzahl festgenagelt, nicht nur der Median.
+    Gegengeprueft mit der Ad-hoc-Messung vom 13.11. (15 Sichtungen).
+    """
+    assert len(player.first_sight_errors) == 15
+    assert player.first_sight_median == pytest.approx(3.10, abs=0.01)
+
+
 def test_spray_zaehlt_treffer_nicht_kills(player):
     """Frueher burst_kills/spray_kills benannt, gezaehlt wurden Treffer.
 

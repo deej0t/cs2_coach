@@ -65,6 +65,12 @@ class Rule:
     # wurde. Solche Metriken korrelieren zwangslaeufig mit dem Ergebnis und
     # taugen nicht als Ursache - wer Runden gewinnt, ueberlebt sie auch.
     outcome_driven: bool = False
+    # Nur beobachten: Verteilung und Effektstaerke (Sieg gegen Niederlage)
+    # werden berechnet, aber es entstehen keine Befunde, kein Verlauf und
+    # kein Trainingsziel. Fuer neue Kennzahlen, bis ein Urteil vorliegt und
+    # sich begruendete Schwellen angeben lassen - eine ausgedachte Schwelle
+    # waere ein Ratschlag ohne Messung.
+    observe_only: bool = False
 
     def extract(self, player: dict) -> float | None:
         for path in (self.path, self.fallback_path):
@@ -96,6 +102,8 @@ class Rule:
             return False
 
     def severity_for(self, value: float) -> str:
+        if self.observe_only:
+            return OK
         if self.lower_is_better:
             if value > self.critical:
                 return CRITICAL
@@ -120,6 +128,18 @@ RULES: list[Rule] = [
         critical=15.0, warning=8.0, lower_is_better=True, unit="°",
         advice="Fadenkreuz auf Kopfhoehe und auf den naechsten erwarteten Angle.",
         min_sample_path=("crosshair_placement", "kills_analyzed"), min_sample=1,
+    ),
+    Rule(
+        # Schema 5. Ad-hoc-Messung 2026-11-13 ueber 133 Matches: 2,57 Grad in
+        # Siegen gegen 2,95 in Niederlagen, d = +0,36 [+0,02...+0,70],
+        # unentschieden. Die Messung 0,5 s vor dem Kill trennte gar nicht
+        # (d = -0,03). Schwellen sind Platzhalter, observe_only greift.
+        key="first_sight",
+        label="Fadenkreuz beim ersten Sehen",
+        path=("first_sight", "median_degrees"),
+        critical=0.0, warning=0.0, lower_is_better=True, unit="°",
+        min_sample_path=("first_sight", "sightings"), min_sample=10,
+        observe_only=True,
     ),
     Rule(
         key="counter_strafe",
@@ -179,10 +199,19 @@ RULES: list[Rule] = [
 RULES_BY_KEY = {r.key: r for r in RULES}
 
 
-def evaluate(player: dict) -> list[Finding]:
-    """Alle Regeln auf ein Spieler-Dict (Export-JSON-Schema) anwenden."""
+def evaluate(player: dict, include_observed: bool = False) -> list[Finding]:
+    """Alle Regeln auf ein Spieler-Dict (Export-JSON-Schema) anwenden.
+
+    Regeln mit observe_only kommen nur mit ``include_observed`` - das nutzen
+    allein Baselines und Effektstaerke. Alle anderen Leser (KI-Nachbesprechung,
+    Wochenrueckblick, Briefing, In-Game-Coach) waehlen aus diesen Werten
+    "besser/schlechter als sonst" und den Fokus; eine Kennzahl ohne Urteil
+    darf dort nicht auftauchen.
+    """
     out: list[Finding] = []
     for rule in RULES:
+        if rule.observe_only and not include_observed:
+            continue
         if not rule.has_enough_data(player):
             continue
         value = rule.extract(player)
@@ -389,7 +418,7 @@ def build_baselines(matches: list[dict]) -> dict[str, Baseline]:
     """Persoenliche Verteilung je Metrik aus der eigenen Historie."""
     vals: dict[str, list[float]] = {}
     for m in matches:
-        for f in evaluate(m.get("player") or {}):
+        for f in evaluate(m.get("player") or {}, include_observed=True):
             vals.setdefault(f.key, []).append(f.value)
 
     out: dict[str, Baseline] = {}
@@ -404,8 +433,8 @@ def build_baselines(matches: list[dict]) -> dict[str, Baseline]:
             p10=round(_percentile(sv, 10), 2), p25=round(_percentile(sv, 25), 2),
             p50=round(_percentile(sv, 50), 2), p75=round(_percentile(sv, 75), 2),
             p90=round(_percentile(sv, 90), 2),
-            always_fires=hits >= len(v) * 0.9,
-            never_fires=hits <= len(v) * 0.05,
+            always_fires=not rule.observe_only and hits >= len(v) * 0.9,
+            never_fires=not rule.observe_only and hits <= len(v) * 0.05,
         )
         b._vals = sv
         out[key] = b
@@ -487,7 +516,7 @@ def build_relevance(matches: list[dict]) -> list[Relevance]:
         if result not in ("Sieg", "Niederlage"):
             continue
         target = wins if result == "Sieg" else losses
-        for f in evaluate(m.get("player") or {}):
+        for f in evaluate(m.get("player") or {}, include_observed=True):
             target.setdefault(f.key, []).append(f.value)
 
     out: list[Relevance] = []
@@ -533,7 +562,7 @@ def training_priorities(matches: list[dict], limit: int = 2) -> list[Track]:
     candidates = []
     for t in tracks:
         rule = RULES_BY_KEY.get(t.key)
-        if rule is None or rule.outcome_driven:
+        if rule is None or rule.outcome_driven or rule.observe_only:
             continue
         if t.issue_count == 0:
             continue

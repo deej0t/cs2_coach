@@ -103,6 +103,8 @@ class PlayerStats:
     crosshair_placement_good: int = 0      # 5-15°
     crosshair_placement_average: int = 0   # 15-30°
     crosshair_placement_poor: int = 0      # > 30°
+    # Winkelfehler in dem Moment, in dem ein Gegner neu in Sicht kommt
+    first_sight_errors: list[float] = field(default_factory=list)
 
     @property
     def kd_ratio(self) -> float:
@@ -230,6 +232,20 @@ class PlayerStats:
         if not self.crosshair_placement_errors:
             return 0.0
         return median(self.crosshair_placement_errors)
+
+    @property
+    def first_sight_median(self) -> float:
+        """Typischer Winkelfehler beim ersten Sehen eines Gegners (Median).
+
+        Misst das Vorzielen *vor* dem Duell - anders als crosshair_placement,
+        das 0,5 s vor dem Kill misst, also schon mitten im Nachziehen.
+        Gemessen 2026-11-13 ueber 133 Matches: beim ersten Sehen 2,57 Grad
+        in Siegen gegen 2,95 in Niederlagen (d = +0,36 [+0,02...+0,70],
+        unentschieden), 0,5 s vor dem Kill 3,59 gegen 3,56 (d = -0,03).
+        """
+        if not self.first_sight_errors:
+            return 0.0
+        return median(self.first_sight_errors)
 
     @property
     def crosshair_placement_rating(self) -> str:
@@ -518,6 +534,7 @@ def parse_demo(demo_path: str, player_name: str = "", steam_id: str = "") -> Mat
 
     # 10) Crosshair Placement
     _process_crosshair_placement(parser, player_lookup)
+    _process_first_sight(parser, player_lookup, freeze_ticks, round_ticks)
 
     # 10b) Kill Positions for 2D Map
     kill_positions = _extract_kill_positions(parser, player_lookup, round_ticks)
@@ -1374,6 +1391,78 @@ def _process_crosshair_placement(parser: DemoParser, player_lookup: dict[str, "P
             stats.crosshair_placement_average += 1
         else:
             stats.crosshair_placement_poor += 1
+
+
+FIRST_SIGHT_STEP = 4          # Abtastung alle 4 Ticks = 16 Hz
+FIRST_SIGHT_QUIET_TICKS = 32  # 0,5 s nicht gesehen -> erneutes Sehen zaehlt neu
+
+
+def _live_sample_ticks(freeze_ticks: list[int], round_ticks: list[int], step: int) -> list[int]:
+    """Abtast-Ticks von jedem Freeze-Ende bis zum folgenden Rundenende."""
+    ticks: list[int] = []
+    for start in freeze_ticks:
+        end = next((r for r in round_ticks if r > start), None)
+        if end is not None:
+            ticks.extend(range(int(start), int(end), step))
+    return ticks
+
+
+def _process_first_sight(parser: DemoParser, player_lookup: dict[str, "PlayerStats"],
+                         freeze_ticks: list[int], round_ticks: list[int]):
+    """Winkelfehler in dem Moment, in dem ein Gegner neu in Sicht kommt.
+
+    Sichtbarkeit = ``approximate_spotted_by`` des Gegners (Radar-
+    Sichtbarkeit, dieselbe Grundlage wie die Spotted-Maske im Server-
+    Training). Ein Sehen zaehlt neu, wenn derselbe Gegner zuvor 0,5 s nicht
+    gesehen wurde; beide muessen leben. Gemessen wird Fuss zu Fuss mit
+    ``_angular_error`` wie beim Crosshair Placement.
+
+    Das Feld schlaegt leicht verzoegert an (im Training ~124 ms), der Wert
+    liegt daher unter Leetifys "Crosshair Placement" (Leetify-Abgleich am
+    12.11.: 2,3 statt 9,4 Grad). Verglichen wird nur mit sich selbst.
+    """
+    ticks = _live_sample_ticks(freeze_ticks, round_ticks, FIRST_SIGHT_STEP)
+    if not ticks:
+        return
+    try:
+        df = parser.parse_ticks(
+            ["X", "Y", "Z", "pitch", "yaw", "team_num", "is_alive", "approximate_spotted_by"],
+            ticks=ticks)
+    except Exception:
+        return
+    if df is None or len(df) == 0 or "approximate_spotted_by" not in df.columns:
+        return
+
+    by_tick: dict[int, dict[str, tuple]] = {}
+    for tick, sid, x, y, z, pitch, yaw, team, alive, spotted in zip(
+            df["tick"], df["steamid"], df["X"], df["Y"], df["Z"], df["pitch"], df["yaw"],
+            df["team_num"], df["is_alive"], df["approximate_spotted_by"]):
+        by_tick.setdefault(int(tick), {})[str(sid)] = (x, y, z, pitch, yaw, team, alive, spotted)
+
+    last_seen: dict[tuple[str, str], int] = {}
+    for tick in sorted(by_tick):
+        players = by_tick[tick]
+        for enemy_sid, enemy in players.items():
+            ex, ey, ez, _, _, eteam, ealive, spotted_by = enemy
+            if eteam not in (2, 3) or spotted_by is None:
+                continue
+            for obs in spotted_by:
+                obs_sid = str(obs)
+                observer = players.get(obs_sid)
+                if observer is None or observer[5] not in (2, 3) or observer[5] == eteam:
+                    continue
+                key = (obs_sid, enemy_sid)
+                new = tick - last_seen.get(key, -10 ** 9) > FIRST_SIGHT_QUIET_TICKS
+                last_seen[key] = tick
+                stats = player_lookup.get(obs_sid)
+                if not new or stats is None or not observer[6] or not ealive:
+                    continue
+                ox, oy, oz, opitch, oyaw = observer[:5]
+                vals = (ox, oy, oz, opitch, oyaw, ex, ey, ez)
+                if any(v is None or not math.isfinite(float(v)) for v in vals):
+                    continue
+                stats.first_sight_errors.append(
+                    _angular_error(ox, oy, oz, oyaw, opitch, ex, ey, ez))
 
 
 def _extract_kill_positions(

@@ -54,9 +54,18 @@ class RecordingParser:
             # Objekt-Spalten mit gemischten Typen brechen Parquet; die
             # betroffenen Spalten werden zu Text, was fuer die Auswertung
             # ausreicht (SteamIDs sind ohnehin Strings).
+            # Ausnahme: Listen-Spalten (approximate_spotted_by) bleiben
+            # Listen - als Text kaeme "[...]" zurueck und die Messung
+            # liefe still leer.
             df = value.copy()
             for col in df.columns:
-                if df[col].dtype == object:
+                if df[col].dtype != object:
+                    continue
+                vals = df[col].dropna()
+                if len(vals) and all(isinstance(v, (list, tuple)) for v in vals):
+                    df[col] = df[col].map(
+                        lambda v: [str(x) for x in v] if isinstance(v, (list, tuple)) else [])
+                else:
                     df[col] = df[col].astype(str)
             df.to_parquet(self._out / fn, index=False)
             entry.update(kind="frame", file=fn, rows=len(df))

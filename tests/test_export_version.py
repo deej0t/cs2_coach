@@ -20,7 +20,8 @@ from cs2_coach.export_version import (
 )
 
 
-def make(*, median=True, utility=False, tick=False, seconds=False, **extra) -> dict:
+def make(*, median=True, utility=False, tick=False, seconds=False, first_sight=False,
+         **extra) -> dict:
     """Export-Fragment mit genau den Feldern, die die Version ausmachen."""
     kp = {"t": "k", "x": 1.0, "y": 2.0, "r": 1}
     if tick:
@@ -35,6 +36,8 @@ def make(*, median=True, utility=False, tick=False, seconds=False, **extra) -> d
         data["utility_positions"] = [{"t": "s", "x": 1.0, "y": 2.0, "r": 1}]
         if seconds:
             data["utility_positions"][0].update({"tk": 4321, "s": 8.5})
+    if first_sight:
+        data["player"]["first_sight"] = {"median_degrees": 2.6, "sightings": 40}
     data.update(extra)
     return data
 
@@ -47,6 +50,7 @@ def test_erschliesst_schema_aus_den_feldern():
     assert export_versions(make(utility=True))[0] == 2
     assert export_versions(make(utility=True, tick=True))[0] == 3
     assert export_versions(make(utility=True, tick=True, seconds=True))[0] == 4
+    assert export_versions(make(utility=True, tick=True, seconds=True, first_sight=True))[0] == 5
 
 
 def test_median_degrees_belegt_die_metrik_korrekturen():
@@ -70,7 +74,7 @@ def test_eingetragene_version_schlaegt_die_ableitung():
 # ── Bewertung ────────────────────────────────────────────────────────
 
 def test_aktueller_export_ist_nicht_veraltet():
-    st = export_status(make(utility=True, tick=True, seconds=True))
+    st = export_status(make(utility=True, tick=True, seconds=True, first_sight=True))
     assert st["is_outdated"] is False
     assert st["needs_reanalysis"] is False
     assert st["missing"] == []
@@ -78,11 +82,12 @@ def test_aktueller_export_ist_nicht_veraltet():
 
 
 def test_fehlende_felder_sind_kein_richtigkeitsproblem():
-    """Schema 1: Utility-Karte und Ticks fehlen, die Zahlen stimmen aber."""
+    """Schema 1: Utility-Karte, Ticks, Granatenschaden und erstes Sehen fehlen,
+    die Zahlen stimmen aber."""
     st = export_status(make())
     assert st["is_outdated"] is True
     assert st["needs_reanalysis"] is False
-    assert len(st["missing"]) == 3
+    assert len(st["missing"]) == 4
     assert st["unreliable"] == []
 
 
@@ -116,7 +121,8 @@ def write_export(d, name, demo_file, **kw):
 
 def test_demo_status_trennt_aktuell_von_veraltet(tmp_path):
     write_export(tmp_path, "alt", "a.dem")
-    write_export(tmp_path, "neu", "b.dem", utility=True, tick=True, seconds=True)
+    write_export(tmp_path, "neu", "b.dem", utility=True, tick=True, seconds=True,
+                 first_sight=True)
     st = demo_status(tmp_path)
     assert st["a.dem"]["is_current"] is False
     assert st["b.dem"]["is_current"] is True
@@ -124,7 +130,8 @@ def test_demo_status_trennt_aktuell_von_veraltet(tmp_path):
 
 def test_demo_mit_mehreren_exporten_ist_nur_ganz_aktuell(tmp_path):
     """Ein veralteter Export je Spieler genuegt, die Demo neu zu lesen."""
-    write_export(tmp_path, "spieler1", "a.dem", utility=True, tick=True, seconds=True)
+    write_export(tmp_path, "spieler1", "a.dem", utility=True, tick=True, seconds=True,
+                 first_sight=True)
     write_export(tmp_path, "spieler2", "a.dem")
     st = demo_status(tmp_path)
     assert st["a.dem"]["exports"] == 2

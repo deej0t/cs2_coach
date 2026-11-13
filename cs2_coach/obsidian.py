@@ -205,6 +205,13 @@ def _player_to_json(p: PlayerStats, is_target: bool,
             "average": p.crosshair_placement_average,
             "poor": p.crosshair_placement_poor,
         },
+        # Ohne gezaehltes Sehen bleibt der Median leer statt 0 - 0 Grad
+        # waere sonst ein perfekter Wert.
+        "first_sight": {
+            "median_degrees": (round(p.first_sight_median, 2)
+                               if p.first_sight_errors else None),
+            "sightings": len(p.first_sight_errors),
+        },
         "counter_strafe_score": round(p.counter_strafe_score, 1),
         "counter_strafe_pct": round(p.counter_strafe_score, 1),
         "avg_inaccuracy_move": round(p.avg_inaccuracy_move, 2),
