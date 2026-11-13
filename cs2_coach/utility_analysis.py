@@ -20,7 +20,7 @@ Tatsache.
 
 from __future__ import annotations
 
-from .evidence import compare_groups
+from .evidence import Comparison, compare_groups, compare_rates
 from .findings import Relevance
 
 #: Kuerzel im Export -> Anzeigename. Siehe _compact_utility_positions().
@@ -186,3 +186,64 @@ def he_effectiveness(exports: list[dict]) -> dict:
             verdict=c.verdict, matches_needed=c.n_needed,
         ))
     return {"rows": rows, "matches_used": used, "matches_skipped": skipped}
+
+
+# ── Fruehe Granate im Full Buy ──────────────────────────────────────────
+#
+# Granaten je Match sind zum grossen Teil eine Folge gewonnener Runden:
+# gemessen 13.11. ueber 131 Matches wirft der *Gegner* in deinen Siegen
+# 1,05 statt 1,44 pro Runde (d = -0,93) - wer verliert, stirbt frueher und
+# hat weniger Geld. Diese Kennzahl schaltet beides aus: nur Full-Buy-Runden
+# (Geld vorhanden) und nur, wenn du die ersten EARLY_SECONDS ueberlebt hast
+# (Gelegenheit vorhanden). Gezaehlt wird, ob du bis dahin eine Granate
+# geworfen hast. Braucht Schema 6 (round_timeline: buy, death_s) und
+# Schema 4 (utility_positions: s).
+
+EARLY_SECONDS = 35
+
+
+def _early_rounds(export: dict) -> set[int]:
+    """Runden, in denen du in den ersten EARLY_SECONDS eine Granate geworfen hast."""
+    return {int(u.get("r", 0)) for u in export.get("utility_positions") or []
+            if u.get("t") in GRENADE_TYPES and u.get("s") is not None
+            and u["s"] <= EARLY_SECONDS}
+
+
+def _counted_rounds(export: dict) -> list[dict] | None:
+    """Full-Buy-Runden, in denen du EARLY_SECONDS ueberlebt hast - None ohne Felder."""
+    timeline = export.get("round_timeline") or []
+    if not any("buy" in r for r in timeline):
+        return None
+    utility = export.get("utility_positions") or []
+    if utility and not any("s" in u for u in utility):
+        return None
+    return [r for r in timeline
+            if r.get("buy") == "fullbuy"
+            and (r.get("death_s") is None or r["death_s"] >= EARLY_SECONDS)]
+
+
+def early_utility(export: dict) -> tuple[int, int] | None:
+    """(Runden mit frueher Granate, gezaehlte Runden) - None ohne die Felder."""
+    rounds = _counted_rounds(export)
+    if rounds is None:
+        return None
+    early = _early_rounds(export)
+    return sum(int(r.get("round", 0)) in early for r in rounds), len(rounds)
+
+
+def early_utility_rounds(exports: list[dict]) -> Comparison | None:
+    """Rundenebene: gewonnene Runden mit frueher Granate gegen ohne."""
+    won_with = n_with = won_without = n_without = 0
+    for export in exports:
+        rounds = _counted_rounds(export)
+        if rounds is None:
+            continue
+        early = _early_rounds(export)
+        for r in rounds:
+            if int(r.get("round", 0)) in early:
+                won_with += bool(r.get("won"))
+                n_with += 1
+            else:
+                won_without += bool(r.get("won"))
+                n_without += 1
+    return compare_rates(won_with, n_with, won_without, n_without)

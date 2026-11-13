@@ -22,18 +22,23 @@ Der Nutzer muss nichts tun, kein Ziel setzen und nichts bestaetigen.
 from __future__ import annotations
 
 import json
+from statistics import median
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .evidence import compare_groups, compare_rates
 from .findings import RULES_BY_KEY, SOLID_POSITIVE, build_relevance, evaluate, training_priorities
-from .utility_analysis import GRENADE_TYPES, _rates, throw_relevance
+from .utility_analysis import GRENADE_TYPES, _rates, early_utility, throw_relevance
 
 #: Ab so vielen Matches seit dem Start wird ein Vergleich gerechnet.
 #: Darunter gibt es nur den Stand, keine Aussage.
 MIN_AFTER = 8
 
 RECENT = 5
+
+#: Darunter ist die Quote eines Matches Zufall (1 von 2 = 50 %).
+MIN_EARLY_ROUNDS = 4
+EARLY_KEY = "early_util"
 
 
 @dataclass
@@ -60,6 +65,11 @@ def _when(export: dict) -> str:
 
 def _value(export: dict, key: str) -> float | None:
     """Wert einer Ziel-Kennzahl in einem Match, None wenn unbekannt."""
+    if key == EARLY_KEY:
+        counts = early_utility(export)
+        if counts is None or counts[1] < MIN_EARLY_ROUNDS:
+            return None
+        return round(100 * counts[0] / counts[1], 1)
     if key.startswith("util_"):
         rates = _rates(export)
         return None if rates is None else rates.get(key[len("util_"):])
@@ -69,11 +79,37 @@ def _value(export: dict, key: str) -> float | None:
     return None
 
 
+def _early_goal(exports: list[dict]) -> Goal | None:
+    """Ziel "fruehe Granate im Full Buy", wenn die Quote Siege belastbar trennt."""
+    def rates(result: str) -> list[float]:
+        return [v for e in exports if (e.get("match") or {}).get("result") == result
+                for v in [_value(e, EARLY_KEY)] if v is not None]
+    wins, losses = rates("Sieg"), rates("Niederlage")
+    c = compare_groups(wins, losses)
+    if c is None or c.verdict != SOLID_POSITIVE:
+        return None
+    return Goal(
+        key=EARLY_KEY, label="Frühe Granate im Full Buy", unit="%", higher_is_better=True,
+        target=round(median(wins), 1), loss=round(median(losses), 1),
+        why=(f"Anteil deiner Full-Buy-Runden mit Granate in den ersten 35 s (solange du lebst): "
+             f"in Siegen {c.mean_a:.0f} %, in Niederlagen {c.mean_b:.0f} % "
+             f"(belastbar, d={c.effect} [{c.ci_low} … {c.ci_high}])."),
+    )
+
+
 def _candidate_goals(exports: list[dict]) -> list[Goal]:
     goals: list[Goal] = []
 
     # 1) Granatentypen, deren Wurfrate belastbar mit Siegen einhergeht.
-    rel = throw_relevance(exports)
+    # 0) Fruehe Granate im Full Buy. Die Granatenzahl je Match steigt zum
+    #    grossen Teil, weil man Runden gewinnt (13.11.: der Gegner wirft in
+    #    deinen Siegen 1,05 statt 1,44 pro Runde). Ist die saubere Kennzahl
+    #    belastbar, ersetzt sie die Zaehl-Ziele je Granatentyp.
+    early = _early_goal(exports)
+    if early is not None:
+        goals.append(early)
+
+    rel = throw_relevance(exports) if early is None else {"rows": []}
     for r in rel["rows"]:
         typ = r.key[len("util_"):]
         if r.verdict != SOLID_POSITIVE or typ not in GRENADE_TYPES:
@@ -87,7 +123,7 @@ def _candidate_goals(exports: list[dict]) -> list[Goal]:
 
     # 2) Offene Trainingsziele aus den Befunden. Das allgemeine "Utility pro
     #    Runde" entfaellt, wenn die Granatentypen schon einzeln Ziele sind.
-    have_utility = any(g.key.startswith("util_") for g in goals)
+    have_utility = any(g.key.startswith("util_") or g.key == EARLY_KEY for g in goals)
     matches = [{"result": (e.get("match") or {}).get("result", ""),
                 "player": e.get("player") or {}, "date": _when(e)} for e in exports]
     # Nur was Siege belastbar von Niederlagen trennt (12.11.: Accuracy stand auf Platz 2,

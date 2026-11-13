@@ -20,6 +20,7 @@ from __future__ import annotations
 from statistics import median
 
 from .training import MIN_AFTER, _value
+from .utility_analysis import early_utility
 
 _DAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 _SHORT_DAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
@@ -31,13 +32,15 @@ _GOALS = {
     "util_f": ("⚡", "Flashbangs"),
     "util_s": ("💨", "Smokes"),
     "utility": ("🧨", "Granaten"),
+    "early_util": ("⏱️", "Frühe Granate im Full Buy"),
     "accuracy": ("🎯", "Treffsicherheit"),
     "crosshair_placement": ("➕", "Fadenkreuz-Position"),
     "counter_strafe": ("🛑", "Counter-Strafing"),
 }
 
 #: Kurzname fuer Saetze wie "eine HE oder Molotov werfen".
-_THROW = {"util_h": "HE", "util_m": "Molotov", "util_f": "Flash", "util_s": "Smoke", "utility": "Granate"}
+_THROW = {"util_h": "HE", "util_m": "Molotov", "util_f": "Flash", "util_s": "Smoke", "utility": "Granate",
+          "early_util": "Granate"}
 
 _VERDICT = {
     "solid_positive": "✅ belastbar besser",
@@ -168,7 +171,11 @@ def _goal_check(e: dict, g) -> tuple[str, bool] | None:
     if value is None:
         return None
     done = value >= g.target if g.higher_is_better else value <= g.target
-    if g.unit == "/Runde":
+    if g.key == "early_util":
+        # Zaehlbar statt Prozent: "6/9" = in 6 von 9 Full-Buy-Runden frueh geworfen
+        k, n = early_utility(e)
+        text = f"{icon} {k}/{n}"
+    elif g.unit == "/Runde":
         rounds = (e.get("match") or {}).get("total_rounds") or 0
         if not rounds:
             return None
