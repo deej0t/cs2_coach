@@ -1,0 +1,138 @@
+{# Fokus-Dashboard (cs2_coach/dashboard.py). Erwartet: d = dashboard.build(...)
+
+   Oben, was heute zaehlt (letztes Match, Ziel, naechster Schritt), darunter
+   Messung ohne Urteilsfarben. Bewertet wird nur das Ziel - mit dem
+   evidence-Urteil aus training.current_plan, wie im Tages-Briefing.
+#}
+<style>
+    .fd-row { display: grid; grid-template-columns: 3fr 2fr; gap: var(--space-4); margin-bottom: var(--space-4); }
+    .fd-row.half { grid-template-columns: 1fr 1fr; }
+    .fd-big { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+    .fd-sub { font-size: 12px; color: var(--color-neutral-500); }
+    .fd-stats { display: flex; gap: var(--space-5); flex-wrap: wrap; margin: var(--space-3) 0; }
+    .fd-stats b { display: block; font-size: 18px; }
+    .fd-quote { border-left: 3px solid var(--color-accent); padding: 6px 0 6px 12px; color: var(--color-neutral-300);
+                font-size: 14px; line-height: 1.5; margin: var(--space-3) 0; }
+    .fd-track { height: 10px; border-radius: 5px; background: var(--color-neutral-800); overflow: hidden; margin: 8px 0 4px; }
+    .fd-fill { height: 100%; border-radius: 5px; background: var(--color-accent); }
+    .fd-checks { display: flex; gap: 6px; flex-wrap: wrap; margin-top: var(--space-3); }
+    .fd-check { border: 1px solid var(--color-divider); border-radius: 6px; padding: 3px 8px; font-size: 12px; }
+    .fd-check.ok { border-color: var(--color-accent); color: var(--color-accent); }
+    .fd-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-4); }
+    .fd-form { display: flex; align-items: flex-end; gap: 3px; height: 150px; margin-top: var(--space-3); }
+    .fd-form div { flex: 1; border-radius: 3px 3px 0 0; min-height: 4px; }
+    .fd-form .w { background: var(--color-green); opacity: .75; }
+    .fd-form .l { background: var(--color-red); opacity: .6; }
+    .fd-form .d { background: var(--color-neutral-500); }
+    @media (max-width: 900px) { .fd-row, .fd-row.half { grid-template-columns: 1fr; } }
+</style>
+
+<div class="fd-row">
+    {# ── Letztes Match ── #}
+    {% set m = d.last %}
+    <div class="card elev-sm">
+        <span class="card-kicker">{{ _('Letztes Match') }} · {{ m.date }}</span>
+        <div style="display:flex;align-items:center;gap:var(--space-3);margin-top:6px;">
+            <span class="fd-big">{{ m.map }} {{ m.score }}</span>
+            {% if m.result == 'Sieg' %}<span class="tag tag-win">{{ _('Sieg') }}</span>
+            {% elif m.result == 'Niederlage' %}<span class="tag tag-loss">{{ _('Niederlage') }}</span>
+            {% else %}<span class="tag tag-draw">{{ m.result }}</span>{% endif %}
+        </div>
+        <div class="fd-stats">
+            {% if m.rating is not none %}<span class="fd-sub">Rating<b style="color:var(--color-text);">{{ m.rating }}</b></span>{% endif %}
+            {% if m.adr is not none %}<span class="fd-sub">ADR<b style="color:var(--color-text);">{{ m.adr }}</b></span>{% endif %}
+            {% if m.kd is not none %}<span class="fd-sub">K/D<b style="color:var(--color-text);">{{ m.kd }}</b></span>{% endif %}
+            {% if m.early %}<span class="fd-sub" title="{{ _('Full-Buy-Runden mit Granate in den ersten 35 s') }}">{{ _('Frühe Granate') }}<b style="color:var(--color-text);">{{ m.early[0] }}/{{ m.early[1] }}</b></span>{% endif %}
+        </div>
+        {% if d.intro %}<div class="fd-quote">{{ d.intro }}</div>{% endif %}
+        <a href="{{ url_for('view_export', filename=m.file) }}" style="font-size:13px;">{{ _('Ganze Analyse') }} →</a>
+    </div>
+
+    {# ── Ziel ── #}
+    <div class="card elev-sm">
+        <span class="card-kicker">{{ _('Dein Ziel') }}</span>
+        {% set g = d.goal %}
+        {% if g %}
+        <div style="font-size:17px;font-weight:600;margin-top:6px;">{{ g.label }}</div>
+        {% if g.recent is not none %}
+        <div style="margin-top:var(--space-3);"><span class="fd-big">{{ g.recent|round|int if g.unit == '%' else g.recent }}{{ ' %' if g.unit == '%' else g.unit }}</span>
+            <span class="fd-sub">{{ _('zuletzt (5 Matches)') }} · {{ _('Ziel') }} {{ g.target|round|int if g.unit == '%' else g.target }}{{ ' %' if g.unit == '%' else g.unit }}</span></div>
+        <div class="fd-track" role="img" aria-label="{{ g.fill }} % {{ _('vom Ziel') }}"><div class="fd-fill" style="width:{{ g.fill }}%;"></div></div>
+        {% endif %}
+        {% if g.checks %}
+        <div class="fd-checks">
+            {% for c in g.checks %}<span class="fd-check {{ 'ok' if c.ok }}" title="{{ c.map }}">⏱️ {{ c.k }}/{{ c.n }}{{ ' ✓' if c.ok }}</span>{% endfor %}
+        </div>
+        {% endif %}
+        <div class="fd-sub" style="margin-top:var(--space-3);">
+            {% if g.verdict == 'solid_positive' %}<span style="color:var(--color-green);">✅ {{ _('Seit dem Start belastbar besser') }}</span>
+            {% elif g.verdict == 'solid_negative' %}<span style="color:var(--color-red);">⚠️ {{ _('Seit dem Start belastbar schlechter') }}</span>
+            {% elif g.verdict %}{{ _('Seit dem Start noch kein belastbarer Unterschied') }}
+            {% else %}{{ g.note or '' }}{% endif %}
+            {% if g.since %} · {{ _('seit') }} {{ g.since }}{% endif %}
+        </div>
+        {% if g.early %}<div class="fd-sub" style="margin-top:6px;">{{ _('Im Full Buy eine Granate in den ersten 35 s - solange du lebst.') }}</div>{% endif %}
+        {% if g.others %}<div class="fd-sub" style="margin-top:6px;">{{ _('Weitere Ziele') }}: {{ g.others|join(', ') }}</div>{% endif %}
+        {% if g.achieved %}<div class="fd-sub" style="margin-top:6px;">{{ _('Erreicht') }}: {{ g.achieved|join(', ') }}</div>{% endif %}
+        {% else %}
+        <p class="fd-sub" style="margin-top:6px;">{{ _('Gerade trennt keine Kennzahl deine Siege belastbar von den Niederlagen - deshalb kein Ziel. Details unter') }} <a href="{{ url_for('coaching') }}">{{ _('Empfehlungen') }}</a>.</p>
+        {% endif %}
+    </div>
+</div>
+
+{# ── Vor dem naechsten Match ── #}
+<div class="fd-actions">
+    <a class="btn btn-primary" href="{{ url_for('live.page') }}"><i data-lucide="radio" style="width:15px;height:15px;"></i> {{ _('Live-Coach öffnen') }}</a>
+    <a class="btn btn-secondary" href="{{ url_for('warmup') }}"><i data-lucide="timer" style="width:15px;height:15px;"></i> Warm-up</a>
+    <a class="btn btn-secondary" href="{{ url_for('briefing') }}"><i data-lucide="clipboard-list" style="width:15px;height:15px;"></i> {{ _('Map-Vorbereitung') }}</a>
+    <a class="btn btn-secondary" href="{{ url_for('daily.page') }}"><i data-lucide="send" style="width:15px;height:15px;"></i> {{ _('Tages-Briefing') }}</a>
+</div>
+
+<div class="fd-row half">
+    {# ── Form ── #}
+    <div class="card elev-sm">
+        <span class="card-kicker">{{ _('Form') }} · {{ _('letzte') }} {{ d.form|length }}</span>
+        <div class="fd-sub" style="margin-top:4px;">{{ d.form_wins }} {{ _('Siege') }}, {{ d.form_losses }} {{ _('Niederlagen') }} · {{ _('Balkenhöhe = Rating') }}</div>
+        {% set ratings = d.form|map(attribute='rating')|select('number')|list %}
+        {% set top = (ratings|max) if ratings else 1 %}
+        <div class="fd-form">
+            {% for f in d.form %}
+            <div class="{{ 'w' if f.result == 'Sieg' else ('l' if f.result == 'Niederlage' else 'd') }}"
+                 style="height:{{ (((f.rating or 0) / top) * 100)|round|int if top else 10 }}%;"
+                 title="{{ f.title }} · {{ f.result }} · Rating {{ f.rating }}"></div>
+            {% endfor %}
+        </div>
+    </div>
+    {# ── Maps ── #}
+    <div class="card elev-sm">
+        <span class="card-kicker">Maps · {{ d.total }} Matches</span>
+        <table class="table" style="margin-top:6px;"><tbody>
+            {% for s in d.maps[:6] %}
+            <tr><td>{{ s.map }}</td><td class="fd-sub">{{ s.n }} {{ _('Spiele') }}</td>
+                <td>{{ s.w }}–{{ s.l }}</td><td class="fd-sub" style="text-align:right;">{{ s.pct }} %</td></tr>
+            {% endfor %}
+        </tbody></table>
+        <a href="{{ url_for('maps') }}" style="font-size:13px;">{{ _('Alle Maps') }} →</a>
+    </div>
+</div>
+
+{# ── Letzte Matches ── #}
+<div class="card elev-sm" style="margin-bottom:var(--space-4);">
+    <span class="card-kicker">{{ _('Letzte Matches') }}</span>
+    <table class="table" style="margin-top:6px;">
+        <thead><tr><th>{{ _('Datum') }}</th><th>Map</th><th>Score</th><th></th><th>Rating</th><th>ADR</th>
+            <th title="{{ _('Full-Buy-Runden mit Granate in den ersten 35 s') }}">{{ _('Früh') }}</th><th></th></tr></thead>
+        <tbody>
+        {% for r in d.recent %}
+        <tr>
+            <td class="fd-sub">{{ r.date }}</td><td>{{ r.map }}</td><td>{{ r.score }}</td>
+            <td>{% if r.result == 'Sieg' %}<span class="tag tag-win">{{ _('Sieg') }}</span>{% elif r.result == 'Niederlage' %}<span class="tag tag-loss">{{ _('Niederlage') }}</span>{% else %}<span class="tag tag-draw">{{ r.result }}</span>{% endif %}</td>
+            <td>{{ r.rating if r.rating is not none else '–' }}</td><td>{{ r.adr if r.adr is not none else '–' }}</td>
+            <td>{% if r.early %}{{ r.early[0] }}/{{ r.early[1] }}{% else %}<span class="fd-sub">–</span>{% endif %}</td>
+            <td style="text-align:right;"><a href="{{ url_for('view_export', filename=r.file) }}">Details</a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <a href="{{ url_for('exports') }}" style="font-size:13px;">{{ _('Alle') }} {{ d.total }} Matches →</a>
+</div>
