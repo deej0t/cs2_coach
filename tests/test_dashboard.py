@@ -50,3 +50,30 @@ def test_build_mit_exporten(tmp_path):
     assert d["premier"]["value"] == "15.387"
     assert d["last"]["change_txt"] == "+362" and d["last"]["radar"] == "cache"
     assert [t["change_txt"] for t in d["tiles"]] == ["+362", "−415"]
+
+
+def test_begruessung_nach_tageszeit():
+    from datetime import datetime
+    assert dashboard._greeting(datetime(2026, 11, 13, 21, 0), "deej0t") == "Guten Abend, deej0t"
+    assert dashboard._greeting(datetime(2026, 11, 13, 8, 0), "") == "Guten Morgen"
+
+
+def test_letzte_sieben_tage():
+    from datetime import datetime
+    now = datetime(2026, 11, 13, 22, 0)
+    ex = [export(15000, 100, when="2026-11-01 20:00"),                     # zu alt
+          export(15387, 362, when="2026-11-12 21:43"),
+          export(15025, -415, result="Niederlage", when="2026-11-12 21:05"),
+          export(14, 1, when="2026-11-10 20:00")]                          # Wettkampf, kein Premier
+    w = dashboard._week(ex, now)
+    assert (w["n"], w["w"], w["l"], w["delta"], w["up"]) == (3, 2, 1, "−53", False)
+    assert dashboard._week(ex[:1], now) is None
+
+
+def test_rundenverlauf_mit_halbzeit_und_kills():
+    e = {"round_timeline": [{"round": r, "won": r % 2 == 0, "side": "CT" if r <= 12 else "T",
+                             "player_kills": 2 if r == 13 else 0, "player_died": r == 1} for r in range(1, 15)]}
+    rd = dashboard._rounds(e)
+    assert [r["n"] for r in rd if r["gap"]] == [12]
+    assert rd[12]["kills"] == 2 and "2 Kills" in rd[12]["title"] and rd[12]["side"] == "T"
+    assert "gestorben" in rd[0]["title"]

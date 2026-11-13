@@ -20,15 +20,16 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import report_ai
-from .training import EARLY_KEY, current_plan
+from .training import EARLY_KEY, MIN_AFTER, current_plan
 from .utility_analysis import early_utility
 
 RECENT = 5
 TILES = 6
+WEEK_DAYS = 7
 CURVE = 30
 INTRO_CHARS = 280
 RADARS = Path(__file__).parent / "web" / "static" / "radars"
@@ -79,6 +80,47 @@ def de(v: float, sign: bool = False) -> str:
     return ("+" if v > 0 else "−" if v < 0 else "±") + txt
 
 
+def _short(day: str) -> str:
+    """2026-11-12 -> 12.11."""
+    return f"{day[8:10]}.{day[5:7]}." if len(day) >= 10 else day
+
+
+def _greeting(now: datetime, name: str) -> str:
+    h = now.hour
+    text = ("Guten Morgen" if 5 <= h < 11 else "Hallo" if h < 17 else "Guten Abend" if h < 23 else "Späte Runde")
+    return f"{text}, {name}" if name else text
+
+
+def _week(exports: list[dict], now: datetime) -> dict | None:
+    """Letzte WEEK_DAYS Tage: Matches, Bilanz, Premier-Aenderung. None ohne Match."""
+    since = (now - timedelta(days=WEEK_DAYS)).strftime("%Y-%m-%d %H:%M")
+    recent = [e for e in exports if ((e.get("match") or {}).get("datetime") or "") >= since]
+    if not recent:
+        return None
+    res = [(e.get("match") or {}).get("result") for e in recent]
+    delta = sum(float(((e.get("player") or {}).get("rank") or {}).get("change") or 0) for e in recent
+                if (((e.get("player") or {}).get("rank") or {}).get("new") or 0) >= 1000)
+    return {"n": len(recent), "w": res.count("Sieg"), "l": res.count("Niederlage"),
+            "delta": de(delta, True) if delta else "", "up": delta > 0}
+
+
+def _rounds(e: dict) -> list[dict]:
+    """Rundenverlauf des Matches: Sieg/Niederlage, Seite, eigene Kills - Lueckenmarke nach jeder Halbzeit."""
+    out = []
+    for r in e.get("round_timeline") or []:
+        n = int(r.get("round", 0))
+        kills = int(r.get("player_kills") or 0)
+        out.append({
+            "n": n, "won": bool(r.get("won")), "side": r.get("side", ""),
+            "gap": n in (12, 24, 27, 30, 33, 36),
+            "title": f"Runde {n} ({r.get('side', '')}): {'gewonnen' if r.get('won') else 'verloren'}"
+                     + (f", {kills} Kill{'s' if kills != 1 else ''}" if kills else "")
+                     + (", gestorben" if r.get("player_died") else ""),
+            "kills": kills,
+        })
+    return out
+
+
 def _radar(map_name: str) -> str | None:
     key = (map_name or "").lower()
     return key if (RADARS / f"{key}.png").exists() else None
@@ -95,6 +137,7 @@ def _premier(exports: list[dict]) -> dict | None:
         m = e.get("match") or {}
         if (r.get("new") or 0) >= 1000:
             pts.append({"v": int(r["new"]), "ch": float(r.get("change") or 0), "map": m.get("map", ""),
+                        "date": (m.get("datetime") or m.get("date") or "")[:10], "result": m.get("result", ""),
                         "title": f"{(m.get('datetime') or '')[:10]} {m.get('map', '')} "
                                  f"{m.get('score_own', '')}:{m.get('score_enemy', '')}: "
                                  f"{de(int(r['new']))} ({de(float(r.get('change') or 0), True)})"})
@@ -122,8 +165,10 @@ def _premier(exports: list[dict]) -> dict | None:
         "next": ({"name": nxt[2], "at": de(nxt[0]), "missing": de(nxt[0] - now), "color": nxt[1],
                   "fill": round((now - lo) / (nxt[0] - lo) * 100)} if nxt else None),
         "w": w, "h": h, "line": line, "area": f"{x[0]:.1f},{h} {line} {x[-1]:.1f},{h}", "refs": refs,
-        "dots": [{"x": round(a, 1), "y": round(b, 1), "title": p["title"], "last": i == len(curve) - 1}
+        "dots": [{"x": round(a, 1), "y": round(b, 1), "title": p["title"], "last": i == len(curve) - 1,
+                  "res": {"Sieg": "w", "Niederlage": "l"}.get(p["result"], "d")}
                  for i, (a, b, p) in enumerate(zip(x, y, curve))],
+        "first_date": _short(curve[0]["date"]), "last_date": _short(curve[-1]["date"]),
     }
 
 
@@ -174,6 +219,8 @@ def _goal(plan: dict, exports: list[dict]) -> dict | None:
                 out["checks"].append({"k": c[0], "n": c[1], "ok": 100 * c[0] / c[1] >= g.target,
                                       "map": (e.get("match") or {}).get("map", "")})
     out["hits"] = sum(1 for c in out["checks"] if c["ok"])
+    out["min_after"] = MIN_AFTER
+    out["left"] = max(MIN_AFTER - g.matches_since, 0)
     out["others"] = [x.label for x in goals[1:]]
     out["achieved"] = [x.label for x in plan.get("achieved") or []]
     return out
@@ -189,8 +236,12 @@ def build(cfg: dict, config_path: Path) -> dict:
                         datetime.now().strftime("%Y-%m-%d %H:%M"))
     last_row = _tile(last)
     last_row["intro"] = _intro(report_ai.load(config_path, last.get("_file", "")))
+    last_row["rounds"] = _rounds(last)
+    now = datetime.now()
     return {
         "has_data": True,
+        "greeting": _greeting(now, (cfg.get("player_name") or "").strip()),
+        "week": _week(exports, now),
         "total": len(exports),
         "premier": _premier(exports),
         "last": last_row,
