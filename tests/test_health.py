@@ -373,3 +373,34 @@ def test_host_load_and_smart(tmp_path):
     write(3, pending=2)
     assert h.check_host(cfg, now=1010)[1].state == h.FAIL
     assert h.check_host(cfg, now=1000 + 30 * 60)[0].state == h.WARN  # Datei veraltet
+
+
+# ── Demos ohne Analyse ───────────────────────────────────────────────
+
+def _unanalyzed_setup(tmp_path):
+    import json
+    import os
+    demos = tmp_path / "demos"
+    demos.mkdir()
+    exports = tmp_path / "vault" / "CS2-Coach" / "exports"
+    exports.mkdir(parents=True)
+    (exports / "2026-11-12_cache_13-6_2143_coach.json").write_text(
+        json.dumps({"match": {"demo_file": "a.dem"}}), encoding="utf-8")
+    for name in ("a.dem", "b.dem"):
+        (demos / name).write_bytes(b"x")
+    os.utime(demos / "b.dem", (1000.0, 1000.0))
+    return {"demo_folder": str(demos), "obsidian_vault_path": str(tmp_path / "vault")}
+
+
+def test_alte_demo_ohne_export_wird_gemeldet(tmp_path):
+    from cs2_coach.health import WARN, check_unanalyzed
+    cfg = _unanalyzed_setup(tmp_path)
+    c = check_unanalyzed(cfg, now=1000.0 + 4 * 3600)
+    assert c.state == WARN and "1 Demo seit" in c.message and "b.dem" in c.message
+
+
+def test_neue_demo_ohne_export_ist_normal(tmp_path):
+    from cs2_coach.health import OK, check_unanalyzed
+    cfg = _unanalyzed_setup(tmp_path)
+    c = check_unanalyzed(cfg, now=1000.0 + 1 * 3600)
+    assert c.state == OK and "naechsten Sync" in c.message

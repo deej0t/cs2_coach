@@ -121,6 +121,48 @@ def _rounds(e: dict) -> list[dict]:
     return out
 
 
+def _ago(seconds: float) -> str:
+    if seconds < 60:
+        return f"vor {int(seconds)} s"
+    if seconds < 3600:
+        return f"vor {int(seconds // 60)} Min."
+    if seconds < 86400:
+        return f"vor {int(seconds // 3600)} Std."
+    days = int(seconds // 86400)
+    return f"vor {days} Tag{'en' if days != 1 else ''}"
+
+
+def _live(config_path: Path, now: float) -> dict:
+    """Live-Coach: letztes GSI-Signal und das zuletzt live gezaehlte Match."""
+    from .live_coach import MATCHES_DIR, SIGNAL_FILE
+    base = Path(config_path).parent
+    out: dict = {"connected": False, "ago": None, "last": None}
+    try:
+        age = now - (base / SIGNAL_FILE).stat().st_mtime
+        out.update(connected=age < 30, ago=_ago(age))
+    except OSError:
+        pass
+    files = sorted((base / MATCHES_DIR).glob("*.json")) if (base / MATCHES_DIR).is_dir() else []
+    if files:
+        try:
+            m = json.loads(files[-1].read_text(encoding="utf-8"))
+            summ = m.get("summary") or {}
+            out["last"] = {"map": str(m.get("map", "")).removeprefix("de_").capitalize(),
+                           "date": _short(str(m.get("started", ""))[:10]),
+                           "early": summ.get("early"), "full_buys": summ.get("full_buys")}
+        except (OSError, ValueError):
+            pass
+    return out
+
+
+def _problems(cfg: dict, exports: list[dict]) -> list[str]:
+    """Hinweise, die man sonst nicht bemerkt - heute: Demos ohne Analyse (12.11.)."""
+    from .health import WARN, check_unanalyzed
+    known = {(e.get("match") or {}).get("demo_file") for e in exports}
+    c = check_unanalyzed(cfg, known=known)
+    return [c.message] if c.state == WARN else []
+
+
 def _radar(map_name: str) -> str | None:
     key = (map_name or "").lower()
     return key if (RADARS / f"{key}.png").exists() else None
@@ -240,6 +282,8 @@ def build(cfg: dict, config_path: Path) -> dict:
     now = datetime.now()
     return {
         "has_data": True,
+        "problems": _problems(cfg, exports),
+        "live": _live(config_path, now.timestamp()),
         "greeting": _greeting(now, (cfg.get("player_name") or "").strip()),
         "week": _week(exports, now),
         "total": len(exports),

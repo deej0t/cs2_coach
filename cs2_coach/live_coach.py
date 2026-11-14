@@ -36,6 +36,7 @@ STATE_FILE = ".live_state.json"
 LOCK_FILE = ".live_state.lock"
 TOKEN_FILE = ".gsi_token"
 MATCHES_DIR = "live_matches"
+SIGNAL_FILE = ".gsi_last"   # mtime = letztes Signal von CS2 (auch im Menue, Heartbeat 10 s)
 # Nur echte Matches. Am 1.11. lief der Live-Coach im !training und auf der Aim-Map mit -
 # dort sind Granaten-Hinweise Rauschen (im Duell wirft man selten), und aim_multigame
 # waere als "Match" gespeichert worden.
@@ -310,6 +311,10 @@ def save_match(config_path: Path, state: dict) -> Path | None:
 
 def ingest(cfg: dict, config_path: Path, payload: dict) -> None:
     from .training_server import is_active
+    try:  # fuer die Startseite: "verbunden (vor 4 s)" - der Zustand selbst aendert sich im Menue nicht
+        (Path(config_path).parent / SIGNAL_FILE).touch()
+    except OSError:
+        pass
     if is_active(config_path):
         return
     with _Lock(config_path):

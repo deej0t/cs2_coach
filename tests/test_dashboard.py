@@ -77,3 +77,28 @@ def test_rundenverlauf_mit_halbzeit_und_kills():
     assert [r["n"] for r in rd if r["gap"]] == [12]
     assert rd[12]["kills"] == 2 and "2 Kills" in rd[12]["title"] and rd[12]["side"] == "T"
     assert "gestorben" in rd[0]["title"]
+
+
+def test_live_status_und_letztes_live_match(tmp_path):
+    import os
+    (tmp_path / ".gsi_last").write_text("")
+    os.utime(tmp_path / ".gsi_last", (1000.0, 1000.0))
+    (tmp_path / "live_matches").mkdir()
+    (tmp_path / "live_matches" / "2026-11-14T20-00-00_de_mirage.json").write_text(json.dumps(
+        {"map": "de_mirage", "started": "2026-11-14T20:00:00", "summary": {"early": 5, "full_buys": 7}}))
+    live = dashboard._live(tmp_path / "config.yaml", now=1010.0)
+    assert live["connected"] and live["ago"] == "vor 10 s"
+    assert live["last"] == {"map": "Mirage", "date": "14.11.", "early": 5, "full_buys": 7}
+    assert not dashboard._live(tmp_path / "config.yaml", now=1000.0 + 7200)["connected"]
+
+
+def test_warnband_bei_liegengebliebener_demo(tmp_path):
+    import os
+    demos = tmp_path / "demos"
+    demos.mkdir()
+    (demos / "alt.dem").write_bytes(b"x")
+    os.utime(demos / "alt.dem", (1000.0, 1000.0))
+    cfg = {"demo_folder": str(demos), "obsidian_vault_path": str(tmp_path)}
+    (tmp_path / "CS2-Coach" / "exports").mkdir(parents=True)
+    assert "alt.dem" in dashboard._problems(cfg, [])[0]
+    assert dashboard._problems(cfg, [{"match": {"demo_file": "alt.dem"}}]) == []

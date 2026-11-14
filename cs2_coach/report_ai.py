@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from statistics import median
+from types import SimpleNamespace
 
 DIR = "report_ai"
 LOOKBACK = 10
@@ -35,7 +36,8 @@ SYSTEM = """Du bist der persoenliche CS2-Coach eines Spielers und schreibst die 
 - "Besser als sonst" und "Schlechter als sonst" stehen in den Fakten. Lobe nichts, was dort als schlechter steht, und umgekehrt.
 - Keine Floskeln ("Kopf hoch", "weiter so", "insgesamt", "konzentriere dich voll"). Beginne nicht mit dem Ergebnis, der Map oder "Dein".
 - Nutze den Rundenverlauf (Serien, Seiten, fruehe Tode, Opening-Duelle), damit man merkt, dass es um GENAU dieses Match geht.
-- Klingt nicht wie die FRUEHEREN NACHBESPRECHUNGEN: andere Satzanfaenge, anderer Aufbau, andere Schwerpunkte."""
+- Klingt nicht wie die FRUEHEREN NACHBESPRECHUNGEN: andere Satzanfaenge, anderer Aufbau, andere Schwerpunkte.
+- Steht eine MISSION in den Fakten, sage in genau einem Satz, ob er sie in diesem Match erfuellt hat - mit den Zahlen aus den Fakten."""
 
 
 def _fmt(v: float) -> str:
@@ -69,7 +71,44 @@ def _timeline(data: dict) -> list[str]:
     return out
 
 
-def facts(data: dict, history: list[dict], goals: list[str]) -> str:
+MISSION_ADVICE = "Im Full Buy in den ersten 35 Sekunden eine Granate werfen."
+
+
+def mission(data: dict, goal) -> dict | None:
+    """Stand der Mission (training._early_goal) in diesem Match.
+
+    Seit 13.11. ist die fruehe Granate im Full Buy das Trainingsziel - die
+    Nachbesprechung sprach aber ueber Crosshair und Utility pro Runde und
+    widersprach damit der Startseite. None ohne Mission.
+    """
+    if goal is None:
+        return None
+    from .training import MIN_EARLY_ROUNDS
+    from .utility_analysis import early_utility
+    counts = early_utility(data)
+    out = {"label": goal.label, "target": round(goal.target), "k": None, "n": None, "met": None}
+    if counts and counts[1] >= MIN_EARLY_ROUNDS:
+        k, n = counts
+        out.update(k=k, n=n, pct=round(100 * k / n), met=100 * k / n >= goal.target)
+    return out
+
+
+def _mission_line(m: dict) -> str:
+    head = f"MISSION (sein Trainingsziel, Ziel aus seinen Siegen {m['target']} %): {m['label']}"
+    if m["met"] is None:
+        return head + " - in diesem Match zu wenige Full-Buy-Runden, nicht gezaehlt."
+    return (head + f" - in diesem Match in {m['k']} von {m['n']} Full-Buy-Runden ({m['pct']} %): "
+            + ("erfuellt." if m["met"] else "nicht erfuellt."))
+
+
+def choose_focus(worse: list, m: dict | None):
+    """Fokus fuers naechste Match: die verfehlte Mission vor dem groessten Rueckschritt."""
+    if m and m["met"] is False:
+        return SimpleNamespace(key="early_util", label=m["label"], advice=MISSION_ADVICE)
+    return focus_of(worse)
+
+
+def facts(data: dict, history: list[dict], goals: list[str], mission_state: dict | None = None) -> str:
     """Faktenblock fuer die KI. history = Exporte VOR diesem Match, aelteste zuerst."""
     from .findings import evaluate
     m = data.get("match") or {}
@@ -100,8 +139,11 @@ def facts(data: dict, history: list[dict], goals: list[str]) -> str:
         lines.append("Besser als sonst: " + ", ".join(f.label for _, f in sorted(better, key=lambda x: -x[0])) + ".")
     if worse:
         lines.append("Schlechter als sonst: " + ", ".join(f.label for _, f in sorted(worse, key=lambda x: -x[0])) + ".")
-    # Fokus legt der Coach fest, nicht die KI: groesster Rueckschritt, sonst das erste Trainingsziel
-    focus = focus_of(worse)
+    if mission_state:
+        lines.append(_mission_line(mission_state))
+    # Fokus legt der Coach fest, nicht die KI: verfehlte Mission, sonst groesster Rueckschritt,
+    # sonst das erste Trainingsziel
+    focus = choose_focus(worse, mission_state)
     if focus is not None:
         lines.append(f"FOKUS FUERS NAECHSTE MATCH: {focus.label} - {focus.advice}")
     elif goals:
@@ -162,7 +204,7 @@ def _notify(cfg: dict, config_path: Path, data: dict, text: str, focus, log) -> 
         bsp = "de_" + str(m.get("map", "")).lower()
         short = bsp.removeprefix("de_")
         task = (f"\n\nHausaufgabe: {focus.label} - auf dem Server `!granaten {short}`."
-                if focus.key == "utility" else
+                if focus.key in ("utility", "early_util") else
                 f"\n\nHausaufgabe: {focus.label} - auf dem Server `!training {short}` "
                 "(deine verlorenen Duelle aus diesem Match kommen zuerst).")
     _send_text(cfg, config_path, f"{head}\n{text}{task}", log)
@@ -210,6 +252,7 @@ def generate_pending(cfg: dict, config_path: Path, log=print, limit: int = PER_S
     """KI-Nachbesprechung fuer die neuesten Matches ohne eine. Gibt die Zahl der neuen zurueck."""
     from .briefing import ask_ai
     from .findings import training_priorities
+    from .training import _early_goal
     ask = ask or ask_ai
     files = _exports(cfg)
     todo = [f for f in reversed(files) if load(config_path, f.name) is None][:limit]
@@ -226,6 +269,10 @@ def generate_pending(cfg: dict, config_path: Path, log=print, limit: int = PER_S
         goals = [t.label for t in training_priorities(ordered)]
     except Exception:  # noqa: BLE001 - Ziele sind nur Beiwerk
         goals = []
+    try:
+        goal = _early_goal(ordered)
+    except Exception:  # noqa: BLE001 - ohne Mission bleibt es beim alten Fokus
+        goal = None
     made = 0
     previous = [t for t in (load(config_path, g.name) for g in reversed(files)) if t][:2]
     for f in todo:
@@ -233,7 +280,8 @@ def generate_pending(cfg: dict, config_path: Path, log=print, limit: int = PER_S
             continue
         idx = [g.name for g in files].index(f.name)
         history = [datas[g.name] for g in files[:idx] if g.name in datas]
-        text = ask(cfg, facts(datas[f.name], history, goals), log=log, system=SYSTEM,
+        state = mission(datas[f.name], goal)
+        text = ask(cfg, facts(datas[f.name], history, goals, state), log=log, system=SYSTEM,
                    instruction=instruction(previous), max_len=MAX_LEN)
         if not text:
             continue
@@ -243,7 +291,7 @@ def generate_pending(cfg: dict, config_path: Path, log=print, limit: int = PER_S
         made += 1
         previous = [text, *previous][:2]
         if f.name == files[-1].name:  # nur das neueste Match bestimmt die Hausaufgabe
-            focus = focus_of(worse_of(datas[f.name], history))
+            focus = choose_focus(worse_of(datas[f.name], history), state)
             m = datas[f.name].get("match") or {}
             (out.parent / FOCUS_FILE).write_text(json.dumps(
                 {"export": f.name, "map": "de_" + str(m.get("map", "")).lower(),

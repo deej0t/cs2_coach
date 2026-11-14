@@ -54,3 +54,36 @@ def test_newest_match_sets_focus_and_training_goal(tmp_path):
     assert focus["key"] == "counter_strafe" and focus["map"] == "de_mirage"
     sessions = [{"duels": [{"first_speed": 50}] * 10 + [{"seen_err": 2}] * 10}]
     assert pick_goal(sessions, focus["key"])["key"] == "stopped"
+
+
+# ── Mission (fruehe Granate im Full Buy) ────────────────────────────
+
+def _mission_export(k, n):
+    return {"match": {"map": "Cache", "result": "Sieg", "score_own": 13, "score_enemy": 6, "total_rounds": 19},
+            "player": {},
+            "round_timeline": [{"round": r, "buy": "fullbuy", "death_s": None, "won": True} for r in range(1, n + 1)],
+            "utility_positions": [{"t": "h", "r": r, "s": 5.0} for r in range(1, k + 1)]}
+
+
+def test_mission_erfuellt_oder_nicht():
+    from types import SimpleNamespace
+    from cs2_coach import report_ai
+    goal = SimpleNamespace(label="Frühe Granate im Full Buy", target=81.8)
+    assert report_ai.mission(_mission_export(12, 12), goal)["met"] is True
+    m = report_ai.mission(_mission_export(5, 8), goal)
+    assert (m["k"], m["n"], m["pct"], m["met"]) == (5, 8, 62, False)
+    assert report_ai.mission(_mission_export(1, 2), goal)["met"] is None      # zu wenige Runden
+    assert report_ai.mission(_mission_export(5, 8), None) is None
+
+
+def test_verfehlte_mission_wird_fokus_und_steht_in_den_fakten():
+    from types import SimpleNamespace
+    from cs2_coach import report_ai
+    goal = SimpleNamespace(label="Frühe Granate im Full Buy", target=81.8)
+    m = report_ai.mission(_mission_export(5, 8), goal)
+    text = report_ai.facts(_mission_export(5, 8), [], [], m)
+    assert "in 5 von 8 Full-Buy-Runden (62 %): nicht erfuellt" in text
+    assert "FOKUS FUERS NAECHSTE MATCH: Frühe Granate im Full Buy" in text
+    assert report_ai.choose_focus([], m).key == "early_util"
+    ok = report_ai.mission(_mission_export(12, 12), goal)
+    assert "FOKUS FUERS NAECHSTE MATCH: Frühe" not in report_ai.facts(_mission_export(12, 12), [], [], ok)

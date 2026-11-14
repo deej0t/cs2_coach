@@ -275,6 +275,45 @@ def check_demos(cfg: dict) -> Check:
     return Check("demos", label, OK, f"Alle {len(known)} Demos auffindbar.")
 
 
+#: Juenger als das gilt eine Demo ohne Export als "kommt mit dem naechsten Sync"
+#: (Sync alle 2 h, danach Analyse) - aelter heisst: die Analyse ist gescheitert.
+PENDING_GRACE_H = 3
+
+
+def check_unanalyzed(cfg: dict, now: float | None = None, known: set | None = None) -> Check:
+    """Liegen Demos im Ordner, zu denen es keinen Export gibt?
+
+    Am 12.11. scheiterten zwei Demos an demoparser2 (CS2-Update vom 11.11.) -
+    einen Tag lang fehlten beide Matches, ohne dass es irgendwo stand.
+    Junge Demos sind normal (die Analyse laeuft nach dem Sync), alte nicht.
+    """
+    import time
+    from .export_version import demo_status
+
+    label = "Analyse"
+    raw = (cfg.get("demo_folder") or "").strip()
+    folder = Path(raw)
+    export_dir = _export_dir(cfg)
+    if not raw or not folder.is_dir() or export_dir is None:
+        return Check("unanalyzed", label, OK, "Kein Demo-Ordner - nichts zu pruefen.")
+    known = set(demo_status(export_dir)) if known is None else known
+    now = time.time() if now is None else now
+    stuck, fresh = [], []
+    for dem in folder.glob("*.dem"):
+        if dem.name in known:
+            continue
+        age_h = (now - dem.stat().st_mtime) / 3600
+        (stuck if age_h > PENDING_GRACE_H else fresh).append(dem.name)
+    if stuck:
+        return Check("unanalyzed", label, WARN,
+                     f"{len(stuck)} Demo{'s' if len(stuck) != 1 else ''} seit ueber {PENDING_GRACE_H} h "
+                     f"ohne Analyse - vermutlich Parser-Fehler ({sorted(stuck)[-1]}).")
+    if fresh:
+        return Check("unanalyzed", label, OK,
+                     f"{len(fresh)} neue Demo{'s' if len(fresh) != 1 else ''} - Analyse mit dem naechsten Sync.")
+    return Check("unanalyzed", label, OK, "Alle Demos analysiert.")
+
+
 def check_exports(cfg: dict) -> Check:
     """Gibt es Exporte, deren Zahlen nach einer Metrikkorrektur falsch sind?"""
     from .export_version import export_status
@@ -434,7 +473,7 @@ def run_checks(cfg: dict, config_path: Path) -> list[Check]:
         "Config/Vault": Path(config_path).parent,
         "Demos": Path(cfg["demo_folder"]) if cfg.get("demo_folder") else None,
     })
-    checks += [check_demos(cfg), check_exports(cfg)]
+    checks += [check_demos(cfg), check_unanalyzed(cfg), check_exports(cfg)]
     checks += check_host(config_path)
     return checks
 

@@ -72,7 +72,13 @@
     .pd-tile-ch.up { color: #4ade80; } .pd-tile-ch.down { color: #f87171; }
     .pd-res { font-size: 10px; padding: 1px 5px; border-radius: 4px; vertical-align: middle; background: var(--color-neutral-800); }
     .pd-res.S { color: #4ade80; } .pd-res.N { color: #f87171; }
-    .pd-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin: var(--space-4) 0; }
+    .pd-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; margin: var(--space-4) 0; }
+    .pd-warn { border: 1px solid #fbbf2466; background: #fbbf2414; color: #fcd34d; border-radius: 10px;
+               padding: 10px 14px; font-size: 13px; margin-bottom: var(--space-3); display: flex; gap: 8px; align-items: center; }
+    .pd-live { font-size: 12px; color: var(--color-neutral-500); margin-left: auto; }
+    .pd-live i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px;
+                 background: var(--color-neutral-600); vertical-align: middle; }
+    .pd-live.on i { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
 
     /* Dezente Animationen - aus bei "Bewegung reduzieren" */
     @media (prefers-reduced-motion: no-preference) {
@@ -111,6 +117,11 @@
     <div class="pd-week">{{ _('Letzte 7 Tage') }}: <b>{{ w.n }} Matches</b> · {{ w.w }}–{{ w.l }}{% if w.delta %} · <b class="{{ 'up-t' if w.up else 'down-t' }}">{{ w.delta }}</b>{% endif %}</div>
     {% else %}<div class="pd-week">{{ _('Letzte 7 Tage: noch kein Match') }}</div>{% endif %}
 </div>
+
+{% for msg in d.problems %}
+<div class="pd-warn" role="status"><i data-lucide="triangle-alert" style="width:16px;height:16px;flex:none;"></i>
+    <span>{{ msg }} <a href="{{ url_for('status') }}" style="color:inherit;text-decoration:underline;">{{ _('Systemstatus') }}</a></span></div>
+{% endfor %}
 
 {# ── Premier-Rating ── #}
 {% if p %}
@@ -247,6 +258,11 @@
     <a class="btn btn-secondary" href="{{ url_for('warmup') }}"><i data-lucide="timer" style="width:15px;height:15px;"></i> Warm-up</a>
     <a class="btn btn-secondary" href="{{ url_for('briefing') }}"><i data-lucide="clipboard-list" style="width:15px;height:15px;"></i> {{ _('Map-Vorbereitung') }}</a>
     <a class="btn btn-secondary" href="{{ url_for('daily.page') }}"><i data-lucide="send" style="width:15px;height:15px;"></i> {{ _('Tages-Briefing') }}</a>
+    {% set lv = d.live %}
+    <span class="pd-live {{ 'on' if lv and lv.connected }}">
+        <i></i>{% if lv and lv.connected %}{{ _('Live-Coach: CS2 verbunden') }}{% elif lv and lv.ago %}{{ _('Live-Coach: letztes Signal') }} {{ lv.ago }}{% else %}{{ _('Live-Coach: noch kein Signal') }}{% endif %}
+        {% if lv and lv.last and lv.last.full_buys %}<br>{{ _('Zuletzt live gezählt') }} ({{ lv.last.map }} {{ lv.last.date }}): {{ _('frühe Granate') }} {{ lv.last.early }}/{{ lv.last.full_buys }}{% endif %}
+    </span>
 </div>
 
 <script>
