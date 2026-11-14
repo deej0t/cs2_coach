@@ -60,16 +60,16 @@ def _load(cfg: dict) -> tuple[list[Path], list[dict]]:
     return files, _cache["exports"]
 
 
-def _intro(text: str | None) -> str:
-    """Die ersten Saetze der Nachbesprechung, an einer Satzgrenze gekuerzt."""
+def _intro(text: str | None, limit: int = INTRO_CHARS) -> str:
+    """Die ersten Saetze eines KI-Texts, an einer Satzgrenze gekuerzt."""
     if not text:
         return ""
     flat = re.sub(r"\s+", " ", re.sub(r"[*_#`]", "", text)).strip()
-    if len(flat) <= INTRO_CHARS:
+    if len(flat) <= limit:
         return flat
-    cut = flat[:INTRO_CHARS]
+    cut = flat[:limit]
     end = max(cut.rfind(". "), cut.rfind("! "), cut.rfind("? "))
-    return cut[:end + 1] if end > 80 else cut.rstrip() + " …"
+    return cut[:end + 1] if end > limit // 3 else cut.rstrip() + " …"
 
 
 def de(v: float, sign: bool = False) -> str:
@@ -152,6 +152,42 @@ def _live(config_path: Path, now: float) -> dict:
                            "early": summ.get("early"), "full_buys": summ.get("full_buys")}
         except (OSError, ValueError):
             pass
+    return out
+
+
+MODE_LABELS = {"duell": "Duell-Training", "situation": "Situationen", "retake": "Retake",
+               "postplant": "Post-Plant", "halten": "Site halten", "granaten": "Granaten-Trainer",
+               "eichen": "Reaktions-Eichung", "warmup": "Warm-up", "wiederholen": "Verlorene wiederholen"}
+
+
+def _training(config_path: Path, last_map: str, now: datetime) -> dict:
+    """Letztes Server-Training und der naechste Befehl (aus der Hausaufgabe des letzten Matches)."""
+    from .training_server import load_sessions
+    try:
+        sessions = load_sessions(Path(config_path))
+    except Exception:  # noqa: BLE001 - Zusatzkarte
+        sessions = []
+    out: dict = {"last": None, "week": 0}
+    week_ago = (now - timedelta(days=WEEK_DAYS)).isoformat()
+    out["week"] = sum(1 for x in sessions if str(x.get("started", "")) >= week_ago)
+    if sessions:
+        s = sessions[0]
+        mode = s.get("mode") or "duell"
+        won, played = s.get("won", 0), s.get("played", 0)
+        result = (f"{won}/{played} Lineups getroffen" if mode == "granaten" else
+                  f"{played} Runden" if mode == "eichen" else f"{won}/{played} Duelle gewonnen")
+        out["last"] = {"mode": MODE_LABELS.get(mode, mode), "map": str(s.get("map", "")).removeprefix("de_").capitalize(),
+                       "date": _short(str(s.get("started", ""))[:10]), "result": result,
+                       "fazit": _intro(s.get("fazit"), 170)}
+    focus = report_ai.load_focus(config_path) or {}
+    fmap = str(focus.get("map") or "").removeprefix("de_") or (last_map or "").lower()
+    key = focus.get("key", "")
+    if key in ("early_util", "utility"):
+        out["cmd"], out["why"] = f"!granaten {fmap}", f"Hausaufgabe aus dem letzten Match: {focus.get('label', 'Granaten')}"
+    elif key:
+        out["cmd"], out["why"] = f"!training {fmap}", f"Hausaufgabe aus dem letzten Match: {focus.get('label', '')}"
+    else:
+        out["cmd"], out["why"] = f"!warmup {fmap}", "Aufwärmen vor dem nächsten Match"
     return out
 
 
@@ -284,6 +320,7 @@ def build(cfg: dict, config_path: Path) -> dict:
         "has_data": True,
         "problems": _problems(cfg, exports),
         "live": _live(config_path, now.timestamp()),
+        "training": _training(config_path, (last.get("match") or {}).get("map", ""), now),
         "greeting": _greeting(now, (cfg.get("player_name") or "").strip()),
         "week": _week(exports, now),
         "total": len(exports),

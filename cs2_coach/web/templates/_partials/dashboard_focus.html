@@ -73,6 +73,12 @@
     .pd-res { font-size: 10px; padding: 1px 5px; border-radius: 4px; vertical-align: middle; background: var(--color-neutral-800); }
     .pd-res.S { color: #4ade80; } .pd-res.N { color: #f87171; }
     .pd-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; margin: var(--space-4) 0; }
+    .pd-train { display: grid; grid-template-columns: 1fr auto; gap: var(--space-5); align-items: center;
+                border-radius: 14px; padding: var(--space-4) var(--space-5); border: 1px solid var(--color-divider);
+                background: var(--color-surface); margin-bottom: var(--space-4); }
+    .pd-cmd { display: flex; align-items: center; gap: 8px; }
+    .pd-cmd code { font-size: 15px; padding: 8px 12px; border-radius: 8px; background: var(--color-neutral-800);
+                   border: 1px solid var(--color-divider); color: var(--color-text); white-space: nowrap; }
     .pd-warn { border: 1px solid #fbbf2466; background: #fbbf2414; color: #fcd34d; border-radius: 10px;
                padding: 10px 14px; font-size: 13px; margin-bottom: var(--space-3); display: flex; gap: 8px; align-items: center; }
     .pd-live { font-size: 12px; color: var(--color-neutral-500); margin-left: auto; }
@@ -105,6 +111,7 @@
         .pd-tiles { grid-template-columns: repeat(2, 1fr); }
         .pd-actions .btn { flex: 1 1 45%; justify-content: center; }
         .pd-rd { width: 15px; height: 20px; }
+        .pd-train { grid-template-columns: 1fr; gap: var(--space-3); padding: var(--space-4); }
         .pd-chart { height: auto; }
         .pd-chart-head { flex-direction: column; gap: 4px; }
         .pd-legend i:first-child { margin-left: 0; }
@@ -236,6 +243,33 @@
     </div>
 </div>
 
+{# ── Server-Training ── #}
+{% set tr = d.training %}
+{% if tr %}
+<div class="pd-train">
+    <div>
+        <div class="pd-kicker">Server-Training{% if tr.week %} · {{ tr.week }} {{ _('in den letzten 7 Tagen') }}{% endif %}</div>
+        {% if tr.last %}
+        <div style="font-size:15px;font-weight:600;margin:4px 0 2px;">{{ tr.last.mode }} · {{ tr.last.map }} · {{ tr.last.date }}
+            <span class="pd-meta" style="font-weight:400;"> – {{ tr.last.result }}</span></div>
+        {% if tr.last.fazit %}<div class="pd-meta" style="line-height:1.5;">{{ tr.last.fazit }}</div>{% endif %}
+        {% else %}
+        <div class="pd-meta" style="margin-top:4px;">{{ _('Noch kein Training auf dem Server.') }}</div>
+        {% endif %}
+        <a href="{{ url_for('training_page.page') }}" style="font-size:13px;">{{ _('Alle Trainings') }} →</a>
+    </div>
+    <div>
+        <div class="pd-kicker" style="margin-bottom:6px;">{{ _('Nächstes Training') }}</div>
+        <div class="pd-cmd">
+            <code id="pd-cmd">{{ tr.cmd }}</code>
+            <button class="btn btn-secondary" type="button" id="pd-copy" title="{{ _('Befehl kopieren - im Server-Chat einfügen') }}">
+                <i data-lucide="copy" style="width:15px;height:15px;"></i></button>
+        </div>
+        <div class="pd-meta" style="font-size:12px;margin-top:4px;">{{ tr.why }}</div>
+    </div>
+</div>
+{% endif %}
+
 {# ── Letzte Matches ── #}
 <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
     <span class="pd-kicker">{{ _('Letzte Matches') }}</span>
@@ -266,6 +300,18 @@
 </div>
 
 <script>
+// Trainingsbefehl kopieren
+(function () {
+    var b = document.getElementById('pd-copy'), c = document.getElementById('pd-cmd');
+    if (!b || !c) return;
+    b.addEventListener('click', function () {
+        if (!navigator.clipboard) return;
+        navigator.clipboard.writeText(c.textContent.trim()).then(function () {
+            b.innerHTML = '✓'; setTimeout(function () { b.innerHTML = '<i data-lucide="copy" style="width:15px;height:15px;"></i>';
+            if (window.lucide) lucide.createIcons(); }, 1500);
+        });
+    });
+})();
 // Rating zaehlt hoch (nicht bei "Bewegung reduzieren")
 (function () {
     var el = document.querySelector('.pd-count');

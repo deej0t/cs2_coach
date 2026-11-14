@@ -102,3 +102,24 @@ def test_warnband_bei_liegengebliebener_demo(tmp_path):
     (tmp_path / "CS2-Coach" / "exports").mkdir(parents=True)
     assert "alt.dem" in dashboard._problems(cfg, [])[0]
     assert dashboard._problems(cfg, [{"match": {"demo_file": "alt.dem"}}]) == []
+
+
+def test_trainingskarte_und_naechster_befehl(tmp_path):
+    from datetime import datetime
+    cfg_path = tmp_path / "config.yaml"
+    sess = tmp_path / "training_sessions"
+    sess.mkdir()
+    (sess / "2026-11-12T20-31-05_de_mirage.json").write_text(json.dumps(
+        {"map": "de_mirage", "started": "2026-11-12T20:31:05", "mode": "granaten",
+         "duels": [{"outcome": "win"}] * 8 + [{"outcome": "loss"}],
+         "fazit": "Du hast 8 von 9 Duellen gewonnen. Danach kommt noch mehr Text."}))
+    now = datetime(2026, 11, 14, 20, 0)
+    t = dashboard._training(cfg_path, "Cache", now)
+    assert t["last"]["mode"] == "Granaten-Trainer" and t["last"]["result"] == "8/9 Lineups getroffen"
+    assert t["last"]["map"] == "Mirage" and t["week"] == 1
+    assert t["cmd"] == "!warmup cache"                     # ohne Hausaufgabe: aufwaermen
+    (tmp_path / "report_ai").mkdir()
+    (tmp_path / "report_ai" / "focus.json").write_text(json.dumps(
+        {"map": "de_nuke", "key": "early_util", "label": "Frühe Granate im Full Buy"}))
+    t = dashboard._training(cfg_path, "Cache", now)
+    assert t["cmd"] == "!granaten nuke" and "Frühe Granate" in t["why"]
