@@ -57,7 +57,8 @@ def test_rundenstart_meldet_quote_und_ziel():
 def test_erinnerung_nach_20_s_im_full_buy_einmal():
     st = run(gsi(3, "freezetime"), gsi(3, t=0), gsi(3, t=10), gsi(3, t=21), gsi(3, t=25))
     hints = [h for h in st["log"] if h["kind"] == "early"]
-    assert len(hints) == 1 and "Noch 14 s" in hints[0]["text"] and "HE" in hints[0]["text"]
+    assert len(hints) == 1 and "Noch 12 s" in hints[0]["text"] and "HE" in hints[0]["text"]
+    assert hints[0]["say"] == "Granate!"          # kurz und laut, nicht der ganze Satz
 
 
 def test_keine_erinnerung_im_eco():
@@ -127,3 +128,37 @@ def test_ai_hint_at_halftime_uses_only_facts(tmp_path):
     assert "R1: 1 geworfen" in seen["prompt"] and "82 %" in seen["prompt"]
     hint = lc.load_state(cfg_path)["hint"]
     assert hint["kind"] == "ai" and hint["text"].startswith("Coach: Wirf")
+
+
+
+def test_rundenstart_still_im_plan_laut_unter_ziel():
+    """Im Plan wird nichts vorgelesen - nur unter dem Ziel (14.11.: jede Runde derselbe Satz)."""
+    def full_round(st, rnd, t0, early):
+        st = run(gsi(rnd, "freezetime", t=t0), gsi(rnd, t=t0 + 1), state=st)
+        return run(gsi(rnd, t=t0 + (10 if early else 40), nades=("weapon_flashbang",)), state=st)
+    st = {}
+    for i, rnd in enumerate((2, 3, 4)):
+        st = full_round(st, rnd, 100 * i, early=True)
+    st["target"] = 80.0
+    st = lc.update(st, gsi(5, "freezetime", t=400), CFG)
+    assert st["hint"]["kind"] == "round" and st["hint"]["say"] is None
+    st = {}
+    for i, rnd in enumerate((2, 3, 4)):
+        st = full_round(st, rnd, 100 * i, early=False)
+    st["target"] = 80.0
+    st = lc.update(st, gsi(5, "freezetime", t=400), CFG)
+    assert st["hint"]["say"] == "Unter Ziel. Fruehe Granate planen."
+
+
+def test_wurf_nach_33_s_zaehlt_nicht_mehr_als_frueh():
+    """Die Demo zaehlt die Detonation bis 35 s - ein Wurf bei 34 s detoniert danach."""
+    st = run(gsi(2, "freezetime"), gsi(2, t=0), gsi(2, t=34, nades=("weapon_flashbang",)))
+    assert not st["rounds"]["2"].get("early")
+
+
+def test_tod_im_zuschauermodus_zaehlt_als_frueher_tod():
+    """Erst der Mitspieler-Blick verraet den Tod - die Runde faellt dann aus der Quote wie in der Demo."""
+    st = run(gsi(2, "freezetime"), gsi(2, t=0), gsi(2, t=12, sid=MATE, nades=()))
+    assert st["rounds"]["2"]["died_s"] == 12.0
+    st = lc.update(st, gsi(3, "freezetime", t=120), CFG)
+    assert lc.early_stats(st) == (0, 0)

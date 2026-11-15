@@ -1,6 +1,18 @@
 {% extends "base.html" %}
 {% block title %}CS2 Coach — Live{% endblock %}
 {% block content %}
+<style>
+    /* Warnung: ganzer Bildschirm blinkt - auf dem zweiten Monitor aus dem Augenwinkel sichtbar */
+    #alarm { position: fixed; inset: 0; z-index: 9999; display: none; flex-direction: column;
+             align-items: center; justify-content: center; text-align: center; cursor: pointer;
+             background: #facc15; color: #1a1a1a; animation: lv-blink .5s steps(2, start) infinite; }
+    #alarm.on { display: flex; }
+    #alarm b { font-size: clamp(56px, 14vw, 160px); font-weight: 900; letter-spacing: -0.02em; line-height: 1; }
+    #alarm small { font-size: clamp(18px, 3vw, 32px); font-weight: 700; margin-top: 16px; }
+    @keyframes lv-blink { 50% { background: #f97316; } }
+    @media (prefers-reduced-motion: reduce) { #alarm { animation: none; } }
+</style>
+<div id="alarm" role="alert"><b>GRANATE!</b><small id="alarm-text"></small></div>
 <h2>Live-Coach</h2>
 <div class="card elev-sm" style="margin-bottom: var(--space-4); text-align: center;">
     <div id="hint" style="font-size: 26px; font-weight: 700; line-height: 1.3; min-height: 70px;">Warte auf ein Match …</div>
@@ -36,7 +48,8 @@
     <div style="font-size: 12px; color: var(--color-neutral-500);">Grün/rot = besser/schlechter als dein Median. Ein einzelnes Match schwankt stark - das ist kein Trend.</div>
 </div>
 {% endif %}
-<p><button id="speak" class="btn">🔊 Hinweise vorlesen</button></p>
+<p><button id="speak" class="btn">🔊 Ton &amp; Ansagen an</button>
+   <span style="font-size:12px;color:var(--color-neutral-500);margin-left:8px;">Vorgelesen wird nur, wenn es zählt: Warnung, unter dem Ziel, Halbzeit, Matchende.</span></p>
 <div id="log" style="font-size: 13px; color: var(--color-neutral-500);"></div>
 
 <details class="card elev-sm" style="margin-top: var(--space-5);">
@@ -47,14 +60,33 @@
         <li>CS2 neu starten. Diese Seite aufs Handy oder den zweiten Bildschirm.</li>
     </ol>
     <p style="font-size: 12px; color: var(--color-neutral-500);">Valves offizielle Game State Integration: nur deine eigenen
-        Daten (Runde, Geld, Waffen), keine Gegner. Ziel = Median deiner Granaten pro Runde in gewonnenen Matches.
+        Daten (Runde, Geld, Waffen), keine Gegner. Ziel = Anteil deiner Full-Buy-Runden mit Granate in den ersten 35 s,
+        Median aus deinen gewonnenen Matches. Im Full Buy nach 20 s ohne Granate blinkt diese Seite gelb.
         Empfang: <code>{{ gsi_url.rsplit('/', 1)[0] }}/…</code></p>
 </details>
 <script>
-let speak = false, lastId = 0;
+let speak = false, lastId = 0, audio = null, alarmTimer = null;
 document.getElementById('speak').onclick = () => { speak = !speak;
-  document.getElementById('speak').textContent = speak ? '🔇 Vorlesen aus' : '🔊 Hinweise vorlesen';
-  if (speak) speechSynthesis.speak(new SpeechSynthesisUtterance('Vorlesen an')); };
+  document.getElementById('speak').textContent = speak ? '🔇 Ton aus' : '🔊 Ton & Ansagen an';
+  // Browser erlauben Ton erst nach einem Klick - deshalb hier anlegen
+  if (speak) { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume();
+               beep(); speechSynthesis.speak(new SpeechSynthesisUtterance('Ton an')); } };
+function beep() {
+  if (!audio) return;
+  [0, 0.22].forEach(off => {
+    const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + off;
+    o.frequency.value = 1100; o.type = 'square';
+    g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    o.connect(g); g.connect(audio.destination); o.start(t); o.stop(t + 0.2);
+  });
+}
+function alarm(text) {
+  const a = document.getElementById('alarm');
+  document.getElementById('alarm-text').textContent = text.replace(/^GRANATE!\s*/, '');
+  a.classList.add('on'); clearTimeout(alarmTimer);
+  alarmTimer = setTimeout(() => a.classList.remove('on'), 8000);
+}
+document.getElementById('alarm').onclick = () => document.getElementById('alarm').classList.remove('on');
 async function tick() {
   try {
     const r = await fetch('{{ url_for("live.state") }}');
@@ -62,8 +94,12 @@ async function tick() {
     const s = await r.json();
     if (s.hint) {
       document.getElementById('hint').textContent = s.hint.text;
-      if (s.hint.id !== lastId && speak && Date.now() / 1000 - s.hint.at < 20) {
-        const u = new SpeechSynthesisUtterance(s.hint.text); u.lang = 'de-DE'; speechSynthesis.speak(u); }
+      const fresh = s.hint.id !== lastId && Date.now() / 1000 - s.hint.at < 20;
+      if (fresh && s.hint.kind === 'early') { alarm(s.hint.text); if (speak) beep(); }
+      // Nur Hinweise mit Ansage werden vorgelesen - im Plan bleibt es still
+      if (fresh && speak && s.hint.say) {
+        const u = new SpeechSynthesisUtterance(s.hint.say); u.lang = 'de-DE'; u.rate = 1.1;
+        setTimeout(() => speechSynthesis.speak(u), s.hint.kind === 'early' ? 450 : 0); }
       lastId = s.hint.id;
     }
     if (s.map) document.getElementById('meta').textContent = `${s.map} · Runde ${s.round} · Halbzeit ${s.half}`;

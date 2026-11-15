@@ -45,7 +45,11 @@ SIGNAL_FILE = ".gsi_last"   # mtime = letztes Signal von CS2 (auch im Menue, Hea
 SKIP_MODES = {"deathmatch", "casual", "armsrace", "gungameprogressive", "gungametrbomb", "training",
               "custom", "survival", "coopmission"}
 EARLY_SECONDS = 35     # wie utility_analysis.EARLY_SECONDS
-EARLY_HINT_AT = 20     # so lange im Full Buy ohne Granate -> Erinnerung
+# Live zaehlt der Wurf, die Demo die Detonation (bis 35 s). Am 14.11. zaehlte
+# der Live-Coach 23/24 und 10/10, die Demo derselben Matches 16/20 und 8/10 -
+# eine Granate bei 33 s detoniert erst nach 35 s. Live gilt deshalb bis 33 s.
+EARLY_THROW_SECONDS = 33
+EARLY_HINT_AT = 20     # so lange im Full Buy ohne Granate -> Warnung (Ton + Blinken)
 FULL_BUY = 3700        # wie parser._FORCE_THRESHOLD (Ausruestungswert bei Rundenstart)
 PISTOL_ROUNDS = (1, 13)
 GRENADE_NAMES = {"weapon_hegrenade": "HE", "weapon_molotov": "Molotov", "weapon_incgrenade": "Brandgranate",
@@ -154,9 +158,15 @@ def _names(nades: dict[str, int]) -> str:
                      for k, n in nades.items())
 
 
-def _hint(state: dict, text: str, kind: str) -> None:
+def _hint(state: dict, text: str, kind: str, say: str | None = None) -> None:
+    """Hinweis fuer /live. *say* wird vorgelesen - ohne bleibt es still (nur Anzeige).
+
+    Am 14.11. kam jede Runde derselbe lange Satz, auch wenn alles im Plan war;
+    die eine wichtige Warnung ("Noch 14 s ...") ging darin unter ("ich habe es
+    waehrend den Matches nicht wirklich bemerkt").
+    """
     state["hint_id"] = state.get("hint_id", 0) + 1
-    state["hint"] = {"id": state["hint_id"], "text": text, "kind": kind, "at": time.time()}
+    state["hint"] = {"id": state["hint_id"], "text": text, "kind": kind, "at": time.time(), "say": say}
     state.setdefault("log", []).append(state["hint"])
     state["log"] = state["log"][-12:]
 
@@ -227,8 +237,10 @@ def update(state: dict, payload: dict, cfg: dict) -> dict:
     if mp.get("phase") == "intermission" and state["half"] == 1 and n > 12:
         thrown, rounds, wasted = half_stats(state)
         early = _early_text(state, 1)
+        k, m = early_stats(state, 1)
         _hint(state, "Halbzeit: " + (f"{early}, " if early else "")
-                     + f"{thrown} Granaten in {rounds} Runden, {wasted} mit ins Grab.", "halftime")
+                     + f"{thrown} Granaten in {rounds} Runden, {wasted} mit ins Grab.", "halftime",
+              say=f"Halbzeit. Fruehe Granate {k} von {m}." if m else None)
         state["half"] = 2
 
     if n != state["round"]:
@@ -243,14 +255,22 @@ def update(state: dict, payload: dict, cfg: dict) -> dict:
                 text += " Im Full Buy: eine Granate in den ersten 35 s."
             if prev and prev.get("wasted"):
                 text += f" Letzte Runde {prev['wasted']} mit ins Grab genommen."
-            _hint(state, text, "round")
+            # Vorgelesen wird nur, wenn du unter dem Ziel liegst - im Plan bleibt es still
+            k, m = early_stats(state)
+            behind = bool(state.get("target") and m >= 3 and 100 * k / m < state["target"])
+            _hint(state, text, "round",
+                  say="Unter Ziel. Fruehe Granate planen." if behind and n not in PISTOL_ROUNDS else None)
 
-    if not own and player.get("steamid") and phase == "live" and state.get("alive", True):
-        # Du bist tot: GSI zeigt jetzt den Mitspieler, den du beobachtest.
-        _round(state, n)["wasted"] += sum(state.get("last_nades", {}).values())
-        state["alive"], state["last_nades"] = False, {}
     stamp = (payload.get("provider") or {}).get("timestamp")
     now = float(stamp) if stamp is not None else time.time()
+    if not own and player.get("steamid") and phase == "live" and state.get("alive", True):
+        # Du bist tot: GSI zeigt jetzt den Mitspieler, den du beobachtest.
+        cur = _round(state, n)
+        cur["wasted"] += sum(state.get("last_nades", {}).values())
+        if "live_at" in cur and "died_s" not in cur:
+            # sonst zaehlte ein frueher Tod als Full Buy ohne Granate - die Demo schliesst ihn aus
+            cur["died_s"] = round(now - cur["live_at"], 1)
+        state["alive"], state["last_nades"] = False, {}
     if own:
         nades = grenades(player)
         pstate = player.get("state") or {}
@@ -267,7 +287,7 @@ def update(state: dict, payload: dict, cfg: dict) -> dict:
                 drop = before - nades.get(k, 0)
                 if drop > 0 and health > 0:
                     cur["thrown"] += drop
-                    if elapsed <= EARLY_SECONDS:
+                    if elapsed <= EARLY_THROW_SECONDS:
                         cur["early"] = True
             if health == 0 and state.get("last_nades"):
                 cur["wasted"] += sum(state["last_nades"].values())
@@ -278,10 +298,10 @@ def update(state: dict, payload: dict, cfg: dict) -> dict:
         state["alive"] = health > 0
         state["last_nades"] = nades if health > 0 else {}
         if (phase == "live" and cur.get("full") and health > 0 and nades and not cur.get("early")
-                and EARLY_HINT_AT <= elapsed < EARLY_SECONDS and not state.get("late_hinted")):
+                and EARLY_HINT_AT <= elapsed < EARLY_THROW_SECONDS and not state.get("late_hinted")):
             state["late_hinted"] = True
-            _hint(state, f"Noch {EARLY_SECONDS - elapsed:.0f} s fuer die fruehe Granate: {_names(nades)}.",
-                  "early")
+            _hint(state, f"GRANATE! Noch {EARLY_THROW_SECONDS - elapsed:.0f} s: {_names(nades)}.",
+                  "early", say="Granate!")
 
     if mp.get("phase") == "gameover" and not state.get("over"):
         state["over"] = True
@@ -294,7 +314,8 @@ def update(state: dict, payload: dict, cfg: dict) -> dict:
                             "early": k, "full_buys": m}
         early = _early_text(state)
         _hint(state, f"Match vorbei ({ct}:{t}): " + (f"{early}, " if early else "")
-                     + f"{thrown} Granaten in {rounds} Runden, {wasted} mit ins Grab.", "gameover")
+                     + f"{thrown} Granaten in {rounds} Runden, {wasted} mit ins Grab.", "gameover",
+              say=f"Match vorbei. Fruehe Granate {k} von {m}." if m else None)
     return state
 
 
@@ -337,7 +358,9 @@ AI_SYSTEM = """Du bist der CS2-Coach eines einzelnen Spielers, der gerade ein Ma
 - Nur aus den Fakten. Erfinde keine Zahlen. Kein Markdown, keine Emojis.
 - Ein konkreter Hinweis fuer die naechste Halbzeit bzw. das naechste Match, kein Lob ohne Inhalt.
 - Laut seinen eigenen Daten zaehlt die fruehe Granate im Full Buy (in den ersten 35 s, solange er lebt);
-  das Ziel ist der Median-Anteil aus seinen Siegen."""
+  das Ziel ist der Median-Anteil aus seinen Siegen. Mehr fruehe Granaten sind immer besser.
+- Steht in den Fakten "im Plan", ist das gut: bestaetige es in einem Satz. Rate NIE dazu, Granaten zu sparen
+  oder seltener zu werfen (14.11.: "dein Ziel sind aber 82 Prozent. Spare sie dir" - bei 100 %)."""
 
 
 def ai_facts(state: dict) -> str:
@@ -348,9 +371,13 @@ def ai_facts(state: dict) -> str:
     wasted = sum(v["wasted"] for _, v in rows)
     target = state.get("target")
     k, m = early_stats(state)
+    verdict = ""
+    if target and m:
+        verdict = (" - im Plan (Ziel erreicht oder uebertroffen)" if 100 * k / m >= target
+                   else " - unter dem Ziel")
     lines = [f"Map {state.get('map')}, {len(rows)} Runden gespielt, Halbzeit {state.get('half')}.",
              f"Fruehe Granate im Full Buy: in {k} von {m} Full-Buy-Runden"
-             + (f", Ziel aus seinen Siegen {target:.0f} %" if target else "") + ".",
+             + (f", Ziel aus seinen Siegen {target:.0f} %" if target else "") + verdict + ".",
              f"Granaten geworfen: {thrown} ({thrown / max(len(rows), 1):.1f} pro Runde).",
              f"Mit ins Grab genommen: {wasted}.", f"Je Runde: {per_round}."]
     if state.get("summary"):
@@ -372,7 +399,7 @@ def ai_hint(cfg: dict, config_path: Path, after_id: int, ask_fn=None) -> str | N
     with _Lock(config_path):
         state = load_state(config_path)
         if state.get("map"):
-            _hint(state, f"Coach: {text}", "ai")
+            _hint(state, f"Coach: {text}", "ai", say=text)
             save_state(config_path, state)
     return text
 
