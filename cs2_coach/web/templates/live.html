@@ -11,12 +11,25 @@
     #alarm small { font-size: clamp(18px, 3vw, 32px); font-weight: 700; margin-top: 16px; }
     @keyframes lv-blink { 50% { background: #f97316; } }
     @media (prefers-reduced-motion: reduce) { #alarm { animation: none; } }
+    /* Rundenstreifen: je Full Buy ein Feld */
+    #strip { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: var(--space-3); min-height: 30px; }
+    #strip span { width: 28px; height: 28px; border-radius: 5px; display: flex; align-items: center; justify-content: center;
+                  font-size: 14px; font-weight: 800; }
+    #strip .ok { background: #22c55e; color: #052e14; } #strip .miss { background: #ef4444; color: #fff; }
+    #strip .open { background: var(--color-neutral-700); color: var(--color-text); }
+    #strip .dead { background: var(--color-neutral-800); color: var(--color-neutral-500); }
+    .lv-plan { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+    .lv-plan h4 { margin: 0 0 6px; font-size: 13px; }
+    .lv-nade { font-size: 14px; padding: 4px 0; border-bottom: 1px solid var(--color-divider); }
+    .lv-nade small { color: var(--color-neutral-500); }
+    @media (max-width: 600px) { .lv-plan { grid-template-columns: 1fr; } }
 </style>
 <div id="alarm" role="alert"><b>GRANATE!</b><small id="alarm-text"></small></div>
 <h2>Live-Coach</h2>
 <div class="card elev-sm" style="margin-bottom: var(--space-4); text-align: center;">
     <div id="hint" style="font-size: 26px; font-weight: 700; line-height: 1.3; min-height: 70px;">Warte auf ein Match …</div>
     <div id="meta" style="color: var(--color-neutral-500); font-size: 13px; margin-top: var(--space-2);"></div>
+    <div id="strip" title="Full Buys: grün = frühe Granate, rot = ohne, grau = läuft / vor 35 s gestorben"></div>
 </div>
 <div style="display: flex; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4);">
     <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
@@ -25,6 +38,15 @@
         <div id="soll" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">Ziel (aus deinen Siegen)</div></div>
     <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
         <div id="thrown" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">Granaten (Halbzeit)</div></div>
+</div>
+<div id="plan" class="card elev-sm" style="margin-bottom: var(--space-4); display: none;">
+    <span class="card-kicker" id="plan-head">Match-Plan</span>
+    <div id="plan-meta" style="font-size: 14px; margin: 6px 0 var(--space-3);"></div>
+    <div class="lv-plan">
+        <div><h4>Als T – deine häufigsten Granaten</h4><div id="plan-T"></div></div>
+        <div><h4>Als CT – deine häufigsten Granaten</h4><div id="plan-CT"></div></div>
+    </div>
+    <div style="font-size: 11px; color: var(--color-neutral-500); margin-top: var(--space-3);">Aus deinen eigenen Würfen in den Demos - die häufigsten, nicht nachweislich die besten. Die Warnung im Match nennt die passende.</div>
 </div>
 {% if summary.goal %}
 <div class="card elev-sm" style="margin-bottom: var(--space-4); border-left: 3px solid var(--color-green);">
@@ -65,7 +87,33 @@
         Empfang: <code>{{ gsi_url.rsplit('/', 1)[0] }}/…</code></p>
 </details>
 <script>
-let speak = false, lastId = 0, audio = null, alarmTimer = null;
+let speak = false, lastId = 0, audio = null, alarmTimer = null, lastPlan = 0;
+const esc = t => String(t).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+function renderPlan(p) {
+  const box = document.getElementById('plan');
+  if (!p || !p.map) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  document.getElementById('plan-head').textContent = 'Match-Plan · ' + p.name;
+  const q = p.quote && p.quote.pct !== null ? `deine Quote hier ${p.quote.pct} % (${p.quote.k}/${p.quote.n})` : 'noch keine Quote auf dieser Map';
+  const last = p.last ? ` · zuletzt ${esc(p.last.score)} ${esc(p.last.result)} (${esc(p.last.date)})` : '';
+  document.getElementById('plan-meta').innerHTML =
+    `Ziel <b>${p.target ? Math.round(p.target) + ' %' : '–'}</b> frühe Granate im Full Buy · ${q}${last}`;
+  ['T', 'CT'].forEach(side => {
+    const list = (p.sides && p.sides[side] || []).slice(0, 3);
+    document.getElementById('plan-' + side).innerHTML = list.length ? list.map(x =>
+      `<div class="lv-nade"><b>${esc(x.label)}</b>${x.place ? ' → ' + esc(x.place) : ''} <small>${x.mine}×</small></div>`).join('')
+      : '<div class="lv-nade"><small>Noch keine eigenen Würfe ausgewertet.</small></div>';
+  });
+  // Einmal ansagen, sobald ein neuer Plan da ist (Aufwaermphase)
+  if (p.id !== lastPlan) { if (lastPlan && speak && p.announce) {
+    const u = new SpeechSynthesisUtterance(p.announce); u.lang = 'de-DE'; speechSynthesis.speak(u); }
+    lastPlan = p.id; }
+}
+function renderStrip(rows) {
+  const sym = {ok: '✓', miss: '✗', open: '…', dead: '–'};
+  document.getElementById('strip').innerHTML = (rows || []).map(r =>
+    `<span class="${r.status}" title="Runde ${r.n}">${sym[r.status]}</span>`).join('');
+}
 document.getElementById('speak').onclick = () => { speak = !speak;
   document.getElementById('speak').textContent = speak ? '🔇 Ton aus' : '🔊 Ton & Ansagen an';
   // Browser erlauben Ton erst nach einem Klick - deshalb hier anlegen
@@ -103,6 +151,7 @@ async function tick() {
       lastId = s.hint.id;
     }
     if (s.map) document.getElementById('meta').textContent = `${s.map} · Runde ${s.round} · Halbzeit ${s.half}`;
+    renderStrip(s.strip); renderPlan(s.plan);
     document.getElementById('early').textContent = s.map ? (s.early + '/' + s.full_buys) : '–';
     document.getElementById('soll').textContent = s.target ? Math.round(s.target) + ' %' : '–';
     document.getElementById('thrown').textContent = s.map ? s.thrown : '–';

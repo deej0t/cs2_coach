@@ -162,3 +162,20 @@ def test_tod_im_zuschauermodus_zaehlt_als_frueher_tod():
     assert st["rounds"]["2"]["died_s"] == 12.0
     st = lc.update(st, gsi(3, "freezetime", t=120), CFG)
     assert lc.early_stats(st) == (0, 0)
+
+
+def test_warnung_nennt_deine_granate():
+    plan = {"map": "de_mirage", "sides": {"T": [{"type": "he", "label": "HE", "place": "Top of Mid", "mine": 9}]}}
+    st = {}
+    for p in (gsi(3, "freezetime"), gsi(3, t=0), gsi(3, t=21)):
+        p["player"]["team"] = "T"
+        st = lc.update(st, p, CFG, plan)
+    hint = [h for h in st["log"] if h["kind"] == "early"][0]
+    assert "HE → Top of Mid (9× von dir)" in hint["text"] and hint["say"] == "Granate! HE Top of Mid"
+
+
+def test_rundenstreifen():
+    st = run(gsi(2, "freezetime"), gsi(2, t=0), gsi(2, t=12, nades=("weapon_flashbang",)),   # frueh
+             gsi(3, "freezetime", t=120), gsi(3, t=130), gsi(3, t=170, nades=()),           # zu spaet
+             gsi(4, "freezetime", t=240), gsi(4, t=250))                                     # laeuft
+    assert [r["status"] for r in lc.round_strip(st)] == ["ok", "miss", "open"]

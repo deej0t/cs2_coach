@@ -216,8 +216,31 @@ def half_stats(state: dict) -> tuple[int, int, int]:
     return sum(r["thrown"] for r in rs), len(rs), sum(r["wasted"] for r in rs)
 
 
-def update(state: dict, payload: dict, cfg: dict) -> dict:
-    """Einen GSI-Stapel verarbeiten; gibt den neuen Zustand zurueck."""
+def round_strip(state: dict) -> list[dict]:
+    """Full-Buy-Runden des laufenden Matches fuer /live: ok / fehlt / offen / tot (zaehlt nicht)."""
+    out = []
+    for key in sorted(state.get("rounds", {}), key=int):
+        r = state["rounds"][key]
+        if not r.get("full"):
+            continue
+        died = r.get("died_s")
+        if r.get("early"):
+            status = "ok"
+        elif died is not None and died < EARLY_SECONDS:
+            status = "dead"
+        elif r.get("survived_early") or int(key) != state.get("round"):
+            status = "miss"
+        else:
+            status = "open"
+        out.append({"n": int(key), "status": status})
+    return out
+
+
+def update(state: dict, payload: dict, cfg: dict, plan: dict | None = None) -> dict:
+    """Einen GSI-Stapel verarbeiten; gibt den neuen Zustand zurueck.
+
+    *plan* (live_plan.load) liefert fuer die Warnung deine haeufigste passende Granate.
+    """
     me = str(cfg.get("steam_id") or (payload.get("provider") or {}).get("steamid") or "")
     mp, rnd, player = payload.get("map") or {}, payload.get("round") or {}, payload.get("player") or {}
     if not mp:  # Hauptmenue
@@ -300,8 +323,16 @@ def update(state: dict, payload: dict, cfg: dict) -> dict:
         if (phase == "live" and cur.get("full") and health > 0 and nades and not cur.get("early")
                 and EARLY_HINT_AT <= elapsed < EARLY_THROW_SECONDS and not state.get("late_hinted")):
             state["late_hinted"] = True
-            _hint(state, f"GRANATE! Noch {EARLY_THROW_SECONDS - elapsed:.0f} s: {_names(nades)}.",
-                  "early", say="Granate!")
+            from .live_plan import suggest
+            tip = suggest(plan or {}, str(player.get("team", "")).upper(), nades) if plan and \
+                plan.get("map") == map_name else None
+            left = f"noch {EARLY_THROW_SECONDS - elapsed:.0f} s"
+            if tip:
+                where = f" → {tip['place']}" if tip["place"] else ""
+                _hint(state, f"GRANATE! {tip['label']}{where} ({tip['mine']}× von dir) · {left}",
+                      "early", say=f"Granate! {tip['label']} {tip['place']}".strip())
+            else:
+                _hint(state, f"GRANATE! {left.capitalize()}: {_names(nades)}.", "early", say="Granate!")
 
     if mp.get("phase") == "gameover" and not state.get("over"):
         state["over"] = True
@@ -338,9 +369,16 @@ def ingest(cfg: dict, config_path: Path, payload: dict) -> None:
         pass
     if is_active(config_path):
         return
+    from . import live_plan
+    mp = payload.get("map") or {}
+    bsp = str(mp.get("name", ""))
+    plan = None
+    if bsp.startswith(("de_", "cs_")) and mp.get("mode") not in SKIP_MODES:
+        live_plan.ensure(cfg, config_path, bsp)   # im Hintergrund, auch schon in der Aufwaermphase
+        plan = live_plan.load(config_path)
     with _Lock(config_path):
         before = load_state(config_path)
-        state = update(dict(before), payload, cfg)
+        state = update(dict(before), payload, cfg, plan)
         if state.get("over") and not before.get("over"):
             save_match(config_path, state)
         if state != before:
