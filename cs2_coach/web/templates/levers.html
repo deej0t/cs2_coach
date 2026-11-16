@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — {{ _('Hebel-Suche') }}{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<h2 style="margin-bottom:4px;">{{ _('Hebel-Suche') }}</h2>
+<p style="color:var(--color-neutral-500);font-size:13px;margin-top:0;">
+    {{ _('Was trennt deine Siege von deinen Niederlagen? Alle Kandidaten werden bei jedem Sync neu gemessen') }}
+    – {{ _('zuletzt') }} {{ data.at|replace('T', ' ') }}, {{ data.matches }} Matches, {{ data.deaths }} {{ _('Tode') }}.
+    {{ _('Wird ein Kandidat neu belastbar, kommt eine Nachricht per Discord/Telegram.') }}
+</p>
+
+<div class="card elev-sm" style="margin-bottom:var(--space-5);border-left:3px solid {{ 'var(--color-green)' if found else 'var(--color-neutral-600)' }};">
+    <span class="card-kicker">{{ _('Belastbare Hebel') }}</span>
+    {% if found %}
+    {% for x in found %}
+    <div style="margin-top:8px;">
+        <b>{{ x.label }}</b> – {{ x.mean_win }}{{ x.unit }} {{ _('gegen') }} {{ x.mean_loss }}{{ x.unit }}
+        <span style="color:var(--color-neutral-500);font-size:12px;">({{ _('Effekt') }} {{ x.effect }} [{{ x.ci_low }} … {{ x.ci_high }}])</span>
+        {% if x.note %}<div style="font-size:12px;color:var(--color-neutral-500);">{{ x.note }}</div>{% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p style="margin:6px 0 0;font-size:14px;">
+        {{ _('Gerade trennt kein Kandidat deine Siege belastbar von den Niederlagen, der nicht nur eine Folge des Siegs ist.') }}
+        {{ _('Die frühe Granate im Full Buy ist auf Rundenebene positiv, aber klein - sie bleibt deine Mission.') }}
+    </p>
+    {% endif %}
+</div>
+
+{% with rel_rows = rows,
+        rel_kicker = _('Alle Kandidaten'),
+        rel_title = _('Runde, Match, Tod und Zone im Vergleich'),
+        rel_intro = _('Runde = gewonnene Runden mit gegen ohne; Match = Siege gegen Niederlagen; Tod = Anteil der Tode in Siegen gegen Niederlagen; Zone = deine Duelle dort gegen den Rest der Map. Effektstärke mit 95%-Bereich.'),
+        rel_footnote = _('Ergebnisabhängig heißt: die Zahl steigt auch, wenn du einfach gewinnst (Survival, KAST, ADR - und Granaten je Match, weil der Gegner in deinen Siegen weniger wirft). Solche Zeilen werden nie als neuer Hebel gemeldet.') %}
+{% include '_partials/relevance_table.html' %}
+{% endwith %}
+
+<div class="card elev-sm" style="margin-bottom:var(--space-5);">
+    <span class="card-kicker">{{ _('Zonen') }}</span>
+    <p style="font-size:13px;margin:6px 0;">
+        {{ data.zones.tested }} {{ _('Map/Seite/Callout-Felder mit genug Duellen getestet') }},
+        <b>{{ data.zones.solid }} {{ _('belastbar') }}</b>.
+        {{ _('Je Feld sind es meist 15 bis 60 Duelle - das Urteil wird mit jedem Match schärfer.') }}
+    </p>
+    {% if data.zones.closest %}
+    <table class="table"><tbody>
+        {% for z in data.zones.closest %}
+        <tr><td>{{ z.label }}</td>
+            <td style="white-space:nowrap;color:var(--color-neutral-500);">{{ z.note }}: {{ z.mean_win }} % {{ _('gegen') }} {{ z.mean_loss }} %</td>
+            <td style="white-space:nowrap;font-size:12px;color:var(--color-neutral-500);">{{ z.effect }} [{{ z.ci_low }} … {{ z.ci_high }}]</td>
+            <td style="text-align:right;">{% if z.verdict in ('solid_positive', 'solid_negative') %}<span class="tag" style="border-color:var(--color-green);color:var(--color-green);">{{ _('belastbar') }}</span>{% else %}<span class="tag" style="border-color:var(--color-yellow);color:var(--color-yellow);">{{ _('unentschieden') }}</span>{% endif %}</td></tr>
+        {% endfor %}
+    </tbody></table>
+    <div style="font-size:11px;color:var(--color-neutral-600);margin-top:6px;">{{ _('Die fünf Felder mit dem größten Unterschied - Kandidaten, keine Befunde. Bonferroni-korrigiert, weil die auffälligste von vielen Zonen sonst immer "auffällig" wäre.') }}</div>
+    {% endif %}
+</div>
+{% endblock %}
