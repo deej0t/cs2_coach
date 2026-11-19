@@ -31,7 +31,7 @@ from pathlib import Path
 
 TICKRATE = 64
 CACHE_DIR = "winprob_cache"
-CACHE_KEY = "rounds-v1"
+CACHE_KEY = "rounds-v2"  # v2: Map je Runde, Callout von Opfer und Schuetze je Tod
 
 #: Grenzen der Zeitabschnitte in Sekunden. Vor der Bombe ab Freeze-Ende
 #: (Rundenzeit 115 s), nach der Bombe ab dem Legen (Zuender 40 s).
@@ -48,10 +48,10 @@ EQUIP_CAP = 4.0
 Cell = tuple[int, int, int, int]  # ct, t, planted, time bucket
 
 
-def _event(p, name: str, columns: list[str]):
+def _event(p, name: str, columns: list[str], player: list[str] | None = None):
     import pandas as pd
     try:
-        df = p.parse_event(name)
+        df = p.parse_event(name, player=player) if player else p.parse_event(name)
     except Exception:  # noqa: BLE001 - Event kommt in dieser Demo nicht vor
         return pd.DataFrame(columns=columns)
     return df if hasattr(df, "iterrows") else pd.DataFrame(columns=columns)
@@ -61,14 +61,30 @@ def _is_human(sid: str) -> bool:
     return sid.startswith("7656") and len(sid) == 17
 
 
+def _place(value) -> str:
+    """Callout aus dem Nav-Mesh oder "" (NaN/None bei Welt-Toden)."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return ""
+    return str(value).strip()
+
+
+def _map_name(p) -> str:
+    """Map wie in den Exporten ("Mirage"), "" wenn der Kopf der Demo fehlt."""
+    try:
+        from .parser import _clean_map_name
+        return _clean_map_name(str(p.parse_header().get("map_name") or ""))
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def scan_demo(demo_path, parser_factory=None) -> list[dict]:
     """Alle Runden einer Demo mit Startaufstellung und Ereignissen.
 
-    Je Runde: ``winner`` (CT/T), ``ct``/``t`` (Steam-IDs am Leben bei
-    Freeze-Ende), ``ct_equip``/``t_equip`` (Summe Ausruestungswert) und
-    ``events`` als ``[sekunde, art, steamid, taeter]`` mit art ``d`` (Tod),
-    ``p`` (Bombe gelegt). Runden ohne 4-5 Menschen je Seite fallen weg
-    (Aufwaermen, Bots, Wingman).
+    Je Runde: ``map``, ``winner`` (CT/T), ``ct``/``t`` (Steam-IDs am Leben
+    bei Freeze-Ende), ``ct_equip``/``t_equip`` (Summe Ausruestungswert) und
+    ``events`` als ``[sekunde, art, steamid, taeter, callout, callout_taeter]``
+    mit art ``d`` (Tod), ``p`` (Bombe gelegt). Runden ohne 4-5 Menschen je
+    Seite fallen weg (Aufwaermen, Bots, Wingman).
     """
     if parser_factory is None:
         from demoparser2 import DemoParser as parser_factory
@@ -78,9 +94,11 @@ def scan_demo(demo_path, parser_factory=None) -> list[dict]:
     ends = sorted((int(r["tick"]), str(r["winner"]).upper()) for _, r in ends_df.iterrows())
     if not freeze or not ends:
         return []
-    deaths = _event(p, "player_death", ["tick", "user_steamid", "attacker_steamid"])
-    deaths = sorted((int(r["tick"]), str(r["user_steamid"]), str(r.get("attacker_steamid") or ""))
+    deaths = _event(p, "player_death", ["tick", "user_steamid", "attacker_steamid"], player=["last_place_name"])
+    deaths = sorted((int(r["tick"]), str(r["user_steamid"]), str(r.get("attacker_steamid") or ""),
+                     _place(r.get("user_last_place_name")), _place(r.get("attacker_last_place_name")))
                     for _, r in deaths.iterrows())
+    map_name = _map_name(p)
     plants = sorted(int(t) for t in _event(p, "bomb_planted", ["tick"])["tick"])
 
     # Je Rundenende das letzte Freeze-Ende davor (und nach dem vorigen Ende)
@@ -113,10 +131,11 @@ def scan_demo(demo_path, parser_factory=None) -> list[dict]:
             equip[side] += int(value) if value == value and value is not None else 0
         if bots or not all(4 <= len(s) <= 5 for s in sides.values()):
             continue
-        events = [[round((t - start) / TICKRATE, 1), "d", v, k] for t, v, k in deaths if start < t <= end]
-        events += [[round((t - start) / TICKRATE, 1), "p", "", ""] for t in plants if start < t <= end]
+        events = [[round((t - start) / TICKRATE, 1), "d", v, k, vp, kp]
+                  for t, v, k, vp, kp in deaths if start < t <= end]
+        events += [[round((t - start) / TICKRATE, 1), "p", "", "", "", ""] for t in plants if start < t <= end]
         events.sort(key=lambda e: (e[0], e[1] != "p"))
-        out.append({"n": n, "winner": winner, "seconds": round((end - start) / TICKRATE, 1),
+        out.append({"n": n, "map": map_name, "winner": winner, "seconds": round((end - start) / TICKRATE, 1),
                     "ct": sides["CT"], "t": sides["T"], "ct_equip": equip["CT"], "t_equip": equip["T"],
                     "events": events})
     return out
@@ -171,14 +190,15 @@ def timeline(rnd: dict) -> list[dict]:
     """Zustandsfolge einer Runde: Start, dann der Zustand vor und nach jedem Ereignis.
 
     Jeder Eintrag: ``second``, ``kind`` (``start``/``d``/``p``), ``sid``/``by``,
-    ``side`` des Opfers, ``before``/``after`` als (ct, t, planted, sekunde im
-    jeweiligen Zeitmass). Tode nach dem Rundenende der Zaehlung (Seite schon
-    bei 0) werden uebersprungen.
+    ``side`` des Opfers, ``place``/``by_place`` (Callouts), ``before``/``after``
+    als (ct, t, planted, sekunde im jeweiligen Zeitmass). Tode nach dem
+    Rundenende der Zaehlung (Seite schon bei 0) werden uebersprungen.
     """
     ct, t = set(rnd["ct"]), set(rnd["t"])
     planted, plant_second = False, 0.0
     out = []
-    for second, kind, sid, by in rnd["events"]:
+    for second, kind, sid, by, *places in rnd["events"]:
+        place, by_place = (places + ["", ""])[:2]
         clock = second - plant_second if planted else second
         before = (len(ct), len(t), planted, clock)
         if not is_live(*before[:3]):
@@ -198,7 +218,7 @@ def timeline(rnd: dict) -> list[dict]:
             continue  # nachgeruckter oder unbekannter Spieler
         after = (len(ct), len(t), planted, second - plant_second if planted else second)
         out.append({"second": second, "kind": kind, "sid": sid, "by": by, "side": side,
-                    "before": before, "after": after})
+                    "place": place, "by_place": by_place, "before": before, "after": after})
     return out
 
 
@@ -436,19 +456,24 @@ def swings(rnd: dict, table: WinTable) -> list[dict]:
 
     ``cost`` in Prozentpunkten (positiv = hat gekostet), ``before`` die Lage
     der Seite davor in Prozent, dazu Spielerzahlen aus Sicht des Opfers.
+    ``by`` ist nur gesetzt, wenn ein Gegner geschossen hat - dann ist ``cost``
+    zugleich dessen Gewinn. ``opening`` = erster Tod der Runde.
     """
     equip = equip_edge(rnd)
+    enemies = {"CT": set(rnd["t"]), "T": set(rnd["ct"])}
     out = []
     for ev in timeline(rnd):
         if ev["kind"] != "d" or ev["side"] is None:
             continue
         side = ev["side"]
+        by = ev["by"] if ev["by"] in enemies[side] else ""
         pb = table.p_side(side, *ev["before"], equip=equip)
         pa = table.p_side(side, *ev["after"], equip=equip)
         ct, t, planted, _ = ev["before"]
         own, enemy = (ct, t) if side == "CT" else (t, ct)
-        out.append({"sid": ev["sid"], "by": ev["by"], "side": side, "second": ev["second"],
-                    "own": own, "enemy": enemy, "planted": bool(planted),
+        out.append({"sid": ev["sid"], "by": by, "side": side, "second": ev["second"],
+                    "place": ev["place"], "by_place": ev["by_place"] if by else "",
+                    "opening": not out, "own": own, "enemy": enemy, "planted": bool(planted),
                     "before": round(pb * 100, 1), "cost": round((pb - pa) * 100, 1),
                     "won": rnd["winner"] == side})
     return out

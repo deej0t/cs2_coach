@@ -16,7 +16,10 @@ class FakeDemo:
     def __init__(self, path):
         pass
 
-    def parse_event(self, name):
+    def parse_header(self):
+        return {"map_name": "de_mirage"}
+
+    def parse_event(self, name, player=None):
         if name == "round_freeze_end":
             return pd.DataFrame({"tick": [100, 3000, 5000]})
         if name == "round_end":
@@ -24,7 +27,9 @@ class FakeDemo:
         if name == "player_death":
             return pd.DataFrame({"tick": [164, 1380, 4990, 5064],
                                  "user_steamid": [T[0], CT[0], CT[1], T[1]],
-                                 "attacker_steamid": [CT[0], T[1], T[0], CT[2]]})
+                                 "attacker_steamid": [CT[0], T[1], T[0], CT[2]],
+                                 "user_last_place_name": ["Palace", "BombsiteA", None, float("nan")],
+                                 "attacker_last_place_name": ["Ticket", "Palace", "Mid", "Jungle"]})
         if name == "bomb_planted":
             return pd.DataFrame({"tick": [740]})
         raise KeyError(name)
@@ -48,11 +53,12 @@ def _round(events, winner="CT", seconds=60.0, ct_equip=20000, t_equip=20000):
 
 def test_scan_reads_rounds_sides_and_events():
     first, third = wp.scan_demo("x.dem", parser_factory=FakeDemo)
-    assert (first["n"], first["winner"], first["seconds"]) == (1, "T", 30.0)
+    assert (first["n"], first["map"], first["winner"], first["seconds"]) == (1, "Mirage", "T", 30.0)
     assert (first["ct"], first["t"]) == (CT, T)
     assert (first["ct_equip"], first["t_equip"]) == (20000, 5000)
-    assert first["events"] == [[1.0, "d", T[0], CT[0]], [10.0, "p", "", ""], [20.0, "d", CT[0], T[1]]]
-    assert third["n"] == 3 and third["events"] == [[1.0, "d", T[1], CT[2]]]  # der Tod im Freeze fehlt
+    assert first["events"] == [[1.0, "d", T[0], CT[0], "Palace", "Ticket"], [10.0, "p", "", "", "", ""],
+                               [20.0, "d", CT[0], T[1], "BombsiteA", "Palace"]]
+    assert third["n"] == 3 and third["events"] == [[1.0, "d", T[1], CT[2], "", "Jungle"]]  # der Tod im Freeze fehlt
 
 
 def test_timeline_switches_clock_at_the_plant_and_stops_when_decided():
@@ -127,9 +133,11 @@ def test_calibration_predicts_each_match_from_the_others():
 def test_swings_charge_a_death_to_the_side_of_the_victim():
     matches = _matches()
     table = wp.fit(matches)
-    rnd = _round([[20.0, "d", CT[0], T[2]], [30.0, "d", T[2], CT[1]]], winner="T", seconds=90.0)
+    rnd = _round([[20.0, "d", CT[0], T[2], "Window", "Mid"], [30.0, "d", T[2], T[3]]], winner="T", seconds=90.0)
     first, second = wp.swings(rnd, table)
     assert (first["sid"], first["by"], first["side"], first["own"], first["enemy"]) == (CT[0], T[2], "CT", 5, 5)
+    assert (first["place"], first["by_place"], first["opening"]) == ("Window", "Mid", True)
+    assert (second["by"], second["place"], second["opening"]) == ("", "", False)  # Teamkill: niemandes Gewinn
     assert first["cost"] > 0 and first["won"] is False
     assert (second["side"], second["own"], second["enemy"], second["won"]) == ("T", 5, 4, True)
     assert second["cost"] > 0
