@@ -753,6 +753,15 @@ def load_calibration(config_path: Path) -> dict | None:
         return None
 
 
+def duel_order(scenarios: list, latest: str, costs: dict[tuple[str, int], float] | None = None) -> list[int]:
+    """Reihenfolge fuer !training/!warmup: Duelle aus dem letzten Match zuerst, darin und danach
+    die teuersten Tode vorn (Preis aus costly_moments, Tod als letzter Mann = 0); ohne Preis
+    bleibt es bei neueste zuerst."""
+    costs = costs or {}
+    return sorted(range(len(scenarios)), key=lambda i: (scenarios[i].export != latest,
+                                                        -costs.get((scenarios[i].export, scenarios[i].round), 0.0)))
+
+
 def repeat_queue(sessions: list[dict], scenarios: list, limit: int = MAX_SCENARIOS) -> list[int]:
     """!wiederholen: nur Duelle, die du im Training verloren hast - die oefter verlorenen zuerst.
 
@@ -930,6 +939,18 @@ class Director:
     def maps(self) -> list[str]:
         return list(self.cfg.get("training_maps") or DEFAULT_MAPS)
 
+    def scenario_costs(self) -> dict[tuple[str, int], float]:
+        """Preis deiner Tode je (Export, Runde) - leer ohne Demo-Cache, dann neueste zuerst."""
+        vault = self.cfg.get("obsidian_vault_path") or ""
+        if not vault:
+            return {}
+        try:
+            from .costly_moments import scenario_costs
+            folder = Path(vault) / self.cfg.get("coach_subfolder", "CS2-Coach") / "exports"
+            return scenario_costs(self.cfg, self.path, folder, str(self.cfg.get("steam_id") or ""))
+        except Exception:  # noqa: BLE001 - das Training startet auch ohne Preise
+            return {}
+
     def scenarios(self) -> dict[str, list[Scenario]]:
         if self._scenarios is None:
             vault = self.cfg.get("obsidian_vault_path") or ""
@@ -1039,11 +1060,12 @@ class Director:
                 return [f"Auf {bsp} hast du im Training noch kein Duell verloren (oder alle danach gewonnen) - "
                         f"erst ein normales !training {bsp.removeprefix('de_')}."]
         else:
-            # Duelle aus deinem letzten Match auf dieser Map zuerst (Hausaufgabe nach dem Match)
+            # Duelle aus deinem letzten Match auf dieser Map zuerst (Hausaufgabe nach dem Match),
+            # darin und danach die teuersten Tode vorn
             from .obsidian import export_sort_key
             scs = all_sc[bsp]
             latest = max((s.export for s in scs if s.export), key=lambda e: export_sort_key(Path(e)), default="")
-            order = sorted(range(len(scs)), key=lambda i: scs[i].export != latest)
+            order = duel_order(scs, latest, self.scenario_costs())
             queue = order[:WARMUP_DUELS if mode == "warmup" else MAX_SCENARIOS]
         uniq = sorted(set(queue))
         n = len(queue)

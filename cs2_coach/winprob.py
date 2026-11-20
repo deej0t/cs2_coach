@@ -142,19 +142,22 @@ def scan_demo(demo_path, parser_factory=None) -> list[dict]:
 
 
 def collect(cfg: dict, config_path: Path, parser_factory=None, log=print, max_new: int = 500,
-            stats: dict | None = None) -> list[dict]:
+            stats: dict | None = None, prefer: list[str] | None = None) -> list[dict]:
     """Alle Demos im Demo-Ordner: ``[{"demo": stem, "rounds": [...]}]``, je Demo zwischengespeichert.
 
     ``stats`` bekommt ``new`` (in diesem Lauf eingelesen) und ``waiting`` (wegen
     ``max_new`` liegen geblieben). Unlesbare Demos werden nicht gemerkt und beim
     naechsten Lauf erneut versucht - ein neuer Parser kann sie oft lesen.
+    ``prefer``: Demos (ohne .dem), die zuerst eingelesen werden - etwa das Match,
+    das gerade nachbesprochen wird, vor einem Rueckstand alter Demos.
     """
     folder = (cfg.get("demo_folder") or "").strip()
     if not folder or not Path(folder).is_dir():
         return []
     cache_dir = Path(config_path).parent / CACHE_DIR
     out, scanned, new, waiting = [], 0, 0, 0
-    for demo in sorted(Path(folder).glob("*.dem")):
+    first = set(prefer or [])
+    for demo in sorted(Path(folder).glob("*.dem"), key=lambda d: (d.stem not in first, d.name)):
         cache = cache_dir / f"{demo.stem}.json"
         try:
             known = json.loads(cache.read_text(encoding="utf-8"))

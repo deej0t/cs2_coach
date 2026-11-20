@@ -37,7 +37,8 @@ SYSTEM = """Du bist der persoenliche CS2-Coach eines Spielers und schreibst die 
 - Keine Floskeln ("Kopf hoch", "weiter so", "insgesamt", "konzentriere dich voll"). Beginne nicht mit dem Ergebnis, der Map oder "Dein".
 - Nutze den Rundenverlauf (Serien, Seiten, fruehe Tode, Opening-Duelle), damit man merkt, dass es um GENAU dieses Match geht.
 - Klingt nicht wie die FRUEHEREN NACHBESPRECHUNGEN: andere Satzanfaenge, anderer Aufbau, andere Schwerpunkte.
-- Steht eine MISSION in den Fakten, sage in genau einem Satz, ob er sie in diesem Match erfuellt hat - mit den Zahlen aus den Fakten."""
+- Steht eine MISSION in den Fakten, sage in genau einem Satz, ob er sie in diesem Match erfuellt hat - mit den Zahlen aus den Fakten.
+- Stehen TEUERSTE TODE in den Fakten, nenne den teuersten in genau einem Satz mit Runde, Lage und Punkten - als Szene zum Anschauen, nicht als Fehlerurteil (ein teurer Tod kann richtig gewesen sein)."""
 
 
 def _fmt(v: float) -> str:
@@ -108,8 +109,12 @@ def choose_focus(worse: list, m: dict | None):
     return focus_of(worse)
 
 
-def facts(data: dict, history: list[dict], goals: list[str], mission_state: dict | None = None) -> str:
-    """Faktenblock fuer die KI. history = Exporte VOR diesem Match, aelteste zuerst."""
+def facts(data: dict, history: list[dict], goals: list[str], mission_state: dict | None = None,
+          moments: list[dict] | None = None) -> str:
+    """Faktenblock fuer die KI. history = Exporte VOR diesem Match, aelteste zuerst.
+
+    ``moments``: die teuersten eigenen Tode (costly_moments.for_match).
+    """
     from .findings import evaluate
     m = data.get("match") or {}
     lines = [f"Match: {m.get('map', '?')}, {m.get('result', '?')} {m.get('score_own', '?')}:{m.get('score_enemy', '?')}, "
@@ -141,6 +146,9 @@ def facts(data: dict, history: list[dict], goals: list[str], mission_state: dict
         lines.append("Schlechter als sonst: " + ", ".join(f.label for _, f in sorted(worse, key=lambda x: -x[0])) + ".")
     if mission_state:
         lines.append(_mission_line(mission_state))
+    if moments:
+        from .costly_moments import facts_line
+        lines.append(facts_line(moments))
     # Fokus legt der Coach fest, nicht die KI: verfehlte Mission, sonst groesster Rueckschritt,
     # sonst das erste Trainingsziel
     focus = choose_focus(worse, mission_state)
@@ -195,7 +203,8 @@ def load_focus(config_path: Path) -> dict:
         return {}
 
 
-def _notify(cfg: dict, config_path: Path, data: dict, text: str, focus, log) -> None:
+def _notify(cfg: dict, config_path: Path, data: dict, text: str, focus, log,
+            moments: list[dict] | None = None) -> None:
     """Nachbesprechung aufs Handy: Discord (briefing_webhook/discord_webhook) und Telegram."""
     m = data.get("match") or {}
     head = f"**Nachbesprechung {m.get('map', '')} {m.get('score_own', '')}:{m.get('score_enemy', '')}** ({m.get('date', '')})"
@@ -207,7 +216,11 @@ def _notify(cfg: dict, config_path: Path, data: dict, text: str, focus, log) -> 
                 if focus.key in ("utility", "early_util") else
                 f"\n\nHausaufgabe: {focus.label} - auf dem Server `!training {short}` "
                 "(deine verlorenen Duelle aus diesem Match kommen zuerst).")
-    _send_text(cfg, config_path, f"{head}\n{text}{task}", log)
+    scene = ""
+    if moments:
+        from .costly_moments import notify_line
+        scene = "\n\n" + notify_line(moments)
+    _send_text(cfg, config_path, f"{head}\n{text}{task}{scene}", log)
 
 
 def _send_text(cfg: dict, config_path: Path, msg: str, log) -> None:
@@ -275,13 +288,23 @@ def generate_pending(cfg: dict, config_path: Path, log=print, limit: int = PER_S
         goal = None
     made = 0
     previous = [t for t in (load(config_path, g.name) for g in reversed(files)) if t][:2]
+    # Preise der eigenen Tode (winprob): die Demos dieser Matches zuerst einlesen - der Sync
+    # bespricht nach, bevor die Hebel-Suche den Demo-Cache auffuellt
+    try:
+        from .costly_moments import for_match, priced_own_deaths
+        stems = [Path((datas.get(f.name, {}).get("match") or {}).get("demo_file") or "").stem for f in todo]
+        own = priced_own_deaths(cfg, config_path, str(cfg.get("steam_id") or ""),
+                                prefer=[x for x in stems if x], scan_new=len(todo))
+    except Exception:  # noqa: BLE001 - ohne Preise bleibt die Nachbesprechung wie bisher
+        own, for_match = {}, None
     for f in todo:
         if f.name not in datas:
             continue
         idx = [g.name for g in files].index(f.name)
         history = [datas[g.name] for g in files[:idx] if g.name in datas]
         state = mission(datas[f.name], goal)
-        text = ask(cfg, facts(datas[f.name], history, goals, state), log=log, system=SYSTEM,
+        moments = for_match(datas[f.name], own) if own and for_match else []
+        text = ask(cfg, facts(datas[f.name], history, goals, state, moments), log=log, system=SYSTEM,
                    instruction=instruction(previous), max_len=MAX_LEN)
         if not text:
             continue
@@ -298,6 +321,6 @@ def generate_pending(cfg: dict, config_path: Path, log=print, limit: int = PER_S
                  **({"key": focus.key, "label": focus.label, "advice": focus.advice} if focus else {})}),
                 encoding="utf-8")
             if notify:
-                _notify(cfg, config_path, datas[f.name], text, focus, log)
+                _notify(cfg, config_path, datas[f.name], text, focus, log, moments)
         log(f"KI-Nachbesprechung: {f.name}")
     return made
