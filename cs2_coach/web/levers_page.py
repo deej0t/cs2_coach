@@ -12,7 +12,7 @@ from flask import Blueprint, render_template
 
 from .. import levers
 
-LEVEL_ORDER = {"Runde": 0, "Match": 1, "Tod": 2, "Zone": 3}
+LEVEL_ORDER = {"Runde": 0, "Match": 1, "Tod": 2, "Zone": 3, "Lage": 4, "Lobby-Zone": 5}
 
 
 def create_blueprint(load_config, config_path) -> Blueprint:

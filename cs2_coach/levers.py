@@ -14,6 +14,10 @@ Auswertungen (keine eigene Statistik, alles ueber evidence.py):
   und die Granatentypen je Runde - ergebnisabhaengige bleiben markiert
 - Todesebene: getradet, Opening-Tod, Mitspieler weit weg (death_review-Cache)
 - Zonen: Duellquote je Map/Seite/Callout gegen den Rest der Map (Bonferroni)
+- Lobby (duel_value): deine Duelle in Prozentpunkten Rundengewinn gegen die
+  aller anderen Spieler deiner Demos - je Lage (Seite, Ueberzahl/Gleichstand/
+  Unterzahl, Bombe) und je Map/Seite/Callout. Diese Referenz sieht auch
+  Schwaechen, die in jedem Match gleich sind (Siege gegen Niederlagen kann das nie)
 
 Die Urteile werden gemerkt (.levers_state.json); wird ein Kandidat neu
 belastbar (und ist nicht ergebnisabhaengig), geht eine Nachricht an
@@ -44,9 +48,9 @@ COUNT_NOTE = "Matchebene - zum Teil Folge gewonnener Runden"
 class Lever:
     key: str
     label: str
-    level: str                 # Runde, Match, Tod, Zone
+    level: str                 # Runde, Match, Tod, Zone, Lage, Lobby-Zone
     unit: str
-    mean_win: float            # Gruppe A (Siege bzw. "mit") - Name passt zu relevance_table.html
+    mean_win: float            # Gruppe A (Siege, "mit" bzw. du) - Name passt zu relevance_table.html
     mean_loss: float
     effect: float
     ci_low: float
@@ -121,6 +125,62 @@ def candidates(exports: list[dict], deaths: list[dict] | None = None) -> tuple[l
     return out, zinfo
 
 
+#: Ebenen, deren Gruppe B die Lobby ist (nicht die Niederlagen)
+LOBBY_LEVELS = ("Lage", "Lobby-Zone")
+LOBBY_UNIT = " Pkt."
+#: Neue Demos, die ein Sync fuer die Siegwahrscheinlichkeit einliest (~1 s je Demo);
+#: der erste Lauf auf dem Server verteilt sich so auf wenige Syncs.
+SCAN_PER_SYNC = 60
+
+
+def lobby_candidates(matches: list[dict], me: str) -> tuple[list[Lever], dict]:
+    """Du gegen die Lobby (duel_value): alle Lagen, belastbare Zonen; dazu die Info fuer /hebel."""
+    from . import duel_value as dv
+    from .evidence import compare_groups
+    from .live_plan import pretty_place
+
+    info = {"demos": len(matches), "tested": 0, "solid": 0, "closest": [], "net": None}
+    if len(matches) < 2 or not me:
+        return [], info
+    deaths = dv.priced_deaths(matches)
+    out = []
+    for g in dv.by_situation(deaths, me):
+        side, lead, planted = g.key
+        shown = lead.replace("Ue", "Ü")      # Schluessel bleiben ASCII
+        label = f"{side}, {shown}{', Bombe liegt' if planted else ''}: deine Duelle gegen die der Lobby"
+        lv = _from_cmp(f"lobby_sit_{side}_{lead}_{int(planted)}", label, "Lage", LOBBY_UNIT, g.value,
+                       note=f"{g.won}/{g.n} Duelle gewonnen, Lobby {g.lobby_won}/{len(g.lobby)}")
+        if lv:
+            lv.matches_needed = 0     # zaehlt Duelle, nicht Matches, und ohne Bonferroni
+            out.append(lv)
+    zones = []
+    for g in dv.by_zone(deaths, me):
+        m, side, place = g.key
+        lv = _from_cmp(f"lobby_zone_{m}_{side}_{place}",
+                       f"{m} {side}: Duelle in {pretty_place(place)} gegen die Lobby dort", "Lobby-Zone",
+                       LOBBY_UNIT, g.value, note=f"{g.won}/{g.n} gewonnen, Lobby {g.lobby_won}/{len(g.lobby)}")
+        if lv:
+            lv.matches_needed = 0
+            zones.append(lv)
+    out += [z for z in zones if z.solid]
+    pm = dv.per_match(deaths, matches, me)
+    net = compare_groups(pm["net_me"], pm["net_lobby"])
+    info.update(tested=len(zones), solid=sum(z.solid for z in zones),
+                closest=[asdict(z) for z in sorted(zones, key=lambda z: z.effect)[:5]],
+                net=None if net is None else {"me": net.mean_a, "lobby": net.mean_b, "effect": net.effect,
+                                              "ci_low": net.ci_low, "ci_high": net.ci_high,
+                                              "verdict": net.verdict, "matches": net.n_a})
+    return out, info
+
+
+def _load_lobby(cfg: dict, config_path: Path, scan_new: int, stats: dict) -> list[dict]:
+    try:
+        from .winprob import collect
+        return collect(cfg, config_path, log=lambda *_: None, max_new=scan_new, stats=stats)
+    except Exception:  # noqa: BLE001 - ohne Demos fehlen nur die Lobby-Kandidaten
+        return []
+
+
 def _load_exports(cfg: dict) -> list[dict]:
     from .report_ai import _exports
     data = []
@@ -132,8 +192,12 @@ def _load_exports(cfg: dict) -> list[dict]:
     return data
 
 
-def run(cfg: dict, config_path: Path) -> dict:
-    """Messung ueber alle Exporte (Todes-Daten nur aus dem Cache, nie neu gescannt)."""
+def run(cfg: dict, config_path: Path, scan_new: int = 0) -> dict:
+    """Messung ueber alle Exporte (Todes-Daten nur aus dem Cache, nie neu gescannt).
+
+    ``scan_new``: so viele noch nicht eingelesene Demos liest die
+    Siegwahrscheinlichkeit dazu ein - 0 fuer die Seite, die schnell bleiben muss.
+    """
     exports = _load_exports(cfg)
     try:
         from .death_review import collect
@@ -141,8 +205,17 @@ def run(cfg: dict, config_path: Path) -> dict:
     except Exception:  # noqa: BLE001 - ohne Todes-Daten fehlen nur diese Kandidaten
         deaths = []
     levers, zinfo = candidates(exports, deaths)
+    stats: dict = {}
+    try:
+        lobby, linfo = lobby_candidates(_load_lobby(cfg, config_path, scan_new, stats),
+                                        str(cfg.get("steam_id") or ""))
+    except Exception:  # noqa: BLE001 - die uebrigen Kandidaten sollen trotzdem kommen
+        lobby, linfo = [], {}
+    # Vollstaendig = in diesem Lauf nichts nachgeladen und nichts liegen geblieben
+    linfo["complete"] = bool(linfo.get("demos")) and not stats.get("new") and not stats.get("waiting")
     return {"at": datetime.now().isoformat(timespec="minutes"), "matches": len(exports),
-            "deaths": len(deaths), "levers": [asdict(x) for x in levers], "zones": zinfo}
+            "deaths": len(deaths), "levers": [asdict(x) for x in levers + lobby], "zones": zinfo,
+            "lobby": linfo}
 
 
 def load(config_path: Path) -> dict:
@@ -155,7 +228,7 @@ def load(config_path: Path) -> dict:
 def check(cfg: dict, config_path: Path, notify: bool = True, log=print) -> list[dict]:
     """Neu messen, Ergebnis ablegen, neu belastbare Hebel melden. Gibt die neuen zurueck."""
     base = Path(config_path).parent
-    result = run(cfg, config_path)
+    result = run(cfg, config_path, scan_new=SCAN_PER_SYNC)
     (base / RESULT_FILE).write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
     try:
         state = json.loads((base / STATE_FILE).read_text(encoding="utf-8"))
@@ -163,8 +236,13 @@ def check(cfg: dict, config_path: Path, notify: bool = True, log=print) -> list[
         state = {}
     first = "verdicts" not in state
     before = state.get("verdicts", {})
+    # Die Lobby-Kandidaten haben ihre eigene Ausgangslage: der erste Sync liest die alten
+    # Demos in Raten ein, und ein Urteil, das nur durch nachgeladene Demos kippt, ist nicht neu
+    lobby_ready = bool(state.get("lobby_baseline"))
     new = [x for x in result["levers"] if x["verdict"] in SOLID and not x["outcome_driven"]
-           and before.get(x["key"]) not in SOLID]
+           and before.get(x["key"]) not in SOLID and (lobby_ready or x["level"] not in LOBBY_LEVELS)]
+    if (result.get("lobby") or {}).get("complete"):
+        state["lobby_baseline"] = True
     lost = [k for k, v in before.items() if v in SOLID
             and next((x["verdict"] for x in result["levers"] if x["key"] == k), None) not in SOLID]
     state["verdicts"] = {x["key"]: x["verdict"] for x in result["levers"]}
@@ -175,9 +253,15 @@ def check(cfg: dict, config_path: Path, notify: bool = True, log=print) -> list[
         from .report_ai import _send_text
         lines = ["**Hebel-Suche: neuer belastbarer Unterschied**"]
         for x in new:
-            word = "in Siegen höher" if x["verdict"] == SOLID_POSITIVE else "in Siegen niedriger"
+            up = x["verdict"] == SOLID_POSITIVE
+            if x["level"] in LOBBY_LEVELS:
+                word = "du besser als die Lobby" if up else "du schwächer als die Lobby"
+                size = f"{result.get('lobby', {}).get('demos', 0)} Demos"
+            else:
+                word = "in Siegen höher" if up else "in Siegen niedriger"
+                size = f"{result['matches']} Matches"
             lines.append(f"• {x['label']}: {x['mean_win']}{x['unit']} gegen {x['mean_loss']}{x['unit']} "
-                         f"({word}, Effekt {x['effect']} [{x['ci_low']} … {x['ci_high']}], {result['matches']} Matches)")
+                         f"({word}, Effekt {x['effect']} [{x['ci_low']} … {x['ci_high']}], {size})")
         lines.append("Details: /hebel")
         _send_text(cfg, config_path, "\n".join(lines), log)
     (base / STATE_FILE).write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")

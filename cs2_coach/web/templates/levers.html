@@ -29,8 +29,8 @@
 
 {% with rel_rows = rows,
         rel_kicker = _('Alle Kandidaten'),
-        rel_title = _('Runde, Match, Tod und Zone im Vergleich'),
-        rel_intro = _('Runde = gewonnene Runden mit gegen ohne; Match = Siege gegen Niederlagen; Tod = Anteil der Tode in Siegen gegen Niederlagen; Zone = deine Duelle dort gegen den Rest der Map. Effektstärke mit 95%-Bereich.'),
+        rel_title = _('Runde, Match, Tod, Zone und Lobby im Vergleich'),
+        rel_intro = _('Runde = gewonnene Runden mit gegen ohne; Match = Siege gegen Niederlagen; Tod = Anteil der Tode in Siegen gegen Niederlagen; Zone = deine Duelle dort gegen den Rest der Map; Lage und Lobby-Zone = deine Duelle gegen die aller anderen Spieler deiner Demos in derselben Lage bzw. am selben Callout, in Prozentpunkten Rundengewinn pro Duell. Effektstärke mit 95%-Bereich.'),
         rel_footnote = _('Ergebnisabhängig heißt: die Zahl steigt auch, wenn du einfach gewinnst (Survival, KAST, ADR - und Granaten je Match, weil der Gegner in deinen Siegen weniger wirft). Solche Zeilen werden nie als neuer Hebel gemeldet.') %}
 {% include '_partials/relevance_table.html' %}
 {% endwith %}
@@ -54,4 +54,37 @@
     <div style="font-size:11px;color:var(--color-neutral-600);margin-top:6px;">{{ _('Die fünf Felder mit dem größten Unterschied - Kandidaten, keine Befunde. Bonferroni-korrigiert, weil die auffälligste von vielen Zonen sonst immer "auffällig" wäre.') }}</div>
     {% endif %}
 </div>
+
+{% set lobby = data.lobby or {} %}
+{% if lobby.demos %}
+<div class="card elev-sm" style="margin-bottom:var(--space-5);">
+    <span class="card-kicker">{{ _('Du gegen die Lobby') }}</span>
+    <p style="font-size:13px;margin:6px 0;">
+        {{ _('Jedes Duell zählt in Prozentpunkten Rundengewinn: gewonnen = was der Tod den Gegner kostet, verloren = was er dich kostet (5v5, Bombe, Ausrüstung eingerechnet). Verglichen wird mit allen anderen Spielern deiner Demos an derselben Stelle - so fallen auch Schwächen auf, die in jedem Match gleich sind.') }}
+        {{ lobby.demos }} {{ _('Demos') }}{% if not lobby.complete %}, {{ _('ältere werden beim nächsten Sync nachgeladen') }}{% endif %}.
+    </p>
+    {% if lobby.net %}
+    <p style="font-size:13px;margin:6px 0;">
+        {{ _('Netto pro Runde') }}: <b>{{ lobby.net.me }}</b> {{ _('gegen') }} {{ lobby.net.lobby }} {{ _('Punkte im Schnitt der anderen neun') }}
+        <span style="color:var(--color-neutral-500);font-size:12px;">({{ _('Effekt') }} {{ lobby.net.effect }} [{{ lobby.net.ci_low }} … {{ lobby.net.ci_high }}], {{ lobby.net.matches }} Matches)</span>
+        – {{ _('dein Niveau, kein Hebel.') }}
+    </p>
+    {% endif %}
+    <p style="font-size:13px;margin:6px 0;">
+        {{ lobby.tested }} {{ _('Map/Seite/Callout-Felder mit mindestens 15 eigenen Duellen getestet') }},
+        <b>{{ lobby.solid }} {{ _('belastbar') }}</b>.
+    </p>
+    {% if lobby.closest %}
+    <table class="table"><tbody>
+        {% for z in lobby.closest %}
+        <tr><td>{{ z.label }}</td>
+            <td style="white-space:nowrap;color:var(--color-neutral-500);">{{ z.note }}: {{ z.mean_win }} {{ _('gegen') }} {{ z.mean_loss }} {{ _('Pkt./Duell') }}</td>
+            <td style="white-space:nowrap;font-size:12px;color:var(--color-neutral-500);">{{ z.effect }} [{{ z.ci_low }} … {{ z.ci_high }}]</td>
+            <td style="text-align:right;">{% if z.verdict in ('solid_positive', 'solid_negative') %}<span class="tag" style="border-color:var(--color-green);color:var(--color-green);">{{ _('belastbar') }}</span>{% else %}<span class="tag" style="border-color:var(--color-yellow);color:var(--color-yellow);">{{ _('unentschieden') }}</span>{% endif %}</td></tr>
+        {% endfor %}
+    </tbody></table>
+    <div style="font-size:11px;color:var(--color-neutral-600);margin-top:6px;">{{ _('Deine fünf schwächsten Felder gegen die Lobby - Kandidaten, keine Befunde, Bonferroni-korrigiert.') }}</div>
+    {% endif %}
+</div>
+{% endif %}
 {% endblock %}

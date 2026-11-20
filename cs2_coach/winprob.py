@@ -141,13 +141,19 @@ def scan_demo(demo_path, parser_factory=None) -> list[dict]:
     return out
 
 
-def collect(cfg: dict, config_path: Path, parser_factory=None, log=print, max_new: int = 500) -> list[dict]:
-    """Alle Demos im Demo-Ordner: ``[{"demo": stem, "rounds": [...]}]``, je Demo zwischengespeichert."""
+def collect(cfg: dict, config_path: Path, parser_factory=None, log=print, max_new: int = 500,
+            stats: dict | None = None) -> list[dict]:
+    """Alle Demos im Demo-Ordner: ``[{"demo": stem, "rounds": [...]}]``, je Demo zwischengespeichert.
+
+    ``stats`` bekommt ``new`` (in diesem Lauf eingelesen) und ``waiting`` (wegen
+    ``max_new`` liegen geblieben). Unlesbare Demos werden nicht gemerkt und beim
+    naechsten Lauf erneut versucht - ein neuer Parser kann sie oft lesen.
+    """
     folder = (cfg.get("demo_folder") or "").strip()
     if not folder or not Path(folder).is_dir():
         return []
     cache_dir = Path(config_path).parent / CACHE_DIR
-    out, scanned = [], 0
+    out, scanned, new, waiting = [], 0, 0, 0
     for demo in sorted(Path(folder).glob("*.dem")):
         cache = cache_dir / f"{demo.stem}.json"
         try:
@@ -156,6 +162,7 @@ def collect(cfg: dict, config_path: Path, parser_factory=None, log=print, max_ne
             known = {}
         if CACHE_KEY not in known:
             if scanned >= max_new:
+                waiting += 1
                 continue
             scanned += 1
             try:
@@ -163,10 +170,13 @@ def collect(cfg: dict, config_path: Path, parser_factory=None, log=print, max_ne
             except Exception as e:  # noqa: BLE001 - kaputte Demo: naechste
                 log(f"[winprob] {demo.name}: {e}")
                 continue
+            new += 1
             cache_dir.mkdir(exist_ok=True)
             cache.write_text(json.dumps(known), encoding="utf-8")
         if known[CACHE_KEY]:
             out.append({"demo": demo.stem, "rounds": known[CACHE_KEY]})
+    if stats is not None:
+        stats.update(new=new, waiting=waiting)
     return out
 
 
