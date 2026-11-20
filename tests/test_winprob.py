@@ -11,7 +11,10 @@ T = [f"7656119800000001{i}" for i in range(1, 6)]
 class FakeDemo:
     """Runde 1 (Freeze-Ende 100, Ende 2020): T1 stirbt bei 164, Bombe bei 740, CT1 stirbt bei 1380.
     Runde 2 (Freeze-Ende 3000): ein Bot steht auf dem Server -> faellt weg.
-    Runde 3 (Freeze-Ende 5000, Ende 5640): nur der Tod nach dem Freeze-Ende zaehlt."""
+    Runde 3 (Freeze-Ende 5000, Ende 5640): nur der Tod nach dem Freeze-Ende zaehlt.
+    CT stehen bei x = 300 * i, T bei x = 5000 + 2000 * i. T1 hat beim Tod einen Flash (und ein
+    Decoy) dabei; CT1 wirft einen Flash, der 20 Ticks nach seinem Tod detoniert (zaehlt noch),
+    T1s Smoke detoniert erst nach seinem Tod und ausserhalb der Flugzeit (zaehlt nicht)."""
 
     def __init__(self, path):
         pass
@@ -32,14 +35,22 @@ class FakeDemo:
                                  "attacker_last_place_name": ["Ticket", "Palace", "Mid", "Jungle"]})
         if name == "bomb_planted":
             return pd.DataFrame({"tick": [740]})
+        if name == "flashbang_detonate":
+            return pd.DataFrame({"tick": [1400], "user_steamid": [CT[0]]})
+        if name == "smokegrenade_detonate":
+            return pd.DataFrame({"tick": [900], "user_steamid": [T[0]]})
         raise KeyError(name)
 
     def parse_ticks(self, props, ticks):
         rows = []
         for tick in ticks:
             for sid in CT + T:
+                x = 300.0 * CT.index(sid) if sid in CT else 5000.0 + 2000 * T.index(sid)
+                dead = (sid == T[0] and tick >= 164) or (sid == CT[0] and tick >= 1380)
                 rows.append({"tick": tick, "steamid": sid, "team_num": 3 if sid in CT else 2,
-                             "is_alive": True, "current_equip_value": 4000 if sid in CT else 1000})
+                             "is_alive": not dead, "current_equip_value": 4000 if sid in CT else 1000,
+                             "X": x, "Y": 0.0,
+                             "inventory": ["AK-47", "Flashbang", "Decoy Grenade"] if (sid, tick) == (T[0], 163) else []})
             if tick == 3000:
                 rows.append({"tick": tick, "steamid": "0", "team_num": 2, "is_alive": True,
                              "current_equip_value": 0})
@@ -56,9 +67,10 @@ def test_scan_reads_rounds_sides_and_events():
     assert (first["n"], first["map"], first["winner"], first["seconds"]) == (1, "Mirage", "T", 30.0)
     assert (first["ct"], first["t"]) == (CT, T)
     assert (first["ct_equip"], first["t_equip"]) == (20000, 5000)
-    assert first["events"] == [[1.0, "d", T[0], CT[0], "Palace", "Ticket"], [10.0, "p", "", "", "", ""],
-                               [20.0, "d", CT[0], T[1], "BombsiteA", "Palace"]]
-    assert third["n"] == 3 and third["events"] == [[1.0, "d", T[1], CT[2], "", "Jungle"]]  # der Tod im Freeze fehlt
+    assert first["events"] == [[1.0, "d", T[0], CT[0], "Palace", "Ticket", 2000, 1, 0],
+                               [10.0, "p", "", "", "", "", None, None, 0],
+                               [20.0, "d", CT[0], T[1], "BombsiteA", "Palace", 300, 0, 1]]
+    assert third["n"] == 3 and third["events"] == [[1.0, "d", T[1], CT[2], "", "Jungle", 2000, 0, 0]]  # Tod im Freeze fehlt
 
 
 def test_timeline_switches_clock_at_the_plant_and_stops_when_decided():

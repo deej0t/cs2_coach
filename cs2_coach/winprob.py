@@ -31,7 +31,12 @@ from pathlib import Path
 
 TICKRATE = 64
 CACHE_DIR = "winprob_cache"
-CACHE_KEY = "rounds-v2"  # v2: Map je Runde, Callout von Opfer und Schuetze je Tod
+CACHE_KEY = "rounds-v3"  # v2: Map, Callouts; v3: je Tod Mitspieler-Abstand, Granaten dabei/geworfen
+
+#: Granaten, die bis so lange nach dem Tod detonieren, hat das Opfer noch vorher geworfen (Flugzeit).
+THROW_GRACE_SECONDS = 2
+DETONATIONS = ("flashbang_detonate", "smokegrenade_detonate", "hegrenade_detonate", "inferno_startburn")
+_NADES = ("grenade", "molotov", "incendiary", "flashbang")
 
 #: Grenzen der Zeitabschnitte in Sekunden. Vor der Bombe ab Freeze-Ende
 #: (Rundenzeit 115 s), nach der Bombe ab dem Legen (Zuender 40 s).
@@ -68,6 +73,48 @@ def _place(value) -> str:
     return str(value).strip()
 
 
+def _nade_count(inventory) -> int | None:
+    """Granaten im Inventar ohne Decoy (wie death_review), None ohne Inventar."""
+    if inventory is None or (isinstance(inventory, float) and math.isnan(inventory)):
+        return None
+    return sum(1 for w in inventory if any(k in str(w).lower() for k in _NADES) and "decoy" not in str(w).lower())
+
+
+def _death_context(p, deaths: list[tuple]) -> dict[tuple[int, str], tuple]:
+    """(Tick, Opfer) -> (Positionen aller als {sid: (x, y, lebt)}, Granaten dabei) beim Tod.
+
+    Positionen im Todestick - die des Opfers ist dort lesbar, obwohl es schon
+    als tot gilt (wie death_review). Das Inventar einen Tick vorher, im
+    Todestick ist es schon geleert.
+    """
+    ticks = sorted({t for t, *_ in deaths})
+    if not ticks:
+        return {}
+    pos = p.parse_ticks(["X", "Y", "is_alive"], ticks=ticks)
+    alive: dict[int, dict[str, tuple[float, float, bool]]] = {}
+    for tick, sid, x, y, live in zip(pos["tick"], pos["steamid"], pos["X"], pos["Y"], pos["is_alive"]):
+        if x == x and y == y:
+            alive.setdefault(int(tick), {})[str(sid)] = (float(x), float(y), bool(live))
+    held: dict[tuple[int, str], int | None] = {}
+    try:
+        inv = p.parse_ticks(["inventory"], ticks=[t - 1 for t in ticks])
+        for tick, sid, items in zip(inv["tick"], inv["steamid"], inv["inventory"]):
+            held[(int(tick) + 1, str(sid))] = _nade_count(items)
+    except Exception:  # noqa: BLE001 - ohne Inventar fehlt nur "Granaten dabei"
+        pass
+    return {(t, v): (alive.get(t, {}), held.get((t, v))) for t, v, *_ in deaths}
+
+
+def _detonations(p) -> dict[str, list[int]]:
+    """Steam-ID -> Ticks, an denen eine seiner Granaten detonierte (ohne Decoy)."""
+    out: dict[str, list[int]] = {}
+    for name in DETONATIONS:
+        df = _event(p, name, ["tick", "user_steamid"])
+        for tick, sid in zip(df["tick"], df["user_steamid"]):
+            out.setdefault(str(sid), []).append(int(tick))
+    return out
+
+
 def _map_name(p) -> str:
     """Map wie in den Exporten ("Mirage"), "" wenn der Kopf der Demo fehlt."""
     try:
@@ -82,9 +129,12 @@ def scan_demo(demo_path, parser_factory=None) -> list[dict]:
 
     Je Runde: ``map``, ``winner`` (CT/T), ``ct``/``t`` (Steam-IDs am Leben
     bei Freeze-Ende), ``ct_equip``/``t_equip`` (Summe Ausruestungswert) und
-    ``events`` als ``[sekunde, art, steamid, taeter, callout, callout_taeter]``
-    mit art ``d`` (Tod), ``p`` (Bombe gelegt). Runden ohne 4-5 Menschen je
-    Seite fallen weg (Aufwaermen, Bots, Wingman).
+    ``events`` als ``[sekunde, art, steamid, taeter, callout, callout_taeter,
+    abstand, dabei, geworfen]`` mit art ``d`` (Tod), ``p`` (Bombe gelegt).
+    ``abstand`` = Units (2D) zum naechsten lebenden Mitspieler (None = keiner
+    mehr am Leben), ``dabei`` = Granaten im Inventar (None = unbekannt),
+    ``geworfen`` = in dieser Runde schon detonierte eigene Granaten. Runden
+    ohne 4-5 Menschen je Seite fallen weg (Aufwaermen, Bots, Wingman).
     """
     if parser_factory is None:
         from demoparser2 import DemoParser as parser_factory
@@ -100,6 +150,8 @@ def scan_demo(demo_path, parser_factory=None) -> list[dict]:
                     for _, r in deaths.iterrows())
     map_name = _map_name(p)
     plants = sorted(int(t) for t in _event(p, "bomb_planted", ["tick"])["tick"])
+    context = _death_context(p, deaths)
+    thrown = _detonations(p)
 
     # Je Rundenende das letzte Freeze-Ende davor (und nach dem vorigen Ende)
     spans, prev_end = [], -1
@@ -131,9 +183,20 @@ def scan_demo(demo_path, parser_factory=None) -> list[dict]:
             equip[side] += int(value) if value == value and value is not None else 0
         if bots or not all(4 <= len(s) <= 5 for s in sides.values()):
             continue
-        events = [[round((t - start) / TICKRATE, 1), "d", v, k, vp, kp]
-                  for t, v, k, vp, kp in deaths if start < t <= end]
-        events += [[round((t - start) / TICKRATE, 1), "p", "", "", "", ""] for t in plants if start < t <= end]
+        side_of = {sid: side for side, ids in sides.items() for sid in ids}
+        events = []
+        for t, v, k, vp, kp in deaths:
+            if not start < t <= end:
+                continue
+            positions, held = context.get((t, v), ({}, None))
+            me_at = positions.get(v)
+            mates = [(x, y) for sid, (x, y, live) in positions.items()
+                     if live and sid != v and side_of.get(sid) == side_of.get(v)]
+            dist = round(min(math.dist(me_at[:2], xy) for xy in mates)) if mates and me_at else None
+            n_thrown = sum(1 for d in thrown.get(v, []) if start < d <= t + THROW_GRACE_SECONDS * TICKRATE)
+            events.append([round((t - start) / TICKRATE, 1), "d", v, k, vp, kp, dist, held, n_thrown])
+        events += [[round((t - start) / TICKRATE, 1), "p", "", "", "", "", None, None, 0]
+                   for t in plants if start < t <= end]
         events.sort(key=lambda e: (e[0], e[1] != "p"))
         out.append({"n": n, "map": map_name, "winner": winner, "seconds": round((end - start) / TICKRATE, 1),
                     "ct": sides["CT"], "t": sides["T"], "ct_equip": equip["CT"], "t_equip": equip["T"],
@@ -210,8 +273,10 @@ def timeline(rnd: dict) -> list[dict]:
     ct, t = set(rnd["ct"]), set(rnd["t"])
     planted, plant_second = False, 0.0
     out = []
-    for second, kind, sid, by, *places in rnd["events"]:
-        place, by_place = (places + ["", ""])[:2]
+    for second, kind, sid, by, *rest in rnd["events"]:
+        # aeltere Cache-Staende haben weniger Felder: nach Position auffuellen
+        place, by_place, mate_dist, held, thrown = (list(rest) + [None] * 5)[:5]
+        place, by_place = place or "", by_place or ""
         clock = second - plant_second if planted else second
         before = (len(ct), len(t), planted, clock)
         if not is_live(*before[:3]):
@@ -231,7 +296,8 @@ def timeline(rnd: dict) -> list[dict]:
             continue  # nachgeruckter oder unbekannter Spieler
         after = (len(ct), len(t), planted, second - plant_second if planted else second)
         out.append({"second": second, "kind": kind, "sid": sid, "by": by, "side": side,
-                    "place": place, "by_place": by_place, "before": before, "after": after})
+                    "place": place, "by_place": by_place, "mate_dist": mate_dist, "held": held,
+                    "thrown": thrown, "before": before, "after": after})
     return out
 
 
@@ -486,6 +552,7 @@ def swings(rnd: dict, table: WinTable) -> list[dict]:
         own, enemy = (ct, t) if side == "CT" else (t, ct)
         out.append({"sid": ev["sid"], "by": by, "side": side, "second": ev["second"],
                     "place": ev["place"], "by_place": ev["by_place"] if by else "",
+                    "mate_dist": ev["mate_dist"], "held": ev["held"], "thrown": ev["thrown"],
                     "opening": not out, "own": own, "enemy": enemy, "planted": bool(planted),
                     "before": round(pb * 100, 1), "cost": round((pb - pa) * 100, 1),
                     "won": rnd["winner"] == side})

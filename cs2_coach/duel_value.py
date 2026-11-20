@@ -26,6 +26,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import winprob as wp
+from dataclasses import replace
+
 from .evidence import SOLID_NEGATIVE, SOLID_POSITIVE, Comparison, compare_groups, compare_rates
 
 FOLDS = 20
@@ -144,6 +146,93 @@ def by_situation(deaths: list[dict], me: str, min_duels: int = MIN_DUELS) -> lis
         own, enemy = (d["own"], d["enemy"]) if not won else (d["enemy"], d["own"])
         _add(groups, (side, _lead(own, enemy), d["planted"]), sid == me, value, won)
     return _compare(groups, min_duels)
+
+
+# --- Gewohnheiten: wie du stirbst, gegen die Lobby ------------------------------
+
+#: Weiter weg als das vom naechsten lebenden Mitspieler = allein (death_review: Median 619).
+ALONE_UNITS = 1000
+EARLY_SECONDS = 25
+
+#: Schluessel -> (Name, Bedingung je Tod). Als letzter Mann ist jeder "allein" - das
+#: zaehlt nicht, sonst saehe aus wie eine Schwaeche, wer oft als Letzter uebrig bleibt.
+HABITS = {
+    "alone": ("allein gestorben (Mitspieler lebt, aber > 1000 Units weg)",
+              lambda d: d["own"] >= 2 and d.get("mate_dist") is not None and d["mate_dist"] > ALONE_UNITS),
+    "early": ("früh gestorben (vor Sekunde 25)", lambda d: d["second"] < EARLY_SECONDS and not d["planted"]),
+    "opening": ("als Erster der Runde gestorben", lambda d: d["opening"]),
+    "unused": ("mit ungenutzter Granate gestorben (keine geworfen, aber eine dabei)",
+               lambda d: d.get("thrown") == 0 and (d.get("held") or 0) >= 1),
+}
+
+
+def _flip(c: Comparison | None) -> Comparison | None:
+    """Bei Gewohnheiten ist "oefter" schlechter: Effekt so drehen, dass positiv = du besser."""
+    if c is None:
+        return None
+    verdict = {SOLID_POSITIVE: SOLID_NEGATIVE, SOLID_NEGATIVE: SOLID_POSITIVE}.get(c.verdict, c.verdict)
+    return replace(c, effect=-c.effect, ci_low=-c.ci_high, ci_high=-c.ci_low, verdict=verdict)
+
+
+@dataclass
+class Habit:
+    """Wie oft dir eine Todesart pro Runde passiert, gegen die Lobby auf derselben Seite."""
+
+    key: str
+    label: str
+    side: str
+    k: int                      # deine Tode dieser Art
+    n: int                      # deine Runden auf dieser Seite
+    lobby_k: int
+    lobby_n: int
+    cost: float                 # Punkte Siegchance pro Runde durch diese Tode, du
+    lobby_cost: float
+    rate: Comparison | None     # positiv = dir passiert es seltener = du besser
+
+    @property
+    def solid(self) -> bool:
+        return self.rate is not None and self.rate.verdict in (SOLID_POSITIVE, SOLID_NEGATIVE)
+
+
+def _side_rounds(matches: list[dict]) -> dict[tuple[str, str], int]:
+    out: dict[tuple[str, str], int] = {}
+    for m in matches:
+        for rnd in m["rounds"]:
+            for side, ids in (("CT", rnd["ct"]), ("T", rnd["t"])):
+                for sid in ids:
+                    out[(sid, side)] = out.get((sid, side), 0) + 1
+    return out
+
+
+def by_habit(deaths: list[dict], matches: list[dict], me: str) -> list[Habit]:
+    """Je Seite und Gewohnheit: Anteil deiner Runden mit so einem Tod gegen den der Lobby.
+
+    Die Lobby sind alle anderen Spieler derselben Demos - Mitspieler und Gegner,
+    also im Mittel gleich oft auf der Sieger- wie auf der Verliererseite.
+    Rolle bleibt eine Stoerquelle: ein Entry stirbt oefter als Erster.
+    Bonferroni ueber alle Seite-Gewohnheit-Paare.
+    """
+    rounds = _side_rounds(matches)
+    pairs = [(side, key) for side in ("CT", "T") for key in HABITS]
+    counts = {(side, key): [0, 0.0, 0, 0.0] for side, key in pairs}   # k, cost du; k, cost Lobby
+    for d in deaths:
+        for key, (_, test) in HABITS.items():
+            c = counts.get((d["side"], key))
+            if c is None or not test(d):
+                continue
+            i = 0 if d["sid"] == me else 2
+            c[i] += 1
+            c[i + 1] += d["cost"]
+    out = []
+    for side, key in pairs:
+        n = rounds.get((me, side), 0)
+        lobby_n = sum(v for (sid, s), v in rounds.items() if s == side and sid != me)
+        k, cost, lk, lcost = counts[(side, key)]
+        rate = _flip(compare_rates(k, n, lk, lobby_n, comparisons=len(pairs))) if n and lobby_n else None
+        out.append(Habit(f"{side}_{key}", HABITS[key][0], side, k, n, lk, lobby_n,
+                         round(cost / n, 2) if n else 0.0, round(lcost / lobby_n, 2) if lobby_n else 0.0, rate))
+    out.sort(key=lambda h: (not h.solid, h.rate.effect if h.rate else 0.0))
+    return out
 
 
 def per_match(deaths: list[dict], matches: list[dict], me: str) -> dict[str, list[float]]:

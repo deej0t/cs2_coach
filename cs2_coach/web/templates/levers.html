@@ -30,7 +30,7 @@
 {% with rel_rows = rows,
         rel_kicker = _('Alle Kandidaten'),
         rel_title = _('Runde, Match, Tod, Zone und Lobby im Vergleich'),
-        rel_intro = _('Runde = gewonnene Runden mit gegen ohne; Match = Siege gegen Niederlagen; Tod = Anteil der Tode in Siegen gegen Niederlagen; Zone = deine Duelle dort gegen den Rest der Map; Lage und Lobby-Zone = deine Duelle gegen die aller anderen Spieler deiner Demos in derselben Lage bzw. am selben Callout, in Prozentpunkten Rundengewinn pro Duell. Effektstärke mit 95%-Bereich.'),
+        rel_intro = _('Runde = gewonnene Runden mit gegen ohne; Match = Siege gegen Niederlagen; Tod = Anteil der Tode in Siegen gegen Niederlagen; Zone = deine Duelle dort gegen den Rest der Map; Gewohnheit = Anteil deiner Runden mit so einem Tod gegen den der Lobby (positiv = dir passiert es seltener); Lage und Lobby-Zone = deine Duelle gegen die aller anderen Spieler deiner Demos in derselben Lage bzw. am selben Callout, in Prozentpunkten Rundengewinn pro Duell. Effektstärke mit 95%-Bereich.'),
         rel_footnote = _('Ergebnisabhängig heißt: die Zahl steigt auch, wenn du einfach gewinnst (Survival, KAST, ADR - und Granaten je Match, weil der Gegner in deinen Siegen weniger wirft). Solche Zeilen werden nie als neuer Hebel gemeldet.') %}
 {% include '_partials/relevance_table.html' %}
 {% endwith %}

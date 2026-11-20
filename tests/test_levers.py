@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from cs2_coach import levers
+from cs2_coach import levers, winprob
 
 
 def _export(i, win, acc):
@@ -114,10 +114,20 @@ def test_lobby_meldet_erst_nach_vollstaendigem_einlesen(tmp_path, monkeypatch):
     assert levers.load(cp)["lobby"]["complete"] is False
     state["stats"] = {"new": 0, "waiting": 0}                   # alles eingelesen -> Ausgangslage
     assert levers.check(cfg, cp) == [] and sent == []
+    st = json.loads((tmp_path / levers.STATE_FILE).read_text(encoding="utf-8"))
+    assert st["lobby_baseline"] == winprob.CACHE_KEY
     state["matches"] = _lobby_matches(weak=False)
     levers.check(cfg, cp)
     state["matches"] = _lobby_matches(weak=True)                # jetzt kippt es wirklich neu
     new = levers.check(cfg, cp)
-    # alle Testduelle sind 5v5 - die Lage kippt mit der Zone
-    assert sorted(x["key"] for x in new) == ["lobby_sit_CT_Gleichstand_0", "lobby_zone_Mirage_CT_Connector"]
+    # alle Testduelle sind 5v5 nach 15 s - Lage und Gewohnheit "frueh" kippen mit der Zone
+    keys = {x["key"] for x in new}
+    assert {"lobby_sit_CT_Gleichstand_0", "lobby_zone_Mirage_CT_Connector"} <= keys
+    assert all(x["level"] in levers.LOBBY_LEVELS for x in new)
     assert len(sent) == 1 and "du schwächer als die Lobby" in sent[0] and "24 Demos" in sent[0]
+    # neuer Cache-Stand: alte Ausgangslage gilt nicht, waehrend neu eingelesen wird
+    st = json.loads((tmp_path / levers.STATE_FILE).read_text(encoding="utf-8"))
+    st["lobby_baseline"], st["verdicts"] = "rounds-v0", {k: "undecided" for k in st["verdicts"]}
+    (tmp_path / levers.STATE_FILE).write_text(json.dumps(st), encoding="utf-8")
+    state["stats"] = {"new": 0, "waiting": 5}
+    assert levers.check(cfg, cp) == [] and len(sent) == 1

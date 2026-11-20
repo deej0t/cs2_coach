@@ -16,7 +16,8 @@ Auswertungen (keine eigene Statistik, alles ueber evidence.py):
 - Zonen: Duellquote je Map/Seite/Callout gegen den Rest der Map (Bonferroni)
 - Lobby (duel_value): deine Duelle in Prozentpunkten Rundengewinn gegen die
   aller anderen Spieler deiner Demos - je Lage (Seite, Ueberzahl/Gleichstand/
-  Unterzahl, Bombe) und je Map/Seite/Callout. Diese Referenz sieht auch
+  Unterzahl, Bombe), je Map/Seite/Callout und je Gewohnheit (allein, frueh,
+  als Erster, mit ungenutzter Granate gestorben). Diese Referenz sieht auch
   Schwaechen, die in jedem Match gleich sind (Siege gegen Niederlagen kann das nie)
 
 Die Urteile werden gemerkt (.levers_state.json); wird ein Kandidat neu
@@ -48,7 +49,7 @@ COUNT_NOTE = "Matchebene - zum Teil Folge gewonnener Runden"
 class Lever:
     key: str
     label: str
-    level: str                 # Runde, Match, Tod, Zone, Lage, Lobby-Zone
+    level: str                 # Runde, Match, Tod, Zone, Gewohnheit, Lage, Lobby-Zone
     unit: str
     mean_win: float            # Gruppe A (Siege, "mit" bzw. du) - Name passt zu relevance_table.html
     mean_loss: float
@@ -126,7 +127,7 @@ def candidates(exports: list[dict], deaths: list[dict] | None = None) -> tuple[l
 
 
 #: Ebenen, deren Gruppe B die Lobby ist (nicht die Niederlagen)
-LOBBY_LEVELS = ("Lage", "Lobby-Zone")
+LOBBY_LEVELS = ("Gewohnheit", "Lage", "Lobby-Zone")
 LOBBY_UNIT = " Pkt."
 #: Neue Demos, die ein Sync fuer die Siegwahrscheinlichkeit einliest (lokal ~1 s, auf
 #: dem Server ~3 s je Demo: 144 Demos am 20.11. in 435 s); ein Rueckstand verteilt sich
@@ -145,6 +146,13 @@ def lobby_candidates(matches: list[dict], me: str) -> tuple[list[Lever], dict]:
         return [], info
     deaths = dv.priced_deaths(matches)
     out = []
+    for h in dv.by_habit(deaths, matches, me):
+        lv = _from_cmp(f"lobby_habit_{h.key}", f"{h.side}: {h.label} - in deinen Runden gegen die der Lobby",
+                       "Gewohnheit", " %", h.rate,
+                       note=f"{h.k} von {h.n} Runden; kostet {h.cost} gegen {h.lobby_cost} Punkte pro Runde")
+        if lv:
+            lv.matches_needed = 0
+            out.append(lv)
     for g in dv.by_situation(deaths, me):
         side, lead, planted = g.key
         shown = lead.replace("Ue", "Ü")      # Schluessel bleiben ASCII
@@ -237,13 +245,17 @@ def check(cfg: dict, config_path: Path, notify: bool = True, log=print) -> list[
         state = {}
     first = "verdicts" not in state
     before = state.get("verdicts", {})
-    # Die Lobby-Kandidaten haben ihre eigene Ausgangslage: der erste Sync liest die alten
-    # Demos in Raten ein, und ein Urteil, das nur durch nachgeladene Demos kippt, ist nicht neu
-    lobby_ready = bool(state.get("lobby_baseline"))
+    # Die Lobby-Kandidaten haben ihre eigene Ausgangslage: nach einem neuen Cache-Stand liest
+    # der Sync alle Demos in Raten neu ein, und ein Urteil, das nur durch nachgeladene Demos
+    # kippt, ist nicht neu. Gemeldet wird erst, wenn die Ausgangslage zu diesem Cache-Stand
+    # steht und auch dieser Lauf vollstaendig war.
+    from .winprob import CACHE_KEY
+    complete = bool((result.get("lobby") or {}).get("complete"))
+    lobby_ready = state.get("lobby_baseline") == CACHE_KEY and complete
     new = [x for x in result["levers"] if x["verdict"] in SOLID and not x["outcome_driven"]
            and before.get(x["key"]) not in SOLID and (lobby_ready or x["level"] not in LOBBY_LEVELS)]
-    if (result.get("lobby") or {}).get("complete"):
-        state["lobby_baseline"] = True
+    if complete:
+        state["lobby_baseline"] = CACHE_KEY
     lost = [k for k, v in before.items() if v in SOLID
             and next((x["verdict"] for x in result["levers"] if x["key"] == k), None) not in SOLID]
     state["verdicts"] = {x["key"]: x["verdict"] for x in result["levers"]}

@@ -74,3 +74,28 @@ def test_priced_deaths_use_a_table_without_the_own_match():
     without_m0 = wp.WinTable([r for d in ("m1", "m2", "m3") for r in seen[d]])
     expected = [s["cost"] for r in matches[0]["rounds"] for s in wp.swings(r, without_m0)]
     assert [d["cost"] for d in ds if d["demo"] == "m0"] == expected
+
+
+def test_habits_count_rounds_per_side_and_skip_the_last_man_for_alone():
+    rnd = {"ct": [ME, MATE], "t": [E1, E2]}
+    matches = [{"demo": "d1", "rounds": [rnd] * 100}]
+
+    def death(sid, side, **kw):
+        base = {**_death(sid, E1 if side == "CT" else ME, side, "A", "B", 10.0), "second": 40.0,
+                "opening": False, "mate_dist": 300, "held": 0, "thrown": 1}
+        return {**base, **kw}
+
+    ds = [death(ME, "CT", opening=True) for _ in range(40)]            # du stirbst oft als Erster
+    ds += [death(MATE, "CT", opening=True) for _ in range(5)]
+    ds += [death(E1, "T", opening=True) for _ in range(5)]
+    ds += [death(ME, "CT", own=1, mate_dist=None) for _ in range(30)]  # letzter Mann: nicht "allein"
+    ds += [death(MATE, "CT", mate_dist=2000) for _ in range(30)]
+    habits = {h.key: h for h in dv.by_habit(ds, matches, ME)}
+    opening = habits["CT_opening"]
+    assert (opening.k, opening.n, opening.lobby_k, opening.lobby_n) == (40, 100, 5, 100)   # Lobby CT = mate
+    assert opening.rate.verdict == "solid_negative" and opening.rate.effect < 0     # oefter = schlechter
+    assert opening.cost == 4.0 and opening.lobby_cost == 0.5
+    alone = habits["CT_alone"]
+    assert (alone.k, alone.lobby_k) == (0, 30) and alone.rate.effect > 0
+    assert habits["T_opening"].n == 0 and habits["T_opening"].rate is None          # du warst nie T
+    assert next(iter(dv.by_habit(ds, matches, ME))).key == "CT_opening"             # belastbar schwach zuerst
