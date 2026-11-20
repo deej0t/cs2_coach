@@ -128,8 +128,9 @@ def candidates(exports: list[dict], deaths: list[dict] | None = None) -> tuple[l
 #: Ebenen, deren Gruppe B die Lobby ist (nicht die Niederlagen)
 LOBBY_LEVELS = ("Lage", "Lobby-Zone")
 LOBBY_UNIT = " Pkt."
-#: Neue Demos, die ein Sync fuer die Siegwahrscheinlichkeit einliest (~1 s je Demo);
-#: der erste Lauf auf dem Server verteilt sich so auf wenige Syncs.
+#: Neue Demos, die ein Sync fuer die Siegwahrscheinlichkeit einliest (lokal ~1 s, auf
+#: dem Server ~3 s je Demo: 144 Demos am 20.11. in 435 s); ein Rueckstand verteilt sich
+#: so auf mehrere Syncs, statt einen einzelnen um Minuten zu verlaengern.
 SCAN_PER_SYNC = 60
 
 
