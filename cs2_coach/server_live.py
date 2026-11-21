@@ -40,7 +40,7 @@ SESSION_HOURS = 6
 _CHAT = re.compile(ss._player("a") + r' say(?:_team)? "(?P<text>.*)"$')
 _last_command: dict[str, float] = {}
 
-HELP = ("Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !map <name> · !waffe <name> · !ausgleich · !workshop · !help · Besitzer: !training (Menue) · "
+HELP = ("Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !map <name> · !w <waffe> / !j / !reset · !ausgleich · !workshop · !help · Besitzer: !training (Menue) · "
         "!warmup / !retake / !halten / !situation / !wiederholen [map] · !einladen <Name> · !coach <Frage> · Eingeladen: !mitmachen")
 
 
@@ -254,7 +254,7 @@ def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, n
     from .ingame_coach import COMMANDS as COACH, handle as coach_handle
     from .training_server import COMMANDS as TRAINING, Director
     from .map_vote import COMMANDS as MAPVOTE, handle as map_vote
-    from .aim_fun import COMMANDS as AIMFUN, chat_reply, handle as aim_fun
+    from .aim_fun import COMMANDS as AIMFUN, YES as AIMFUN_YES, chat_reply, handle as aim_fun, vote_open as aim_vote_open
     from .own_lineups import COMMANDS as OWN, handle as own_lineups
     from .workshop import COMMANDS as WORKSHOP, handle as workshop
     commands = parse_commands(lines)
@@ -290,7 +290,7 @@ def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, n
             send(*_say_commands(own_lineups(config_path, send, name, cmd, arg, uid)))
             sent += 1
             continue
-        if cmd in AIMFUN:
+        if cmd in AIMFUN or (cmd in AIMFUN_YES and aim_vote_open(config_path)):
             _last_command[sid] = time.monotonic()
             reply = aim_fun(cfg, config_path, send, sid, name, cmd, arg)
             if reply:

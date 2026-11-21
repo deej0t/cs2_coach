@@ -125,20 +125,44 @@ def test_waffen_abstimmung(tmp_path):
     cp = tmp_path / "config.yaml"
     run(tmp_path, start("dj", "x", "da"))
     rec = Rec()
-    r = aim_fun.handle({}, cp, rec, "a", "dj", "waffe", "deagle", now=100)
-    assert "1/2" in r[0] and rec.cmds == []
-    r = aim_fun.handle({}, cp, rec, "b", "Dancho", "waffe", "deagle", now=110)
+    r = aim_fun.handle({}, cp, rec, "a", "dj", "w", "deagle", now=100)
+    assert "zustimmen mit !j (1/2" in r[0] and rec.cmds == []
+    assert aim_fun.vote_open(cp, now=110) and not aim_fun.vote_open(cp, now=200)
+    r = aim_fun.handle({}, cp, rec, "b", "Dancho", "j", "", now=110)
     assert "Mehrheit" in r[0] and rec.cmds == ["coach_weapon_mode weapon_deagle"]
     _, cmds = run(tmp_path, [round_start()])  # sofort, ohne Verzoegerung
     assert cmds == ["coach_weapon_mode weapon_deagle"]
     assert aim_fun.handle({}, cp, rec, "a", "dj", "waffe", "bazooka", now=120)[0].startswith("Unbekannte")
-    aim_fun.handle({}, cp, rec, "a", "dj", "waffe", "messer", now=130)
-    aim_fun.handle({}, cp, rec, "b", "Dancho", "waffe", "messer", now=131)
+    assert aim_fun.handle({}, cp, rec, "a", "dj", "j", "", now=125)[0].startswith("Gerade laeuft keine")
+    # !reset: sofort, ohne Abstimmung, zurueck zu den Arena-Waffen
+    r = aim_fun.handle({}, cp, rec, "a", "dj", "reset", "", now=130)
+    assert "Arena-Waffen" in r[0] and rec.cmds[-1] == "coach_weapon_mode off"
+    assert "weapon" not in aim_fun.load(cp)
+    _, cmds = run(tmp_path, [round_start()])
+    assert cmds == []
+    aim_fun.handle({}, cp, rec, "a", "dj", "w", "messer", now=140)
+    aim_fun.handle({}, cp, rec, "b", "Dancho", "ja", "", now=141)
     assert rec.cmds[-1] == "coach_weapon_mode knife"
     # Mapwechsel weg von aim: Plugin aus
     _, cmds = run(tmp_path, ['11/21/2026 - 19:40:00.000 - World triggered "Match_Start" on "de_mirage"'])
     assert cmds == ["coach_weapon_mode off"]
     assert "weapon" not in aim_fun.load(cp)
+
+
+def test_ja_routet_nach_abstimmung(tmp_path, monkeypatch):
+    from cs2_coach import server_live
+    cp = tmp_path / "config.yaml"
+    run(tmp_path, start("dj", "x", "da"))
+    seen = []
+    monkeypatch.setattr("cs2_coach.map_vote.handle", lambda *a, **k: seen.append("map") or [])
+    line = '11/21/2026 - 19:40:00.000 - "Dancho<1><[U:1:923059335]><CT>" say "!j"'
+    server_live._last_command.clear()
+    server_live.handle_commands({}, cp, [line], send=Rec())
+    assert seen == []  # keine Waffen-Abstimmung: "j" ist kein Map-Befehl, nichts passiert
+    aim_fun.handle({}, cp, Rec(), "x", "dj", "w", "awp")
+    server_live._last_command.clear()
+    server_live.handle_commands({}, cp, [line], send=Rec())
+    assert aim_fun.load(cp)["weapon"] == "weapon_awp"
 
 
 def test_befehl_auf_anderer_map(tmp_path):

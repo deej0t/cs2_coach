@@ -43,7 +43,8 @@ NEMESIS_AT = (4, 6, 10, 15)   # Ansage bei so vielen Kills in Folge gegen densel
 BOUNTY = 5                    # ab dieser Serie ist ein Kopfgeld ausgesetzt
 STATS_EVERY = 5               # Zwischenstand alle n Runden
 BALANCE_LEAD = 5              # Rundenvorsprung seit dem letzten Ausgleich
-COMMANDS = {"waffe", "weapon", "ausgleich", "balance"}
+YES = {"j", "ja", "y", "yes"}
+COMMANDS = {"waffe", "weapon", "w", "reset", "normal", "ausgleich", "balance"}  # !j: vote_open()
 
 WEAPONS = {
     "deagle": "weapon_deagle", "deag": "weapon_deagle", "r8": "weapon_revolver", "revolver": "weapon_revolver",
@@ -358,40 +359,49 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
             save(config_path, st)
             state = "aus" if st.get("balance_off") or cfg.get("aim_fun_balance") is False else "an"
             return [f"Automatischer Ausgleich ist {state} (ab {BALANCE_LEAD} Runden Vorsprung). !ausgleich an/aus"]
-        word = arg.strip().lower().replace("-", "").replace(" ", "")
-        if not word:
-            cur = st.get("weapon")
-            return [("Waffen-Runde: " + (cur.removeprefix("weapon_") if cur else "nur Messer")
-                     if cur is not None else "Keine Waffen-Runde aktiv.")
-                    + " Abstimmen: !waffe <deagle|ak|awp|scout|usp|messer|...> oder !waffe aus"]
-        if word in ("aus", "off", "normal"):
-            target = None
-        elif word in WEAPONS:
-            target = WEAPONS[word]
+        if cmd in ("reset", "normal") or arg.strip().lower() in ("aus", "off", "normal", "reset"):
+            # Zurueck zu den Arena-Waffen der Map: ohne Abstimmung (Wunsch 21.11.)
+            had = st.pop("weapon", None) is not None
+            st.pop("weapon_vote", None)
+            save(config_path, st)
+            if send:
+                send(weapon_command(None))
+            return ["Waffen-Runde beendet - ab dem naechsten Spawn wieder die Arena-Waffen."
+                    if had else "Keine Waffen-Runde aktiv - es gelten die Arena-Waffen."]
+        vote = st.get("weapon_vote")
+        if vote and now > vote["until"]:
+            vote = None
+        if cmd in YES:
+            if not vote:
+                return ["Gerade laeuft keine Waffen-Abstimmung. Start: !w <waffe>"]
+            target = vote["target"]
         else:
-            return [f"Unbekannte Waffe '{arg}'. Z. B.: deagle, ak, m4a1, awp, scout, usp, r8, messer."]
+            word = arg.strip().lower().replace("-", "").replace(" ", "")
+            if not word:
+                cur = st.get("weapon")
+                return [("Waffen-Runde: " + (cur.removeprefix("weapon_") or "nur Messer")
+                         if cur is not None else "Keine Waffen-Runde aktiv.")
+                        + " Start: !w <deagle|ak|awp|scout|usp|messer|...> · Zustimmen: !j · Zurueck: !reset"]
+            if word not in WEAPONS:
+                return [f"Unbekannte Waffe '{arg}'. Z. B.: deagle, ak, m4a1, awp, scout, usp, r8, messer."]
+            target = WEAPONS[word]
+            if not vote or vote["target"] != target:
+                vote = {"target": target, "votes": [], "until": now + 30}
         humans = _humans(st)
         needed = len(humans) // 2 + 1
-        vote = st.get("weapon_vote")
-        if not vote or now > vote["until"] or vote["target"] != target:
-            vote = {"target": target, "votes": [], "until": now + 30}
         if sid not in vote["votes"]:
             vote["votes"].append(sid)
-        label = "normale Waffen" if target is None else (target.removeprefix("weapon_") or "nur Messer")
+        label = target.removeprefix("weapon_") or "nur Messer"
         if len(vote["votes"]) >= needed:
             st.pop("weapon_vote", None)
-            if target is None:
-                st.pop("weapon", None)
-            else:
-                st["weapon"] = target
+            st["weapon"] = target
             save(config_path, st)
             if send:
                 send(weapon_command(target))
-            return [f"Mehrheit: ab sofort {label}."]
+            return [f"Mehrheit: ab sofort {label}. Zurueck zu den Arena-Waffen: !reset"]
         st["weapon_vote"] = vote
         save(config_path, st)
-        return [f"{name} will {label} - die anderen stimmen mit derselben Eingabe zu "
-                f"({len(vote['votes'])}/{needed}, 30 s)."]
+        return [f"{name} will {label} - zustimmen mit !j ({len(vote['votes'])}/{needed}, 30 s)."]
 
 
 def last_game_lines(config_path: Path, max_age: float = 600) -> list[str]:
@@ -403,3 +413,9 @@ def last_game_lines(config_path: Path, max_age: float = 600) -> list[str]:
 def chat_reply(config_path: Path, lines: list[str]) -> list[str]:
     st = load(config_path)
     return [c for text in lines for c in _chat(st, text)]
+
+
+def vote_open(config_path: Path, now: float | None = None) -> bool:
+    """Laeuft eine Waffen-Abstimmung? Dann gehoert !j/!ja ihr, sonst der Map-Abstimmung."""
+    vote = load(config_path).get("weapon_vote")
+    return bool(vote) and (now or time.time()) <= vote["until"]
