@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.28.0";
+    public override string ModuleVersion => "1.28.1";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -144,6 +144,7 @@ public class CoachTeleport : BasePlugin
         });
         RegisterEventHandler<EventItemPickup>((ev, _) =>
         {
+            // ev.Item kann der Zwillingsname sein - EnforceWeapon prueft am Item-Index nach
             if (_forcedWeapon is not null && ev.Userid is { } p && !WeaponAllowed("weapon_" + ev.Item))
                 Server.NextFrame(() => EnforceWeapon(p));
             return HookResult.Continue;
@@ -1454,19 +1455,37 @@ public class CoachTeleport : BasePlugin
 
     // null = aus, "" = nur Messer, sonst z. B. "weapon_deagle"
     private string? _forcedWeapon;
+    private readonly Dictionary<int, (int Since, int Count)> _enforced = new();
 
     private bool WeaponAllowed(string name) =>
-        name.Contains("knife") || name.Contains("bayonet") || name == _forcedWeapon
-        || (_forcedWeapon == "weapon_m4a1_silencer" && name == "weapon_m4a1_silencer_off")
-        || (_forcedWeapon == "weapon_usp_silencer" && name == "weapon_usp_silencer_off");
+        name.Contains("knife") || name.Contains("bayonet") || name == _forcedWeapon;
+
+    // CS2 meldet fuer manche Waffen den DesignerName des Zwillings (R8 = "weapon_deagle",
+    // USP-S = "weapon_hkp2000", ...). 21.11.: "!waffe r8 ist verbuggt" - das Plugin hielt
+    // den R8 fuer eine Deagle und tauschte ihn endlos. Eindeutig ist der Item-Index.
+    private static readonly Dictionary<ushort, string> Twins = new()
+    {
+        [23] = "weapon_mp5sd", [60] = "weapon_m4a1_silencer", [61] = "weapon_usp_silencer",
+        [63] = "weapon_cz75a", [64] = "weapon_revolver",
+    };
+
+    private static string RealName(CBasePlayerWeapon w) =>
+        Twins.TryGetValue(w.AttributeManager.Item.ItemDefinitionIndex, out var n) ? n : w.DesignerName;
 
     private void EnforceWeapon(CCSPlayerController player)
     {
         if (_forcedWeapon is null || !player.IsValid || player.PlayerPawn.Value is not { } pawn
             || pawn.LifeState != (byte)LifeState_t.LIFE_ALIVE || pawn.WeaponServices is not { } ws) return;
-        var names = ws.MyWeapons.Select(w => w.Value?.DesignerName ?? "").Where(n => n != "").ToList();
+        var names = ws.MyWeapons.Where(w => w.Value is not null).Select(w => RealName(w.Value!)).ToList();
         var ok = names.All(WeaponAllowed) && (_forcedWeapon == "" || names.Contains(_forcedWeapon));
         if (ok) return;
+        // Bremse: hoechstens 3 Tausche je Spieler in 2 s - ein weiterer unbekannter
+        // Zwilling darf nicht wieder endlos tauschen.
+        var uid = player.UserId ?? -1;
+        var now = Server.TickCount;
+        var (since, count) = _enforced.TryGetValue(uid, out var e) && now - e.Since < 128 ? e : (now, 0);
+        if (count >= 3) return;
+        _enforced[uid] = (since, count + 1);
         player.RemoveWeapons();
         player.GiveNamedItem("weapon_knife");
         if (_forcedWeapon != "") player.GiveNamedItem(_forcedWeapon);
