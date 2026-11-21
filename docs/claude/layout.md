@@ -61,5 +61,5 @@ server_plugin/CoachTeleport/ C# CounterStrikeSharp plugin: `coach_tp` (teleport 
 tests/                  pytest, ~14 files — run with `pytest` (config in pytest.ini)
 docker/                 compose, portainer stack, unraid template
 ```
-- `web/app.py` is already over 11,000 lines. **New functionality goes into its own module** and is imported by the app; do not grow app.py further.
+- `web/app.py` is still ~10,000 lines. **New functionality goes into its own module** and is imported by the app; do not grow app.py further.
 - Shared template markup belongs in `templates/_partials/` (e.g. the 2D kill map used by both `result.html` and `export_detail.html`), never duplicated.

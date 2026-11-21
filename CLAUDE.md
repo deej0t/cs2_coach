@@ -2,7 +2,7 @@
 
 ## Tokens
 - Diese Datei wird in jede Session geladen → nur Regeln + Index. Details stehen in `docs/claude/*.md` und werden **nur gelesen, wenn die Aufgabe das Thema berührt** (keine `@`-Imports – die würden alles wieder vorladen).
-- Suchen mit `grep`, dann nur benötigte Zeilenbereiche lesen. `web/app.py` (11.000+ Zeilen) nie ganz lesen.
+- Suchen mit `grep`, dann nur benötigte Zeilenbereiche lesen. `web/app.py` (~10.000 Zeilen) nie ganz lesen.
 - Kein graphify (2026-10-14 entfernt).
 - Neue Gotchas: 1 Zeile hier nur wenn sie *jede* Aufgabe betrifft, sonst in die passende Detailnotiz. Mess-Erzählungen gehören in Commit-Messages.
 
