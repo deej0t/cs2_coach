@@ -30,6 +30,7 @@ Desktop.ini
 config.yaml
 .steam_session
 .secret_key
+.gsi_token
 
 # UI mockups
 cs2-coach-ui-mockups/
