@@ -121,22 +121,23 @@ def test_andere_map_still(tmp_path):
     assert cmds == []
 
 
-def test_waffen_abstimmung(tmp_path, monkeypatch):
+def test_waffen_abstimmung(tmp_path):
     cp = tmp_path / "config.yaml"
     run(tmp_path, start("dj", "x", "da"))
-    r = aim_fun.handle({}, cp, None, "a", "dj", "waffe", "deagle", now=100)
-    assert "1/2" in r[0]
-    r = aim_fun.handle({}, cp, None, "b", "Dancho", "waffe", "deagle", now=110)
-    assert "Mehrheit" in r[0]
-    timers = []
-    monkeypatch.setattr(aim_fun.threading, "Timer", lambda d, f: timers.append(f) or type("T", (), {"start": lambda s: None})())
     rec = Rec()
-    aim_fun.on_lines({}, cp, [round_start()], rec)
-    timers[0]()
-    assert "coach_give 0 weapon_deagle weapon_knife weapon_deagle" in rec.cmds
-    assert aim_fun.handle({}, cp, None, "a", "dj", "waffe", "bazooka", now=120)[0].startswith("Unbekannte")
-    aim_fun.handle({}, cp, None, "a", "dj", "waffe", "aus", now=130)
-    aim_fun.handle({}, cp, None, "b", "Dancho", "waffe", "aus", now=131)
+    r = aim_fun.handle({}, cp, rec, "a", "dj", "waffe", "deagle", now=100)
+    assert "1/2" in r[0] and rec.cmds == []
+    r = aim_fun.handle({}, cp, rec, "b", "Dancho", "waffe", "deagle", now=110)
+    assert "Mehrheit" in r[0] and rec.cmds == ["coach_weapon_mode weapon_deagle"]
+    _, cmds = run(tmp_path, [round_start()])  # sofort, ohne Verzoegerung
+    assert cmds == ["coach_weapon_mode weapon_deagle"]
+    assert aim_fun.handle({}, cp, rec, "a", "dj", "waffe", "bazooka", now=120)[0].startswith("Unbekannte")
+    aim_fun.handle({}, cp, rec, "a", "dj", "waffe", "messer", now=130)
+    aim_fun.handle({}, cp, rec, "b", "Dancho", "waffe", "messer", now=131)
+    assert rec.cmds[-1] == "coach_weapon_mode knife"
+    # Mapwechsel weg von aim: Plugin aus
+    _, cmds = run(tmp_path, ['11/21/2026 - 19:40:00.000 - World triggered "Match_Start" on "de_mirage"'])
+    assert cmds == ["coach_weapon_mode off"]
     assert "weapon" not in aim_fun.load(cp)
 
 

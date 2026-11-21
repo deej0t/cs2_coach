@@ -16,8 +16,9 @@ Config (CS2 schickt den naechsten Stapel erst nach der Antwort).
 - Ausgleich: fuehrt ein Team mit BALANCE_LEAD Runden seit dem letzten
   Ausgleich, wechselt der Beste des fuehrenden Teams (bei gleich grossen
   Teams Tausch mit dem Schwaechsten des anderen). Abschaltbar: !ausgleich aus.
-- !waffe <name>: Mehrheit der Menschen -> jede Runde nur diese Waffe (plus
-  Messer), per Plugin coach_give nach dem Rundenstart. !waffe aus beendet.
+- !waffe <name>: Mehrheit der Menschen -> nur diese Waffe (plus Messer).
+  Plugin ``coach_weapon_mode`` ersetzt beim Spawn und bei jedem Aufheben
+  sofort (21.11.: coach_give 1,5 s nach Rundenstart tauschte sichtbar).
 
 Ausgabe nur per Plugin ``coach_chat`` (PrintToChat des Servers): ein ``say``
 loest das Chat-Skript der Map aus, das bei jeder Chatzeile eine Exception
@@ -42,7 +43,6 @@ NEMESIS_AT = (4, 6, 10, 15)   # Ansage bei so vielen Kills in Folge gegen densel
 BOUNTY = 5                    # ab dieser Serie ist ein Kopfgeld ausgesetzt
 STATS_EVERY = 5               # Zwischenstand alle n Runden
 BALANCE_LEAD = 5              # Rundenvorsprung seit dem letzten Ausgleich
-GIVE_DELAY = 1.5              # s nach Round_Start: die Map verteilt ihre Waffen selbst
 COMMANDS = {"waffe", "weapon", "ausgleich", "balance"}
 
 WEAPONS = {
@@ -166,11 +166,14 @@ def on_lines(cfg: dict, config_path: Path, lines: list[str], send) -> dict:
                 continue
             out += _line(cfg, st, m.group(1), m.group(2), gives)
         save(config_path, st)
-    if out:
-        send(*out)
-    if gives:
-        threading.Timer(GIVE_DELAY, lambda: send(*gives)).start()
+    if out or gives:
+        send(*gives, *out)
     return st
+
+
+def weapon_command(weapon: str | None) -> str:
+    """Plugin 1.28.0: None = aus, "" = nur Messer, sonst weapon_xyz."""
+    return f"coach_weapon_mode {'off' if weapon is None else weapon or 'knife'}"
 
 
 def _line(cfg: dict, st: dict, stamp: str, body: str, gives: list[str]) -> list[str]:
@@ -178,6 +181,8 @@ def _line(cfg: dict, st: dict, stamp: str, body: str, gives: list[str]) -> list[
         st["map"] = mm.group("map")
         st["roster"] = {}
         _new_game(st)
+        if st.pop("weapon", None) is not None:
+            gives.append(weapon_command(None))
     if body.startswith('World triggered "Match_Start"'):
         _new_game(st)
         return []
@@ -193,10 +198,10 @@ def _line(cfg: dict, st: dict, stamp: str, body: str, gives: list[str]) -> list[
         st["round_t"] = _ts(stamp)
         st["clutch"] = None
         st["alive"] = {k: r["team"] for k, r in st.get("roster", {}).items() if r.get("team")}
-        if (w := st.get("weapon")) is not None:  # "" = nur Messer
-            items = ["weapon_knife"] + ([w] if w else [])
-            gives += [f"coach_give {r['uid']} {items[-1]} {' '.join(items)}"
-                      for r in st["roster"].values() if r.get("team")]
+        if (w := st.get("weapon")) is not None:
+            # Das Plugin ersetzt selbst beim Spawn/Aufheben; hier nur auffrischen, falls
+            # es nach Mapwechsel oder Neustart nichts mehr weiss.
+            gives.append(weapon_command(w))
         return []
     if (k := ss._KILL.match(body)):
         return _kill(st, stamp, k)
@@ -380,7 +385,9 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
             else:
                 st["weapon"] = target
             save(config_path, st)
-            return [f"Mehrheit: ab der naechsten Runde {label}."]
+            if send:
+                send(weapon_command(target))
+            return [f"Mehrheit: ab sofort {label}."]
         st["weapon_vote"] = vote
         save(config_path, st)
         return [f"{name} will {label} - die anderen stimmen mit derselben Eingabe zu "

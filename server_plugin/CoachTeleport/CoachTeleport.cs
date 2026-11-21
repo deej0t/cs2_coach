@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.27.0";
+    public override string ModuleVersion => "1.28.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -134,6 +134,20 @@ public class CoachTeleport : BasePlugin
             return HookResult.Continue;
         });
         RegisterListener<Listeners.OnPlayerButtonsChanged>(OnButtons);
+        // Waffen-Runde (!waffe): beim Spawn und bei jeder anderen aufgenommenen Waffe sofort
+        // ersetzen - Wunsch 21.11.: "muss zum Rundenstart schon instant da sein", das
+        // coach_give 1,5 s nach Round_Start tauschte sichtbar im Nachhinein.
+        RegisterEventHandler<EventPlayerSpawn>((ev, _) =>
+        {
+            if (_forcedWeapon is not null && ev.Userid is { } p) Server.NextFrame(() => EnforceWeapon(p));
+            return HookResult.Continue;
+        });
+        RegisterEventHandler<EventItemPickup>((ev, _) =>
+        {
+            if (_forcedWeapon is not null && ev.Userid is { } p && !WeaponAllowed("weapon_" + ev.Item))
+                Server.NextFrame(() => EnforceWeapon(p));
+            return HookResult.Continue;
+        });
         RegisterEventHandler<EventRoundStart>((_, _) =>
         {
             _inFreeze = true;
@@ -1436,6 +1450,37 @@ public class CoachTeleport : BasePlugin
         var active = info.GetArg(2);
         if (active.StartsWith("weapon_")) player.ExecuteClientCommandFromServer($"use {active}");
         info.ReplyToCommand($"coach_give ok {userid} {given}");
+    }
+
+    // null = aus, "" = nur Messer, sonst z. B. "weapon_deagle"
+    private string? _forcedWeapon;
+
+    private bool WeaponAllowed(string name) =>
+        name.Contains("knife") || name.Contains("bayonet") || name == _forcedWeapon
+        || (_forcedWeapon == "weapon_m4a1_silencer" && name == "weapon_m4a1_silencer_off")
+        || (_forcedWeapon == "weapon_usp_silencer" && name == "weapon_usp_silencer_off");
+
+    private void EnforceWeapon(CCSPlayerController player)
+    {
+        if (_forcedWeapon is null || !player.IsValid || player.PlayerPawn.Value is not { } pawn
+            || pawn.LifeState != (byte)LifeState_t.LIFE_ALIVE || pawn.WeaponServices is not { } ws) return;
+        var names = ws.MyWeapons.Select(w => w.Value?.DesignerName ?? "").Where(n => n != "").ToList();
+        var ok = names.All(WeaponAllowed) && (_forcedWeapon == "" || names.Contains(_forcedWeapon));
+        if (ok) return;
+        player.RemoveWeapons();
+        player.GiveNamedItem("weapon_knife");
+        if (_forcedWeapon != "") player.GiveNamedItem(_forcedWeapon);
+        player.ExecuteClientCommandFromServer($"use {(_forcedWeapon == "" ? "weapon_knife" : _forcedWeapon)}");
+    }
+
+    [ConsoleCommand("coach_weapon_mode", "Waffen-Runde: <weapon_xyz|knife|off>")]
+    [CommandHelper(minArgs: 1, usage: "<weapon_xyz|knife|off>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnWeaponMode(CCSPlayerController? caller, CommandInfo info)
+    {
+        var arg = info.GetArg(1).ToLowerInvariant();
+        _forcedWeapon = arg == "off" ? null : arg == "knife" ? "" : arg.StartsWith("weapon_") ? arg : null;
+        foreach (var p in Utilities.GetPlayers()) EnforceWeapon(p);
+        info.ReplyToCommand($"coach_weapon_mode ok {_forcedWeapon ?? "off"}");
     }
 
     [ConsoleCommand("coach_chat", "Private Chatzeilen: <userid> <text_base64>")]
