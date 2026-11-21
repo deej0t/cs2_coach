@@ -228,6 +228,16 @@ if [ -n "$spieler" ]; then
 fi
 
 # --- Haenger
+# A2S allein reicht nicht: am 21.11. blieb A2S 240 s stumm, waehrend auf aim_multigame
+# weiter Runden liefen (Log-Zeilen bis 19:33) - der Neustart warf beide Spieler raus.
+# Ein haengender Server schreibt auch keine Spiel-Log-Zeilen ("L <datum> - ...") mehr.
+if docker logs --since 90s "$NAME" 2>&1 | grep -q '^L [0-9]'; then
+    if [ -f "$SEIT" ]; then
+        rm -f "$SEIT"
+        logger -t cs2-waechter "A2S stumm, aber das Spiel-Log laeuft - kein Neustart"
+    fi
+    exit 0
+fi
 if [ ! -f "$SEIT" ]; then
     echo "$jetzt" > "$SEIT"
     logger -t cs2-waechter "CS2-Server antwortet nicht auf Port $PORT"
