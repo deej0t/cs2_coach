@@ -40,7 +40,7 @@ SESSION_HOURS = 6
 _CHAT = re.compile(ss._player("a") + r' say(?:_team)? "(?P<text>.*)"$')
 _last_command: dict[str, float] = {}
 
-HELP = ("Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !map <name> · !workshop · !help · Besitzer: !training (Menue) · "
+HELP = ("Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !map <name> · !waffe <name> · !ausgleich · !workshop · !help · Besitzer: !training (Menue) · "
         "!warmup / !retake / !halten / !situation / !wiederholen [map] · !einladen <Name> · !coach <Frage> · Eingeladen: !mitmachen")
 
 
@@ -254,6 +254,7 @@ def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, n
     from .ingame_coach import COMMANDS as COACH, handle as coach_handle
     from .training_server import COMMANDS as TRAINING, Director
     from .map_vote import COMMANDS as MAPVOTE, handle as map_vote
+    from .aim_fun import COMMANDS as AIMFUN, chat_reply, handle as aim_fun
     from .own_lineups import COMMANDS as OWN, handle as own_lineups
     from .workshop import COMMANDS as WORKSHOP, handle as workshop
     commands = parse_commands(lines)
@@ -288,6 +289,13 @@ def handle_commands(cfg: dict, config_path: Path, lines: list[str], send=None, n
             _last_command[sid] = time.monotonic()
             send(*_say_commands(own_lineups(config_path, send, name, cmd, arg, uid)))
             sent += 1
+            continue
+        if cmd in AIMFUN:
+            _last_command[sid] = time.monotonic()
+            reply = aim_fun(cfg, config_path, send, sid, name, cmd, arg)
+            if reply:
+                send(*chat_reply(config_path, reply))
+                sent += 1
             continue
         if cmd in MAPVOTE:
             _last_command[sid] = time.monotonic()
@@ -393,6 +401,9 @@ def handle_posts(cfg: dict, config_path: Path, lines: list[str], post=None, now=
     log = ss.read_logs(config_path)
     jobs = []
     if game_over and (g := game_summary(log, cfg, now)):
+        from .aim_fun import last_game_lines
+        if extras := last_game_lines(config_path):
+            g = (g[0], g[1] + "\n" + " · ".join(extras))
         jobs.append(g)
     if week_due:
         key, text = weekly_summary(log, cfg, now)
@@ -437,6 +448,12 @@ def on_batch(cfg: dict, config_path: Path, body: bytes) -> None:
             Director(cfg, config_path, send).on_lines(lines)
         except Exception as e:  # noqa: BLE001
             print(f"[training] {e}", flush=True)
+    elif send_fun := rcon_sender(cfg):
+        from . import aim_fun
+        try:  # synchron: Reihenfolge der Kills/Runden zaehlt
+            aim_fun.on_lines(cfg, config_path, lines, send_fun)
+        except Exception as e:  # noqa: BLE001
+            print(f"[aim_fun] {e}", flush=True)
     if (cmds := map_settings(cfg, lines)) and (send_map := rcon_sender(cfg)):
         # kurz warten: das Map-Skript setzt seine Werte beim Spielstart selbst
         threading.Timer(2, lambda: send_map(*cmds)).start()
