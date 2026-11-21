@@ -95,12 +95,6 @@
         <div class="eiq-meta">
             <span>{{ eco.total_matches }} Matches</span>
             <span>{{ eco.total_rounds }} Runden</span>
-            {% if eco.best_cat and eco.summary[eco.best_cat] %}
-            <span>{{ _('Staerke') }}: <span style="color:{{ eco.summary[eco.best_cat].color }};font-weight:600;">{{ eco.summary[eco.best_cat].label }}</span></span>
-            {% endif %}
-            {% if eco.worst_cat and eco.summary[eco.worst_cat] %}
-            <span>{{ _('Schwaeche') }}: <span style="color:{{ eco.summary[eco.worst_cat].color }};font-weight:600;">{{ eco.summary[eco.worst_cat].label }}</span></span>
-            {% endif %}
         </div>
     </div>
 </div>
@@ -119,11 +113,6 @@
             <div>
                 <div class="eiq-card-label">
                     {{ s.label }}
-                    {% if key == eco.best_cat %}
-                    <span class="eiq-badge" style="background:rgba(74,222,128,0.15);color:#4ade80;margin-left:6px;">{{ _('Staerke') }}</span>
-                    {% elif key == eco.worst_cat %}
-                    <span class="eiq-badge" style="background:rgba(248,113,113,0.15);color:#f87171;margin-left:6px;">{{ _('Schwaeche') }}</span>
-                    {% endif %}
                 </div>
                 <div class="eiq-card-desc">{{ s.desc }}</div>
             </div>

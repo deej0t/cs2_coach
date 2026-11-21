@@ -757,8 +757,8 @@ def create_app() -> Flask:
 
     @app.route("/calendar")
     def calendar():
-        cal_data = _build_calendar_data(cfg)
-        return render_template("calendar.html", cal=cal_data, config=cfg)
+        # Entfernt 2026-11-16 - ueberschnitt sich mit /sessions
+        return redirect(url_for("sessions"))
 
     @app.route("/duels")
     def duels():
@@ -1818,13 +1818,8 @@ def create_app() -> Flask:
 
     @app.route("/momentum")
     def momentum():
-        mom_data = _build_momentum(cfg)
-        # Das Urteil "nach Niederlagen schlechter?" kommt aus derselben
-        # Rechnung wie auf /tilt. Vorher hatte momentum.html eine eigene
-        # Variante mit festen Schwellen, die der Tilt-Seite widersprechen
-        # konnte.
-        tilt_res = _build_tilt_analysis(cfg).get("resilience")
-        return render_template("momentum.html", mom=mom_data, tilt_res=tilt_res, config=cfg)
+        # Entfernt 2026-11-16 - ueberschnitt sich mit /tilt
+        return redirect(url_for("tilt"))
 
     @app.route("/teammates")
     def teammates():
@@ -3461,33 +3456,8 @@ def _build_opponent_strength(cfg: dict) -> dict:
         })
 
     # Tips
+    # Tipps mit festen Schwellen entfernt (2026-11-16): Rat nur mit evidence.py
     tips = []
-    strong_t = tiers["strong"]
-    weak_t = tiers["weak"]
-    if strong_t["matches"] >= 3 and weak_t["matches"] >= 3:
-        strong_kd = round(strong_t["kd_sum"] / strong_t["matches"], 2)
-        weak_kd = round(weak_t["kd_sum"] / weak_t["matches"], 2)
-        drop = round((1 - strong_kd / weak_kd) * 100, 1) if weak_kd > 0 else 0
-        if drop > 15:
-            tips.append({
-                "type": "warning",
-                "text": f"Gegen starke Gegner faellt dein K/D um {drop}% ({weak_kd} vs. {strong_kd}) — an Positioning und Utility arbeiten.",
-            })
-        elif drop < 5:
-            tips.append({
-                "type": "success",
-                "text": f"Dein K/D bleibt stabil gegen starke Gegner ({strong_kd} vs. {weak_kd}) — du adaptierst gut.",
-            })
-
-    avg_t = tiers["average"]
-    if strong_t["matches"] >= 3:
-        strong_wr = round(strong_t["wins"] / strong_t["matches"] * 100, 1)
-        if strong_wr >= 45:
-            tips.append({"type": "success",
-                         "text": f"Du gewinnst {strong_wr}% gegen starke Gegner — du kannst mit guten Spielern mithalten."})
-        elif strong_wr < 30:
-            tips.append({"type": "warning",
-                         "text": f"Nur {strong_wr}% Winrate gegen starke Gegner — fokussiere auf Fundamentals (Utility, Positioning)."})
 
     return {
         "has_data": True,
@@ -4866,51 +4836,8 @@ def _build_economy_iq(exports: list[dict], cfg: dict) -> dict:
     trend = per_match[-20:]
 
     # Recommendations
+    # Tipps mit festen Schwellen entfernt (2026-11-16): Rat nur mit evidence.py
     tips = []
-    eco_s = summary.get("eco", {})
-    force_s = summary.get("force", {})
-    full_s = summary.get("fullbuy", {})
-    pistol_s = summary.get("pistol", {})
-
-    # Pistol rounds
-    if pistol_s:
-        if pistol_s["win_rate"] >= 48:
-            tips.append({"type": "positive", "text": f"Starke Pistolrunden: {pistol_s['win_rate']}% Win-Rate — oekonomischer Vorteil fuers Team."})
-        elif pistol_s["win_rate"] < 40:
-            tips.append({"type": "warning", "text": f"Pistolrunden-WR nur {pistol_s['win_rate']}% — trainiere USP/Glock-Aim und Pistol-Setups."})
-
-    # Eco rounds
-    if eco_s:
-        if eco_s["kd"] >= 0.7:
-            tips.append({"type": "positive", "text": f"Eco K/D {eco_s['kd']} — du machst auch ohne Equipment Impact."})
-        elif eco_s["kd"] < 0.5:
-            tips.append({"type": "warning", "text": f"Eco K/D nur {eco_s['kd']} — in Sparrunden passiver spielen und auf Picks lauern."})
-
-    # Force buys
-    if force_s:
-        if force_s["win_rate"] >= 42:
-            tips.append({"type": "positive", "text": f"Force-Buys effektiv: {force_s['win_rate']}% Win-Rate — gute Kaufentscheidungen."})
-        elif force_s["win_rate"] < 30:
-            tips.append({"type": "warning", "text": f"Force-Buys nur {force_s['win_rate']}% WR — Full-Save koennte effektiver sein."})
-
-    # Full buys
-    if full_s:
-        if full_s["win_rate"] < 52:
-            tips.append({"type": "warning", "text": f"Full-Buy WR nur {full_s['win_rate']}% — Utility-Einsatz und Teamplay verbessern."})
-        elif full_s["win_rate"] >= 58:
-            tips.append({"type": "positive", "text": f"Starke Full-Buys: {full_s['win_rate']}% Win-Rate — Equipment wird effektiv genutzt."})
-
-    # Cross-category insights
-    if force_s and full_s and force_s.get("kd", 0) > full_s.get("kd", 0) * 0.9:
-        tips.append({"type": "info", "text": f"Force-Buy K/D ({force_s['kd']}) fast wie Full-Buy ({full_s['kd']}) — du spielst mit wenig Equipment aehnlich gut."})
-
-    if eco_s and full_s and eco_s.get("total_rounds", 0) > full_s.get("total_rounds", 0) * 0.3:
-        eco_ratio = round(eco_s["total_rounds"] / max(full_s["total_rounds"], 1) * 100)
-        tips.append({"type": "info", "text": f"Eco-Anteil {eco_ratio}% der Full-Buy-Runden — Pistolrunden gewinnen spart Economy-Stress."})
-
-    # Best/worst comparison insight (always show)
-    if best_cat and worst_cat and best_cat != worst_cat:
-        tips.append({"type": "info", "text": f"Staerkste Kategorie: {summary[best_cat]['label']} ({summary[best_cat]['win_rate']}% WR) — Schwaeche: {summary[worst_cat]['label']} ({summary[worst_cat]['win_rate']}% WR)"})
 
     # Overall eco efficiency score (weighted win rate)
     total_rounds_all = sum(s["total_rounds"] for s in summary.values())
@@ -6477,52 +6404,8 @@ def _build_death_analysis(cfg: dict) -> dict:
               "map": m["map"], "result": m["result"]} for m in reversed(matches)]
 
     # Actionable tips
+    # Tipps mit festen Schwellen entfernt (2026-11-16): Rat nur mit evidence.py
     tips = []
-    if timing_pcts["early"] > 40:
-        tips.append({"type": "warning", "icon": "alert-triangle",
-                     "text": f"{timing_pcts['early']}% deiner Tode passieren frueh in der Runde — spiel passiver oder warte auf Utility."})
-    if opening_death_rate > 15:
-        tips.append({"type": "warning", "icon": "skull",
-                     "text": f"Opening Death Rate {opening_death_rate}% — du stirbst zu oft als Erster. Lass einen Teammate vorgehen."})
-    if trade_rate < 5 and total_rounds > 50:
-        tips.append({"type": "warning", "icon": "users",
-                     "text": f"Nur {total_trade_kills} Trade-Kills in {total_rounds} Runden — achte darauf, Teammates schneller zu traden."})
-    if impact_pct > 50:
-        tips.append({"type": "success", "icon": "check-circle",
-                     "text": f"In {impact_pct}% deiner Tode hattest du vorher einen Kill — du stirbst produktiv."})
-    if opening_duel_wr >= 55:
-        tips.append({"type": "success", "icon": "swords",
-                     "text": f"Opening Duel Winrate {opening_duel_wr}% — starke Erstduelle, weiter so."})
-
-    worse_side = "CT" if ct_death_rate > t_death_rate + 5 else ("T" if t_death_rate > ct_death_rate + 5 else None)
-    if worse_side:
-        worse_rate = ct_death_rate if worse_side == "CT" else t_death_rate
-        tips.append({"type": "warning", "icon": "shield",
-                     "text": f"Auf {worse_side}-Side stirbst du haeufiger ({worse_rate}% Death Rate) — ueberdenke dein Positioning."})
-
-    # Category-specific tips
-    if total_death_events > 20:
-        timing_pct_cat = cat_counts["timing"] / total_death_events * 100
-        aim_pct_cat = cat_counts["aim"] / total_death_events * 100
-        pos_pct_cat = cat_counts["positioning"] / total_death_events * 100
-        util_pct_cat = cat_counts["utility"] / total_death_events * 100
-        impact_pct_cat = cat_counts["impact"] / total_death_events * 100
-
-        if timing_pct_cat > 25:
-            tips.append({"type": "warning", "icon": "timer",
-                         "text": f"{timing_pct_cat:.0f}% deiner Tode sind Timing-Fehler — du peekst zu frueh oder wirst beim Rotieren erwischt."})
-        if aim_pct_cat > 30:
-            tips.append({"type": "warning", "icon": "target",
-                         "text": f"{aim_pct_cat:.0f}% deiner Tode sind Aim-Duelle die du verlierst — trainiere Crosshair Placement und Recoil."})
-        if pos_pct_cat > 30:
-            tips.append({"type": "warning", "icon": "map-pin",
-                         "text": f"{pos_pct_cat:.0f}% deiner Tode kommen durch schlechtes Positioning — spiele weniger exposed, nutze Cover."})
-        if util_pct_cat > 20:
-            tips.append({"type": "warning", "icon": "flame",
-                         "text": f"{util_pct_cat:.0f}% deiner Tode passieren ohne eigene Utility — wirf Flash/Smoke bevor du peekst."})
-        if impact_pct_cat > 35:
-            tips.append({"type": "success", "icon": "trophy",
-                         "text": f"{impact_pct_cat:.0f}% deiner Tode sind produktiv (Impact-Deaths) — du stirbst mit Wirkung."})
 
     return {
         "has_data": True,
@@ -6571,200 +6454,6 @@ def _build_death_analysis(cfg: dict) -> dict:
 
 
 # ── Momentum ──────────────────────────────────────────────
-def _build_momentum(cfg: dict) -> dict:
-    """Analyze performance flow, streaks, tilt patterns, and session momentum."""
-    vault_path = cfg.get("obsidian_vault_path", "")
-    sub = cfg.get("coach_subfolder", "CS2-Coach")
-    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
-    if not export_dir or not export_dir.exists():
-        return {"has_data": False}
-
-    matches = []
-    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        m = data.get("match", {})
-        p = data.get("player", {})
-        timeline = data.get("round_timeline", [])
-        if not m or not p:
-            continue
-
-        result = m.get("result", "?")
-        matches.append({
-            "date": m.get("date", ""),
-            "datetime": m.get("datetime", m.get("date", "")),
-            "map": m.get("map", "?"),
-            "result": result,
-            "score": f"{m.get('score_own', '?')}:{m.get('score_enemy', '?')}",
-            "rating": p.get("rating", 0),
-            "kd": p.get("kd", 0),
-            "adr": p.get("adr", 0),
-            "kills": p.get("kills", 0),
-            "deaths": p.get("deaths", 0),
-            "won": result == "Sieg",
-            "rounds": len(timeline),
-            "round_data": [{
-                "round": r.get("round", 0),
-                "won": r.get("won", False),
-                "kills": r.get("player_kills", 0),
-                "died": r.get("player_died", False),
-                "side": r.get("side", "?"),
-            } for r in timeline],
-        })
-
-    if len(matches) < 3:
-        return {"has_data": False}
-
-    # ── Streaks ──
-    streaks = []
-    cur_type = None
-    cur_count = 0
-    best_win_streak = 0
-    worst_loss_streak = 0
-    current_streak_type = None
-    current_streak_count = 0
-
-    for i, m in enumerate(matches):
-        w = m["won"]
-        st = "win" if w else "loss"
-        if st == cur_type:
-            cur_count += 1
-        else:
-            if cur_type and cur_count >= 2:
-                streaks.append({"type": cur_type, "count": cur_count, "end_idx": i - 1})
-            cur_type = st
-            cur_count = 1
-        if w:
-            best_win_streak = max(best_win_streak, cur_count)
-        else:
-            worst_loss_streak = max(worst_loss_streak, cur_count)
-    if cur_type and cur_count >= 2:
-        streaks.append({"type": cur_type, "count": cur_count, "end_idx": len(matches) - 1})
-    # Current streak
-    current_streak_type = cur_type or "none"
-    current_streak_count = cur_count
-
-    # ── Tilt detection ──
-    # Tilt = 2+ losses where rating drops below 0.85 progressively
-    tilt_sessions = []
-    i = 0
-    while i < len(matches):
-        if not matches[i]["won"] and matches[i]["rating"] < 0.85:
-            start = i
-            while i < len(matches) and not matches[i]["won"]:
-                i += 1
-            length = i - start
-            if length >= 2:
-                avg_rating = round(sum(matches[j]["rating"] for j in range(start, i)) / length, 2)
-                tilt_sessions.append({
-                    "start_idx": start,
-                    "length": length,
-                    "avg_rating": avg_rating,
-                    "start_date": matches[start]["date"],
-                    "maps": [matches[j]["map"] for j in range(start, i)],
-                })
-        else:
-            i += 1
-
-    # ── Comeback detection ──
-    comebacks = []
-    for i, m in enumerate(matches):
-        rd = m["round_data"]
-        if not rd or not m["won"]:
-            continue
-        # Check for losing at halftime but winning overall
-        half = len(rd) // 2
-        if half < 6:
-            continue
-        first_half_wins = sum(1 for r in rd[:half] if r["won"])
-        first_half_losses = half - first_half_wins
-        if first_half_losses >= first_half_wins + 3:
-            comebacks.append({
-                "idx": i, "date": m["date"], "map": m["map"],
-                "score": m["score"],
-                "deficit": f"{first_half_wins}:{first_half_losses}",
-            })
-
-    # ── Match-to-match momentum ──
-    flow = []
-    for i, m in enumerate(matches):
-        label = "neutral"
-        if i > 0:
-            prev = matches[i - 1]
-            rating_diff = m["rating"] - prev["rating"]
-            if m["won"] and prev["won"]:
-                label = "hot"
-            elif not m["won"] and not prev["won"]:
-                label = "cold"
-            elif m["won"] and not prev["won"] and m["rating"] >= 1.0:
-                label = "bounce"
-            elif not m["won"] and prev["won"] and m["rating"] < 0.8:
-                label = "tilt"
-
-        flow.append({
-            "date": m["date"], "map": m["map"], "result": m["result"],
-            "score": m["score"], "rating": m["rating"], "kd": m["kd"],
-            "won": m["won"], "label": label,
-        })
-
-    # ── Session grouping (games on same day) ──
-    sessions: dict[str, list] = {}
-    for i, m in enumerate(matches):
-        day = m["date"]
-        if day not in sessions:
-            sessions[day] = []
-        sessions[day].append(m)
-
-    session_analysis = []
-    for day, games in sorted(sessions.items()):
-        if len(games) < 2:
-            continue
-        ratings = [g["rating"] for g in games]
-        first_rating = ratings[0]
-        last_rating = ratings[-1]
-        trend = "improving" if last_rating > first_rating + 0.1 else \
-                "declining" if last_rating < first_rating - 0.1 else "stable"
-        wins = sum(1 for g in games if g["won"])
-        session_analysis.append({
-            "date": day, "games": len(games),
-            "wins": wins, "losses": len(games) - wins,
-            "first_rating": first_rating, "last_rating": last_rating,
-            "avg_rating": round(sum(ratings) / len(ratings), 2),
-            "trend": trend,
-        })
-
-    # ── After-loss performance ──
-    after_loss_ratings = []
-    for i in range(1, len(matches)):
-        if not matches[i - 1]["won"]:
-            after_loss_ratings.append(matches[i]["rating"])
-    after_loss_avg = round(sum(after_loss_ratings) / len(after_loss_ratings), 2) if after_loss_ratings else 0
-
-    after_win_ratings = []
-    for i in range(1, len(matches)):
-        if matches[i - 1]["won"]:
-            after_win_ratings.append(matches[i]["rating"])
-    after_win_avg = round(sum(after_win_ratings) / len(after_win_ratings), 2) if after_win_ratings else 0
-
-    return {
-        "has_data": True,
-        "total_matches": len(matches),
-        "flow": flow,
-        "best_win_streak": best_win_streak,
-        "worst_loss_streak": worst_loss_streak,
-        "current_streak": {"type": current_streak_type, "count": current_streak_count},
-        "streaks": sorted(streaks, key=lambda x: x["count"], reverse=True)[:10],
-        "tilt_sessions": tilt_sessions,
-        "comebacks": comebacks,
-        "sessions": session_analysis,
-        "after_loss_avg": after_loss_avg,
-        "after_win_avg": after_win_avg,
-    }
-
-
-# ── Teammates ─────────────────────────────────────────────
 def _build_teammates(cfg: dict) -> dict:
     """Analyze teammate performance and chemistry across all matches."""
     vault_path = cfg.get("obsidian_vault_path", "")
@@ -7138,24 +6827,8 @@ def _build_team_analysis(cfg: dict) -> dict:
     group_rating = round(sum(m["my_rating"] for m in group_matches) / len(group_matches), 2) if group_matches else 0
 
     # Tips
+    # Tipps mit festen Schwellen entfernt (2026-11-16): Rat nur mit evidence.py
     tips = []
-    if solo_matches and group_matches:
-        if group_wr > solo_wr + 10:
-            tips.append({"type": "success",
-                         "text": f"Im Stack gewinnst du {group_wr}% vs. {solo_wr}% solo — spiel oefter mit Premades."})
-        elif solo_wr > group_wr + 10:
-            tips.append({"type": "info",
-                         "text": f"Solo gewinnst du {solo_wr}% vs. {group_wr}% im Stack — du adaptierst gut an Randoms."})
-
-    if best_duos:
-        d = best_duos[0]
-        tips.append({"type": "success",
-                     "text": f"Bestes Duo: {d['player_a']} + {d['player_b']} ({d['win_rate']}% WR in {d['matches']} Matches)."})
-
-    if worst_duos and worst_duos[0]["win_rate"] < 40:
-        d = worst_duos[0]
-        tips.append({"type": "warning",
-                     "text": f"Schwieriges Duo: {d['player_a']} + {d['player_b']} (nur {d['win_rate']}% WR in {d['matches']} Matches)."})
 
     return {
         "has_data": True,
@@ -7713,21 +7386,8 @@ def _build_mechanics(cfg: dict) -> dict:
     recent = trend_data[-10:]
 
     # Coaching insights
+    # Tipps mit festen Schwellen entfernt (2026-11-16): Rat nur mit evidence.py
     insights = []
-    if avg_crosshair is not None and avg_crosshair > 10:
-        insights.append("Dein Crosshair-Placement ist zu hoch. Uebe auf Workshop-Maps wie 'Aim Botz' mit bewusstem Head-Level-Tracking.")
-    if avg_cs is not None and avg_cs < 75:
-        insights.append("Dein Counter-Strafe-Score ist niedrig. Uebe im Deathmatch, vor jedem Schuss kurz die Gegentaste zu druecken.")
-    if avg_accuracy is not None and avg_accuracy < 20:
-        insights.append("Deine Accuracy ist unterdurchschnittlich. Konzentriere dich auf weniger, aber praezisere Schuesse.")
-    if burst_pct < 80 and total_spray_kills > 20:
-        insights.append(f"Du sprayed zu viel ({100 - burst_pct:.0f}% Spray-Kills). Uebe kontrollierte Bursts von 3-5 Schuss.")
-    if death_breakdown["early_pct"] > 35 and total_death_events > 30:
-        insights.append(f"{death_breakdown['early_pct']}% deiner Tode sind frueh in der Runde. Ueberdenke deine Positionierung und spiele weniger aggressiv.")
-    if avg_hs is not None and avg_hs >= 55:
-        insights.append(f"Starke Headshot-Rate von {avg_hs}%! Deine Aim-Praezision ist ueberdurchschnittlich.")
-    if avg_cs is not None and avg_cs >= 88:
-        insights.append(f"Exzellentes Counter-Strafing ({avg_cs}%). Deine Bewegungsmechanik ist auf hohem Niveau.")
 
     return {
         "has_data": True,
@@ -8711,50 +8371,8 @@ def _build_utility_analysis(cfg: dict) -> dict:
     ]
 
     # ── Coaching insights ──
+    # Tipps mit festen Schwellen entfernt (2026-11-16): Rat nur mit evidence.py
     insights = []
-    if avg_per_round < 1.0:
-        insights.append({"type": "warning", "icon": "alert-triangle",
-                         "text": f"Nur {avg_per_round} Utility/Runde — das ist sehr wenig. Versuche jede Runde mindestens 1 Granate zu nutzen."})
-    elif avg_per_round >= 1.8:
-        insights.append({"type": "success", "icon": "check-circle",
-                         "text": f"Starke Utility-Nutzung mit {avg_per_round}/Runde — du setzt deine Granaten aktiv ein."})
-
-    if flash_hit_rate < 35 and total_flashes >= 20:
-        insights.append({"type": "warning", "icon": "alert-triangle",
-                         "text": f"Flash-Trefferquote bei nur {flash_hit_rate}% — uebe Pop-Flashes und lerne die Standard-Flash-Lineups fuer deine Maps."})
-    elif flash_hit_rate >= 65 and total_flashes >= 20:
-        insights.append({"type": "success", "icon": "check-circle",
-                         "text": f"Exzellente Flash-Trefferquote von {flash_hit_rate}% — deine Flashes sind effektiv."})
-
-    if friendly_flash_rate > 45 and total_flashes >= 20:
-        insights.append({"type": "warning", "icon": "alert-triangle",
-                         "text": f"Team-Flash-Rate bei {friendly_flash_rate}% — achte auf Teammate-Positionen vor dem Flashen."})
-
-    if total_smokes < total_flashes * 0.5 and total_matches >= 5:
-        insights.append({"type": "info", "icon": "info",
-                         "text": "Du wirfst deutlich mehr Flashes als Smokes. Smokes sind entscheidend fuer Map-Kontrolle — nutze sie haeufiger."})
-
-    if correlation["rating_diff"] > 0.1:
-        insights.append({"type": "success", "icon": "trending-up",
-                         "text": f"Wenn du viel Utility nutzt ({correlation['high_util_pr']}/Rd), ist dein Rating {correlation['rating_diff']:.2f} hoeher als bei wenig Utility ({correlation['low_util_pr']}/Rd)."})
-    elif correlation["rating_diff"] < -0.05:
-        insights.append({"type": "info", "icon": "info",
-                         "text": "Dein Rating ist bei weniger Utility-Nutzung hoeher — vielleicht konzentrierst du dich zu sehr auf Granaten statt auf Positioning."})
-
-    if util_trend > 0.15:
-        insights.append({"type": "success", "icon": "trending-up",
-                         "text": f"Deine Utility-Nutzung steigt — +{util_trend:.2f}/Runde im Vergleich zur ersten Haelfte deiner Matches."})
-    elif util_trend < -0.15:
-        insights.append({"type": "warning", "icon": "trending-down",
-                         "text": f"Deine Utility-Nutzung sinkt — {util_trend:.2f}/Runde weniger als frueher."})
-
-    # Best/worst map for utility
-    if len(map_stats) >= 2:
-        best_util_map = max(map_stats, key=lambda x: x["per_round"])
-        worst_util_map = min(map_stats, key=lambda x: x["per_round"])
-        if best_util_map["per_round"] - worst_util_map["per_round"] > 0.3:
-            insights.append({"type": "info", "icon": "map",
-                             "text": f"Groesster Utility-Unterschied: {best_util_map['map']} ({best_util_map['per_round']}/Rd) vs {worst_util_map['map']} ({worst_util_map['per_round']}/Rd) — uebe Lineups fuer {worst_util_map['map']}."})
 
     return {
         "has_data": True,
@@ -8788,303 +8406,6 @@ def _build_utility_analysis(cfg: dict) -> dict:
 
 
 # ── Calendar Heatmap ─────────────────────────────────────────
-def _build_calendar_data(cfg: dict) -> dict:
-    """Build GitHub-style performance heatmap data from all exports."""
-    vault_path = cfg.get("obsidian_vault_path", "")
-    sub = cfg.get("coach_subfolder", "CS2-Coach")
-    export_dir = Path(vault_path) / sub / "exports" if vault_path else None
-    if not export_dir or not export_dir.exists():
-        return {"has_data": False}
-
-    exports = []
-    for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key):
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        mi = data.get("match", {})
-        pl = data.get("player", {})
-        dt_str = mi.get("datetime", mi.get("date", ""))
-        date_str = dt_str[:10] if dt_str else ""
-        if not date_str:
-            continue
-        hour = -1
-        if len(dt_str) >= 16:
-            try:
-                hour = int(dt_str[11:13])
-            except ValueError:
-                pass
-        result = mi.get("result", "?")
-        exports.append({
-            "date": date_str,
-            "hour": hour,
-            "map": mi.get("map", "?"),
-            "score": f"{mi.get('score_own', '?')}:{mi.get('score_enemy', '?')}",
-            "result": result,
-            "rating": pl.get("rating", 0),
-            "kd": round(pl.get("kills", 0) / max(pl.get("deaths", 1), 1), 2),
-            "adr": pl.get("adr", 0),
-            "kills": pl.get("kills", 0),
-            "deaths": pl.get("deaths", 0),
-            "filename": f.stem.replace("_coach", ""),
-        })
-
-    if not exports:
-        return {"has_data": False}
-
-    # ── Group by date ──
-    by_date: dict[str, list[dict]] = {}
-    for e in exports:
-        by_date.setdefault(e["date"], []).append(e)
-
-    # ── Build day summaries ──
-    day_summaries: dict[str, dict] = {}
-    for date, matches in by_date.items():
-        n = len(matches)
-        avg_rating = round(sum(m["rating"] for m in matches) / n, 2)
-        wins = sum(1 for m in matches if m["result"] == "Sieg")
-        losses = sum(1 for m in matches if m["result"] == "Niederlage")
-        total_kills = sum(m["kills"] for m in matches)
-        total_deaths = sum(m["deaths"] for m in matches)
-        avg_adr = round(sum(m["adr"] for m in matches) / n, 1)
-        day_summaries[date] = {
-            "date": date,
-            "matches": n,
-            "avg_rating": avg_rating,
-            "wins": wins,
-            "losses": losses,
-            "draws": n - wins - losses,
-            "win_rate": round(wins / n * 100, 1),
-            "total_kills": total_kills,
-            "total_deaths": total_deaths,
-            "kd": round(total_kills / max(total_deaths, 1), 2),
-            "avg_adr": avg_adr,
-            "match_list": matches,
-        }
-
-    # ── Calendar grid (last 365 days) ──
-    from datetime import timedelta
-    today = datetime.now().date()
-    start = today - timedelta(days=364)
-    # Align to Monday (weekday 0)
-    start = start - timedelta(days=start.weekday())
-
-    weeks = []
-    current = start
-    all_ratings = [d["avg_rating"] for d in day_summaries.values()]
-    rating_min = min(all_ratings) if all_ratings else 0
-    rating_max = max(all_ratings) if all_ratings else 2
-    rating_range = max(rating_max - rating_min, 0.1)
-
-    while current <= today:
-        week = []
-        for dow in range(7):
-            d = current + timedelta(days=dow)
-            ds = d.isoformat()
-            info = day_summaries.get(ds)
-            if info:
-                norm = (info["avg_rating"] - rating_min) / rating_range
-                level = min(4, max(1, int(norm * 4) + 1))
-                if info["win_rate"] < 40:
-                    color_type = "loss"
-                elif info["win_rate"] >= 60:
-                    color_type = "win"
-                else:
-                    color_type = "draw"
-            else:
-                level = 0
-                color_type = "empty"
-                info = None
-            week.append({
-                "date": ds,
-                "level": level,
-                "color_type": color_type,
-                "info": info,
-                "is_future": d > today,
-            })
-        weeks.append(week)
-        current += timedelta(days=7)
-
-    # ── Weekday analysis ──
-    weekday_names = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-    weekday_stats = []
-    for dow in range(7):
-        dow_matches = [e for e in exports if e["date"] and datetime.strptime(e["date"], "%Y-%m-%d").weekday() == dow]
-        if dow_matches:
-            n = len(dow_matches)
-            wr = round(sum(1 for m in dow_matches if m["result"] == "Sieg") / n * 100, 1)
-            avg_r = round(sum(m["rating"] for m in dow_matches) / n, 2)
-            weekday_stats.append({"day": weekday_names[dow], "matches": n, "win_rate": wr, "avg_rating": avg_r})
-        else:
-            weekday_stats.append({"day": weekday_names[dow], "matches": 0, "win_rate": 0, "avg_rating": 0})
-
-    def _standout(groups: dict) -> tuple:
-        """Hebt sich die beste bzw. schlechteste Gruppe belastbar ab?
-
-        Frueher war "bester Tag" schlicht der hoechste Mittelwert - auch bei
-        einem einzigen Match, und "beste Uhrzeit" ab zwei. Wer aus sieben
-        Wochentagen oder vielen Stunden den besten heraussucht, findet
-        immer einen. Verglichen wird daher die Gruppe gegen alle uebrigen
-        Matches, nur Gruppen ab MIN_PER_GROUP Matches kommen in Frage, und
-        der Vertrauensbereich wird um die Zahl der Kandidaten verbreitert.
-        Liefert (bester, Vergleich, schlechtester, Vergleich, Kandidaten).
-        """
-        eligible = {g: v for g, v in groups.items() if len(v) >= MIN_PER_GROUP}
-        if len(eligible) < 2:
-            return None, None, None, None, len(eligible)
-
-        def mean(g):
-            return sum(eligible[g]) / len(eligible[g])
-
-        best, worst = max(eligible, key=mean), min(eligible, key=mean)
-
-        def vs_rest(g):
-            rest = [r for o, v in groups.items() if o != g for r in v]
-            return compare_groups(groups[g], rest, comparisons=len(eligible))
-
-        bc, wc = vs_rest(best), vs_rest(worst)
-        return (best if bc and bc.a_better else None, bc,
-                worst if wc and wc.b_better else None, wc, len(eligible))
-
-    def _with_note(stats, key, value, cmp):
-        if value is None:
-            return None
-        row = dict(next(x for x in stats if x[key] == value))
-        row["note"] = cmp.note()
-        return row
-
-    wd_groups = {weekday_names[dow]: [e["rating"] for e in exports
-                                      if e["date"] and datetime.strptime(e["date"], "%Y-%m-%d").weekday() == dow]
-                 for dow in range(7)}
-    wd_best, wd_bc, wd_worst, wd_wc, wd_candidates = _standout(wd_groups)
-    best_weekday = _with_note(weekday_stats, "day", wd_best, wd_bc)
-    worst_weekday = _with_note(weekday_stats, "day", wd_worst, wd_wc)
-
-    # ── Hour-of-day analysis ──
-    hour_stats = []
-    for h in range(24):
-        h_matches = [e for e in exports if e["hour"] == h]
-        if h_matches:
-            n = len(h_matches)
-            wr = round(sum(1 for m in h_matches if m["result"] == "Sieg") / n * 100, 1)
-            avg_r = round(sum(m["rating"] for m in h_matches) / n, 2)
-            hour_stats.append({"hour": h, "label": f"{h:02d}:00", "matches": n, "win_rate": wr, "avg_rating": avg_r})
-        else:
-            hour_stats.append({"hour": h, "label": f"{h:02d}:00", "matches": 0, "win_rate": 0, "avg_rating": 0})
-
-    hr_groups = {h: [e["rating"] for e in exports if e["hour"] == h] for h in range(24)}
-    hr_best, hr_bc, hr_worst, hr_wc, hr_candidates = _standout(hr_groups)
-    best_hour = _with_note(hour_stats, "hour", hr_best, hr_bc)
-    worst_hour = _with_note(hour_stats, "hour", hr_worst, hr_wc)
-
-    # ── Monthly breakdown ──
-    monthly: dict[str, list[dict]] = {}
-    for e in exports:
-        month_key = e["date"][:7]
-        monthly.setdefault(month_key, []).append(e)
-
-    month_stats = []
-    for month_key in sorted(monthly.keys()):
-        matches = monthly[month_key]
-        n = len(matches)
-        wins = sum(1 for m in matches if m["result"] == "Sieg")
-        avg_r = round(sum(m["rating"] for m in matches) / n, 2)
-        month_stats.append({
-            "month": month_key,
-            "matches": n,
-            "wins": wins,
-            "losses": sum(1 for m in matches if m["result"] == "Niederlage"),
-            "win_rate": round(wins / n * 100, 1),
-            "avg_rating": avg_r,
-        })
-
-    # ── Streaks ──
-    sorted_dates = sorted(day_summaries.keys())
-    active_days = len(sorted_dates)
-    total_matches = len(exports)
-
-    longest_streak = 0
-    current_streak = 0
-    prev_date = None
-    for ds in sorted_dates:
-        d = datetime.strptime(ds, "%Y-%m-%d").date()
-        if prev_date and (d - prev_date).days == 1:
-            current_streak += 1
-        else:
-            current_streak = 1
-        longest_streak = max(longest_streak, current_streak)
-        prev_date = d
-
-    best_day = max(day_summaries.values(), key=lambda d: d["avg_rating"])
-    worst_day = min(day_summaries.values(), key=lambda d: d["avg_rating"])
-
-    # ── Insights ──
-    insights = []
-    if best_weekday:
-        insights.append({
-            "type": "success", "icon": "calendar-check",
-            "text": f"Bester Tag: {best_weekday['day']} (Rating {best_weekday['avg_rating']}, {best_weekday['matches']} Matches, {best_weekday['note']})"
-        })
-    if worst_weekday:
-        insights.append({
-            "type": "warning", "icon": "calendar-x",
-            "text": f"Schwaechster Tag: {worst_weekday['day']} (Rating {worst_weekday['avg_rating']}, {worst_weekday['matches']} Matches, {worst_weekday['note']})"
-        })
-    if not best_weekday and not worst_weekday:
-        insights.append({
-            "type": "info", "icon": "calendar",
-            "text": f"Kein Wochentag hebt sich belastbar ab ({wd_candidates} Tage mit mindestens {MIN_PER_GROUP} Matches)."
-        })
-    if best_hour:
-        insights.append({
-            "type": "info", "icon": "clock",
-            "text": f"Beste Uhrzeit: {best_hour['label']} Uhr (Rating {best_hour['avg_rating']}, {best_hour['matches']} Matches, {best_hour['note']})"
-        })
-    if worst_hour:
-        insights.append({
-            "type": "warning", "icon": "clock",
-            "text": f"Schwaechste Uhrzeit: {worst_hour['label']} Uhr (Rating {worst_hour['avg_rating']}, {worst_hour['matches']} Matches, {worst_hour['note']})"
-        })
-    if not best_hour and not worst_hour:
-        insights.append({
-            "type": "info", "icon": "clock",
-            "text": f"Keine Uhrzeit hebt sich belastbar ab ({hr_candidates} Stunden mit mindestens {MIN_PER_GROUP} Matches)."
-        })
-    if longest_streak >= 3:
-        insights.append({
-            "type": "info", "icon": "flame",
-            "text": f"Laengste Spiel-Serie: {longest_streak} Tage am Stueck"
-        })
-
-    avg_per_day = round(total_matches / max(active_days, 1), 1)
-    if avg_per_day > 4:
-        insights.append({
-            "type": "warning", "icon": "alert-triangle",
-            "text": f"Durchschnittlich {avg_per_day} Matches pro Spieltag — Ermuedung beachten!"
-        })
-
-    return {
-        "has_data": True,
-        "weeks": weeks,
-        "day_summaries": day_summaries,
-        "weekday_stats": weekday_stats,
-        "hour_stats": hour_stats,
-        "month_stats": month_stats,
-        "best_day": best_day,
-        "worst_day": worst_day,
-        "best_weekday": best_weekday,
-        "worst_weekday": worst_weekday,
-        "best_hour": best_hour,
-        "worst_hour": worst_hour,
-        "active_days": active_days,
-        "total_matches": total_matches,
-        "avg_per_day": avg_per_day,
-        "longest_streak": longest_streak,
-        "insights": insights,
-    }
-
-
-# ── Duel Analysis ────────────────────────────────────────────
 def _build_duel_analysis(cfg: dict) -> dict:
     """Analyze 1v1 duel patterns: weapons, distances, opponents, and fight outcomes."""
     vault_path = cfg.get("obsidian_vault_path", "")
@@ -9305,40 +8626,8 @@ def _build_duel_analysis(cfg: dict) -> dict:
     trend = match_duels[-20:] if match_duels else []
 
     # ── Insights ──
+    # Tipps mit festen Schwellen entfernt (2026-11-16): Rat nur mit evidence.py
     insights = []
-    if opening_wr >= 55 and opening_total >= 10:
-        insights.append({"type": "success", "icon": "swords",
-                         "text": f"Opening Duel Winrate {opening_wr}% ({opening_wins}/{opening_total}) — du gewinnst Erstduelle ueberdurchschnittlich."})
-    elif opening_wr < 45 and opening_total >= 10:
-        insights.append({"type": "warning", "icon": "swords",
-                         "text": f"Opening Duel Winrate nur {opening_wr}% ({opening_wins}/{opening_total}) — arbeite an Crosshair Placement und Peeking."})
-
-    if hs_kill_pct >= 50:
-        insights.append({"type": "success", "icon": "target",
-                         "text": f"Headshot-Quote {hs_kill_pct}% — exzellentes Aim!"})
-    elif hs_kill_pct < 30 and total_kills > 50:
-        insights.append({"type": "warning", "icon": "target",
-                         "text": f"Headshot-Quote nur {hs_kill_pct}% — mehr auf Kopfhoehe zielen."})
-
-    if hs_death_pct > 60 and total_deaths > 30:
-        insights.append({"type": "info", "icon": "crosshair",
-                         "text": f"{hs_death_pct}% deiner Tode sind Headshots — Gegner zielen praezise auf dich. Nutze mehr Off-Angles."})
-
-    if dist_pcts.get("close", 0) > 45:
-        insights.append({"type": "info", "icon": "move",
-                         "text": f"{dist_pcts['close']}% deiner Kills auf Nahkampf-Distanz — du spielst sehr aggressiv."})
-    elif dist_pcts.get("long", 0) > 40:
-        insights.append({"type": "info", "icon": "eye",
-                         "text": f"{dist_pcts['long']}% deiner Kills auf langer Distanz — passiver Spielstil oder AWP-lastig."})
-
-    # Best/worst weapon
-    rifle_weapons = [w for w in weapon_stats if w["weapon"] in ("ak47", "m4a1_silencer", "m4a1", "sg556", "aug", "galil", "famas")]
-    if rifle_weapons:
-        best_rifle = max(rifle_weapons, key=lambda w: w["kd"])
-        worst_rifle = min(rifle_weapons, key=lambda w: w["kd"])
-        if best_rifle["weapon"] != worst_rifle["weapon"] and worst_rifle["total"] >= 5:
-            insights.append({"type": "info", "icon": "crosshair",
-                             "text": f"Beste Rifle: {best_rifle['weapon']} ({best_rifle['kd']} K/D) — schwaeachste: {worst_rifle['weapon']} ({worst_rifle['kd']} K/D)"})
 
     return {
         "has_data": True,
@@ -9534,39 +8823,8 @@ def _build_side_analysis(cfg: dict) -> dict:
         })
 
     # ── Insights ──
+    # Tipps mit festen Schwellen entfernt (2026-11-16): Rat nur mit evidence.py
     insights = []
-    diff = abs(ct_wr - t_wr)
-    if diff > 10:
-        weak = "CT" if ct_wr < t_wr else "T"
-        strong = "CT" if ct_wr > t_wr else "T"
-        insights.append({"type": "warning", "icon": "shield-alert",
-                         "text": f"Starkes Ungleichgewicht: {strong}-Side {max(ct_wr, t_wr)}% WR vs. {weak}-Side {min(ct_wr, t_wr)}% — trainiere {weak}-spezifische Strategien."})
-    elif diff < 3:
-        insights.append({"type": "success", "icon": "scale",
-                         "text": f"Ausgewogene Sides: CT {ct_wr}% vs. T {t_wr}% — gute Vielseitigkeit."})
-
-    if ct_kd > 1.3 and t_kd < 0.9:
-        insights.append({"type": "info", "icon": "shield",
-                         "text": f"Starke CT-Side (K/D {ct_kd}) aber schwache T-Side ({t_kd}) — mehr Entry-Fragging und Trade-Kills auf T-Side ueben."})
-    elif t_kd > 1.3 and ct_kd < 0.9:
-        insights.append({"type": "info", "icon": "swords",
-                         "text": f"Starke T-Side (K/D {t_kd}) aber schwache CT-Side ({ct_kd}) — Positioning und Crossfire-Setups verbessern."})
-
-    if t["self_plants"] > 0:
-        plant_rate = round(t["self_plants"] / max(t["rounds"], 1) * 100, 1)
-        if plant_rate > 10:
-            insights.append({"type": "success", "icon": "target",
-                             "text": f"Aktiver Planter: Du planst die Bombe in {plant_rate}% der T-Runden selbst."})
-
-    # Map insights
-    for ms in map_stats:
-        if ms["matches"] >= 3:
-            if ms["ct_wr"] < 35 and ms["t_wr"] > 55:
-                insights.append({"type": "warning", "icon": "map-pin",
-                                 "text": f"{ms['map']}: CT-Side schwach ({ms['ct_wr']}% WR) — ueberdenke Positionen und Rotations."})
-            elif ms["t_wr"] < 35 and ms["ct_wr"] > 55:
-                insights.append({"type": "warning", "icon": "map-pin",
-                                 "text": f"{ms['map']}: T-Side schwach ({ms['t_wr']}% WR) — Executes und Default-Strategien lernen."})
 
     return {
         "has_data": True,
