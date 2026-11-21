@@ -4421,7 +4421,7 @@ def _build_match_narration_context(data: dict) -> str:
 Map: {map_name} — {score_own}:{score_enemy} ({result})
 Rating: {player.get('rating', '?')} | K/D: {player.get('kd', '?')} ({player.get('kills', '?')}/{player.get('deaths', '?')}/{player.get('assists', '?')})
 ADR: {player.get('adr', '?')} | HS%: {player.get('hs_pct', '?')}% | KAST: {player.get('kast_pct', '?')}%
-Counter-Strafe: {player.get('counter_strafe_pct', '?')}% | Accuracy: {player.get('accuracy', '?')}%
+Counter-Strafe: {player.get('counter_strafe_pct', '?')}% aller Schuesse (Gewehre auf sichtbare Gegner: {(player.get('counter_strafe_split') or {}).get('rifle_seen_pct', '?')}%, Pistolen: {(player.get('counter_strafe_split') or {}).get('pistol_pct', '?')}%) | Accuracy: {player.get('accuracy', '?')}%
 Opening Duels: {player.get('opening_kills', 0)}W / {player.get('opening_deaths', 0)}L
 Survival Rate: {player.get('survival_rate', '?')}%"""
 

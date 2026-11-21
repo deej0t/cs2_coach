@@ -21,7 +21,7 @@ from cs2_coach.export_version import (
 
 
 def make(*, median=True, utility=False, tick=False, seconds=False, first_sight=False,
-         buy=False, **extra) -> dict:
+         buy=False, split=False, **extra) -> dict:
     """Export-Fragment mit genau den Feldern, die die Version ausmachen."""
     kp = {"t": "k", "x": 1.0, "y": 2.0, "r": 1}
     if tick:
@@ -40,6 +40,8 @@ def make(*, median=True, utility=False, tick=False, seconds=False, first_sight=F
         data["player"]["first_sight"] = {"median_degrees": 2.6, "sightings": 40}
     if buy:
         data["round_timeline"] = [{"round": 1, "buy": "fullbuy", "death_s": None}]
+    if split:
+        data["player"]["counter_strafe_split"] = {"rifle_seen_pct": 93.5, "pistol_pct": 59.1}
     data.update(extra)
     return data
 
@@ -55,6 +57,8 @@ def test_erschliesst_schema_aus_den_feldern():
     assert export_versions(make(utility=True, tick=True, seconds=True, first_sight=True))[0] == 5
     assert export_versions(make(utility=True, tick=True, seconds=True, first_sight=True,
                                 buy=True))[0] == 6
+    assert export_versions(make(utility=True, tick=True, seconds=True, first_sight=True,
+                                buy=True, split=True))[0] == 7
 
 
 def test_median_degrees_belegt_die_metrik_korrekturen():
@@ -79,7 +83,7 @@ def test_eingetragene_version_schlaegt_die_ableitung():
 
 def test_aktueller_export_ist_nicht_veraltet():
     st = export_status(make(utility=True, tick=True, seconds=True, first_sight=True,
-                                    buy=True))
+                                    buy=True, split=True))
     assert st["is_outdated"] is False
     assert st["needs_reanalysis"] is False
     assert st["missing"] == []
@@ -92,7 +96,7 @@ def test_fehlende_felder_sind_kein_richtigkeitsproblem():
     st = export_status(make())
     assert st["is_outdated"] is True
     assert st["needs_reanalysis"] is False
-    assert len(st["missing"]) == 5
+    assert len(st["missing"]) == 6
     assert st["unreliable"] == []
 
 
@@ -127,7 +131,7 @@ def write_export(d, name, demo_file, **kw):
 def test_demo_status_trennt_aktuell_von_veraltet(tmp_path):
     write_export(tmp_path, "alt", "a.dem")
     write_export(tmp_path, "neu", "b.dem", utility=True, tick=True, seconds=True,
-                 first_sight=True, buy=True)
+                 first_sight=True, buy=True, split=True)
     st = demo_status(tmp_path)
     assert st["a.dem"]["is_current"] is False
     assert st["b.dem"]["is_current"] is True
@@ -136,7 +140,7 @@ def test_demo_status_trennt_aktuell_von_veraltet(tmp_path):
 def test_demo_mit_mehreren_exporten_ist_nur_ganz_aktuell(tmp_path):
     """Ein veralteter Export je Spieler genuegt, die Demo neu zu lesen."""
     write_export(tmp_path, "spieler1", "a.dem", utility=True, tick=True, seconds=True,
-                 first_sight=True, buy=True)
+                 first_sight=True, buy=True, split=True)
     write_export(tmp_path, "spieler2", "a.dem")
     st = demo_status(tmp_path)
     assert st["a.dem"]["exports"] == 2

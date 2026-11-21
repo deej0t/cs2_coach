@@ -193,6 +193,14 @@ def _counter_strafe(s: PlayerStats) -> str:
         f"### Counter-Strafing: {score:.0f}% stehend geschossen "
         f"(avg Inaccuracy: {s.avg_inaccuracy_move:.4f})"
     ]
+    split = []
+    if s.counter_strafe_rifle_seen is not None:
+        split.append(f"Gewehre/SMGs auf sichtbare Gegner {s.counter_strafe_rifle_seen:.0f}% "
+                     f"({s.cs_rifle_seen_shots} Schüsse, vergleichbar mit Leetify)")
+    if s.counter_strafe_pistol is not None:
+        split.append(f"Pistolen {s.counter_strafe_pistol:.0f}% ({s.cs_pistol_shots} Schüsse)")
+    if split:
+        lines.append(" · ".join(split))
 
     if score < 60:
         lines.append(

@@ -286,6 +286,14 @@
     <div class="card elev-sm" style="align-items:center;text-align:center;">
         <span class="card-kicker"><abbr title="{{ _('Anteil der Schuesse im Stillstand — gutes Counter-Strafing bedeutet vor dem Schuss stehen bleiben') }}">Counter-Strafe</abbr></span>
         <span class="ed-stat">{{ p.counter_strafe_pct }}%</span>
+        {% set css = p.counter_strafe_split %}
+        {% if css and (css.rifle_seen_pct is not none or css.pistol_pct is not none) %}
+        <span class="text-muted" style="font-size:var(--font-sm);">
+            {% if css.rifle_seen_pct is not none %}<abbr title="{{ _('Wie Leetify: nur Gewehre/SMGs, nur Schuesse waehrend ein Gegner sichtbar ist') }} ({{ css.rifle_seen_shots }})">{{ _('Gewehre') }} {{ css.rifle_seen_pct|round|int }}%</abbr>{% endif %}
+            {% if css.rifle_seen_pct is not none and css.pistol_pct is not none %} · {% endif %}
+            {% if css.pistol_pct is not none %}<abbr title="{{ _('Alle Pistolen-Schuesse') }} ({{ css.pistol_shots }})">{{ _('Pistolen') }} {{ css.pistol_pct|round|int }}%</abbr>{% endif %}
+        </span>
+        {% endif %}
     </div>
 </div>
 

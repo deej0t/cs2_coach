@@ -9,18 +9,18 @@
       "payload": null,
       "kind": "json",
       "value": {
-        "game_directory": "/opt/srcds/cs2/csgo_v2000884/csgo",
-        "fullpackets_version": "2",
+        "demo_file_stamp": "PBDEMS2\u0000",
         "allow_clientside_particles": "true",
-        "map_name": "de_inferno",
-        "server_name": "Valve Counter-Strike 2 eu_west Server (srcds223-fra2.272.208)",
-        "demo_version_guid": "8e9d71ab-04a1-4c01-bb61-acfede27c046",
+        "demo_version_name": "valve_demo_2",
         "patch_version": "14175",
         "addons": "",
-        "client_name": "SourceTV Demo",
-        "demo_version_name": "valve_demo_2",
-        "demo_file_stamp": "PBDEMS2\u0000",
-        "allow_clientside_entities": "true"
+        "allow_clientside_entities": "true",
+        "server_name": "Valve Counter-Strike 2 eu_west Server (srcds223-fra2.272.208)",
+        "fullpackets_version": "2",
+        "game_directory": "/opt/srcds/cs2/csgo_v2000884/csgo",
+        "map_name": "de_inferno",
+        "demo_version_guid": "8e9d71ab-04a1-4c01-bb61-acfede27c046",
+        "client_name": "SourceTV Demo"
       }
     },
     {
@@ -252,12 +252,15 @@
       ]
     },
     {
-      "key": "dda1351310dfa612",
+      "key": "e7bd11ec9c05f14b",
       "method": "parse_ticks",
       "payload": {
         "props": [
           "X",
-          "Y"
+          "Y",
+          "approximate_spotted_by",
+          "is_alive",
+          "team_num"
         ],
         "ticks": [
           1440,
@@ -1145,7 +1148,7 @@
         ]
       },
       "kind": "frame",
-      "file": "dda1351310dfa612.parquet",
+      "file": "e7bd11ec9c05f14b.parquet",
       "rows": 3528
     },
     {

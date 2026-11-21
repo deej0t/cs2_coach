@@ -586,6 +586,15 @@ def _player_to_dict(p, is_target: bool, include_rating: float | None = None) -> 
             "poor_over_30": p.crosshair_placement_poor,
         },
         "counter_strafe_pct": round(p.counter_strafe_score, 1),
+        # Schema 7: wie Leetify (Gewehre/SMGs auf sichtbare Gegner) und Pistolen getrennt
+        "counter_strafe_split": {
+            "rifle_seen_pct": (round(p.counter_strafe_rifle_seen, 1)
+                               if p.counter_strafe_rifle_seen is not None else None),
+            "rifle_seen_shots": p.cs_rifle_seen_shots,
+            "pistol_pct": (round(p.counter_strafe_pistol, 1)
+                           if p.counter_strafe_pistol is not None else None),
+            "pistol_shots": p.cs_pistol_shots,
+        },
         "avg_inaccuracy_move": round(p.avg_inaccuracy_move, 5),
         "spray_control": {
             "burst_hits": p.burst_hits,

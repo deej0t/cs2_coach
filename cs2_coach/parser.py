@@ -35,6 +35,12 @@ class PlayerStats:
     # Counter-Strafing (bullet_damage-basiert)
     shots_standing: int = 0  # ueber ALLE Schuesse (weapon_fire + Geschwindigkeit)
     shots_running: int = 0
+    # Aufgeteilt (Schema 7): Gewehre/SMGs auf sichtbare Gegner = Leetify-Definition
+    # (Ancient 21.11.: 93,5 % hier vs. 93 % Leetify, alle Schuesse 81,6 %), Pistolen extra.
+    cs_rifle_seen_standing: int = 0
+    cs_rifle_seen_shots: int = 0
+    cs_pistol_standing: int = 0
+    cs_pistol_shots: int = 0
     total_shots_hit: int = 0
     avg_inaccuracy_move: float = 0.0
     # Spray Control
@@ -136,6 +142,19 @@ class PlayerStats:
         if total == 0:
             return 100.0
         return (self.shots_standing / total) * 100
+
+    @property
+    def counter_strafe_rifle_seen(self) -> float | None:
+        """Wie Leetify: ohne Pistolen, nur Schuesse, waehrend ein Gegner sichtbar ist."""
+        if not self.cs_rifle_seen_shots:
+            return None
+        return self.cs_rifle_seen_standing / self.cs_rifle_seen_shots * 100
+
+    @property
+    def counter_strafe_pistol(self) -> float | None:
+        if not self.cs_pistol_shots:
+            return None
+        return self.cs_pistol_standing / self.cs_pistol_shots * 100
 
     @property
     def awp_rifle_split(self) -> str:
@@ -836,36 +855,55 @@ def _process_counter_strafe(parser: DemoParser, player_lookup: dict[str, PlayerS
     for _, row in shots_df.iterrows():
         sid = str(row.get("user_steamid", ""))
         if sid in player_lookup:
-            shots.append((int(row.get("tick", 0)), sid))
+            shots.append((int(row.get("tick", 0)), sid, str(row.get("weapon", ""))))
     if not shots:
         return
 
-    ticks = {t for t, _ in shots}
+    ticks = {t for t, _, _ in shots}
     try:
-        tick_df = parser.parse_ticks(["X", "Y"], ticks=sorted(ticks | {t - 1 for t in ticks}))
+        tick_df = parser.parse_ticks(["X", "Y", "team_num", "is_alive", "approximate_spotted_by"],
+                                     ticks=sorted(ticks | {t - 1 for t in ticks}))
     except Exception:
         return
     if tick_df is None or "X" not in tick_df.columns:
         return
 
     pos: dict[tuple[int, str], tuple] = {}
+    # Sichtbar: ein lebender Gegner hat den Schuetzen in approximate_spotted_by (Radar)
+    alive_by_tick: dict[int, list[tuple]] = {}
     for _, row in tick_df.iterrows():
         x, y = row.get("X"), row.get("Y")
         if x is None or y is None:
             continue
-        pos[(int(row["tick"]), str(row.get("steamid", "")))] = (float(x), float(y))
+        tick, sid = int(row["tick"]), str(row.get("steamid", ""))
+        pos[(tick, sid)] = (float(x), float(y))
+        if tick in ticks and row.get("is_alive"):
+            spotted = row.get("approximate_spotted_by")
+            alive_by_tick.setdefault(tick, []).append(
+                (sid, row.get("team_num"), {str(v) for v in spotted} if spotted is not None else set()))
 
-    for tick, sid in shots:
+    for tick, sid, weapon in shots:
         here = pos.get((tick, sid))
         before = pos.get((tick - 1, sid))
         if here is None or before is None:
             continue
         speed = math.dist(before, here) * _TICKRATE
         stats = player_lookup[sid]
-        if speed <= COUNTER_STRAFE_SPEED_THRESHOLD:
+        ok = speed <= COUNTER_STRAFE_SPEED_THRESHOLD
+        if ok:
             stats.shots_standing += 1
         else:
             stats.shots_running += 1
+        w = weapon.lower()
+        if w in PISTOL_WEAPONS or w.removeprefix("weapon_") in ("hkp2000", "p2000"):
+            stats.cs_pistol_shots += 1
+            stats.cs_pistol_standing += ok
+            continue
+        rows = alive_by_tick.get(tick, [])
+        team = next((t for s_, t, _ in rows if s_ == sid), None)
+        if team is not None and any(t != team and sid in seen for s_, t, seen in rows if s_ != sid):
+            stats.cs_rifle_seen_shots += 1
+            stats.cs_rifle_seen_standing += ok
 
 
 def _process_bullet_damage(bullet_df, player_lookup):

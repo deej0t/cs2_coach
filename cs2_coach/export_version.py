@@ -37,7 +37,7 @@ from __future__ import annotations
 
 # ── Aktueller Stand ──────────────────────────────────────────────────
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 METRICS_VERSION = 1
 
 
@@ -51,6 +51,7 @@ SCHEMA_FEATURES = {
     4: "HE- und Feuerschaden sowie Wurfzeitpunkt der Granaten",
     5: "Fadenkreuz beim ersten Sehen, Startseite aller Spieler, Callouts der Duelle",
     6: "Kaufart und Todeszeitpunkt je Runde (fruehe Granate im Full Buy)",
+    7: "Counter-Strafing getrennt: Gewehre auf sichtbare Gegner (wie Leetify) und Pistolen",
 }
 
 #: Was die jeweilige Metrik-Version korrigiert hat. Fehlt sie, sind die
@@ -77,6 +78,8 @@ def _detect_schema_version(data: dict) -> int:
     Geprueft wird jeweils das Feld, das die Version eingefuehrt hat,
     von neu nach alt.
     """
+    if isinstance((data.get("player") or {}).get("counter_strafe_split"), dict):
+        return 7
     if any("buy" in r for r in data.get("round_timeline") or []):
         return 6
     if isinstance((data.get("player") or {}).get("first_sight"), dict):

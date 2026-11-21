@@ -86,6 +86,20 @@ def test_counter_strafing_zaehlt_alle_schuesse(player):
     assert player.counter_strafe_score == pytest.approx(70.286, abs=0.05)
 
 
+def test_counter_strafing_aufgeteilt(player):
+    """Schema 7: Gewehre/SMGs auf sichtbare Gegner (Leetify-Definition) und Pistolen.
+
+    Faellt approximate_spotted_by weg (Aufzeichnung fehlt, Spalte leer), bliebe
+    der Gewehr-Wert stumm None - darum die Anzahl festhalten, nicht nur die Quote.
+    """
+    assert player.cs_rifle_seen_shots == 32
+    assert player.cs_rifle_seen_standing == 27
+    assert player.cs_pistol_shots == 11
+    assert player.cs_pistol_standing == 3
+    # Teilmengen aller Schuesse
+    assert player.cs_rifle_seen_shots + player.cs_pistol_shots <= player.shots_fired
+
+
 def test_accuracy_ohne_granaten_und_messer(player):
     """Granaten und Messer koennen keinen bullet_damage erzeugen.
 
