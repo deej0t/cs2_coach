@@ -1,0 +1,119 @@
+"""Uebungsmodus (!uebung): sv_cheats 1, Zeit steht, Geld ohne Ende, Godmode, Tasten-HUD.
+
+Wunsch 21.11.: ein reiner Trainingsmodus auf der aktuellen Map - zum Ueben von
+Bewegung, Spray und Lineups, ohne dass eine Runde endet oder jemand stirbt.
+
+- Cvars setzt der Coach per RCON; vorher liest er die aktuellen Werte und
+  stellt genau diese beim Ausschalten wieder her (aim_multigame setzt eigene
+  Werte, Standardwerte waeren dort falsch).
+- Godmode, Geld (alle 0,5 s auf 16000) und die Tasten-Anzeige (W/A/S/D,
+  JUMP, DUCK, SHIFT, L/R/L+R) macht das Plugin (``coach_practice``,
+  ``coach_keys``, ab 1.29.0). ``!tasten`` schaltet die Anzeige auch ausserhalb
+  des Modus fuer sich selbst.
+- Einschalten darf der Besitzer (steam_id/training_admins) oder wer allein auf
+  dem Server ist - sv_cheats 1 gibt jedem noclip.
+- Ein Mapwechsel setzt die Cvars zurueck; das Plugin schaltet sich dabei selbst
+  ab (OnMapStart), der Coach vergisst den Zustand (``on_lines``).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+STATE_FILE = ".practice.json"
+COMMANDS = {"uebung", "übung", "ubung", "practice", "prac", "tasten", "keys"}
+
+SETUP = {
+    "sv_cheats": "1",
+    "mp_ignore_round_win_conditions": "1",  # Runde endet nie
+    "mp_roundtime": "60", "mp_roundtime_defuse": "60", "mp_roundtime_hostage": "60",
+    "mp_freezetime": "0",
+    "mp_buytime": "99999", "mp_buy_anywhere": "1",
+    "mp_maxmoney": "65535", "mp_startmoney": "16000", "mp_afterroundmoney": "16000",
+    "mp_respawn_on_death_t": "1", "mp_respawn_on_death_ct": "1",
+    "sv_infinite_ammo": "2",  # volle Magazine nachladen, ohne Reserve-Ende
+    "sv_grenade_trajectory_prac_pipreview": "1",
+    "mp_warmup_pausetimer": "1",
+}
+_VALUE = re.compile(r"^\s*(\S+)\s*=\s*(.*?)\s*$")
+
+
+def _path(config_path: Path) -> Path:
+    return Path(config_path).parent / STATE_FILE
+
+
+def load(config_path: Path) -> dict:
+    try:
+        return json.loads(_path(config_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def save(config_path: Path, st: dict) -> None:
+    _path(config_path).write_text(json.dumps(st), encoding="utf-8")
+
+
+def read_cvars(send, names) -> dict[str, str]:
+    """Aktuelle Werte per RCON ("mp_roundtime = 1.92"); true/false -> 1/0."""
+    out = {}
+    for name, reply in zip(names, send(*names)):
+        m = _VALUE.match((reply or "").strip().splitlines()[0] if (reply or "").strip() else "")
+        if m and m.group(1) == name:
+            v = m.group(2).strip('"')
+            out[name] = {"true": "1", "false": "0"}.get(v.lower(), v)
+    return out
+
+
+def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, arg: str,
+           uid: int | None = None) -> list[str]:
+    from .training_server import _admins, _humans, is_active
+    st = load(config_path)
+    word = arg.strip().lower()
+
+    if cmd in ("tasten", "keys"):
+        if uid is None:
+            return []
+        shown = set(st.get("keys", []))
+        on = uid not in shown if word not in ("an", "on", "aus", "off") else word in ("an", "on")
+        shown = (shown | {uid}) if on else (shown - {uid})
+        st["keys"] = sorted(shown)
+        save(config_path, st)
+        send(f"coach_keys {uid} {1 if on else 0}")
+        return [f"Tasten-Anzeige fuer {name} {'an' if on else 'aus'}."]
+
+    if word in ("aus", "off", "stop", "ende"):
+        if not st.get("on"):
+            return ["Der Uebungsmodus ist nicht an."]
+        saved = st.get("saved") or {}
+        send(*[f"{k} {v}" for k, v in saved.items()], "coach_practice 0", "mp_restartgame 1")
+        st.update(on=False, saved={}, keys=[])
+        save(config_path, st)
+        return [f"Uebungsmodus aus ({name}) - vorherige Einstellungen wiederhergestellt, Neustart der Runde."]
+
+    if st.get("on"):
+        return ["Uebungsmodus laeuft schon. Beenden: !uebung aus · Tasten: !tasten"]
+    if is_active(config_path):
+        return ["Waehrend eines Trainings geht der Uebungsmodus nicht (!stop beendet das Training)."]
+    if sid not in _admins(cfg):
+        humans = _humans(send("status")[0])
+        if len(humans) > 1:
+            return ["Den Uebungsmodus darf mit anderen auf dem Server nur der Besitzer starten (sv_cheats 1)."]
+    saved = read_cvars(send, list(SETUP))
+    send(*[f"{k} {v}" for k, v in SETUP.items()], "mp_warmup_end", "mp_restartgame 1")
+    send("coach_practice 1")  # nach dem Rundenneustart: Spawn setzt Godmode erneut
+    st.update(on=True, saved=saved, by=name)
+    save(config_path, st)
+    return [f"Uebungsmodus an ({name}): sv_cheats 1, Zeit steht, 16000 $ ueberall kaufen, Godmode, "
+            "Respawn, Tasten-Anzeige. Beenden: !uebung aus · Tasten aus: !tasten"]
+
+
+def on_lines(config_path: Path, lines: list[str]) -> None:
+    """Mapwechsel: der Server hat die Cvars selbst zurueckgesetzt, das Plugin ist aus."""
+    if not any("Loading map" in ln for ln in lines):
+        return
+    st = load(config_path)
+    if st.get("on"):
+        st.update(on=False, saved={}, keys=[])
+        save(config_path, st)

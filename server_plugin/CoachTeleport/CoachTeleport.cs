@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.28.1";
+    public override string ModuleVersion => "1.29.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -105,6 +105,9 @@ public class CoachTeleport : BasePlugin
         RegisterListener<Listeners.OnTick>(Hunt);
         RegisterListener<Listeners.OnTick>(SpeedLimit);
         RegisterListener<Listeners.OnTick>(NadeTick);
+        RegisterListener<Listeners.OnTick>(PracticeTick);
+        // Neue Map = neue Cvars (sv_cheats 0): der Uebungsmodus darf nicht als Godmode weiterleben.
+        RegisterListener<Listeners.OnMapStart>(_ => _practice = false);
         RegisterEventHandler<EventSmokegrenadeDetonate>((ev, _) => { NadeLanded(ev.Userid, ev.X, ev.Y, ev.Z, "smoke"); return HookResult.Continue; });
         RegisterEventHandler<EventHegrenadeDetonate>((ev, _) => { NadeLanded(ev.Userid, ev.X, ev.Y, ev.Z, "he"); return HookResult.Continue; });
         RegisterEventHandler<EventFlashbangDetonate>((ev, _) => { NadeLanded(ev.Userid, ev.X, ev.Y, ev.Z, "flash"); return HookResult.Continue; });
@@ -140,6 +143,7 @@ public class CoachTeleport : BasePlugin
         RegisterEventHandler<EventPlayerSpawn>((ev, _) =>
         {
             if (_forcedWeapon is not null && ev.Userid is { } p) Server.NextFrame(() => EnforceWeapon(p));
+            if (_practice && ev.Userid is { } q) Server.NextFrame(() => ApplyGod(q));
             return HookResult.Continue;
         });
         RegisterEventHandler<EventItemPickup>((ev, _) =>
@@ -268,8 +272,8 @@ public class CoachTeleport : BasePlugin
 
     private void DrawCenter()
     {
-        if (_huds.Count == 0 && _menus.Count == 0 && _shown.Count == 0) return;
-        foreach (var userid in _huds.Keys.Concat(_menus.Keys).Concat(_shown.Keys).Distinct().ToList())
+        if (_huds.Count == 0 && _menus.Count == 0 && _shown.Count == 0 && _keys.Count == 0) return;
+        foreach (var userid in _huds.Keys.Concat(_menus.Keys).Concat(_shown.Keys).Concat(_keys).Distinct().ToList())
             Refresh(userid);
     }
 
@@ -281,6 +285,7 @@ public class CoachTeleport : BasePlugin
             _huds.Remove(userid);
             _menus.Remove(userid);
             _shown.Remove(userid);
+            _keys.Remove(userid);
             return;
         }
         var now = Server.TickCount;
@@ -289,6 +294,11 @@ public class CoachTeleport : BasePlugin
         string? html = null;
         if (_menus.TryGetValue(userid, out var menu)) html = RenderMenu(menu);
         else if (_huds.TryGetValue(userid, out var hud)) html = BombLine() is { } bl ? bl + "<br>" + hud.Html : hud.Html;
+        if (_keys.Contains(userid) && !_menus.ContainsKey(userid))
+        {
+            var keys = KeyLine(KeysOf(player));
+            html = html is null ? keys : html + "<br>" + keys;
+        }
 
         if (html is null)
         {
@@ -1451,6 +1461,84 @@ public class CoachTeleport : BasePlugin
         var active = info.GetArg(2);
         if (active.StartsWith("weapon_")) player.ExecuteClientCommandFromServer($"use {active}");
         info.ReplyToCommand($"coach_give ok {userid} {given}");
+    }
+
+    // --- Uebungsmodus (!uebung, Wunsch 21.11.): Godmode und volles Geld fuer alle,
+    // Tasten-Anzeige fuer jeden Menschen. Die Cvars (sv_cheats, Zeit, Kaufen) setzt der Coach.
+    private bool _practice;
+    private readonly HashSet<int> _keys = new();
+
+    private void ApplyGod(CCSPlayerController p)
+    {
+        if (!p.IsValid || p.PlayerPawn.Value is not { } pawn) return;
+        pawn.TakesDamage = !_practice;
+        if (_practice && pawn.Health < 100)
+        {
+            pawn.Health = 100;
+            Utilities.SetStateChanged(pawn, "CBaseEntity", "m_iHealth");
+        }
+    }
+
+    private void PracticeTick()
+    {
+        if (!_practice || Server.TickCount % 32 != 0) return;
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p.InGameMoneyServices is { } money && money.Account < 16000)
+            {
+                money.Account = 16000;
+                Utilities.SetStateChanged(p, "CCSPlayerController", "m_pInGameMoneyServices");
+            }
+            ApplyGod(p);  // auch nach Respawn/Teamwechsel, falls ein Spawn-Event fehlte
+        }
+    }
+
+    // Wer zuschaut (tot/Spectator), sieht die Tasten des beobachteten Spielers.
+    private static PlayerButtons KeysOf(CCSPlayerController player)
+    {
+        var pawn = player.PlayerPawn.Value;
+        if (pawn is not null && pawn.LifeState == (byte)LifeState_t.LIFE_ALIVE) return player.Buttons;
+        var target = player.Pawn.Value?.ObserverServices?.ObserverTarget.Value?.As<CCSPlayerPawn>();
+        return target?.Controller.Value?.As<CCSPlayerController>() is { IsValid: true } t ? t.Buttons : 0;
+    }
+
+    private static string KeyLine(PlayerButtons b)
+    {
+        static string K(string t, bool on) =>
+            on ? $"<font color='#4ade80'><b>{t}</b></font>" : $"<font color='#555555'>{t}</font>";
+        bool On(PlayerButtons f) => (b & f) != 0;
+        var mouse = On(PlayerButtons.Attack) && On(PlayerButtons.Attack2) ? K("L+R", true)
+            : K("L", On(PlayerButtons.Attack)) + " " + K("R", On(PlayerButtons.Attack2));
+        return $"{K("W", On(PlayerButtons.Forward))}<br>"
+             + $"{K("A", On(PlayerButtons.Moveleft))} {K("S", On(PlayerButtons.Back))} {K("D", On(PlayerButtons.Moveright))}<br>"
+             + $"{K("JUMP", On(PlayerButtons.Jump))} {K("DUCK", On(PlayerButtons.Duck))} {K("SHIFT", On(PlayerButtons.Speed))}<br>"
+             + mouse;
+    }
+
+    [ConsoleCommand("coach_practice", "Uebungsmodus: <0|1> - Godmode, Geld, Tasten-HUD fuer alle Menschen")]
+    [CommandHelper(minArgs: 1, usage: "<0|1>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnPractice(CCSPlayerController? caller, CommandInfo info)
+    {
+        _practice = info.GetArg(1) == "1";
+        foreach (var p in Utilities.GetPlayers())
+        {
+            ApplyGod(p);
+            if (p.IsBot || p.UserId is not { } uid) continue;
+            if (_practice) _keys.Add(uid);
+            else _keys.Remove(uid);
+        }
+        info.ReplyToCommand($"coach_practice ok {(_practice ? 1 : 0)}");
+    }
+
+    [ConsoleCommand("coach_keys", "Tasten-Anzeige: <userid> <0|1>")]
+    [CommandHelper(minArgs: 2, usage: "<userid> <0|1>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnKeys(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (!int.TryParse(info.GetArg(1), out var uid)) return;
+        if (info.GetArg(2) == "1") _keys.Add(uid);
+        else _keys.Remove(uid);
+        Refresh(uid);
+        info.ReplyToCommand($"coach_keys ok {uid}");
     }
 
     // null = aus, "" = nur Messer, sonst z. B. "weapon_deagle"
