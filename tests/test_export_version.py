@@ -159,3 +159,14 @@ def test_demo_status_uebergeht_unbrauchbare_dateien(tmp_path):
 
 def test_demo_status_ohne_verzeichnis(tmp_path):
     assert demo_status(tmp_path / "gibtsnicht") == {}
+
+
+def test_vault_export_traegt_counter_strafe_split():
+    """22.11.: der Split stand nur im CLI-Export, die Vault-Exporte (obsidian) blieben ohne."""
+    from cs2_coach.obsidian import _player_to_json
+    from cs2_coach.parser import PlayerStats
+    p = PlayerStats(name="x", steam_id="1", team="T", cs_rifle_seen_standing=29, cs_rifle_seen_shots=31,
+                    cs_pistol_standing=26, cs_pistol_shots=44)
+    split = _player_to_json(p, True)["counter_strafe_split"]
+    assert split["rifle_seen_pct"] == 93.5 and split["pistol_pct"] == 59.1
+    assert export_versions({"player": {"counter_strafe_split": split}})[0] == 7
