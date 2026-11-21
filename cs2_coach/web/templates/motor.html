@@ -128,19 +128,18 @@
                 <div class="ms-stat-lbl">Durchschnitt</div>
             </div>
             <div class="ms-stat">
-                <div class="ms-stat-val {% if sk.improved %}win{% else %}loss{% endif %}">{{ sk.best }}{{ sk.unit }}</div>
+                <div class="ms-stat-val">{{ sk.best }}{{ sk.unit }}</div>
                 <div class="ms-stat-lbl">Bestwert</div>
             </div>
         </div>
 
-        <div class="ms-trend-row">
-            <span class="ms-trend-arrow" style="color: {% if sk.improved %}#4ade80{% else %}#f87171{% endif %};">
-                {% if sk.improved %}&#9650;{% else %}&#9660;{% endif %}
+        {% set tc = {'up': '#4ade80', 'down': '#f87171'}.get(sk.trend, 'var(--color-neutral-500)') %}
+        <div class="ms-trend-row" title="{{ sk.trend_note }}">
+            <span class="ms-trend-arrow" style="color: {{ tc }};">
+                {% if sk.trend == 'up' %}&#9650;{% elif sk.trend == 'down' %}&#9660;{% else %}&#8211;{% endif %}
             </span>
-            <span class="ms-trend-text">Erste 5: {{ sk.first5_avg }}{{ sk.unit }} → Letzte 5: {{ sk.last5_avg }}{{ sk.unit }}</span>
-            <span class="ms-delta-badge" style="margin-left: auto; background: {% if sk.improved %}rgba(74,222,128,0.15);color:#4ade80{% else %}rgba(248,113,113,0.15);color:#f87171{% endif %};">
-                {% if sk.improved %}+{% else %}-{% endif %}{{ sk.delta_abs }}{{ sk.unit }}
-            </span>
+            <span class="ms-trend-text">{% if sk.before_avg is not none %}Davor: {{ sk.before_avg }}{{ sk.unit }} → Letzte {{ sk.recent_n }}: {{ sk.recent_avg }}{{ sk.unit }}{% else %}Letzte {{ sk.recent_n }}: {{ sk.recent_avg }}{{ sk.unit }}{% endif %}</span>
+            <span class="ms-delta-badge" style="margin-left: auto; color: {{ tc }};">{{ sk.trend_label }}</span>
         </div>
 
         <div class="ms-range-row">

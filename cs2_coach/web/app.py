@@ -5291,6 +5291,16 @@ def _build_map_veto(map_stats: list[dict], exports: list[dict]) -> dict:
     if not map_stats:
         return {"has_data": False, "picks": [], "bans": [], "maps": []}
 
+    # Pick/Ban nur, wenn die Siegquote einer Map belastbar von deinen
+    # uebrigen Maps abweicht. Frueher reichten WR >= 55 % und Rating >= 1.0
+    # fuer "Pick" bzw. WR < 40 % fuer "Ban" - bei 6 Matches auf einer Map
+    # ist das Rauschen. Die auffaelligste von k Maps ist eine Auswahl aus k
+    # Kandidaten, deshalb comparisons=k.
+    all_wins = sum(m["wins"] for m in map_stats)
+    all_n = sum(m["matches"] for m in map_stats)
+    tested = sum(1 for m in map_stats
+                 if m["matches"] >= MIN_PER_GROUP and all_n - m["matches"] >= MIN_PER_GROUP)
+
     # Enrich with side splits and trends
     enriched = []
     for ms in map_stats:
@@ -5319,19 +5329,17 @@ def _build_map_veto(map_stats: list[dict], exports: list[dict]) -> dict:
             + min(ms["avg_kd"], 2.0) * 50 * 0.15
         )
 
-        # Recommendation text
-        if ms["win_rate"] >= 55 and ms["avg_rating"] >= 1.0:
-            rec = "Starke Map — Pick empfohlen"
-            rec_type = "pick"
-        elif ms["win_rate"] >= 50 and ms["avg_rating"] >= 0.9:
-            rec = "Solide Map — spielbar"
-            rec_type = "neutral"
-        elif ms["win_rate"] < 40 or ms["avg_rating"] < 0.8:
-            rec = "Schwache Map — Ban empfohlen"
-            rec_type = "ban"
+        cmp = compare_rates(ms["wins"], ms["matches"], all_wins - ms["wins"], all_n - ms["matches"],
+                            comparisons=max(tested, 1))
+        rec_type = "neutral"
+        if cmp is None:
+            rec = f"Zu wenige Matches für ein Urteil (mindestens {MIN_PER_GROUP})"
+        elif cmp.a_better:
+            rec, rec_type = f"Siegquote belastbar höher als auf deinen übrigen Maps ({cmp.note()})", "pick"
+        elif cmp.b_better:
+            rec, rec_type = f"Siegquote belastbar niedriger als auf deinen übrigen Maps ({cmp.note()})", "ban"
         else:
-            rec = "Durchschnittlich — nur bei Bedarf"
-            rec_type = "neutral"
+            rec = f"Nicht von deinen übrigen Maps unterscheidbar ({cmp.note()})"
 
         stronger_side = "CT" if ct_kd > t_kd else ("T" if t_kd > ct_kd else "Ausgeglichen")
 
@@ -5737,57 +5745,8 @@ def _build_briefing(map_name: str | None, exports: list[dict], map_stats: list[d
     t_kd = round(t_kills / max(t_deaths, 1), 2)
     weaker_side = "CT" if ct_kd < t_kd else "T"
 
-    # Opening deaths
-    opening_deaths = sum(e.get("opening_deaths", 0) or e.get("deaths_early", 0) for e in recent)
-    opening_kills = sum(e.get("opening_kills", 0) for e in recent)
-    total_rounds = sum(1 for _ in recent)  # approximate
-
-    # Build reminders
+    # Tipps mit festen Schwellen entfernt (2026-11-21): Rat nur mit evidence.py
     reminders = []
-
-    # Win rate reminder
-    if ms["win_rate"] < 45:
-        reminders.append({"type": "warning", "text": f"Schwache Win-Rate ({ms['win_rate']}%). Spiel diszipliniert, keine Hero-Plays."})
-    elif ms["win_rate"] >= 55:
-        reminders.append({"type": "positive", "text": f"Starke Map fuer dich ({ms['win_rate']}% WR). Selbstbewusst spielen."})
-
-    # Side weakness
-    if ct_kd < 0.8:
-        reminders.append({"type": "warning", "text": f"CT-Side schwach (K/D {ct_kd}). Passiver spielen, Retakes ueben."})
-    if t_kd < 0.8:
-        reminders.append({"type": "warning", "text": f"T-Side schwach (K/D {t_kd}). Mehr Utility vor dem Entry nutzen."})
-
-    # Opening deaths
-    if opening_deaths > opening_kills and opening_deaths > 0:
-        reminders.append({"type": "warning", "text": f"Zu viele Opening Deaths. Nicht als Erster dry-peeken."})
-
-    # Utility
-    if avg_util < 1.5:
-        reminders.append({"type": "tip", "text": f"Utility nur {avg_util}/Runde. Kauf Nades und wirf sie ALLE."})
-
-    # Crosshair
-    if avg_xh > 12:
-        reminders.append({"type": "tip", "text": f"Crosshair Placement {avg_xh}° — halte das Fadenkreuz auf Kopfhoehe."})
-
-    # Survival
-    if avg_survival < 30:
-        reminders.append({"type": "tip", "text": f"Survival nur {avg_survival}%. Nicht overpeeken, Rueckzugsweg planen."})
-
-    # HS%
-    if avg_hs < 35:
-        reminders.append({"type": "tip", "text": f"HS% nur {avg_hs}% auf {map_name}. Bewusst auf den Kopf zielen."})
-
-    # Recent form
-    recent_wins = sum(1 for e in recent if e["result"] == "Sieg")
-    recent_losses = sum(1 for e in recent if e["result"] == "Niederlage")
-    if recent_losses >= 3:
-        reminders.append({"type": "warning", "text": f"Letzte {n}: {recent_wins}W/{recent_losses}L — schwache Form. Fokus auf Basics."})
-    elif recent_wins >= 3:
-        reminders.append({"type": "positive", "text": f"Letzte {n}: {recent_wins}W/{recent_losses}L — gute Form! Bleib dran."})
-
-    # Always add a positive/neutral one
-    if avg_rating >= 1.0:
-        reminders.append({"type": "positive", "text": f"Dein Rating auf {map_name} ist {avg_rating} — du performst gut hier."})
 
     # Recent match results for display
     recent_results = []
@@ -6077,60 +6036,8 @@ def _build_scout_data(cfg: dict) -> dict:
         for m, p in e["positions"].items():
             pos_summary[m] = {"kills": len(p["kills"]), "deaths": len(p["deaths"])}
 
-        # ── Generate tactical tips ──
+        # Tipps mit festen Schwellen entfernt (2026-11-21): Rat nur mit evidence.py
         tips = []
-
-        # AWP warning
-        awp_count = e["weapons_them"].get("awp", 0)
-        total_weapon_uses = sum(e["weapons_them"].values()) if e["weapons_them"] else 1
-        if awp_count > 0 and awp_count / max(total_weapon_uses, 1) > 0.3:
-            tips.append({"type": "warning", "icon": "crosshair",
-                         "text": f"AWP-Spieler — {round(awp_count/total_weapon_uses*100)}% seiner Kills mit AWP. Smokes und Off-Angles vorbereiten."})
-
-        # Headshot machine
-        if hs_pct_them >= 55 and e["deaths"] >= 4:
-            tips.append({"type": "warning", "icon": "target",
-                         "text": f"Headshot-Maschine ({hs_pct_them}% HS gegen dich) — nicht wide-peeken, Jiggle-Peeks nutzen."})
-
-        # You dominate them
-        if kd >= 1.5 and total >= 6:
-            tips.append({"type": "success", "icon": "trending-up",
-                         "text": f"Du dominierst ({kd} K/D, {e['kills']}K/{e['deaths']}D) — selbstbewusst spielen."})
-
-        # They dominate you
-        if kd <= 0.7 and total >= 6:
-            tips.append({"type": "danger", "icon": "alert-triangle",
-                         "text": f"Gefaehrlich! ({kd} K/D, {e['deaths']}D gegen dich) — direkte Duelle vermeiden, Utility und Trades nutzen."})
-
-        # Win rate warning
-        if win_rate < 40 and len(e["results"]) >= 3:
-            tips.append({"type": "danger", "icon": "trending-down",
-                         "text": f"Nur {win_rate}% Win-Rate in {len(e['results'])} Matches gegen diesen Spieler."})
-        elif win_rate > 65 and len(e["results"]) >= 3:
-            tips.append({"type": "success", "icon": "trophy",
-                         "text": f"{win_rate}% Win-Rate in {len(e['results'])} Matches — du gewinnst meistens."})
-
-        # Deagle/pistol specialist
-        deagle_count = e["weapons_them"].get("deagle", 0)
-        if deagle_count > 0 and deagle_count / max(total_weapon_uses, 1) > 0.25:
-            tips.append({"type": "info", "icon": "zap",
-                         "text": f"Deagle-Spieler — {deagle_count} Kills mit Deagle. In Eco-Runden vorsichtig."})
-
-        # SMG/rush tendency
-        smg_kills = sum(e["weapons_them"].get(w, 0) for w in ["mac10", "mp9", "mp5sd", "mp7", "p90"])
-        if smg_kills > 0 and smg_kills / max(total_weapon_uses, 1) > 0.3:
-            tips.append({"type": "info", "icon": "zap",
-                         "text": f"SMG-/Rush-Tendenz ({round(smg_kills/total_weapon_uses*100)}% SMG-Kills) — Abstand halten, Angles halten."})
-
-        # Low headshot rate = spray player
-        if hs_pct_them < 25 and e["deaths"] >= 5:
-            tips.append({"type": "info", "icon": "info",
-                         "text": f"Spray-Spieler ({hs_pct_them}% HS) — Aim-Duelle solltest du gewinnen."})
-
-        # Multi-map opponent
-        if len(e["maps"]) >= 3:
-            tips.append({"type": "info", "icon": "map",
-                         "text": f"Auf {len(e['maps'])} verschiedenen Maps getroffen — vielseitiger Spieler."})
 
         opponents.append({
             "name": e["name"], "steam_id": sid,
@@ -7702,6 +7609,7 @@ def _build_zone_analysis(cfg: dict) -> dict:
     total_matches = 0
     total_positions = 0
     maps_seen: set[str] = set()
+    raw_exports: list[dict] = []
 
     for f in sorted(export_dir.glob("*_coach.json"), key=export_sort_key, reverse=True):
         try:
@@ -7712,6 +7620,7 @@ def _build_zone_analysis(cfg: dict) -> dict:
         positions = data.get("kill_positions", [])
         if not positions:
             continue
+        raw_exports.append(data)
 
         map_name = data.get("match", {}).get("map", "").lower()
         if not map_name:
@@ -7801,44 +7710,17 @@ def _build_zone_analysis(cfg: dict) -> dict:
             "kd": map_kd,
         }
 
-    # Generate tips
-    if worst_zone and worst_zone[2] < 0.8:
+    # Nur Zonen, deren Duellquote belastbar von deinen uebrigen Duellen
+    # auf derselben Map und Seite abweicht (zones.py, Bonferroni je Map).
+    # Frueher: K/D < 0.8 bzw. >= 1.5 einer Rechteck-Zone, ohne Unsicherheit.
+    from ..live_plan import pretty_place
+    from ..zones import analyse as analyse_zones
+    for z in [z for z in analyse_zones(raw_exports) if z.solid][:6]:
         global_tips.append({
-            "type": "warning",
-            "text": f"Auf {worst_zone[0].capitalize()} {worst_zone[1]} ist dein K/D nur {worst_zone[2]} ({worst_zone[3]}K/{worst_zone[4]}D) — trainiere diese Position.",
+            "type": "warning" if z.cmp.b_better else "success",
+            "text": f"{z.map} {z.side}, {pretty_place(z.place)}: {z.won}/{z.duels} Duelle gewonnen "
+                    f"({z.rate} %) gegen {z.rest_rate} % an deinen übrigen Stellen ({z.cmp.note('Duelle')}).",
         })
-    if best_zone and best_zone[2] >= 1.5:
-        global_tips.append({
-            "type": "success",
-            "text": f"Auf {best_zone[0].capitalize()} {best_zone[1]} dominierst du mit K/D {best_zone[2]} ({best_zone[3]}K/{best_zone[4]}D) — nutze das aus.",
-        })
-
-    # Check for predictability (single zone > 50% of all events on a map)
-    for map_name, md in maps_data.items():
-        map_total = md["kills"] + md["deaths"]
-        if map_total < 20:
-            continue
-        for z in md["zones"]:
-            if z["total"] / map_total > 0.50 and z["name"] != "Other":
-                global_tips.append({
-                    "type": "info",
-                    "text": f"Auf {map_name.capitalize()} finden {round(z['total']/map_total*100)}% deiner Duelle in {z['name']} statt — du bist vorhersehbar.",
-                })
-                break
-
-    # Death-heavy zones (more deaths than kills, min 8 events)
-    death_zones = []
-    for map_name, md in maps_data.items():
-        for z in md["zones"]:
-            if z["deaths"] > z["kills"] and z["total"] >= 8 and z["name"] != "Other":
-                death_zones.append((map_name, z["name"], z["kd"], z["deaths"]))
-    death_zones.sort(key=lambda x: x[2])
-    for dz in death_zones[:3]:
-        if dz[2] < 0.7:
-            global_tips.append({
-                "type": "warning",
-                "text": f"{dz[0].capitalize()} {dz[1]}: K/D {dz[2]} mit {dz[3]} Deaths — vermeide diese Zone oder aendere dein Approach.",
-            })
 
     # Map list for template selector
     map_list = sorted(maps_data.keys())
@@ -7927,6 +7809,7 @@ def _build_motor_skills(cfg: dict) -> dict:
     ]
 
     # Compute per-skill stats
+    RECENT = 10
     n = len(entries)
     skill_data = []
     tips = []
@@ -7938,21 +7821,29 @@ def _build_motor_skills(cfg: dict) -> dict:
             continue
 
         current = values[-1]
-        first5 = values[:5]
-        last5 = values[-5:]
         all_avg = round(sum(values) / len(values), 1)
-        first5_avg = round(sum(first5) / len(first5), 1)
-        last5_avg = round(sum(last5) / len(last5), 1)
         best = round(max(values), 1) if sk["higher_better"] else round(min(values), 1)
         worst = round(min(values), 1) if sk["higher_better"] else round(max(values), 1)
 
-        # Trend: compare first 5 vs last 5
-        if sk["higher_better"]:
-            delta = round(last5_avg - first5_avg, 1)
-            improved = delta > 0
+        # Trend: letzte 10 Matches gegen alle davor, ueber evidence.py.
+        # Frueher galt jede Differenz Erste 5 -> Letzte 5 als "verbessert"
+        # und ab 2-3 Einheiten als Tipp - ohne Blick auf die Streuung.
+        recent, before = values[-RECENT:], values[:-RECENT]
+        cmp = compare_groups(recent, before, higher_is_better=sk["higher_better"],
+                             comparisons=len(skills))
+        recent_avg = round(sum(recent) / len(recent), 1)
+        before_avg = round(sum(before) / len(before), 1) if before else None
+        improved = bool(cmp and cmp.a_better)
+        if cmp is None:
+            trend, trend_label = "open", f"zu wenige Matches (je {MIN_PER_GROUP} nötig)"
+        elif cmp.a_better:
+            trend, trend_label = "up", "belastbar verbessert"
+        elif cmp.b_better:
+            trend, trend_label = "down", "belastbar verschlechtert"
+        elif cmp.no_difference:
+            trend, trend_label = "flat", "belegt stabil"
         else:
-            delta = round(first5_avg - last5_avg, 1)
-            improved = delta > 0
+            trend, trend_label = "open", "noch nicht entscheidbar"
 
         # Rolling 5-match averages for chart
         rolling = []
@@ -7960,35 +7851,29 @@ def _build_motor_skills(cfg: dict) -> dict:
             window = values[max(0, i - 4):i + 1]
             rolling.append(round(sum(window) / len(window), 1))
 
-        trend_label = "verbessert" if improved else ("verschlechtert" if abs(delta) > 1 else "stabil")
-
         skill_data.append({
             **sk,
             "current": current,
             "all_avg": all_avg,
-            "first5_avg": first5_avg,
-            "last5_avg": last5_avg,
             "best": best,
             "worst": worst,
-            "delta": delta,
-            "delta_abs": abs(delta),
+            "recent_avg": recent_avg,
+            "before_avg": before_avg,
+            "recent_n": len(recent),
             "improved": improved,
+            "trend": trend,
             "trend_label": trend_label,
+            "trend_note": cmp.note() if cmp else "",
             "values": values,
             "rolling": rolling,
             "count": len(values),
         })
 
-        # Tips
-        if improved and abs(delta) >= 2:
+        if trend in ("up", "down"):
             tips.append({
-                "type": "success",
-                "text": f"{sk['label']} {trend_label}: {first5_avg}{sk['unit']} → {last5_avg}{sk['unit']} (+{abs(delta)}{sk['unit']})",
-            })
-        elif not improved and abs(delta) >= 3:
-            tips.append({
-                "type": "warning",
-                "text": f"{sk['label']} {trend_label}: {first5_avg}{sk['unit']} → {last5_avg}{sk['unit']} (-{abs(delta)}{sk['unit']})",
+                "type": "success" if trend == "up" else "warning",
+                "text": f"{sk['label']} {trend_label}: letzte {len(recent)} Matches {recent_avg}{sk['unit']} "
+                        f"gegen {before_avg}{sk['unit']} davor ({cmp.note()}).",
             })
 
     if not skill_data:
@@ -9064,10 +8949,6 @@ def _build_pistol_analysis(cfg: dict) -> dict:
 
     # Coaching tips
     tips = []
-    if wr >= 55:
-        tips.append({"type": "positive", "text": f"Starke Pistolrunden: {wr}% Win-Rate — du sicherst deinem Team den oekonomischen Vorteil."})
-    elif wr < 40:
-        tips.append({"type": "warning", "text": f"Pistol-WR nur {wr}% — trainiere USP/Glock-Aim und Pistol-Setups."})
 
     # CT gegen T als Vergleich zweier Quoten. Frueher genuegten 15
     # Prozentpunkte Abstand fuer "deutlich staerker" - bei rund 30
@@ -9655,35 +9536,9 @@ def _build_role_detection(cfg: dict) -> dict:
 
     radar_scores = [aggression, utility_dim, survival_dim, aim_dim, impact_dim, clutch_dim]
 
-    # ── Role fit analysis: does skill match the role? ──
+    # ── Role fit ──
+    # Tipps mit festen Schwellen entfernt (2026-11-21): Rat nur mit evidence.py
     fit_issues = []
-    if primary_role == "Entry Fragger":
-        if avg_hs < 40:
-            fit_issues.append({"type": "warning", "text": f"Als Entry Fragger brauchst du praezises Aim — deine HS-Rate ist nur {avg_hs:.0f}%. Trainiere Prefire und Crosshair Placement."})
-        if opening_wr < 0.45:
-            fit_issues.append({"type": "warning", "text": f"Opening-Duel-WR nur {opening_wr*100:.0f}% — als Entry musst du diese Duelle gewinnen. Arbeite an Peeking-Technik."})
-        if opening_wr >= 0.55:
-            fit_issues.append({"type": "positive", "text": f"Opening-Duel-WR {opening_wr*100:.0f}% — du gewinnst deine Erstduelle zuverlaessig. Starker Entry!"})
-    elif primary_role == "Support":
-        if avg_util < 1.5:
-            fit_issues.append({"type": "warning", "text": f"Als Support nur {avg_util:.1f} Utility/Runde — das ist zu wenig. Lerne mehr Lineups und wirf jede Runde Utility."})
-        if avg_util >= 2.0:
-            fit_issues.append({"type": "positive", "text": f"{avg_util:.1f} Utility/Runde — du nutzt dein Equipment gut. Exzellenter Support-Spieler!"})
-    elif primary_role == "AWPer":
-        if awp_ratio < 0.3:
-            fit_issues.append({"type": "info", "text": f"AWP-Anteil {awp_ratio*100:.0f}% — du spielst auch viel Rifle. Hybrid-Spieler mit AWP-Tendenz."})
-        if awp_ratio >= 0.5:
-            fit_issues.append({"type": "positive", "text": f"AWP-Anteil {awp_ratio*100:.0f}% — klarer AWP-Fokus. Stelle sicher dass du Economy im Griff hast."})
-    elif primary_role == "Lurker":
-        if avg_survival < 30:
-            fit_issues.append({"type": "warning", "text": f"Survival-Rate nur {avg_survival:.0f}% — fuer einen Lurker zu niedrig. Positioniere dich sicherer."})
-        if clutch_rate >= 0.3:
-            fit_issues.append({"type": "positive", "text": f"Clutch-Rate {clutch_rate*100:.0f}% — du bist in 1vX Situationen stark. Perfekt fuer die Lurker-Rolle."})
-    elif primary_role == "Anchor":
-        if ct_kd < 1.0:
-            fit_issues.append({"type": "warning", "text": f"CT K/D nur {ct_kd:.2f} — als Anchor solltest du auf CT staerker sein. Arbeite an Site-Holds."})
-        if ct_kd >= 1.3:
-            fit_issues.append({"type": "positive", "text": f"CT K/D {ct_kd:.2f} — starke CT-Performance. Du bist ein zuverlaessiger Anchor."})
 
     # General fit insight
     if abs(primary_score - secondary_score) < 8:
