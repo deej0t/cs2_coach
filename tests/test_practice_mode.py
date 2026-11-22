@@ -89,3 +89,14 @@ def test_rethrow_und_zurueck(tmp_path):
     assert srv.cmds[-1] == "coach_tp 7 100.0 200.0 64.0 -40.5 90.0"
     none = lambda *c: ["coach_nade_last none"]
     assert "Noch kein" in pm.handle({}, cp, none, "76561", "dj", "zurueck", "", uid=7)[0]
+
+
+def test_impacts_umschalten_und_wiederherstellen(tmp_path):
+    cp = tmp_path / "config.yaml"
+    srv = Server()
+    pm.handle({}, cp, srv, "76561", "dj", "uebung", "", uid=0)
+    assert srv.values["sv_showimpacts"] == "1"
+    assert pm.handle({}, cp, srv, "76561", "dj", "impacts", "", uid=0) == ["Einschlaege aus."]
+    assert pm.handle({}, cp, srv, "76561", "dj", "impacts", "", uid=0) == ["Einschlaege an."]
+    pm.handle({}, cp, srv, "76561", "dj", "uebung", "aus", uid=0)
+    assert srv.values["sv_showimpacts"] == "0"

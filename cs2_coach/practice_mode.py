@@ -29,8 +29,9 @@ from pathlib import Path
 
 STATE_FILE = ".practice.json"
 RETHROW = {"rethrow", "nochmal"}
+IMPACTS = {"impacts", "impact", "einschlaege", "einschläge"}
 BACK = {"zurueck", "zurück", "zuruck", "back"}
-COMMANDS = {"uebung", "übung", "ubung", "practice", "prac", "tasten", "keys"} | RETHROW | BACK
+COMMANDS = {"uebung", "übung", "ubung", "practice", "prac", "tasten", "keys"} | RETHROW | BACK | IMPACTS
 
 SETUP = {
     "sv_cheats": "1",
@@ -43,6 +44,7 @@ SETUP = {
     "sv_infinite_ammo": "2",  # volle Magazine nachladen, ohne Reserve-Ende
     "sv_grenade_trajectory_prac_pipreview": "1",
     "mp_warmup_pausetimer": "1",
+    "sv_showimpacts": "1",  # Einschlaege: rot = Server, blau = Client; !impacts schaltet
 }
 _VALUE = re.compile(r"^\s*(\S+)\s*=\s*(.*?)\s*$")
 
@@ -90,6 +92,14 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
         send(f"coach_keys {uid} {1 if on else 0}")
         return [f"Tasten-Anzeige fuer {name} {'an' if on else 'aus'}."]
 
+    if cmd in IMPACTS:
+        if not st.get("on"):
+            return ["Geht nur im Uebungsmodus (sv_cheats 1) - erst !uebung."]
+        cur = read_cvars(send, ["sv_showimpacts"]).get("sv_showimpacts", "0")
+        on = cur == "0" if word not in ("an", "on", "aus", "off") else word in ("an", "on")
+        send(f"sv_showimpacts {1 if on else 0}")
+        return [f"Einschlaege {'an' if on else 'aus'}."]
+
     if cmd in RETHROW | BACK:
         if not st.get("on"):
             return ["Geht nur im Uebungsmodus (sv_cheats 1) - erst !uebung."]
@@ -130,8 +140,8 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
     st.update(on=True, saved=saved, by=name)
     save(config_path, st)
     return [f"Uebungsmodus an ({name}): sv_cheats 1, Zeit steht, 16000 $ ueberall kaufen, Godmode, "
-            "Respawn, Tasten-Anzeige. Granate nochmal: !rethrow · zum Wurfpunkt: !zurueck · "
-            "Beenden: !uebung aus · Tasten aus: !tasten"]
+            "Respawn, Tasten-Anzeige, Einschlaege. Granate nochmal: !rethrow · zum Wurfpunkt: !zurueck · "
+            "Beenden: !uebung aus · an/aus: !tasten · !impacts"]
 
 
 def on_lines(config_path: Path, lines: list[str]) -> None:
