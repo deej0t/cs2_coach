@@ -1,0 +1,34 @@
+from cs2_coach.key_moments import annotate
+
+
+def _replay(mate_xy, trade=True):
+    players = [
+        {"steamid": "me", "name": "Ich", "is_target": True, "team": "self"},
+        {"steamid": "m1", "name": "Mate", "is_target": False, "team": "mate"},
+        {"steamid": "e1", "name": "Gegner", "is_target": False, "team": "enemy"},
+    ]
+    frames = []
+    for i in range(80):
+        t = 1000 + i * 8
+        hp = 100 if t < 1320 else 0
+        frames.append({"t": t, "p": [[0, 500, 500, hp], [1, *mate_xy, 100], [2, 520, 500, 100]]})
+    kills = [{"tick": 1320, "attacker": "e1", "victim": "me", "weapon": "ak47"}]
+    if trade:
+        kills.append({"tick": 1400, "attacker": "m1", "victim": "e1", "weapon": "m4a1"})
+    return {"players": players, "frames": frames, "kills": kills, "fps": 8}
+
+
+def test_close_mate_and_trade_are_good():
+    out = annotate(_replay((505, 500)), 1320, scale=5.0)
+    tones = {n["tone"] for n in out["notes"]}
+    assert "bad" not in tones
+    assert any("Getradet" in n["text"] for n in out["notes"])
+    assert out["focus"] == 40
+    assert out["clip"][0] < out["focus"] < out["clip"][1]
+
+
+def test_far_mate_without_trade_is_bad():
+    out = annotate(_replay((900, 900), trade=False), 1320, scale=5.0)
+    texts = " ".join(n["text"] for n in out["notes"] if n["tone"] == "bad")
+    assert "zu weit" in texts and "Kein Trade" in texts
+    assert out["marks"][0]["type"] == "circle"

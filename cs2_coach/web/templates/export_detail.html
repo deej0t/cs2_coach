@@ -1029,30 +1029,7 @@ var rpData = null, rpFrame = 0, rpTimer = null, rpImg = null, rpPlaying = false;
 // gleich eingefaerbt und das Replay damit nicht zu lesen.
 var rpUtilOn = true, rpNamesOn = true, rpFrameDots = [];
 
-function rpShortName(name) {
-    var n = (name || '?').trim();
-    // Nur Zeichen behalten, die als Kuerzel taugen - Clantags und
-    // Zierzeichen machen die Karte sonst unleserlich.
-    var clean = n.replace(/[^\p{L}\p{N}_.\- ]/gu, '').trim() || n;
-    return clean.length > 9 ? clean.slice(0, 8) + '…' : clean;
-}
-
-// Symbol und Flaeche getrennt: die Flaeche zeigt, was Raum einnimmt
-// (Smoke, Feuer), das Symbol den Typ. Vier aehnlich gefaerbte Kreise
-// liessen sich auf der Karte nicht auseinanderhalten.
-var RP_UTIL_STYLE = {
-    smoke:   { icon: '☁', fill: '#cbd5e1', alpha: 0.38, area: true },
-    molotov: { icon: '🔥', fill: '#fb923c', alpha: 0.34, area: true },
-    flash:   { icon: '⚡', fill: '#fef08a', alpha: 0.30, area: false },
-    he:      { icon: '💥', fill: '#f87171', alpha: 0.30, area: false }
-};
-
-var RP_TEAM_COLORS = {
-    self:    '#4ade80',
-    mate:    '#60a5fa',
-    enemy:   '#f87171',
-    unknown: '#9ca3af'
-};
+{% include '_partials/replay_scene_js.html' %}
 
 function closeReplay() {
     if (rpTimer) { clearInterval(rpTimer); rpTimer = null; }
@@ -1114,99 +1091,9 @@ function togglePlay() {
 function drawReplay() {
     if (!rpData) return;
     var canvas = document.getElementById('rp-canvas');
-    var ctx = canvas.getContext('2d');
-    var W = canvas.width, scale = W / 1024;
-    ctx.clearRect(0, 0, W, W);
-    if (rpImg && rpImg.complete && rpImg.naturalWidth) ctx.drawImage(rpImg, 0, 0, W, W);
-
+    rpFrameDots = rpDrawScene(canvas, rpData, rpFrame, rpImg, { util: rpUtilOn, names: rpNamesOn });
     var frame = rpData.frames[rpFrame];
     if (!frame) return;
-
-    // Granaten zuerst, damit die Spieler darueber liegen. Angezeigt wird
-    // der Zeitraum zwischen Zuendung und Ende - ein Smoke steht rund 18
-    // Sekunden, ein Molotov brennt etwa sieben.
-    if (rpUtilOn) {
-        (rpData.utility || []).forEach(function(u) {
-            if (frame.t < u.t || frame.t > u.end) return;
-            var style = RP_UTIL_STYLE[u.type];
-            if (!style) return;
-            var cx = u.x * scale, cy = u.y * scale, rr = Math.max(u.r * scale, 3);
-            var teamColor = RP_TEAM_COLORS[u.team] || '#9ca3af';
-
-            // Flaeche nur fuer Smoke und Feuer - die decken wirklich
-            // Raum ab. Flash und HE wirken punktuell.
-            if (style.area) {
-                ctx.beginPath();
-                ctx.arc(cx, cy, rr, 0, Math.PI * 2);
-                ctx.globalAlpha = style.alpha;
-                ctx.fillStyle = style.fill;
-                ctx.fill();
-                ctx.globalAlpha = 1;
-                ctx.lineWidth = 1.5;
-                ctx.strokeStyle = teamColor;
-                ctx.stroke();
-            } else {
-                // Kurzer Blitz: Ring, der mit der Zeit verblasst
-                var age = (frame.t - u.t) / Math.max(u.end - u.t, 1);
-                ctx.beginPath();
-                ctx.arc(cx, cy, rr * (0.6 + age * 0.8), 0, Math.PI * 2);
-                ctx.globalAlpha = Math.max(1 - age, 0.25);
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = style.fill;
-                ctx.stroke();
-                ctx.globalAlpha = 1;
-            }
-
-            // Symbol mittig, mit dunklem Rand fuer Lesbarkeit auf hellen
-            // Kartenbereichen
-            ctx.font = '15px system-ui, "Segoe UI Emoji", sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = 'rgba(0,0,0,0.75)';
-            ctx.strokeText(style.icon, cx, cy);
-            ctx.fillStyle = '#fff';
-            ctx.fillText(style.icon, cx, cy);
-
-            // Kleiner Punkt in Teamfarbe unter dem Symbol
-            ctx.beginPath();
-            ctx.arc(cx, cy + 11, 2.5, 0, Math.PI * 2);
-            ctx.fillStyle = teamColor;
-            ctx.fill();
-        });
-    }
-
-    frame.p.forEach(function(e) {
-        var pi = e[0], x = e[1], y = e[2], hp = e[3];
-        var pl = rpData.players[pi];
-        if (!pl) return;
-        var alive = hp > 0;
-        ctx.globalAlpha = alive ? 1 : 0.28;
-        ctx.beginPath();
-        ctx.arc(x * scale, y * scale, pl.is_target ? 6 : 4.5, 0, Math.PI * 2);
-        ctx.fillStyle = RP_TEAM_COLORS[pl.team] || '#9ca3af';
-        ctx.fill();
-        if (pl.is_target) { ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke(); }
-        ctx.globalAlpha = 1;
-
-        if (rpNamesOn) {
-            // Kurzform unter dem Punkt. Volle Namen sind oft lang und
-            // enthalten Sonderzeichen; die Karte wuerde sonst zulaufen.
-            ctx.globalAlpha = alive ? 1 : 0.4;
-            ctx.font = '600 10px system-ui, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-            ctx.strokeText(rpShortName(pl.name), x * scale, y * scale + 7);
-            ctx.fillStyle = RP_TEAM_COLORS[pl.team] || '#9ca3af';
-            ctx.fillText(rpShortName(pl.name), x * scale, y * scale + 7);
-            ctx.globalAlpha = 1;
-        }
-    });
-
-    rpFrameDots = frame.p;
-
     var secs = ((frame.t - rpData.start_tick) / 64).toFixed(1);
     document.getElementById('rp-time').textContent = secs + 's';
 }

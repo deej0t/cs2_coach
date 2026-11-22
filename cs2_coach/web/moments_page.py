@@ -1,0 +1,93 @@
+"""WebUI-Seite /momente: Schluesselmomente eines Matches als kommentierter Clip.
+
+Liste = teuerste eigene Tode (costly_moments), Clip = 2D-Replay der Runde
+(build_round_replay) mit Markierungen aus key_moments.annotate. Kein
+Spielvideo - dafuer muesste CS2 mit GPU laufen.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from flask import Blueprint, jsonify, render_template, request
+
+from .. import costly_moments, key_moments
+from ..maps import MAP_RADAR_DATA
+from ..obsidian import export_sort_key
+
+MAX_EXPORTS = 30
+
+
+def _export_dir(cfg: dict) -> Path | None:
+    vault = cfg.get("obsidian_vault_path", "")
+    if not vault:
+        return None
+    return Path(vault) / cfg.get("coach_subfolder", "CS2-Coach") / "exports"
+
+
+def _load(export_dir: Path, filename: str) -> dict | None:
+    path = export_dir / filename
+    if not path.resolve().is_relative_to(export_dir.resolve()) or not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _me(cfg: dict, data: dict) -> str:
+    return str(cfg.get("steam_id") or (data.get("player") or {}).get("steam_id") or "")
+
+
+def create_blueprint(load_config, config_path) -> Blueprint:
+    bp = Blueprint("moments_page", __name__)
+
+    @bp.route("/momente")
+    def page():
+        cfg = load_config()
+        edir = _export_dir(cfg)
+        files = sorted(edir.glob("*_coach.json"), key=export_sort_key, reverse=True)[:MAX_EXPORTS] \
+            if edir and edir.exists() else []
+        chosen = request.args.get("file") or (files[0].name if files else "")
+        data = _load(edir, chosen) if edir and chosen else None
+        moments, error = [], ""
+        if data:
+            stem = Path((data.get("match") or {}).get("demo_file") or "").stem
+            try:
+                own = costly_moments.priced_own_deaths(cfg, Path(config_path()), _me(cfg, data),
+                                                       prefer=[stem] if stem else None, scan_new=1)
+                moments = costly_moments.for_match(data, own, top=8)
+            except Exception as e:  # noqa: BLE001 - Seite bleibt nutzbar, zeigt den Grund
+                error = f"Siegchance nicht berechenbar: {e}"
+            for m in moments:
+                m["headline"] = key_moments.headline(m)
+        demo_ok = bool(data and cfg.get("demo_folder") and (Path(cfg["demo_folder"]) /
+                       ((data.get("match") or {}).get("demo_file") or "-")).exists())
+        return render_template("moments.html", files=[f.name for f in files], chosen=chosen,
+                               match=(data or {}).get("match") or {}, moments=moments,
+                               demo_ok=demo_ok, error=error, config=cfg)
+
+    @bp.route("/api/momente/<path:filename>/<int:round_num>/<int:tick>")
+    def clip(filename, round_num, tick):
+        from .app import build_round_replay
+        cfg = load_config()
+        edir = _export_dir(cfg)
+        data = _load(edir, filename) if edir else None
+        if data is None:
+            return jsonify({"error": "Export nicht gefunden"}), 404
+        match = data.get("match") or {}
+        demo = Path(cfg.get("demo_folder", "")) / (match.get("demo_file") or "-")
+        if not demo.exists():
+            return jsonify({"error": f"Demo fehlt: {match.get('demo_file')}"}), 404
+        map_key = (match.get("map") or "").lower()
+        if map_key not in MAP_RADAR_DATA:
+            return jsonify({"error": f"Map ohne Radardaten: {map_key}"}), 400
+        replay = build_round_replay(str(demo), round_num, _me(cfg, data), map_key)
+        if "error" in replay:
+            return jsonify(replay), 400
+        replay["map"] = map_key
+        replay["moment"] = key_moments.annotate(replay, tick, MAP_RADAR_DATA[map_key]["scale"])
+        return jsonify(replay)
+
+    return bp

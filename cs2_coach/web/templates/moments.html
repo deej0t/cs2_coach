@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — {{ _('Schlüsselmomente') }}{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+
+{% block content %}
+<h2>{{ _('Schlüsselmomente') }}</h2>
+<p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-4);">
+    {{ _('Deine teuersten Tode eines Matches als kommentierte Szene: Zeitlupe vor dem Tod, Stopp im Moment, Markierungen auf der Karte. Nur Tode, bei denen noch ein Mitspieler lebte. Rekonstruktion aus Positionsdaten, kein Spielvideo.') }}
+</p>
+
+<style>
+    .km-wrap { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: var(--space-4); }
+    @media (max-width: 900px) { .km-wrap { grid-template-columns: 1fr; } }
+    .km-item { padding: 10px 12px; border-radius: var(--radius-md); background: var(--color-surface);
+               box-shadow: var(--shadow-sm); margin-bottom: 8px; cursor: pointer; font-size: 13px;
+               border: 1px solid transparent; }
+    .km-item.active { border-color: var(--color-accent); }
+    .km-cost { font-family: var(--font-heading); font-weight: 700; color: #f87171; font-size: 18px; }
+    .km-notes { list-style: none; padding: 0; margin: var(--space-3) 0 0; font-size: 13px; }
+    .km-notes li { padding: 6px 10px; border-radius: var(--radius-sm); margin-bottom: 6px;
+                   background: var(--color-surface); border-left: 3px solid #9ca3af; }
+    .km-notes li.good { border-left-color: #4ade80; }
+    .km-notes li.bad { border-left-color: #f87171; }
+</style>
+
+<form method="get" style="margin-bottom: var(--space-4);">
+    <select name="file" class="input" style="width:auto;" onchange="this.form.submit()">
+        {% for f in files %}<option value="{{ f }}" {% if f == chosen %}selected{% endif %}>{{ f }}</option>{% endfor %}
+    </select>
+</form>
+
+{% if error %}<p style="color:#f87171;">{{ error }}</p>{% endif %}
+{% if not files %}
+<p>{{ _('Noch keine Exports vorhanden.') }}</p>
+{% elif not moments %}
+<p>{{ _('Für dieses Match gibt es keine bepreisten Tode (zu wenige Matches im Siegchance-Modell oder kein Tod mit lebendem Mitspieler).') }}</p>
+{% else %}
+<div class="km-wrap">
+    <div>
+        {% for m in moments %}
+        <div class="km-item" data-round="{{ m.round }}" data-tick="{{ m.tick }}"
+             {% if demo_ok %}onclick="kmLoad(this)"{% endif %}>
+            <span class="km-cost">−{{ m.cost|round(0)|int }}</span> {{ _('Punkte Siegchance') }}<br>
+            <span style="color:var(--color-neutral-500);">{{ m.headline }}</span>
+        </div>
+        {% endfor %}
+        {% if not demo_ok %}<p style="font-size:12px;color:var(--color-neutral-500);">{{ _('Demo-Datei fehlt – Clips nicht verfügbar.') }}</p>{% endif %}
+    </div>
+    <div>
+        <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-2);">
+            <span id="km-title" style="font-size:13px;font-weight:600;">{{ _('Moment links auswählen') }}</span>
+            <button class="btn btn-ghost" id="km-play" onclick="kmToggle()">▶</button>
+            <button class="btn btn-ghost" onclick="kmRestart()">⟲</button>
+            <select id="km-speed" class="input" style="width:auto;min-height:26px;padding:2px 8px;font-size:11px;">
+                <option value="0.25">0.25×</option>
+                <option value="0.5" selected>0.5×</option>
+                <option value="1">1×</option>
+            </select>
+            <span id="km-time" style="font-size:11px;color:var(--color-neutral-500);"></span>
+        </div>
+        <canvas id="km-canvas" width="640" height="640" style="width:100%;max-width:640px;border-radius:var(--radius-md);background:var(--color-bg);"></canvas>
+        <ul class="km-notes" id="km-notes"></ul>
+    </div>
+</div>
+{% endif %}
+
+<script>
+{% include '_partials/replay_scene_js.html' %}
+
+var km = { data: null, frame: 0, img: null, timer: null, hold: 0 };
+var KM_TONE = { bad: '#f87171', good: '#4ade80', enemy: '#f87171', info: '#e5e7eb' };
+var KM_HOLD_FRAMES = 3 * 8;   // am Todesmoment ~3 s stehen bleiben
+
+function kmLoad(el) {
+    document.querySelectorAll('.km-item').forEach(function(x) { x.classList.remove('active'); });
+    el.classList.add('active');
+    kmStop();
+    var title = document.getElementById('km-title');
+    title.textContent = 'Runde ' + el.dataset.round + ' — wird geladen...';
+    document.getElementById('km-notes').innerHTML = '';
+    var url = '{{ url_for("moments_page.clip", filename=chosen, round_num=1, tick=0) }}'
+        .replace(/\/1\/0$/, '/' + el.dataset.round + '/' + el.dataset.tick);
+    fetch(url).then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
+        .then(function(res) {
+            if (!res.ok) { title.textContent = res.j.error || 'Fehler'; return; }
+            km.data = res.j;
+            title.textContent = 'Runde ' + el.dataset.round;
+            var ul = document.getElementById('km-notes');
+            (km.data.moment.notes || []).forEach(function(n) {
+                var li = document.createElement('li');
+                li.className = n.tone; li.textContent = n.text; ul.appendChild(li);
+            });
+            km.img = new Image();
+            km.img.onload = km.img.onerror = kmRestart;
+            km.img.src = '{{ url_for("static", filename="radars/") }}' + km.data.map + '.png';
+        })
+        .catch(function(e) { title.textContent = 'Fehler: ' + e.message; });
+}
+
+function kmStop() {
+    if (km.timer) clearInterval(km.timer);
+    km.timer = null;
+    document.getElementById('km-play').textContent = '▶';
+}
+
+function kmRestart() {
+    if (!km.data) return;
+    km.frame = km.data.moment.clip[0];
+    km.hold = 0;
+    kmPlay();
+}
+
+function kmPlay() {
+    kmStop();
+    var fps = km.data.fps * parseFloat(document.getElementById('km-speed').value);
+    document.getElementById('km-play').textContent = '❚❚';
+    km.timer = setInterval(kmTick, 1000 / fps);
+    kmDraw();
+}
+
+function kmToggle() {
+    if (!km.data) return;
+    if (km.timer) { kmStop(); return; }
+    if (km.frame >= km.data.moment.clip[1]) km.frame = km.data.moment.clip[0];
+    kmPlay();
+}
+
+function kmTick() {
+    var mo = km.data.moment;
+    // Im Todesmoment anhalten, damit die Markierungen lesbar sind
+    if (km.frame === mo.focus && km.hold < KM_HOLD_FRAMES) { km.hold++; kmDraw(); return; }
+    if (km.frame >= mo.clip[1]) { kmStop(); return; }
+    km.frame++;
+    kmDraw();
+}
+
+function kmDraw() {
+    var canvas = document.getElementById('km-canvas');
+    rpDrawScene(canvas, km.data, km.frame, km.img, { util: true, names: true });
+    var mo = km.data.moment, frame = km.data.frames[km.frame];
+    var ctx = canvas.getContext('2d'), s = canvas.width / 1024;
+    if (km.frame < mo.focus) {
+        // Vorlauf: deinen Punkt dezent hervorheben, die Auswertung kommt im Moment selbst
+        var dt = (km.data.frames[mo.focus].t - frame.t) / 64;
+        ctx.font = '600 14px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillText('Tod in ' + dt.toFixed(1) + ' s', 12, 12);
+    } else {
+        (mo.marks || []).forEach(function(m) { kmMark(ctx, s, m); });
+        if (km.frame === mo.focus) {
+            ctx.font = '700 16px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+            ctx.fillStyle = '#f87171';
+            ctx.fillText('■ Moment des Todes', 12, 12);
+        }
+    }
+    var secs = ((frame.t - km.data.start_tick) / 64).toFixed(1);
+    document.getElementById('km-time').textContent = secs + ' s';
+}
+
+function kmMark(ctx, s, m) {
+    var c = KM_TONE[m.tone] || '#e5e7eb';
+    ctx.save();
+    ctx.strokeStyle = c; ctx.lineWidth = 3;
+    if (m.type === 'circle') {
+        ctx.beginPath(); ctx.arc(m.x * s, m.y * s, m.r, 0, Math.PI * 2); ctx.stroke();
+        if (m.label) {
+            ctx.font = '700 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+            ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+            ctx.strokeText(m.label, m.x * s, m.y * s - m.r - 2);
+            ctx.fillStyle = c; ctx.fillText(m.label, m.x * s, m.y * s - m.r - 2);
+        }
+    } else {
+        if (m.type === 'dash') ctx.setLineDash([6, 5]);
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(m.x1 * s, m.y1 * s); ctx.lineTo(m.x2 * s, m.y2 * s); ctx.stroke();
+    }
+    ctx.restore();
+}
+</script>
+{% endblock %}
