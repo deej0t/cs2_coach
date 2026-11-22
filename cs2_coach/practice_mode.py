@@ -144,7 +144,7 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
     st.update(on=True, saved=saved, by=name)
     save(config_path, st)
     return [f"Uebungsmodus an ({name}): sv_cheats 1, Zeit steht, 16000 $ ueberall kaufen, Godmode, "
-            "Respawn, Tasten-Anzeige, Einschlaege. Granate nochmal: !rethrow · zum Wurfpunkt: !zurueck · "
+            "Respawn, Tasten-Anzeige, Einschlaege. Ping raeumt Smokes/Feuer weg. Granate nochmal: !rethrow · zum Wurfpunkt: !zurueck · "
             "Beenden: !uebung aus · an/aus: !tasten · !impacts"]
 
 

@@ -137,6 +137,12 @@ public class CoachTeleport : BasePlugin
             return HookResult.Continue;
         });
         RegisterListener<Listeners.OnPlayerButtonsChanged>(OnButtons);
+        // Uebungsmodus: Ping (Mausrad-Klick/Ping-Taste) raeumt Smokes, Feuer & Co. weg (Wunsch 22.11.)
+        RegisterEventHandler<EventPlayerPing>((ev, _) =>
+        {
+            if (_practice && ev.Userid is { IsBot: false }) Server.NextFrame(ClearNades);
+            return HookResult.Continue;
+        });
         // Mausrad-Sprung ist ein Subtick-Druck: player.Buttons sieht ihn im Tick meist nie.
         RegisterEventHandler<EventPlayerJump>((ev, _) =>
         {
@@ -1541,6 +1547,19 @@ public class CoachTeleport : BasePlugin
             else _keys.Remove(uid);
         }
         info.ReplyToCommand($"coach_practice ok {(_practice ? 1 : 0)}");
+    }
+
+    private static readonly string[] NadeEntities =
+    {
+        "smokegrenade_projectile", "molotov_projectile", "inferno", "flashbang_projectile",
+        "hegrenade_projectile", "decoy_projectile",
+    };
+
+    private static void ClearNades()
+    {
+        foreach (var name in NadeEntities)
+            foreach (var e in Utilities.FindAllEntitiesByDesignerName<CBaseEntity>(name))
+                if (e.IsValid) e.Remove();
     }
 
     // sv_rethrow_last_grenade braucht einen Spieler als Absender: per RCON (ohne Spieler)
