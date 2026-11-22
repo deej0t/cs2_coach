@@ -51,21 +51,24 @@ def create_blueprint(load_config, config_path) -> Blueprint:
             if edir and edir.exists() else []
         chosen = request.args.get("file") or (files[0].name if files else "")
         data = _load(edir, chosen) if edir and chosen else None
-        moments, error = [], ""
+        moments, good, error = [], [], ""
         if data:
             stem = Path((data.get("match") or {}).get("demo_file") or "").stem
             try:
-                own = costly_moments.priced_own_deaths(cfg, Path(config_path()), _me(cfg, data),
-                                                       prefer=[stem] if stem else None, scan_new=1)
-                moments = costly_moments.for_match(data, own, top=8)
+                own, kills = key_moments.priced(cfg, Path(config_path()), _me(cfg, data),
+                                                prefer=[stem] if stem else None, scan_new=1)
+                moments = costly_moments.for_match(data, own, top=6)
+                good = key_moments.best_kills(data, kills, top=5)
             except Exception as e:  # noqa: BLE001 - Seite bleibt nutzbar, zeigt den Grund
                 error = f"Siegchance nicht berechenbar: {e}"
             for m in moments:
                 m["headline"] = key_moments.headline(m)
+            for m in good:
+                m["headline"] = key_moments.kill_headline(m)
         demo_ok = bool(data and cfg.get("demo_folder") and (Path(cfg["demo_folder"]) /
                        ((data.get("match") or {}).get("demo_file") or "-")).exists())
         return render_template("moments.html", files=[f.name for f in files], chosen=chosen,
-                               match=(data or {}).get("match") or {}, moments=moments,
+                               match=(data or {}).get("match") or {}, moments=moments, good=good,
                                demo_ok=demo_ok, error=error, config=cfg)
 
     @bp.route("/api/momente/<path:filename>/<int:round_num>/<int:tick>")
@@ -88,13 +91,15 @@ def create_blueprint(load_config, config_path) -> Blueprint:
             return jsonify(replay), 400
         replay["map"] = map_key
         replay["scale"] = MAP_RADAR_DATA[map_key]["scale"]
-        mo = key_moments.annotate(replay, tick, MAP_RADAR_DATA[map_key]["scale"])
+        is_kill = request.args.get("kind") == "kill"
+        scale = MAP_RADAR_DATA[map_key]["scale"]
+        mo = (key_moments.annotate_kill if is_kill else key_moments.annotate)(replay, tick, scale)
         mo["events"] = []
         if mo.get("killer") and mo.get("killer_idx") is not None:
             name = replay["players"][mo["killer_idx"]]["name"]
             try:
                 facts = key_moments.scan_duel(str(demo), _me(cfg, data), mo["killer"], mo["death_tick"])
-                notes, mo["events"] = key_moments.duel_notes(facts, name)
+                notes, mo["events"] = key_moments.duel_notes(facts, name, kill=is_kill)
                 mo["notes"] = mo["notes"][:1] + notes + mo["notes"][1:]
             except Exception as e:  # noqa: BLE001 - Clip bleibt nutzbar ohne Duell-Detail
                 mo["notes"].append({"tone": "info", "text": f"Duell-Detail nicht lesbar: {e}"})

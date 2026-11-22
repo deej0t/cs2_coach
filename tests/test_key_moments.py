@@ -49,3 +49,15 @@ def test_duel_facts_who_saw_first_and_crosshair_side():
     text = " ".join(n["text"] for n in notes)
     assert "469 ms früher" in text and "rechts" in text
     assert safe_angle(float("nan")) == 0 and safe_angle("x") == 0 and safe_angle(12.6) == 13
+
+
+def test_best_kills_matches_by_order_and_skips_mismatched_rounds():
+    from cs2_coach.key_moments import best_kills
+    data = {"match": {"demo_file": "m.dem"}, "kill_positions": [
+        {"t": "k", "r": 3, "tk": 500, "e": "B", "w": "ak47", "p": ""},
+        {"t": "k", "r": 3, "tk": 300, "e": "A", "w": "ak47", "p": ""},
+        {"t": "k", "r": 4, "tk": 900, "e": "C", "w": "awp", "p": ""}]}
+    d = lambda sec, cost: {"side": "T", "cost": cost, "before": 60.0, "second": sec, "enemy": 5, "own": 4, "planted": False}  # noqa: E731
+    kills = {("m", 3): [d(10, 5.0), d(20, 12.0)], ("m", 4): [d(5, 50.0), d(6, 1.0)]}
+    out = best_kills(data, kills)
+    assert [(m["opponent"], m["gain"], m["side"], m["before"]) for m in out] == [("B", 12.0, "CT", 40.0), ("A", 5.0, "CT", 40.0)]

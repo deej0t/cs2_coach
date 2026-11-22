@@ -192,8 +192,11 @@ def duel_facts(rows: list[dict], shots: list[dict], me: str, killer: str, death_
     return out
 
 
-def duel_notes(f: dict, killer_name: str) -> tuple[list[dict], list[dict]]:
-    """Kommentare und Zeitmarken (fuer Einblendungen im Clip) aus duel_facts."""
+def duel_notes(f: dict, killer_name: str, kill: bool = False) -> tuple[list[dict], list[dict]]:
+    """Kommentare und Zeitmarken (fuer Einblendungen im Clip) aus duel_facts.
+
+    ``kill``: das Duell endete mit deinem Kill statt deinem Tod.
+    """
     notes, events = [], []
     ms = lambda ticks: round(ticks * 1000 / TICKRATE)  # noqa: E731
     mine, his = f["my_sight"], f["his_sight"]
@@ -201,7 +204,10 @@ def duel_notes(f: dict, killer_name: str) -> tuple[list[dict], list[dict]]:
         events.append({"tick": his, "text": f"{killer_name} sieht dich", "tone": "bad"})
     if mine is not None:
         events.append({"tick": mine, "text": f"Du siehst {killer_name}", "tone": "info"})
-    if mine is None:
+    if mine is None and kill:
+        notes.append({"tone": "info", "text": f"Vor dem Kill gab es keinen Sichtkontakt zu {killer_name} - durch Smoke/Wand "
+                      "oder so schnell, dass die Demo ihn noch nicht als gesehen fuehrte (unter ~0,1 s)."})
+    elif mine is None:
         notes.append({"tone": "bad", "text": f"Du hattest {killer_name} vor deinem Tod nicht im Blick "
                       "(von hinten, durch Smoke oder sehr schnell)."})
     elif his is not None:
@@ -225,7 +231,7 @@ def duel_notes(f: dict, killer_name: str) -> tuple[list[dict], list[dict]]:
                 txt += f", seiner: {ms(f['his_shot'] - his)} ms"
             notes.append({"tone": "info", "text": txt + "."})
             events.append({"tick": f["my_shot"], "text": "Dein erster Schuss", "tone": "info"})
-        else:
+        elif not kill:
             notes.append({"tone": "bad", "text": "Du hast zwischen Sichtkontakt und Tod nicht geschossen."})
     if f["his_shot"] is not None:
         events.append({"tick": f["his_shot"], "text": f"{killer_name} schießt", "tone": "bad"})
@@ -250,3 +256,103 @@ def scan_duel(demo_path: str, me: str, killer: str, death_tick: int) -> dict:
     except Exception:  # noqa: BLE001 - ohne Schuesse bleibt der Rest
         pass
     return duel_facts(rows, shots, me, killer, death_tick)
+
+
+# ── Gute Momente: deine wertvollsten Kills ────────────────────────────────
+# Ein Kill bringt deinem Team genau das, was der Tod den Gegner kostet
+# (zwei Seiten, Summe 100 %) - derselbe Preis wie bei costly_moments, nur
+# aus der anderen Richtung gelesen.
+
+def priced(cfg: dict, config_path, me: str, prefer: list[str] | None = None, scan_new: int = 0):
+    """(eigene Tode, eigene Kills) mit Preis, Schluessel (Demo-Stamm, Runde).
+
+    Tode: ein Eintrag je Runde (wie costly_moments.priced_own_deaths), Kills:
+    Liste je Runde in Reihenfolge der Rundensekunde.
+    """
+    from .duel_value import priced_deaths
+    from .winprob import collect
+    if not me:
+        return {}, {}
+    matches = collect(cfg, config_path, log=lambda *_: None, max_new=scan_new, prefer=prefer)
+    if len(matches) < 2:
+        return {}, {}
+    deaths, kills = {}, {}
+    for d in priced_deaths(matches):
+        key = (d["demo"], d["round"])
+        if d["sid"] == me:
+            deaths[key] = d
+        elif d["by"] == me:
+            kills.setdefault(key, []).append(d)
+    for v in kills.values():
+        v.sort(key=lambda d: d["second"])
+    return deaths, kills
+
+
+def best_kills(data: dict, kills: dict, top: int = 5) -> list[dict]:
+    """Deine Kills dieses Matches, die am meisten Siegchance gebracht haben.
+
+    Zuordnung zum Export (Tick, Gegnername) ueber die Reihenfolge innerhalb der
+    Runde: der n-te Kill im Export ist der n-te bepreiste Kill. Stimmt die
+    Anzahl nicht ueberein, wird die Runde ausgelassen statt geraten.
+    """
+    from pathlib import Path
+    stem = Path((data.get("match") or {}).get("demo_file") or "").stem
+    per_round: dict[int, list[dict]] = {}
+    for kp in data.get("kill_positions") or []:
+        if kp.get("t") == "k":
+            per_round.setdefault(int(kp.get("r") or 0), []).append(kp)
+    out = []
+    for r, kps in per_round.items():
+        priced_round = kills.get((stem, r)) or []
+        if len(priced_round) != len(kps):
+            continue
+        for kp, d in zip(sorted(kps, key=lambda k: int(k.get("tk") or 0)), priced_round):
+            mine = "T" if d["side"] == "CT" else "CT"
+            out.append({"kind": "kill", "round": r, "side": mine, "gain": d["cost"],
+                        "before": round(100 - d["before"], 1), "second": d["second"],
+                        "own": d["enemy"], "enemy": d["own"], "planted": d["planted"],
+                        "tick": int(kp.get("tk") or 0), "place": kp.get("p") or "",
+                        "weapon": kp.get("w") or "", "opponent": kp.get("e") or ""})
+    out.sort(key=lambda m: -m["gain"])
+    return out[:top]
+
+
+def kill_headline(m: dict) -> str:
+    from .live_plan import pretty_place
+    where = f" in {pretty_place(m['place'])}" if m["place"] else ""
+    return (f"Runde {m['round']} als {m['side']}{where}: Kill an {m['opponent']} ({m['weapon']}) "
+            f"im {m['own']} gegen {m['enemy']} nach {m['second']:g} s (Siegchance vorher {m['before']:g} %)")
+
+
+def annotate_kill(replay: dict, kill_tick: int, scale: float) -> dict:
+    """Markierungen fuer einen eigenen Kill: du gruen, dein Opfer rot, Linie dazwischen."""
+    players = replay.get("players") or []
+    frames = replay.get("frames") or []
+    if not frames:
+        return {"focus": 0, "clip": [0, 0], "marks": [], "notes": []}
+    me = next((i for i, p in enumerate(players) if p.get("is_target")), None)
+    my_sid = players[me]["steamid"] if me is not None else ""
+    kill = next((k for k in replay.get("kills") or []
+                 if k["attacker"] == my_sid and abs(k["tick"] - kill_tick) <= TICKRATE), None)
+    if kill:
+        kill_tick = kill["tick"]
+    focus = _frame_at(frames, kill_tick)
+    pos = {e[0]: e for e in frames[max(focus - 1, 0)]["p"]}
+    fps = replay.get("fps") or 8
+    clip = [max(focus - LEAD_SECONDS * fps, 0), min(focus + TAIL_SECONDS * fps, len(frames) - 1)]
+    victim_idx = next((i for i, p in enumerate(players) if kill and p["steamid"] == kill["victim"]), None)
+    marks, notes = [], []
+    mine, victim = pos.get(me), pos.get(victim_idx)
+    if mine is not None:
+        marks.append({"type": "circle", "x": mine[1], "y": mine[2], "r": 22, "tone": "good", "label": "du"})
+    if mine is not None and victim is not None:
+        d = math.hypot(mine[1] - victim[1], mine[2] - victim[2]) * scale
+        marks.append({"type": "line", "x1": mine[1], "y1": mine[2], "x2": victim[1], "y2": victim[2], "tone": "good"})
+        marks.append({"type": "circle", "x": victim[1], "y": victim[2], "r": 14, "tone": "enemy",
+                      "label": players[victim_idx]["name"][:12]})
+        weapon = (kill.get("weapon") or "").replace("weapon_", "")
+        notes.append({"tone": "good", "text": f"Kill gegen {players[victim_idx]['name']}"
+                      + (f" ({weapon})" if weapon else "") + f" aus {_meters(d)} m."})
+    return {"focus": focus, "clip": clip, "marks": marks, "notes": notes,
+            "killer": kill["victim"] if kill else "", "killer_idx": victim_idx, "me_idx": me,
+            "death_tick": kill_tick, "kind": "kill"}

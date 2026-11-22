@@ -5,7 +5,7 @@
 {% block content %}
 <h2>{{ _('Schlüsselmomente') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-4);">
-    {{ _('Deine teuersten Tode eines Matches als kommentierte Szene: Zeitlupe vor dem Tod, Stopp im Moment, Markierungen auf der Karte. Nur Tode, bei denen noch ein Mitspieler lebte. Rekonstruktion aus Positionsdaten, kein Spielvideo. Kegel = Blickrichtung (grün du, rot dein Killer). Sichtkontakt kommt aus der Radar-Sichtbarkeit der Demo und ist für beide Seiten um ~0,1 s verzögert – Vergleiche zwischen euch sind fair, absolute Millisekunden nur grob.') }}
+    {{ _('Deine wertvollsten Kills und teuersten Tode eines Matches als kommentierte Szene: Zeitlupe vorher, Stopp im Moment, Markierungen auf der Karte. Tode nur, wenn noch ein Mitspieler lebte. Rekonstruktion aus Positionsdaten, kein Spielvideo. Kegel = Blickrichtung (grün du, rot dein Gegner). Sichtkontakt kommt aus der Radar-Sichtbarkeit der Demo und ist für beide Seiten um ~0,1 s verzögert – Vergleiche zwischen euch sind fair, absolute Millisekunden nur grob.') }}
 </p>
 
 <style>
@@ -32,13 +32,22 @@
 {% if error %}<p style="color:#f87171;">{{ error }}</p>{% endif %}
 {% if not files %}
 <p>{{ _('Noch keine Exports vorhanden.') }}</p>
-{% elif not moments %}
-<p>{{ _('Für dieses Match gibt es keine bepreisten Tode (zu wenige Matches im Siegchance-Modell oder kein Tod mit lebendem Mitspieler).') }}</p>
+{% elif not moments and not good %}
+<p>{{ _('Für dieses Match gibt es keine bepreisten Momente (zu wenige Matches im Siegchance-Modell).') }}</p>
 {% else %}
 <div class="km-wrap">
     <div>
+        {% if good %}<h3 style="font-size:13px;margin:0 0 8px;color:#4ade80;">{{ _('Deine wertvollsten Kills') }}</h3>{% endif %}
+        {% for m in good %}
+        <div class="km-item" data-kind="kill" data-round="{{ m.round }}" data-tick="{{ m.tick }}"
+             {% if demo_ok %}onclick="kmLoad(this)"{% endif %}>
+            <span class="km-cost" style="color:#4ade80;">+{{ m.gain|round(0)|int }}</span> {{ _('Punkte Siegchance') }}<br>
+            <span style="color:var(--color-neutral-500);">{{ m.headline }}</span>
+        </div>
+        {% endfor %}
+        {% if moments %}<h3 style="font-size:13px;margin:16px 0 8px;color:#f87171;">{{ _('Deine teuersten Tode') }}</h3>{% endif %}
         {% for m in moments %}
-        <div class="km-item" data-round="{{ m.round }}" data-tick="{{ m.tick }}"
+        <div class="km-item" data-kind="death" data-round="{{ m.round }}" data-tick="{{ m.tick }}"
              {% if demo_ok %}onclick="kmLoad(this)"{% endif %}>
             <span class="km-cost">−{{ m.cost|round(0)|int }}</span> {{ _('Punkte Siegchance') }}<br>
             <span style="color:var(--color-neutral-500);">{{ m.headline }}</span>
@@ -79,7 +88,8 @@ function kmLoad(el) {
     title.textContent = 'Runde ' + el.dataset.round + ' — wird geladen...';
     document.getElementById('km-notes').innerHTML = '';
     var url = '{{ url_for("moments_page.clip", filename=chosen, round_num=1, tick=0) }}'
-        .replace(/\/1\/0$/, '/' + el.dataset.round + '/' + el.dataset.tick);
+        .replace(/\/1\/0$/, '/' + el.dataset.round + '/' + el.dataset.tick) + '?kind=' + el.dataset.kind;
+    km.kind = el.dataset.kind;
     fetch(url).then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
         .then(function(res) {
             if (!res.ok) { title.textContent = res.j.error || 'Fehler'; return; }
@@ -150,13 +160,13 @@ function kmDraw() {
         var dt = (km.data.frames[mo.focus].t - frame.t) / 64;
         ctx.font = '600 14px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
         ctx.fillStyle = '#fbbf24';
-        ctx.fillText('Tod in ' + dt.toFixed(1) + ' s', 12, 12);
+        ctx.fillText((km.kind === 'kill' ? 'Kill in ' : 'Tod in ') + dt.toFixed(1) + ' s', 12, 12);
     } else {
         (mo.marks || []).forEach(function(m) { kmMark(ctx, s, m); });
         if (km.frame === mo.focus) {
             ctx.font = '700 16px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-            ctx.fillStyle = '#f87171';
-            ctx.fillText('■ Moment des Todes', 12, 12);
+            ctx.fillStyle = km.kind === 'kill' ? '#4ade80' : '#f87171';
+            ctx.fillText(km.kind === 'kill' ? '■ Dein Kill' : '■ Moment des Todes', 12, 12);
         }
     }
     var secs = ((frame.t - km.data.start_tick) / 64).toFixed(1);
