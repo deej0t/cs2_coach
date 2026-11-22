@@ -44,11 +44,14 @@ function init() {
 }
 
 function resize() {
+    // Groesse kommt aus dem CSS (Spaltenbreite, Vollbild) - die Zeichenflaeche folgt ihr
+    if (!renderer) return;
     const cv = canvasEl();
-    const w = cv.clientWidth || 640;
-    renderer.setSize(w, Math.round(w * 9 / 16), false);
-    camera.aspect = 16 / 9;
+    const w = cv.clientWidth || 960, h = cv.clientHeight || Math.round(w * 9 / 16);
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    renderer.render(scene, camera);
 }
 
 async function loadGeo(mapKey) {
@@ -194,6 +197,7 @@ async function show(newMode) {
         data = km.data;
         msg.textContent = '';
         if (newMode !== 'free') controls.enabled = false;
+        resize();
         draw();
     } catch (e) { msg.textContent = e.message; }
 }
@@ -204,5 +208,13 @@ window.km3d = {
     show,
 };
 document.querySelectorAll('[data-km-view]').forEach(b => b.addEventListener('click', () => show(b.dataset.kmView)));
+document.getElementById('km-3d-full')?.addEventListener('click', () => {
+    const box = document.getElementById('km-3d-wrap');
+    if (document.fullscreenElement) document.exitFullscreen(); else box.requestFullscreen();
+});
+document.addEventListener('fullscreenchange', () => {
+    requestAnimationFrame(() => { resize(); draw(); });
+});
+if (window.ResizeObserver) new ResizeObserver(() => { resize(); draw(); }).observe(canvasEl());
 mode = '2d';
 </script>
