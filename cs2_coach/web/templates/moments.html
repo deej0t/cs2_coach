@@ -67,6 +67,17 @@
             </select>
             <span id="km-time" style="font-size:11px;color:var(--color-neutral-500);"></span>
         </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:var(--space-2);">
+            <button class="btn btn-ghost btn-primary" data-km-view="2d">2D-Karte</button>
+            <button class="btn btn-ghost" data-km-view="me">3D: deine Sicht</button>
+            <button class="btn btn-ghost" data-km-view="enemy">3D: Sicht des Gegners</button>
+            <button class="btn btn-ghost" data-km-view="free">3D: frei (Maus)</button>
+        </div>
+        <div id="km-3d-wrap" style="display:none;position:relative;max-width:960px;">
+            <canvas id="km-3d" style="width:100%;border-radius:var(--radius-md);display:block;"></canvas>
+            <div id="km-3d-msg" style="position:absolute;top:8px;left:10px;font-size:13px;color:#111;font-weight:600;"></div>
+            <p style="font-size:11px;color:var(--color-neutral-600);margin-top:4px;">{{ _('Schlichtes Kollisionsmodell der Map, keine Spielgrafik. Linie = Blickrichtung. Sichtfeld wie CS2 (106°).') }}</p>
+        </div>
         <canvas id="km-canvas" width="640" height="640" style="width:100%;max-width:640px;border-radius:var(--radius-md);background:var(--color-bg);"></canvas>
         <ul class="km-notes" id="km-notes"></ul>
     </div>
@@ -90,6 +101,7 @@ function kmLoad(el) {
     var url = '{{ url_for("moments_page.clip", filename=chosen, round_num=1, tick=0) }}'
         .replace(/\/1\/0$/, '/' + el.dataset.round + '/' + el.dataset.tick) + '?kind=' + el.dataset.kind;
     km.kind = el.dataset.kind;
+    km.url = url;
     fetch(url).then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
         .then(function(res) {
             if (!res.ok) { title.textContent = res.j.error || 'Fehler'; return; }
@@ -100,6 +112,7 @@ function kmLoad(el) {
                 var li = document.createElement('li');
                 li.className = n.tone; li.textContent = n.text; ul.appendChild(li);
             });
+            if (window.km3d) window.km3d.reset();
             km.img = new Image();
             km.img.onload = km.img.onerror = kmRestart;
             km.img.src = '{{ url_for("static", filename="radars/") }}' + km.data.map + '.png';
@@ -169,6 +182,7 @@ function kmDraw() {
             ctx.fillText(km.kind === 'kill' ? '■ Dein Kill' : '■ Moment des Todes', 12, 12);
         }
     }
+    if (window.km3d) window.km3d.draw();
     var secs = ((frame.t - km.data.start_tick) / 64).toFixed(1);
     document.getElementById('km-time').textContent = secs + ' s';
 }
@@ -234,4 +248,5 @@ function kmMark(ctx, s, m) {
     ctx.restore();
 }
 </script>
+{% include '_partials/moment_3d_js.html' %}
 {% endblock %}

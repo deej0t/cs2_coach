@@ -1,0 +1,208 @@
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+<script type="module">
+// 3D-Ansicht der Schluesselmomente: Kollisionsgeometrie der Map (map3d.py) plus
+// Spieler aus der Demo. Kamera aus deinen Augen, aus denen des Gegners oder frei.
+// Koordinaten = Spieleinheiten, Z oben - wie in der Demo, keine Umrechnung.
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const COLORS = { self: 0x4ade80, mate: 0x60a5fa, enemy: 0xf87171, unknown: 0x9ca3af };
+const VFOV = 73.7;           // vertikal zu 106° horizontal bei 16:9 (CS2-Standard)
+const EYE = 64, EYE_DUCK = 46;
+const geoCache = {};
+
+let renderer, scene, camera, controls, world, playersGroup, overlay, mode = 'me', data = null;
+
+function canvasEl() { return document.getElementById('km-3d'); }
+
+function init() {
+    if (renderer) return;
+    const cv = canvasEl();
+    renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x9fb4c7);
+    scene.fog = new THREE.Fog(0x9fb4c7, 1500, 6000);
+    camera = new THREE.PerspectiveCamera(VFOV, 16 / 9, 4, 20000);
+    camera.up.set(0, 0, 1);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x6b5b45, 1.6));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+    sun.position.set(0.4, 0.3, 1);
+    scene.add(sun);
+    playersGroup = new THREE.Group();
+    scene.add(playersGroup);
+    overlay = new THREE.Group();
+    scene.add(overlay);
+    controls = new OrbitControls(camera, cv);
+    controls.enabled = false;
+    controls.addEventListener('change', () => renderer.render(scene, camera));
+    resize();
+    window.addEventListener('resize', resize);
+}
+
+function resize() {
+    const cv = canvasEl();
+    const w = cv.clientWidth || 640;
+    renderer.setSize(w, Math.round(w * 9 / 16), false);
+    camera.aspect = 16 / 9;
+    camera.updateProjectionMatrix();
+}
+
+async function loadGeo(mapKey) {
+    if (geoCache[mapKey]) return geoCache[mapKey];
+    const r = await fetch('{{ url_for("moments_page.geo", map_key="MAPKEY") }}'.replace('MAPKEY', mapKey));
+    if (!r.ok) throw new Error('Für diese Map gibt es noch keine 3D-Geometrie');
+    const buf = await r.arrayBuffer();
+    const [nv, ns, nt] = new Uint32Array(buf, 0, 3);
+    const pos = new Float32Array(buf, 12, nv * 3);
+    const idx = new Uint32Array(buf, 12 + nv * 12, ns + nt);
+    const g = new THREE.Group();
+    const mk = (from, count, mat) => {
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setIndex(new THREE.BufferAttribute(idx.subarray(from, from + count), 1));
+        geo.computeVertexNormals();
+        g.add(new THREE.Mesh(geo, mat));
+    };
+    mk(0, ns, new THREE.MeshStandardMaterial({ color: 0xc9b99a, flatShading: true, roughness: 0.95, side: THREE.DoubleSide }));
+    if (nt) mk(ns, nt, new THREE.MeshStandardMaterial({ color: 0x8899aa, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }));
+    geoCache[mapKey] = g;
+    return g;
+}
+
+function dirFrom(yaw, pitch) {
+    // Source: yaw gegen den Uhrzeigersinn ab +X, pitch positiv = nach unten
+    const y = yaw * Math.PI / 180, p = pitch * Math.PI / 180;
+    return new THREE.Vector3(Math.cos(p) * Math.cos(y), Math.cos(p) * Math.sin(y), -Math.sin(p));
+}
+
+function label(text, color) {
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 64;
+    const x = c.getContext('2d');
+    x.font = 'bold 30px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.lineWidth = 6; x.strokeStyle = 'rgba(0,0,0,0.85)'; x.strokeText(text, 128, 32);
+    x.fillStyle = '#' + color.toString(16).padStart(6, '0'); x.fillText(text, 128, 32);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false }));
+    s.scale.set(80, 20, 1);
+    return s;
+}
+
+function playerMesh(team, isFocus) {
+    const g = new THREE.Group();
+    const color = COLORS[team] || COLORS.unknown;
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(14, 44, 4, 8),
+        new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35 }));
+    body.rotation.x = Math.PI / 2;
+    body.position.z = 36;
+    g.add(body);
+    if (isFocus) {
+        // Ring am Boden: die beiden Duellanten sind sofort zu finden
+        const ring = new THREE.Mesh(new THREE.RingGeometry(26, 34, 32),
+            new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.9 }));
+        ring.position.z = 2;
+        g.add(ring);
+    }
+    return g;
+}
+
+function nearestTick(t) {
+    const keys = Object.keys(data.view3d || {}).map(Number);
+    let best = null;
+    keys.forEach(k => { if (k <= t && (best === null || k > best)) best = k; });
+    return best === null ? keys[0] : best;
+}
+
+function draw() {
+    if (!renderer || !data || !data.view3d || !window.km.data) return;
+    const km = window.km, mo = km.data.moment;
+    const frame = km.data.frames[km.frame];
+    if (!frame) return;
+    const rows = data.view3d[nearestTick(frame.t)] || [];
+    playersGroup.clear();
+    overlay.clear();
+    const at = {};
+    rows.forEach(r => {
+        const [i, x, y, z, yaw, pitch, hp, duck] = r;
+        at[i] = r;
+        if (hp <= 0) return;
+        const pl = km.data.players[i];
+        const focus = i === mo.me_idx || i === mo.killer_idx;
+        const m = playerMesh(pl.team, focus);
+        m.position.set(x, y, z);
+        if (duck) m.scale.z = 0.72;
+        playersGroup.add(m);
+        const lb = label(pl.name.slice(0, 12), COLORS[pl.team] || COLORS.unknown);
+        lb.position.set(x, y, z + 92);
+        playersGroup.add(lb);
+        if (focus) {
+            // Blickstrahl: wohin dieser Spieler gerade zielt
+            const eye = new THREE.Vector3(x, y, z + (duck ? EYE_DUCK : EYE));
+            const end = eye.clone().add(dirFrom(yaw, pitch).multiplyScalar(900));
+            overlay.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([eye, end]),
+                new THREE.LineBasicMaterial({ color: COLORS[pl.team] })));
+        }
+    });
+
+    const viewer = mode === 'me' ? mo.me_idx : (mode === 'enemy' ? mo.killer_idx : null);
+    const v = viewer !== null && viewer !== undefined ? at[viewer] : null;
+    if (v && v[6] > 0) {
+        controls.enabled = false;
+        const eye = new THREE.Vector3(v[1], v[2], v[3] + (v[7] ? EYE_DUCK : EYE));
+        camera.position.copy(eye);
+        camera.lookAt(eye.clone().add(dirFrom(v[4], v[5])));
+        // Den eigenen Koerper ausblenden, sonst steht die Kamera in der Kapsel
+        playersGroup.children.forEach(c => { if (Math.abs(c.position.x - v[1]) < 1 && Math.abs(c.position.y - v[2]) < 1) c.visible = false; });
+    } else {
+        // Frei / Zuschauer: die beiden Duellanten von schraeg oben, mit Maus drehbar
+        if (!controls.enabled) {
+            const a = at[mo.me_idx] || rows[0], b = at[mo.killer_idx] || a;
+            if (a) {
+                const mid = new THREE.Vector3((a[1] + b[1]) / 2, (a[2] + b[2]) / 2, (a[3] + b[3]) / 2);
+                controls.target.copy(mid);
+                camera.position.set(mid.x - 500, mid.y - 500, mid.z + 650);
+            }
+            controls.enabled = true;
+            controls.update();
+        }
+    }
+    renderer.render(scene, camera);
+}
+
+async function show(newMode) {
+    mode = newMode;
+    const km = window.km;
+    const box = document.getElementById('km-3d-wrap'), cv2d = document.getElementById('km-canvas');
+    document.querySelectorAll('[data-km-view]').forEach(b => b.classList.toggle('btn-primary', b.dataset.kmView === newMode));
+    if (newMode === '2d' || !km.data) { box.style.display = 'none'; cv2d.style.display = ''; return; }
+    box.style.display = ''; cv2d.style.display = 'none';
+    init();
+    const msg = document.getElementById('km-3d-msg');
+    try {
+        if (!km.data.view3d) {
+            msg.textContent = '3D-Daten werden geladen...';
+            const r = await fetch(km.url + '&3d=1');
+            const j = await r.json();
+            if (!r.ok || !j.view3d) throw new Error(j.error || j.view3d_error || 'keine 3D-Daten');
+            km.data.view3d = j.view3d;
+        }
+        const g = await loadGeo(km.data.map);
+        if (world !== g) { if (world) scene.remove(world); world = g; scene.add(g); }
+        data = km.data;
+        msg.textContent = '';
+        if (newMode !== 'free') controls.enabled = false;
+        draw();
+    } catch (e) { msg.textContent = e.message; }
+}
+
+window.km3d = {
+    draw: () => { if (mode !== '2d') draw(); },
+    reset: () => { data = null; if (controls) controls.enabled = false; show(mode === '2d' ? '2d' : mode); },
+    show,
+};
+document.querySelectorAll('[data-km-view]').forEach(b => b.addEventListener('click', () => show(b.dataset.kmView)));
+mode = '2d';
+</script>

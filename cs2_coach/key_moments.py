@@ -356,3 +356,33 @@ def annotate_kill(replay: dict, kill_tick: int, scale: float) -> dict:
     return {"focus": focus, "clip": clip, "marks": marks, "notes": notes,
             "killer": kill["victim"] if kill else "", "killer_idx": victim_idx, "me_idx": me,
             "death_tick": kill_tick, "kind": "kill"}
+
+
+# ── 3D: Positionen mit Hoehe und Neigung fuer den Clip ────────────────────
+EYE_HEIGHT = 64             # Augenhoehe stehend (Spieleinheiten ueber den Fuessen)
+EYE_HEIGHT_DUCKED = 46
+
+
+def scan_3d(demo_path: str, players: list[dict], ticks: list[int]) -> dict:
+    """Je Clip-Tick: [Spieler-Index, x, y, z, yaw, pitch, hp, geduckt] in Spieleinheiten.
+
+    Spieler-Index wie im Replay (``players``), damit 2D und 3D dieselben
+    Personen meinen. Nur fuer die Clip-Ticks - eine ganze Runde waere
+    unnoetig gross.
+    """
+    from demoparser2 import DemoParser
+    if not ticks:
+        return {}
+    idx = {p["steamid"]: i for i, p in enumerate(players)}
+    df = DemoParser(demo_path).parse_ticks(["X", "Y", "Z", "yaw", "pitch", "health", "ducking"], ticks=ticks)
+    out: dict[int, list] = {}
+    cols = [df[c] if c in df.columns else [None] * len(df) for c in
+            ("tick", "steamid", "X", "Y", "Z", "yaw", "pitch", "health", "ducking")]
+    for t, sid, x, y, z, yaw, pitch, hp, duck in zip(*cols):
+        i = idx.get(str(sid))
+        vals = (x, y, z)
+        if i is None or any(v is None or not math.isfinite(float(v)) for v in vals):
+            continue
+        out.setdefault(int(t), []).append([i, round(float(x), 1), round(float(y), 1), round(float(z), 1),
+                                           safe_angle(yaw), safe_angle(pitch), int(hp or 0), bool(duck)])
+    return out

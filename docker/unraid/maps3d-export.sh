@@ -1,0 +1,45 @@
+#!/bin/bash
+# maps3d-export: Kartengeometrie fuer die 3D-Ansicht der Schluesselmomente (/momente).
+#
+# Liest die Kollisionsgeometrie (maps/<map>/world_physics.vmdl_c) aus den Map-VPKs
+# des CS2-Servers, exportiert sie mit Source2Viewer-CLI als glb und wandelt sie im
+# cs2-coach-Container in kompakte .geo.gz um (cs2_coach/map3d.py, ~2-3 MB je Map).
+# Source2Viewer liegt auf dem Host, nicht im Image: es braucht die Spieldateien,
+# und die gibt es nur hier.
+#
+# Nach CS2-Updates mit geaenderten Maps einfach erneut ausfuehren (dauert < 1 min).
+# Aufruf: bash /boot/config/scripts/maps3d-export.sh [map ...]   (ohne Argument: alle de_-Maps)
+set -euo pipefail
+
+mountpoint -q /mnt/user || { echo "/mnt/user nicht gemountet - Abbruch"; exit 1; }
+
+S2V_VERSION="21.1"
+TOOLS=/mnt/user/appdata/s2v
+MAPS=/mnt/ssdcache/appdata/cs2/game/csgo/maps
+DATA=/mnt/user/appdata/cs2-coach/data       # im Container /data
+WORK="$DATA/maps3d_glb"
+
+mkdir -p "$TOOLS/bin" "$WORK"
+if [ ! -x "$TOOLS/bin/Source2Viewer-CLI" ]; then
+    curl -sfLo "$TOOLS/cli.zip" "https://github.com/ValveResourceFormat/ValveResourceFormat/releases/download/$S2V_VERSION/cli-linux-x64.zip"
+    unzip -oq "$TOOLS/cli.zip" -d "$TOOLS/bin"
+    chmod +x "$TOOLS/bin/Source2Viewer-CLI"
+fi
+
+if [ "$#" -gt 0 ]; then names=("$@"); else names=(); for f in "$MAPS"/de_*.vpk; do n=$(basename "$f" .vpk); names+=("$n"); done; fi
+
+for n in "${names[@]}"; do
+    n="de_${n#de_}"
+    vpk="$MAPS/$n.vpk"
+    [ -f "$vpk" ] || { echo "$n: kein VPK"; continue; }
+    rm -rf "$WORK/tmp"
+    "$TOOLS/bin/Source2Viewer-CLI" -i "$vpk" -f "maps/$n/world_physics.vmdl_c" \
+        --gltf_export_format glb -o "$WORK/tmp" >/dev/null
+    mkdir -p "$WORK/$n"
+    mv "$WORK/tmp/maps/$n/world_physics_physics.glb" "$WORK/$n/" && echo "$n: exportiert"
+done
+rm -rf "$WORK/tmp"
+
+# Umwandeln im Container (numpy ist dort vorhanden); Ziel = maps3d/ neben der Config
+docker exec cs2-coach python -m cs2_coach.map3d /data/maps3d_glb /data/maps3d
+rm -rf "$WORK"
