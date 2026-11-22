@@ -32,3 +32,20 @@ def test_far_mate_without_trade_is_bad():
     texts = " ".join(n["text"] for n in out["notes"] if n["tone"] == "bad")
     assert "zu weit" in texts and "Kein Trade" in texts
     assert out["marks"][0]["type"] == "circle"
+
+
+def test_duel_facts_who_saw_first_and_crosshair_side():
+    from cs2_coach.key_moments import duel_facts, duel_notes, safe_angle
+    rows = []
+    for t in range(100, 201):
+        # Gegner sieht dich ab Tick 120, du ihn ab 150; du schaust nach +X, er steht leicht rechts (y < 0)
+        rows.append({"tick": t, "steamid": "me", "X": 0, "Y": 0, "yaw": 0, "spotted_by": ["k"] if t >= 120 else []})
+        rows.append({"tick": t, "steamid": "k", "X": 500, "Y": -100, "yaw": 180, "spotted_by": ["me"] if t >= 150 else []})
+    shots = [{"tick": 125, "steamid": "k"}, {"tick": 170, "steamid": "me"}]
+    f = duel_facts(rows, shots, "me", "k", 200)
+    assert (f["his_sight"], f["my_sight"], f["my_shot"], f["his_shot"]) == (120, 150, 170, 125)
+    assert f["offset"] > 0  # rechts
+    notes, events = duel_notes(f, "Gegner")
+    text = " ".join(n["text"] for n in notes)
+    assert "469 ms früher" in text and "rechts" in text
+    assert safe_angle(float("nan")) == 0 and safe_angle("x") == 0 and safe_angle(12.6) == 13

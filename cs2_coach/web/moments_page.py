@@ -87,7 +87,18 @@ def create_blueprint(load_config, config_path) -> Blueprint:
         if "error" in replay:
             return jsonify(replay), 400
         replay["map"] = map_key
-        replay["moment"] = key_moments.annotate(replay, tick, MAP_RADAR_DATA[map_key]["scale"])
+        replay["scale"] = MAP_RADAR_DATA[map_key]["scale"]
+        mo = key_moments.annotate(replay, tick, MAP_RADAR_DATA[map_key]["scale"])
+        mo["events"] = []
+        if mo.get("killer") and mo.get("killer_idx") is not None:
+            name = replay["players"][mo["killer_idx"]]["name"]
+            try:
+                facts = key_moments.scan_duel(str(demo), _me(cfg, data), mo["killer"], mo["death_tick"])
+                notes, mo["events"] = key_moments.duel_notes(facts, name)
+                mo["notes"] = mo["notes"][:1] + notes + mo["notes"][1:]
+            except Exception as e:  # noqa: BLE001 - Clip bleibt nutzbar ohne Duell-Detail
+                mo["notes"].append({"tone": "info", "text": f"Duell-Detail nicht lesbar: {e}"})
+        replay["moment"] = mo
         return jsonify(replay)
 
     return bp

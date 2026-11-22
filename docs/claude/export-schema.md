@@ -18,4 +18,5 @@ tags: [cs2-coach, claude-context]
 - Built on demand rather than exported: positions of all 10 players over a full round cost ~0.3s regardless of resolution (8 fps ≈ 4640 rows).
 - Team colors come from `parse_ticks` `team_num` (2=T, 3=CT) in the same ticks read for positions — per round, so the half-time swap is handled automatically. Players without usable `team_num` render grey as "unknown", never guessed.
 - Grenades appear at detonation and disappear when they expire. `smokegrenade_expired` / `inferno_expire` carry the same `entityid` as the ignition, but **Steam reuses entity ids within a match** — always take the *next* end after the ignition and clamp at round end. Flash and HE have no end event and get a short fixed display time.
+- Frame entry = `[player_idx, x, y, hp, yaw]` (yaw in game degrees, 0 if missing; used for view cones on /momente). `/momente` adds `moment` (marks, notes, events) via `key_moments.annotate` + `scan_duel` (per-tick read of the last 4 s, ~2.5 s per clip).
 - Player labels are shortened to 9 chars (letters, digits, `.`, `-`, space); if nothing survives filtering, fall back to the original name.

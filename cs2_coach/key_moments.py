@@ -119,10 +119,134 @@ def annotate(replay: dict, death_tick: int, scale: float) -> dict:
             notes.append({"tone": "good", "text": f"Getradet nach {secs:.1f} s."})
         elif mates:
             notes.append({"tone": "bad", "text": f"Kein Trade durch dein Team innerhalb von {TRADE_SECONDS} s."})
-    return {"focus": focus, "clip": clip, "marks": marks, "notes": notes}
+    return {"focus": focus, "clip": clip, "marks": marks, "notes": notes,
+            "killer": kill["attacker"] if kill else "", "killer_idx": killer_idx, "me_idx": me,
+            "death_tick": death_tick}
 
 
 def headline(m: dict) -> str:
     """Kopfzeile eines Moments, ohne Nachkommastellen-Rauschen."""
     from .costly_moments import describe
     return describe(m)
+
+
+def safe_angle(v) -> int:
+    """Blickwinkel als ganze Grad, 0 bei fehlendem Wert (NaN/None im Demo-Tick)."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return 0
+    return round(f) if math.isfinite(f) else 0
+
+
+# ── Duell-Detail: wer sah wen zuerst, wohin zeigte dein Fadenkreuz ─────────
+# Sichtbarkeit = approximate_spotted_by (wie parser._process_first_sight). Das
+# Feld schlaegt fuer beide Seiten gleich verzoegert an (~124 ms) - die
+# Differenz "er sah dich X ms frueher" ist deshalb fairer als absolute Zeiten.
+DUEL_WINDOW_SECONDS = 4     # so weit vor dem Tod wird jeder Tick gelesen
+SIGHT_QUIET_TICKS = 32      # 0,5 s nicht gesehen -> neues Sehen (wie First Sight)
+
+
+def _signed_offset(ox, oy, oyaw, tx, ty) -> float:
+    """Grad, um die das Ziel neben deiner Blickrichtung liegt; positiv = rechts von dir."""
+    ideal = math.degrees(math.atan2(ty - oy, tx - ox))
+    return (oyaw - ideal + 180) % 360 - 180
+
+
+def _first_contact(ticks: list[int], seen: dict[int, bool], death_tick: int) -> int | None:
+    """Beginn des letzten durchgehenden Sichtkontakts vor dem Tod (Luecken < 0,5 s zaehlen mit)."""
+    start, last = None, None
+    for t in ticks:
+        if t > death_tick:
+            break
+        if seen.get(t):
+            if last is None or t - last > SIGHT_QUIET_TICKS:
+                start = t
+            last = t
+    return start
+
+
+def duel_facts(rows: list[dict], shots: list[dict], me: str, killer: str, death_tick: int) -> dict:
+    """Reine Auswertung ueber Tick-Zeilen (steamid, tick, X, Y, yaw, spotted_by).
+
+    ``shots``: weapon_fire-Ereignisse (tick, steamid). Rueckgabe: Ticks des
+    ersten Sichtkontakts beider Seiten, dein Fadenkreuz-Versatz in dem Moment,
+    Zeit bis zum ersten Schuss beider Seiten.
+    """
+    by = {}
+    for r in rows:
+        by.setdefault(int(r["tick"]), {})[str(r["steamid"])] = r
+    ticks = sorted(by)
+    i_see = {t: me in {str(s) for s in (by[t].get(killer, {}).get("spotted_by") or [])} for t in ticks}
+    he_sees = {t: killer in {str(s) for s in (by[t].get(me, {}).get("spotted_by") or [])} for t in ticks}
+    my_sight = _first_contact(ticks, i_see, death_tick)
+    his_sight = _first_contact(ticks, he_sees, death_tick)
+    out = {"my_sight": my_sight, "his_sight": his_sight, "offset": None, "my_shot": None, "his_shot": None}
+    if my_sight is not None:
+        a, b = by[my_sight].get(me), by[my_sight].get(killer)
+        if a and b and all(math.isfinite(float(v)) for v in (a["X"], a["Y"], a["yaw"], b["X"], b["Y"])):
+            out["offset"] = round(_signed_offset(a["X"], a["Y"], a["yaw"], b["X"], b["Y"]), 1)
+        out["my_shot"] = next((s["tick"] for s in shots if s["steamid"] == me and my_sight <= s["tick"] <= death_tick), None)
+    if his_sight is not None:
+        out["his_shot"] = next((s["tick"] for s in shots if s["steamid"] == killer and his_sight <= s["tick"] <= death_tick), None)
+    return out
+
+
+def duel_notes(f: dict, killer_name: str) -> tuple[list[dict], list[dict]]:
+    """Kommentare und Zeitmarken (fuer Einblendungen im Clip) aus duel_facts."""
+    notes, events = [], []
+    ms = lambda ticks: round(ticks * 1000 / TICKRATE)  # noqa: E731
+    mine, his = f["my_sight"], f["his_sight"]
+    if his is not None:
+        events.append({"tick": his, "text": f"{killer_name} sieht dich", "tone": "bad"})
+    if mine is not None:
+        events.append({"tick": mine, "text": f"Du siehst {killer_name}", "tone": "info"})
+    if mine is None:
+        notes.append({"tone": "bad", "text": f"Du hattest {killer_name} vor deinem Tod nicht im Blick "
+                      "(von hinten, durch Smoke oder sehr schnell)."})
+    elif his is not None:
+        d = mine - his
+        if d > 8:
+            notes.append({"tone": "bad", "text": f"{killer_name} sah dich {ms(d)} ms früher als du ihn."})
+        elif d < -8:
+            notes.append({"tone": "good", "text": f"Du sahst {killer_name} {ms(-d)} ms früher."})
+        else:
+            notes.append({"tone": "info", "text": "Ihr saht euch praktisch gleichzeitig."})
+    if f["offset"] is not None:
+        o = f["offset"]
+        side = "rechts" if o > 0 else "links"
+        tone = "good" if abs(o) <= 5 else ("info" if abs(o) <= 20 else "bad")
+        notes.append({"tone": tone, "text": f"Beim ersten Sichtkontakt lag dein Fadenkreuz {abs(o):.0f}° "
+                      + (f"{side} neben ihm." if abs(o) > 1 else "direkt auf ihm.")})
+    if mine is not None:
+        if f["my_shot"] is not None:
+            txt = f"Dein erster Schuss: {ms(f['my_shot'] - mine)} ms nach Sichtkontakt"
+            if his is not None and f["his_shot"] is not None:
+                txt += f", seiner: {ms(f['his_shot'] - his)} ms"
+            notes.append({"tone": "info", "text": txt + "."})
+            events.append({"tick": f["my_shot"], "text": "Dein erster Schuss", "tone": "info"})
+        else:
+            notes.append({"tone": "bad", "text": "Du hast zwischen Sichtkontakt und Tod nicht geschossen."})
+    if f["his_shot"] is not None:
+        events.append({"tick": f["his_shot"], "text": f"{killer_name} schießt", "tone": "bad"})
+    return notes, events
+
+
+def scan_duel(demo_path: str, me: str, killer: str, death_tick: int) -> dict:
+    """Liest das Duell-Fenster aus der Demo (jeder Tick, nur du und dein Killer)."""
+    from demoparser2 import DemoParser
+    p = DemoParser(demo_path)
+    ticks = list(range(max(death_tick - DUEL_WINDOW_SECONDS * TICKRATE, 0), death_tick + 1))
+    df = p.parse_ticks(["X", "Y", "yaw", "approximate_spotted_by"], ticks=ticks)
+    rows = [{"tick": t, "steamid": str(s), "X": x, "Y": y, "yaw": yw, "spotted_by": sp}
+            for t, s, x, y, yw, sp in zip(df["tick"], df["steamid"], df["X"], df["Y"], df["yaw"],
+                                          df["approximate_spotted_by"]) if str(s) in (me, killer)]
+    shots = []
+    try:
+        fdf = p.parse_event("weapon_fire")
+        shots = sorted(({"tick": int(t), "steamid": str(s)} for t, s in zip(fdf["tick"], fdf["user_steamid"])
+                        if ticks[0] <= int(t) <= death_tick and str(s) in (me, killer)),
+                       key=lambda s: s["tick"])
+    except Exception:  # noqa: BLE001 - ohne Schuesse bleibt der Rest
+        pass
+    return duel_facts(rows, shots, me, killer, death_tick)

@@ -107,7 +107,7 @@ def test_coordinates_are_radar_space(fake):
 
     r = build_round_replay("x.dem", 1, "A", "ancient")
     for fr in r["frames"]:
-        for _, x, y, _hp in fr["p"]:
+        for _, x, y, _hp, _yaw in fr["p"]:
             assert 0 <= x <= 1024 and 0 <= y <= 1024
 
 

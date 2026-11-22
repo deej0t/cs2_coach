@@ -5,7 +5,7 @@
 {% block content %}
 <h2>{{ _('Schlüsselmomente') }}</h2>
 <p style="color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-4);">
-    {{ _('Deine teuersten Tode eines Matches als kommentierte Szene: Zeitlupe vor dem Tod, Stopp im Moment, Markierungen auf der Karte. Nur Tode, bei denen noch ein Mitspieler lebte. Rekonstruktion aus Positionsdaten, kein Spielvideo.') }}
+    {{ _('Deine teuersten Tode eines Matches als kommentierte Szene: Zeitlupe vor dem Tod, Stopp im Moment, Markierungen auf der Karte. Nur Tode, bei denen noch ein Mitspieler lebte. Rekonstruktion aus Positionsdaten, kein Spielvideo. Kegel = Blickrichtung (grün du, rot dein Killer). Sichtkontakt kommt aus der Radar-Sichtbarkeit der Demo und ist für beide Seiten um ~0,1 s verzögert – Vergleiche zwischen euch sind fair, absolute Millisekunden nur grob.') }}
 </p>
 
 <style>
@@ -130,6 +130,9 @@ function kmTick() {
     // Im Todesmoment anhalten, damit die Markierungen lesbar sind
     if (km.frame === mo.focus && km.hold < KM_HOLD_FRAMES) { km.hold++; kmDraw(); return; }
     if (km.frame >= mo.clip[1]) { kmStop(); return; }
+    // Die letzte Sekunde vor dem Tod in halbem Tempo - dort passiert das Duell
+    km.slow = !km.slow;
+    if (km.frame >= mo.focus - km.data.fps && km.frame < mo.focus && km.slow) { kmDraw(); return; }
     km.frame++;
     kmDraw();
 }
@@ -139,6 +142,9 @@ function kmDraw() {
     rpDrawScene(canvas, km.data, km.frame, km.img, { util: true, names: true });
     var mo = km.data.moment, frame = km.data.frames[km.frame];
     var ctx = canvas.getContext('2d'), s = canvas.width / 1024;
+    kmCone(ctx, s, frame, mo.me_idx, '#4ade80');
+    kmCone(ctx, s, frame, mo.killer_idx, '#f87171');
+    kmBanners(ctx, frame);
     if (km.frame < mo.focus) {
         // Vorlauf: deinen Punkt dezent hervorheben, die Auswertung kommt im Moment selbst
         var dt = (km.data.frames[mo.focus].t - frame.t) / 64;
@@ -155,6 +161,39 @@ function kmDraw() {
     }
     var secs = ((frame.t - km.data.start_tick) / 64).toFixed(1);
     document.getElementById('km-time').textContent = secs + ' s';
+}
+
+// Sichtkegel: ~106° wie das horizontale Sichtfeld in CS2 (16:9), 25 m lang.
+// yaw ist gegen den Uhrzeigersinn ab +X, die Radar-Y-Achse zeigt nach unten -> Winkel spiegeln.
+var KM_FOV = 106, KM_CONE_UNITS = 1300;
+function kmCone(ctx, s, frame, idx, color) {
+    if (idx === null || idx === undefined) return;
+    var e = frame.p.filter(function(p) { return p[0] === idx; })[0];
+    if (!e || e[3] <= 0 || e.length < 5) return;
+    var x = e[1] * s, y = e[2] * s, a = -e[4] * Math.PI / 180, h = KM_FOV / 2 * Math.PI / 180;
+    var len = KM_CONE_UNITS / (km.data.scale || 5) * s;
+    ctx.save();
+    var g = ctx.createRadialGradient(x, y, 0, x, y, len);
+    g.addColorStop(0, color + '66'); g.addColorStop(1, color + '00');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, len, a - h, a + h); ctx.closePath(); ctx.fill();
+    // Mittellinie = Fadenkreuz
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); ctx.stroke();
+    ctx.restore();
+}
+
+// Einblendungen ("X sieht dich", "Dein erster Schuss") ab ihrem Tick 1,5 s lang
+function kmBanners(ctx, frame) {
+    var y = 40;
+    (km.data.moment.events || []).forEach(function(ev) {
+        if (frame.t < ev.tick || frame.t > ev.tick + 96) return;
+        ctx.font = '700 15px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        var w = ctx.measureText(ev.text).width + 16;
+        ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(10, y - 4, w, 24);
+        ctx.fillStyle = KM_TONE[ev.tone] || '#e5e7eb'; ctx.fillText(ev.text, 18, y);
+        y += 28;
+    });
 }
 
 // Ersten Moment direkt laden - sonst wirkt die leere Karte wie ein Fehler

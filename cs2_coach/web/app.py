@@ -2939,6 +2939,7 @@ def build_round_replay(demo_path: str, round_num: int, target_id: str = "",
     zehn Spieler gleichzeitig verfolgen lassen.
     """
     from demoparser2 import DemoParser
+    from ..key_moments import safe_angle as _km_angle
 
     parser = DemoParser(demo_path)
     ends = sorted(parser.parse_event("round_end")["tick"].tolist())
@@ -2964,7 +2965,7 @@ def build_round_replay(demo_path: str, round_num: int, target_id: str = "",
         # 2 = T, 3 = CT zum jeweiligen Zeitpunkt - damit ist der
         # Seitenwechsel zur Halbzeit automatisch beruecksichtigt und es
         # braucht keine eigene Seitenzuordnung.
-        df = parser.parse_ticks(["X", "Y", "health", "team_num"], ticks=ticks)
+        df = parser.parse_ticks(["X", "Y", "health", "team_num", "yaw"], ticks=ticks)
     except Exception as e:
         return {"error": f"Tickdaten nicht lesbar: {e}"}
 
@@ -3004,7 +3005,7 @@ def build_round_replay(demo_path: str, round_num: int, target_id: str = "",
             continue
         frames.setdefault(int(row["tick"]), []).append([
             pidx[sid], round(pos[0], 1), round(pos[1], 1),
-            int(row.get("health") or 0),
+            int(row.get("health") or 0), _km_angle(row.get("yaw")),  # Sichtkegel
         ])
 
     kills = []
