@@ -361,6 +361,7 @@ def annotate_kill(replay: dict, kill_tick: int, scale: float) -> dict:
 # ── 3D: Positionen mit Hoehe und Neigung fuer den Clip ────────────────────
 EYE_HEIGHT = 64             # Augenhoehe stehend (Spieleinheiten ueber den Fuessen)
 EYE_HEIGHT_DUCKED = 46
+VIEW3D_STEP = 2             # jeder 2. Tick = 32 Hz fuer die 3D-Ansicht
 
 
 def scan_3d(demo_path: str, players: list[dict], ticks: list[int]) -> dict:

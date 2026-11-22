@@ -105,7 +105,9 @@ def create_blueprint(load_config, config_path) -> Blueprint:
                 mo["notes"].append({"tone": "info", "text": f"Duell-Detail nicht lesbar: {e}"})
         replay["moment"] = mo
         if request.args.get("3d"):
-            clip_ticks = [f["t"] for f in replay["frames"][mo["clip"][0]:mo["clip"][1] + 1]]
+            # 32 Hz statt der 8 Hz der 2D-Frames - der Browser interpoliert dazwischen
+            fr = replay["frames"]
+            clip_ticks = list(range(fr[mo["clip"][0]]["t"], fr[mo["clip"][1]]["t"] + 1, key_moments.VIEW3D_STEP))
             try:
                 replay["view3d"] = key_moments.scan_3d(str(demo), replay["players"], clip_ticks)
             except Exception as e:  # noqa: BLE001 - 2D bleibt

@@ -22,7 +22,7 @@ function init() {
     if (renderer) return;
     const cv = canvasEl();
     renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x9fb4c7);
     scene.fog = new THREE.Fog(0x9fb4c7, 1500, 6000);
@@ -38,7 +38,6 @@ function init() {
     scene.add(overlay);
     controls = new OrbitControls(camera, cv);
     controls.enabled = false;
-    controls.addEventListener('change', () => renderer.render(scene, camera));
     resize();
     window.addEventListener('resize', resize);
 }
@@ -67,7 +66,6 @@ async function loadGeo(mapKey) {
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
         geo.setIndex(new THREE.BufferAttribute(idx.subarray(from, from + count), 1));
-        geo.computeVertexNormals();
         g.add(new THREE.Mesh(geo, mat));
     };
     mk(0, ns, new THREE.MeshStandardMaterial({ color: 0xc9b99a, flatShading: true, roughness: 0.95, side: THREE.DoubleSide }));
@@ -112,68 +110,117 @@ function playerMesh(team, isFocus) {
     return g;
 }
 
-function nearestTick(t) {
-    const keys = Object.keys(data.view3d || {}).map(Number);
-    let best = null;
-    keys.forEach(k => { if (k <= t && (best === null || k > best)) best = k; });
-    return best === null ? keys[0] : best;
+// ── Wiedergabe ───────────────────────────────────────────────────────────
+// Figuren werden einmal je Moment gebaut und danach nur bewegt. Gezeichnet
+// wird mit der Bildrate des Bildschirms; die Positionen liegen mit 32 Hz vor
+// und werden dazwischen linear interpoliert (Winkel ueber den kuerzeren Weg).
+let figures = {}, ticks3d = [], loopOn = false, camFreeSet = false;
+const _eye = new THREE.Vector3(), _end = new THREE.Vector3();
+
+function buildFigures() {
+    playersGroup.clear(); overlay.clear(); figures = {};
+    const mo = data.moment;
+    data.players.forEach((pl, i) => {
+        const focus = i === mo.me_idx || i === mo.killer_idx;
+        const color = COLORS[pl.team] || COLORS.unknown;
+        const g = playerMesh(pl.team, focus);
+        const lb = label(pl.name.slice(0, 12), color);
+        lb.position.z = 92;
+        g.add(lb);
+        let ray = null;
+        if (focus) {
+            ray = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+                                 new THREE.LineBasicMaterial({ color }));
+            ray.frustumCulled = false;
+            overlay.add(ray);
+        }
+        g.visible = false;
+        playersGroup.add(g);
+        figures[i] = { g, ray };
+    });
+    ticks3d = Object.keys(data.view3d).map(Number).sort((a, b) => a - b);
+    // Je Tick: Spieler-Index -> Zeile, fuer schnelles Nachschlagen
+    data.byTick = {};
+    ticks3d.forEach(t => { const m = {}; data.view3d[t].forEach(r => { m[r[0]] = r; }); data.byTick[t] = m; });
+    camFreeSet = false;
+}
+
+function lerpAngle(a, b, f) { const d = ((b - a + 540) % 360) - 180; return a + d * f; }
+
+function currentTick() {
+    const km = window.km, frames = km.data.frames;
+    const fr = frames[km.frame];
+    if (!fr) return ticks3d[0];
+    const nx = frames[Math.min(km.frame + 1, frames.length - 1)];
+    const f = km.timer && km.stepMs ? Math.min((performance.now() - km.stepAt) / km.stepMs, 1) : 0;
+    return fr.t + (nx.t - fr.t) * f;
+}
+
+function sample(t) {
+    // die zwei umgebenden 32-Hz-Stuetzstellen und der Anteil dazwischen
+    let lo = 0, hi = ticks3d.length - 1;
+    if (t <= ticks3d[0]) return [data.byTick[ticks3d[0]], data.byTick[ticks3d[0]], 0];
+    if (t >= ticks3d[hi]) return [data.byTick[ticks3d[hi]], data.byTick[ticks3d[hi]], 0];
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (ticks3d[m] <= t) lo = m; else hi = m; }
+    return [data.byTick[ticks3d[lo]], data.byTick[ticks3d[hi]], (t - ticks3d[lo]) / (ticks3d[hi] - ticks3d[lo])];
+}
+
+function pose(a, b, f) {
+    if (!a) return null;
+    if (!b) b = a;
+    return { x: a[1] + (b[1] - a[1]) * f, y: a[2] + (b[2] - a[2]) * f, z: a[3] + (b[3] - a[3]) * f,
+             yaw: lerpAngle(a[4], b[4], f), pitch: a[5] + (b[5] - a[5]) * f,
+             hp: f < 0.5 ? a[6] : b[6], duck: f < 0.5 ? a[7] : b[7] };
 }
 
 function draw() {
-    if (!renderer || !data || !data.view3d || !window.km.data) return;
-    const km = window.km, mo = km.data.moment;
-    const frame = km.data.frames[km.frame];
-    if (!frame) return;
-    const rows = data.view3d[nearestTick(frame.t)] || [];
-    playersGroup.clear();
-    overlay.clear();
-    const at = {};
-    rows.forEach(r => {
-        const [i, x, y, z, yaw, pitch, hp, duck] = r;
-        at[i] = r;
-        if (hp <= 0) return;
-        const pl = km.data.players[i];
-        const focus = i === mo.me_idx || i === mo.killer_idx;
-        const m = playerMesh(pl.team, focus);
-        m.position.set(x, y, z);
-        if (duck) m.scale.z = 0.72;
-        playersGroup.add(m);
-        const lb = label(pl.name.slice(0, 12), COLORS[pl.team] || COLORS.unknown);
-        lb.position.set(x, y, z + 92);
-        playersGroup.add(lb);
-        if (focus) {
-            // Blickstrahl: wohin dieser Spieler gerade zielt
-            const eye = new THREE.Vector3(x, y, z + (duck ? EYE_DUCK : EYE));
-            const end = eye.clone().add(dirFrom(yaw, pitch).multiplyScalar(900));
-            overlay.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([eye, end]),
-                new THREE.LineBasicMaterial({ color: COLORS[pl.team] })));
-        }
-    });
-
+    if (!renderer || !data || !data.byTick || !window.km.data || !ticks3d.length) return;
+    const mo = data.moment;
+    const [A, B, f] = sample(currentTick());
     const viewer = mode === 'me' ? mo.me_idx : (mode === 'enemy' ? mo.killer_idx : null);
-    const v = viewer !== null && viewer !== undefined ? at[viewer] : null;
-    if (v && v[6] > 0) {
-        controls.enabled = false;
-        const eye = new THREE.Vector3(v[1], v[2], v[3] + (v[7] ? EYE_DUCK : EYE));
-        camera.position.copy(eye);
-        camera.lookAt(eye.clone().add(dirFrom(v[4], v[5])));
-        // Den eigenen Koerper ausblenden, sonst steht die Kamera in der Kapsel
-        playersGroup.children.forEach(c => { if (Math.abs(c.position.x - v[1]) < 1 && Math.abs(c.position.y - v[2]) < 1) c.visible = false; });
-    } else {
-        // Frei / Zuschauer: die beiden Duellanten von schraeg oben, mit Maus drehbar
-        if (!controls.enabled) {
-            const a = at[mo.me_idx] || rows[0], b = at[mo.killer_idx] || a;
-            if (a) {
-                const mid = new THREE.Vector3((a[1] + b[1]) / 2, (a[2] + b[2]) / 2, (a[3] + b[3]) / 2);
-                controls.target.copy(mid);
-                camera.position.set(mid.x - 500, mid.y - 500, mid.z + 650);
-            }
-            controls.enabled = true;
-            controls.update();
+    let view = null;
+    for (const key in figures) {
+        const i = Number(key), p = pose(A[i], B[i], f), fig = figures[i];
+        if (!p || p.hp <= 0) { fig.g.visible = false; if (fig.ray) fig.ray.visible = false; continue; }
+        fig.g.visible = i !== viewer;   // eigene Kapsel ausblenden, die Kamera steht darin
+        fig.g.position.set(p.x, p.y, p.z);
+        fig.g.scale.z = p.duck ? 0.72 : 1;
+        _eye.set(p.x, p.y, p.z + (p.duck ? EYE_DUCK : EYE));
+        if (fig.ray) {
+            const pos = fig.ray.geometry.attributes.position;
+            _end.copy(dirFrom(p.yaw, p.pitch)).multiplyScalar(900).add(_eye);
+            pos.setXYZ(0, _eye.x, _eye.y, _eye.z);
+            pos.setXYZ(1, _end.x, _end.y, _end.z);
+            pos.needsUpdate = true;
+            fig.ray.visible = i !== viewer;
         }
+        if (i === viewer) view = { eye: _eye.clone(), yaw: p.yaw, pitch: p.pitch };
+    }
+    if (view) {
+        controls.enabled = false;
+        camera.position.copy(view.eye);
+        camera.lookAt(view.eye.clone().add(dirFrom(view.yaw, view.pitch)));
+    } else if (!camFreeSet) {
+        // Frei / Zuschauer: die beiden Duellanten von schraeg oben, mit der Maus drehbar
+        const a = pose(A[mo.me_idx], B[mo.me_idx], f);
+        const b = pose(A[mo.killer_idx], B[mo.killer_idx], f) || a;
+        if (a) {
+            controls.target.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+            camera.position.set(controls.target.x - 500, controls.target.y - 500, controls.target.z + 650);
+        }
+        controls.enabled = true;
+        controls.update();
+        camFreeSet = true;
     }
     renderer.render(scene, camera);
 }
+
+function loop() {
+    if (mode === '2d' || !document.getElementById('km-3d-wrap').offsetParent) { loopOn = false; return; }
+    draw();
+    requestAnimationFrame(loop);
+}
+function startLoop() { if (!loopOn) { loopOn = true; requestAnimationFrame(loop); } }
 
 async function show(newMode) {
     mode = newMode;
@@ -194,16 +241,17 @@ async function show(newMode) {
         }
         const g = await loadGeo(km.data.map);
         if (world !== g) { if (world) scene.remove(world); world = g; scene.add(g); }
-        data = km.data;
+        if (data !== km.data) { data = km.data; buildFigures(); }
         msg.textContent = '';
         if (newMode !== 'free') controls.enabled = false;
+        if (newMode === 'free') camFreeSet = false;
         resize();
-        draw();
+        startLoop();
     } catch (e) { msg.textContent = e.message; }
 }
 
 window.km3d = {
-    draw: () => { if (mode !== '2d') draw(); },
+    draw: () => {},   // die 3D-Schleife zeichnet selbst
     reset: () => { data = null; if (controls) controls.enabled = false; show(mode === '2d' ? '2d' : mode); },
     show,
 };

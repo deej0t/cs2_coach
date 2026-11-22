@@ -139,6 +139,9 @@ function kmPlay() {
     kmStop();
     var fps = km.data.fps * parseFloat(document.getElementById('km-speed').value);
     document.getElementById('km-play').textContent = '❚❚';
+    km.interval = 1000 / fps;
+    km.stepAt = performance.now();
+    km.stepMs = km.interval;
     km.timer = setInterval(kmTick, 1000 / fps);
     kmDraw();
 }
@@ -159,6 +162,9 @@ function kmTick() {
     km.slow = !km.slow;
     if (km.frame >= mo.focus - km.data.fps && km.frame < mo.focus && km.slow) { kmDraw(); return; }
     km.frame++;
+    // Taktgeber fuer die 3D-Ansicht: sie zeichnet zwischen zwei Schritten weich weiter
+    km.stepAt = performance.now();
+    km.stepMs = km.interval * ((km.frame >= mo.focus - km.data.fps && km.frame < mo.focus) ? 2 : 1);
     kmDraw();
 }
 
