@@ -40,7 +40,7 @@ SESSION_HOURS = 6
 _CHAT = re.compile(ss._player("a") + r' say(?:_team)? "(?P<text>.*)"$')
 _last_command: dict[str, float] = {}
 
-HELP = ("Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !map <name> · !w <waffe> / !j / !reset · !ausgleich · !uebung (an/aus) · !tasten · !workshop · !help · Besitzer: !training (Menue) · "
+HELP = ("Befehle: !top · !rank · !session · !nemesis · !vs <Name> · !map <name> · !w <waffe> / !j / !reset · !ausgleich · !uebung (an/aus) · !rethrow · !zurueck · !tasten · !workshop · !help · Besitzer: !training (Menue) · "
         "!warmup / !retake / !halten / !situation / !wiederholen [map] · !einladen <Name> · !coach <Frage> · Eingeladen: !mitmachen")
 
 

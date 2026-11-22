@@ -70,3 +70,22 @@ def test_mapwechsel_vergisst_modus(tmp_path):
     pm.handle({}, cp, Server(), "a", "dj", "uebung", "", uid=0)
     pm.on_lines(cp, ['11/21/2026 - 21:00:00.000 - Loading map "de_mirage"'])
     assert not pm.load(cp)["on"]
+
+
+def test_rethrow_und_zurueck(tmp_path):
+    cp = tmp_path / "config.yaml"
+    srv = Server()
+    assert pm.handle({}, cp, srv, "76561", "dj", "rethrow", "", uid=0)[0].startswith("Geht nur")
+    pm.handle({}, cp, srv, "76561", "dj", "uebung", "", uid=0)
+    assert pm.handle({}, cp, srv, "76561", "dj", "rethrow", "", uid=0) == []
+    assert srv.cmds[-1] == "sv_rethrow_last_grenade"
+
+    def last(*cmds):
+        srv.cmds.extend(cmds)
+        if cmds[0].startswith("coach_nade_last"):
+            return ["coach_nade_last smoke 100.00 200.00 64.00 -40.50 90.00 900.00 800.00 0.00 1.00 1 0 0 2\n"]
+        return [""]
+    assert pm.handle({}, cp, last, "76561", "dj", "zurueck", "", uid=7) == []
+    assert srv.cmds[-1] == "coach_tp 7 100.0 200.0 64.0 -40.5 90.0"
+    none = lambda *c: ["coach_nade_last none"]
+    assert "Noch kein" in pm.handle({}, cp, none, "76561", "dj", "zurueck", "", uid=7)[0]

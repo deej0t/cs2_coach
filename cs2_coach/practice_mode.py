@@ -12,6 +12,11 @@ Bewegung, Spray und Lineups, ohne dass eine Runde endet oder jemand stirbt.
   des Modus fuer sich selbst.
 - Einschalten darf der Besitzer (steam_id/training_admins) oder wer allein auf
   dem Server ist - sv_cheats 1 gibt jedem noclip.
+- ``!rethrow`` (``!nochmal``) laesst den Server ``sv_rethrow_last_grenade``
+  ausfuehren - aus der Client-Konsole geht das auf einem dedizierten Server
+  nicht. Es wirft die letzte Granate auf dem Server, egal von wem.
+  ``!zurueck`` setzt dich an die Stelle und Blickrichtung deines letzten
+  gelandeten Wurfs (``coach_nade_last``, bei Sprungwuerfen der Absprungpunkt).
 - Ein Mapwechsel setzt die Cvars zurueck; das Plugin schaltet sich dabei selbst
   ab (OnMapStart), der Coach vergisst den Zustand (``on_lines``).
 """
@@ -23,7 +28,9 @@ import re
 from pathlib import Path
 
 STATE_FILE = ".practice.json"
-COMMANDS = {"uebung", "übung", "ubung", "practice", "prac", "tasten", "keys"}
+RETHROW = {"rethrow", "nochmal"}
+BACK = {"zurueck", "zurück", "zuruck", "back"}
+COMMANDS = {"uebung", "übung", "ubung", "practice", "prac", "tasten", "keys"} | RETHROW | BACK
 
 SETUP = {
     "sv_cheats": "1",
@@ -83,6 +90,23 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
         send(f"coach_keys {uid} {1 if on else 0}")
         return [f"Tasten-Anzeige fuer {name} {'an' if on else 'aus'}."]
 
+    if cmd in RETHROW | BACK:
+        if not st.get("on"):
+            return ["Geht nur im Uebungsmodus (sv_cheats 1) - erst !uebung."]
+        if cmd in RETHROW:
+            send("sv_rethrow_last_grenade")
+            return []
+        from .own_lineups import parse_last
+        if uid is None:
+            return []
+        last = parse_last(send(f"coach_nade_last {uid}")[0].strip())
+        if last is None:
+            return ["Noch kein gelandeter Wurf von dir - erst werfen, dann !zurueck."]
+        x, y, z = last["pos"]
+        pitch, yaw = last["ang"]
+        send(f"coach_tp {uid} {x} {y} {z} {pitch} {yaw}")
+        return []
+
     if word in ("aus", "off", "stop", "ende"):
         if not st.get("on"):
             return ["Der Uebungsmodus ist nicht an."]
@@ -106,7 +130,8 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
     st.update(on=True, saved=saved, by=name)
     save(config_path, st)
     return [f"Uebungsmodus an ({name}): sv_cheats 1, Zeit steht, 16000 $ ueberall kaufen, Godmode, "
-            "Respawn, Tasten-Anzeige. Beenden: !uebung aus · Tasten aus: !tasten"]
+            "Respawn, Tasten-Anzeige. Granate nochmal: !rethrow · zum Wurfpunkt: !zurueck · "
+            "Beenden: !uebung aus · Tasten aus: !tasten"]
 
 
 def on_lines(config_path: Path, lines: list[str]) -> None:
