@@ -157,6 +157,14 @@ function kmDraw() {
     document.getElementById('km-time').textContent = secs + ' s';
 }
 
+// Ersten Moment direkt laden - sonst wirkt die leere Karte wie ein Fehler
+document.addEventListener('DOMContentLoaded', function() {
+    var first = document.querySelector('.km-item[onclick]');
+    if (first) kmLoad(first);
+    var sp = document.getElementById('km-speed');
+    if (sp) sp.addEventListener('change', function() { if (km.timer) kmPlay(); });
+});
+
 function kmMark(ctx, s, m) {
     var c = KM_TONE[m.tone] || '#e5e7eb';
     ctx.save();

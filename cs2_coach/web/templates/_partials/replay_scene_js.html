@@ -28,7 +28,7 @@ function rpDrawScene(canvas, data, frameIdx, img, opts) {
     var ctx = canvas.getContext('2d');
     var W = canvas.width, scale = W / 1024;
     ctx.clearRect(0, 0, W, W);
-    if (img && img.complete && rpImg.naturalWidth) ctx.drawImage(img, 0, 0, W, W);
+    if (img && img.complete && img.naturalWidth) ctx.drawImage(img, 0, 0, W, W);
 
     var frame = data.frames[frameIdx];
     if (!frame) return [];
