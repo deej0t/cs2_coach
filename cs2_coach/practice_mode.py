@@ -12,9 +12,9 @@ Bewegung, Spray und Lineups, ohne dass eine Runde endet oder jemand stirbt.
   des Modus fuer sich selbst.
 - Einschalten darf der Besitzer (steam_id/training_admins) oder wer allein auf
   dem Server ist - sv_cheats 1 gibt jedem noclip.
-- ``!rethrow`` (``!nochmal``) laesst den Server ``sv_rethrow_last_grenade``
-  ausfuehren - aus der Client-Konsole geht das auf einem dedizierten Server
-  nicht. Es wirft die letzte Granate auf dem Server, egal von wem.
+- ``!rethrow`` (``!nochmal``): das Plugin (``coach_rethrow``, ab 1.30.0) fuehrt
+  ``sv_rethrow_last_grenade`` im Namen des Spielers aus - aus der Client-Konsole
+  und per RCON (ohne Spieler) passiert auf dem dedizierten Server nichts.
   ``!zurueck`` setzt dich an die Stelle und Blickrichtung deines letzten
   gelandeten Wurfs (``coach_nade_last``, bei Sprungwuerfen der Absprungpunkt).
 - Ein Mapwechsel setzt die Cvars zurueck; das Plugin schaltet sich dabei selbst
@@ -104,7 +104,11 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
         if not st.get("on"):
             return ["Geht nur im Uebungsmodus (sv_cheats 1) - erst !uebung."]
         if cmd in RETHROW:
-            send("sv_rethrow_last_grenade")
+            # Der Befehl braucht einen Spieler als Absender (Plugin ab 1.30.0);
+            # ohne Plugin bleibt nur RCON, das auf dem Server meist nichts tut.
+            reply = send(f"coach_rethrow {uid}")[0] if uid is not None else ""
+            if not (reply or "").strip().startswith("coach_rethrow ok"):
+                send("sv_rethrow_last_grenade")
             return []
         from .own_lineups import parse_last
         if uid is None:

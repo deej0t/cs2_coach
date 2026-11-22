@@ -78,7 +78,13 @@ def test_rethrow_und_zurueck(tmp_path):
     assert pm.handle({}, cp, srv, "76561", "dj", "rethrow", "", uid=0)[0].startswith("Geht nur")
     pm.handle({}, cp, srv, "76561", "dj", "uebung", "", uid=0)
     assert pm.handle({}, cp, srv, "76561", "dj", "rethrow", "", uid=0) == []
-    assert srv.cmds[-1] == "sv_rethrow_last_grenade"
+    assert srv.cmds[-2:] == ["coach_rethrow 0", "sv_rethrow_last_grenade"]  # ohne Plugin: RCON
+
+    def plugin(*cmds):
+        srv.cmds.extend(cmds)
+        return ["coach_rethrow ok 0"]
+    pm.handle({}, cp, plugin, "76561", "dj", "nochmal", "", uid=0)
+    assert srv.cmds[-1] == "coach_rethrow 0"
 
     def last(*cmds):
         srv.cmds.extend(cmds)

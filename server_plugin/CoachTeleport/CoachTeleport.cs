@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.29.0";
+    public override string ModuleVersion => "1.30.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -137,6 +137,12 @@ public class CoachTeleport : BasePlugin
             return HookResult.Continue;
         });
         RegisterListener<Listeners.OnPlayerButtonsChanged>(OnButtons);
+        // Mausrad-Sprung ist ein Subtick-Druck: player.Buttons sieht ihn im Tick meist nie.
+        RegisterEventHandler<EventPlayerJump>((ev, _) =>
+        {
+            if (ev.Userid?.UserId is { } j) _jumpTick[j] = Server.TickCount;
+            return HookResult.Continue;
+        });
         // Waffen-Runde (!waffe): beim Spawn und bei jeder anderen aufgenommenen Waffe sofort
         // ersetzen - Wunsch 21.11.: "muss zum Rundenstart schon instant da sein", das
         // coach_give 1,5 s nach Round_Start tauschte sichtbar im Nachhinein.
@@ -1494,12 +1500,19 @@ public class CoachTeleport : BasePlugin
     }
 
     // Wer zuschaut (tot/Spectator), sieht die Tasten des beobachteten Spielers.
-    private static PlayerButtons KeysOf(CCSPlayerController player)
+    // Ein Sprung leuchtet 16 Ticks nach - auch der per Mausrad, den Buttons nie zeigt.
+    private readonly Dictionary<int, int> _jumpTick = new();
+
+    private PlayerButtons KeysOf(CCSPlayerController player)
     {
         var pawn = player.PlayerPawn.Value;
-        if (pawn is not null && pawn.LifeState == (byte)LifeState_t.LIFE_ALIVE) return player.Buttons;
-        var target = player.Pawn.Value?.ObserverServices?.ObserverTarget.Value?.As<CCSPlayerPawn>();
-        return target?.Controller.Value?.As<CCSPlayerController>() is { IsValid: true } t ? t.Buttons : 0;
+        CCSPlayerController? who = player;
+        if (pawn is null || pawn.LifeState != (byte)LifeState_t.LIFE_ALIVE)
+            who = player.Pawn.Value?.ObserverServices?.ObserverTarget.Value?.As<CCSPlayerPawn>()?.Controller.Value?.As<CCSPlayerController>();
+        if (who is null || !who.IsValid) return 0;
+        var b = who.Buttons;
+        if (who.UserId is { } u && _jumpTick.TryGetValue(u, out var t) && Server.TickCount - t <= 16) b |= PlayerButtons.Jump;
+        return b;
     }
 
     private static string KeyLine(PlayerButtons b)
@@ -1528,6 +1541,21 @@ public class CoachTeleport : BasePlugin
             else _keys.Remove(uid);
         }
         info.ReplyToCommand($"coach_practice ok {(_practice ? 1 : 0)}");
+    }
+
+    // sv_rethrow_last_grenade braucht einen Spieler als Absender: per RCON (ohne Spieler)
+    // und aus der Client-Konsole auf dem dedizierten Server passierte nichts (22.11.).
+    [ConsoleCommand("coach_rethrow", "Letzte Granate erneut werfen, im Namen von: <userid>")]
+    [CommandHelper(minArgs: 1, usage: "<userid>", whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnRethrow(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (!int.TryParse(info.GetArg(1), out var uid) || Utilities.GetPlayerFromUserid(uid) is not { IsValid: true } p)
+        {
+            info.ReplyToCommand("coach_rethrow none");
+            return;
+        }
+        p.ExecuteClientCommandFromServer("sv_rethrow_last_grenade");
+        info.ReplyToCommand($"coach_rethrow ok {uid}");
     }
 
     [ConsoleCommand("coach_keys", "Tasten-Anzeige: <userid> <0|1>")]
