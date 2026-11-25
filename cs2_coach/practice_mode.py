@@ -150,9 +150,16 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
             return ["Den Uebungsmodus darf mit anderen auf dem Server nur der Besitzer starten (sv_cheats 1)."]
     saved = read_cvars(send, list(SETUP))
     send(*[f"{k} {v}" for k, v in SETUP.items()], "mp_warmup_end", "mp_restartgame 1")
-    send("coach_practice 1")  # nach dem Rundenneustart: Spawn setzt Godmode erneut
+    # nach dem Rundenneustart: Spawn setzt Godmode erneut
+    plugin = (send("coach_practice 1")[0] or "").strip().startswith("coach_practice ok")
     st.update(on=True, saved=saved, by=name)
     save(config_path, st)
+    if not plugin:
+        # 25.11.: CS2-Update, CounterStrikeSharp abgeschaltet - die Ansage versprach trotzdem
+        # Godmode und Ping-Wegraeumen, und der Ping "ging nicht"
+        return [f"Uebungsmodus an ({name}): sv_cheats 1, Zeit steht, 16000 $ ueberall kaufen. "
+                "Coach-Plugin gerade nicht geladen (meist nach einem CS2-Update) - ohne Godmode, "
+                "Tasten-Anzeige, Ping-Wegraeumen, !clear und !rethrow. Beenden: !uebung aus"]
     return [f"Uebungsmodus an ({name}): sv_cheats 1, Zeit steht, 16000 $ ueberall kaufen, Godmode, "
             "Respawn, Tasten-Anzeige, Einschlaege. Ping oder !clear raeumt Smokes/Feuer weg. Granate nochmal: !rethrow · zum Wurfpunkt: !zurueck · "
             "Beenden: !uebung aus · an/aus: !tasten · !impacts"]

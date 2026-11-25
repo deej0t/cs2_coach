@@ -120,3 +120,9 @@ def test_clear_raeumt_ueber_plugin_weg(tmp_path):
         return ["coach_clear ok 3"]
     assert pm.handle({}, cp, plugin, "76561", "dj", "clear", "", uid=0) == ["Weggeraeumt: 3 Granaten/Smokes/Feuer."]
     assert srv.cmds[-1] == "coach_clear"
+
+
+def test_uebung_sagt_wenn_plugin_fehlt(tmp_path):
+    cp = tmp_path / "config.yaml"
+    out = pm.handle({}, cp, Server(), "76561", "dj", "uebung", "", uid=0)
+    assert "nicht geladen" in out[0] and "Ping oder !clear" not in out[0]
