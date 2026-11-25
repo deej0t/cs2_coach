@@ -106,3 +106,17 @@ def test_impacts_umschalten_und_wiederherstellen(tmp_path):
     assert pm.handle({}, cp, srv, "76561", "dj", "impacts", "", uid=0) == ["Einschlaege an."]
     pm.handle({}, cp, srv, "76561", "dj", "uebung", "aus", uid=0)
     assert srv.values["sv_showimpacts"] == "0"
+
+
+def test_clear_raeumt_ueber_plugin_weg(tmp_path):
+    cp = tmp_path / "config.yaml"
+    srv = Server()
+    assert pm.handle({}, cp, srv, "76561", "dj", "clear", "", uid=0)[0].startswith("Geht nur")
+    pm.handle({}, cp, srv, "76561", "dj", "uebung", "", uid=0)
+    assert "1.31.0" in pm.handle({}, cp, srv, "76561", "dj", "weg", "", uid=0)[0]  # altes Plugin
+
+    def plugin(*cmds):
+        srv.cmds.extend(cmds)
+        return ["coach_clear ok 3"]
+    assert pm.handle({}, cp, plugin, "76561", "dj", "clear", "", uid=0) == ["Weggeraeumt: 3 Granaten/Smokes/Feuer."]
+    assert srv.cmds[-1] == "coach_clear"

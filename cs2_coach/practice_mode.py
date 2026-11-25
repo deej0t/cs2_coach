@@ -31,7 +31,8 @@ STATE_FILE = ".practice.json"
 RETHROW = {"rethrow", "nochmal"}
 IMPACTS = {"impacts", "impact", "einschlaege", "einschläge"}
 BACK = {"zurueck", "zurück", "zuruck", "back"}
-COMMANDS = {"uebung", "übung", "ubung", "practice", "prac", "tasten", "keys"} | RETHROW | BACK | IMPACTS
+CLEAR = {"clear", "weg", "clean"}
+COMMANDS = {"uebung", "übung", "ubung", "practice", "prac", "tasten", "keys"} | RETHROW | BACK | IMPACTS | CLEAR
 
 SETUP = {
     "sv_cheats": "1",
@@ -100,6 +101,15 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
         send(f"sv_showimpacts {1 if on else 0}")
         return [f"Einschlaege {'an' if on else 'aus'}."]
 
+    if cmd in CLEAR:
+        # Wie der Ping, aber per Chat - falls die Ping-Taste nicht ankommt (Plugin ab 1.31.0)
+        if not st.get("on"):
+            return ["Geht nur im Uebungsmodus - erst !uebung."]
+        reply = (send("coach_clear")[0] or "").strip()
+        if not reply.startswith("coach_clear ok"):
+            return ["Wegraeumen braucht das Coach-Plugin ab 1.31.0."]
+        return [f"Weggeraeumt: {reply.split()[-1]} Granaten/Smokes/Feuer."]
+
     if cmd in RETHROW | BACK:
         if not st.get("on"):
             return ["Geht nur im Uebungsmodus (sv_cheats 1) - erst !uebung."]
@@ -144,7 +154,7 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
     st.update(on=True, saved=saved, by=name)
     save(config_path, st)
     return [f"Uebungsmodus an ({name}): sv_cheats 1, Zeit steht, 16000 $ ueberall kaufen, Godmode, "
-            "Respawn, Tasten-Anzeige, Einschlaege. Ping raeumt Smokes/Feuer weg. Granate nochmal: !rethrow · zum Wurfpunkt: !zurueck · "
+            "Respawn, Tasten-Anzeige, Einschlaege. Ping oder !clear raeumt Smokes/Feuer weg. Granate nochmal: !rethrow · zum Wurfpunkt: !zurueck · "
             "Beenden: !uebung aus · an/aus: !tasten · !impacts"]
 
 

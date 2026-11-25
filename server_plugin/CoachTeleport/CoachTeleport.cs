@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.30.0";
+    public override string ModuleVersion => "1.31.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -138,9 +138,16 @@ public class CoachTeleport : BasePlugin
         });
         RegisterListener<Listeners.OnPlayerButtonsChanged>(OnButtons);
         // Uebungsmodus: Ping (Mausrad-Klick/Ping-Taste) raeumt Smokes, Feuer & Co. weg (Wunsch 22.11.)
+        // Zwei Wege, weil der Ping am 25.11. nichts wegraeumte und nicht zu sehen war, welcher
+        // Teil versagt: das Spielereignis und der Konsolenbefehl, den die Ping-Taste schickt.
         RegisterEventHandler<EventPlayerPing>((ev, _) =>
         {
-            if (_practice && ev.Userid is { IsBot: false }) Server.NextFrame(ClearNades);
+            OnPingFrom(ev.Userid, "event");
+            return HookResult.Continue;
+        });
+        AddCommandListener("player_ping", (caller, _) =>
+        {
+            OnPingFrom(caller, "cmd");
             return HookResult.Continue;
         });
         // Mausrad-Sprung ist ein Subtick-Druck: player.Buttons sieht ihn im Tick meist nie.
@@ -1555,11 +1562,32 @@ public class CoachTeleport : BasePlugin
         "hegrenade_projectile", "decoy_projectile",
     };
 
-    private static void ClearNades()
+    private int _lastClearTick = -1000;
+
+    private void OnPingFrom(CCSPlayerController? p, string via)
     {
+        Console.WriteLine($"[CoachTeleport] ping via {via} von {p?.PlayerName ?? "?"} practice={(_practice ? 1 : 0)}");
+        if (!_practice || p is not { IsValid: true, IsBot: false }) return;
+        // Ereignis und Befehl kommen beim selben Druck beide - nur einmal raeumen
+        if (Server.TickCount - _lastClearTick < 16) return;
+        _lastClearTick = Server.TickCount;
+        Server.NextFrame(() => Console.WriteLine($"[CoachTeleport] clear: {ClearNades()} entfernt"));
+    }
+
+    private static int ClearNades()
+    {
+        var n = 0;
         foreach (var name in NadeEntities)
             foreach (var e in Utilities.FindAllEntitiesByDesignerName<CBaseEntity>(name))
-                if (e.IsValid) e.Remove();
+                if (e.IsValid) { e.Remove(); n++; }
+        return n;
+    }
+
+    [ConsoleCommand("coach_clear", "Uebungsmodus: alle Smokes, Feuer und Granaten entfernen")]
+    [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnClear(CCSPlayerController? caller, CommandInfo info)
+    {
+        info.ReplyToCommand($"coach_clear ok {ClearNades()}");
     }
 
     // sv_rethrow_last_grenade braucht einen Spieler als Absender: per RCON (ohne Spieler)
