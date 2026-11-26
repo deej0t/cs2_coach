@@ -144,6 +144,7 @@ def safe_angle(v) -> int:
 # Feld schlaegt fuer beide Seiten gleich verzoegert an (~124 ms) - die
 # Differenz "er sah dich X ms frueher" ist deshalb fairer als absolute Zeiten.
 DUEL_WINDOW_SECONDS = 4     # so weit vor dem Tod wird jeder Tick gelesen
+DUEL_FIELDS = ["X", "Y", "yaw", "approximate_spotted_by"]
 SIGHT_QUIET_TICKS = 32      # 0,5 s nicht gesehen -> neues Sehen (wie First Sight)
 
 
@@ -238,12 +239,18 @@ def duel_notes(f: dict, killer_name: str, kill: bool = False) -> tuple[list[dict
     return notes, events
 
 
-def scan_duel(demo_path: str, me: str, killer: str, death_tick: int) -> dict:
-    """Liest das Duell-Fenster aus der Demo (jeder Tick, nur du und dein Killer)."""
+def duel_ticks(death_tick: int) -> list[int]:
+    return list(range(max(death_tick - DUEL_WINDOW_SECONDS * TICKRATE, 0), death_tick + 1))
+
+
+def scan_duel(demo_path: str, me: str, killer: str, death_tick: int, parser=None) -> dict:
+    """Liest das Duell-Fenster aus der Demo (jeder Tick, nur du und dein Killer).
+
+    ``parser``: gemeinsamer (demo_cache.CachedParser) - sonst ein eigener."""
     from demoparser2 import DemoParser
-    p = DemoParser(demo_path)
-    ticks = list(range(max(death_tick - DUEL_WINDOW_SECONDS * TICKRATE, 0), death_tick + 1))
-    df = p.parse_ticks(["X", "Y", "yaw", "approximate_spotted_by"], ticks=ticks)
+    p = parser or DemoParser(demo_path)
+    ticks = duel_ticks(death_tick)
+    df = p.parse_ticks(DUEL_FIELDS, ticks=ticks)
     rows = [{"tick": t, "steamid": str(s), "X": x, "Y": y, "yaw": yw, "spotted_by": sp}
             for t, s, x, y, yw, sp in zip(df["tick"], df["steamid"], df["X"], df["Y"], df["yaw"],
                                           df["approximate_spotted_by"]) if str(s) in (me, killer)]
@@ -364,7 +371,11 @@ EYE_HEIGHT_DUCKED = 46
 VIEW3D_STEP = 2             # jeder 2. Tick = 32 Hz fuer die 3D-Ansicht
 
 
-def scan_3d(demo_path: str, players: list[dict], ticks: list[int]) -> dict:
+VIEW3D_FIELDS = ["X", "Y", "Z", "yaw", "pitch", "health", "ducking", "team_num", "active_weapon_name",
+                 "active_weapon_ammo", "armor_value", "flash_duration", "is_scoped"]
+
+
+def scan_3d(demo_path: str, players: list[dict], ticks: list[int], parser=None) -> dict:
     """Je Clip-Tick eine Zeile je Spieler, in Spieleinheiten:
 
     [Index, x, y, z, yaw, pitch, hp, geduckt, Seite (2=T, 3=CT), Waffen-Schluessel
@@ -380,9 +391,8 @@ def scan_3d(demo_path: str, players: list[dict], ticks: list[int]) -> dict:
     if not ticks:
         return {}
     idx = {p["steamid"]: i for i, p in enumerate(players)}
-    fields = ["X", "Y", "Z", "yaw", "pitch", "health", "ducking", "team_num", "active_weapon_name",
-              "active_weapon_ammo", "armor_value", "flash_duration", "is_scoped"]
-    df = DemoParser(demo_path).parse_ticks(fields, ticks=ticks)
+    fields = VIEW3D_FIELDS
+    df = (parser or DemoParser(demo_path)).parse_ticks(fields, ticks=ticks)
     out: dict[int, list] = {}
     cols = [df[c] if c in df.columns else [None] * len(df) for c in ["tick", "steamid"] + fields]
     for t, sid, x, y, z, yaw, pitch, hp, duck, side, wname, ammo, armor, flash, scoped in zip(*cols):

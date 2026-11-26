@@ -2938,7 +2938,7 @@ def build_round_replay(demo_path: str, round_num: int, target_id: str = "",
     Nachvollziehen einer Situation ist das oft brauchbarer, weil sich alle
     zehn Spieler gleichzeitig verfolgen lassen.
     """
-    from demoparser2 import DemoParser
+    from ..demo_cache import cached_parser as DemoParser   # Events je Demo nur einmal lesen
     from ..key_moments import safe_angle as _km_angle
 
     parser = DemoParser(demo_path)

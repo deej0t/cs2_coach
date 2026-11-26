@@ -124,3 +124,30 @@ def test_moment_clip_cache_roundtrip(tmp_path, monkeypatch):
     assert mp.cached_clip({}, cfgp, "a.json", 1, 5, "kill")[0]["x"] == 1 and calls == [1]
     assert mp.cached_clip({}, cfgp, "a.json", 2, 5, "kill")[1] == 404
     assert not mp._cache_file(cfgp, "a.json", 2, 5, "kill").exists()
+
+
+def test_cached_parser_reads_events_once(monkeypatch, tmp_path):
+    """demo_cache: ein Durchlauf fuer alle Events, danach aus dem Speicher; preload bedient Teilmengen."""
+    import pandas as pd
+    from cs2_coach import demo_cache
+    calls = {"events": 0, "ticks": 0}
+
+    class Fake:
+        def __init__(self, path): pass
+        def parse_events(self, names):
+            calls["events"] += 1
+            return [("player_hurt", pd.DataFrame({"tick": [1]}))]
+        def parse_ticks(self, fields, ticks=None):
+            calls["ticks"] += 1
+            return pd.DataFrame([{"tick": t, "steamid": "1", **{f: 0 for f in fields}} for t in ticks])
+    import demoparser2
+    monkeypatch.setattr(demoparser2, "DemoParser", Fake)
+    demo = tmp_path / "a.dem"
+    demo.write_bytes(b"x")
+    demo_cache.clear()
+    p = demo_cache.cached_parser(demo)
+    assert len(p.parse_event("player_hurt")) == 1 and p.parse_event("weapon_fire").empty
+    assert len(demo_cache.cached_parser(demo).parse_event("player_hurt")) == 1 and calls["events"] == 1
+    p.preload_ticks(["X", "Y"], [1, 2, 3])
+    df = p.parse_ticks(["X"], ticks=[2, 3])
+    assert list(df["tick"]) == [2, 3] and "Y" not in df.columns and calls["ticks"] == 1

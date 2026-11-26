@@ -16,7 +16,7 @@ from pathlib import Path
 
 from flask import Blueprint, Response, jsonify, render_template, request, send_file
 
-from .. import aim_trace, costly_moments, key_moments, map3d, map3d_render, models3d, nades3d
+from .. import aim_trace, costly_moments, demo_cache, key_moments, map3d, map3d_render, models3d, nades3d
 from ..maps import MAP_RADAR_DATA
 from ..obsidian import export_sort_key
 
@@ -49,6 +49,7 @@ CLIP_VERSION = 3            # erhoehen, wenn sich der Inhalt einer Szene aendert
 CACHE_DIR = ".moments_cache"
 _warming: set[str] = set()
 _warm_lock = threading.Lock()
+_clip_locks: dict[str, threading.Lock] = {}
 
 
 def build_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: int, kind: str,
@@ -77,10 +78,19 @@ def build_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: i
     mo = (key_moments.annotate_kill if is_kill else key_moments.annotate)(replay, tick, replay["scale"])
     mo["events"] = []
     facts = {}
+    p = demo_cache.cached_parser(demo)
+    fr = replay["frames"]
+    t0, t1 = fr[mo["clip"][0]]["t"], fr[mo["clip"][1]]["t"]
+    clip_ticks = list(range(t0, t1 + 1, key_moments.VIEW3D_STEP))
+    # Alle Tick-Felder der Szene in EINEM Durchlauf (3D, Duell, Aim-Spur lesen daraus)
+    window = key_moments.duel_ticks(mo["death_tick"]) if mo.get("killer") else []
+    fields = key_moments.DUEL_FIELDS + aim_trace.FIELDS + (key_moments.VIEW3D_FIELDS if with3d else [])
+    if window or with3d:
+        p.preload_ticks(fields, window + (clip_ticks if with3d else []))
     if mo.get("killer") and mo.get("killer_idx") is not None:
         name = replay["players"][mo["killer_idx"]]["name"]
         try:
-            facts = key_moments.scan_duel(str(demo), me, mo["killer"], mo["death_tick"])
+            facts = key_moments.scan_duel(str(demo), me, mo["killer"], mo["death_tick"], parser=p)
             notes, mo["events"] = key_moments.duel_notes(facts, name, kill=is_kill)
             mo["notes"] = mo["notes"][:1] + notes + mo["notes"][1:]
         except Exception as e:  # noqa: BLE001 - Clip bleibt nutzbar ohne Duell-Detail
@@ -89,23 +99,21 @@ def build_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: i
     if not with3d:
         return replay, 200
     # 32 Hz statt der 8 Hz der 2D-Frames - der Browser interpoliert dazwischen
-    fr = replay["frames"]
-    t0, t1 = fr[mo["clip"][0]]["t"], fr[mo["clip"][1]]["t"]
-    clip_ticks = list(range(t0, t1 + 1, key_moments.VIEW3D_STEP))
     try:
-        replay["view3d"] = key_moments.scan_3d(str(demo), replay["players"], clip_ticks)
+        replay["view3d"] = key_moments.scan_3d(str(demo), replay["players"], clip_ticks, parser=p)
     except Exception as e:  # noqa: BLE001 - 2D bleibt
         replay["view3d_error"] = str(e)
     if mo.get("killer"):
         start = max(t0, mo["death_tick"] - 4 * key_moments.TICKRATE)
         try:
-            replay["aim"] = aim_trace.scan(str(demo), me, mo["killer"], start, mo["death_tick"], facts.get("my_sight"))
+            replay["aim"] = aim_trace.scan(str(demo), me, mo["killer"], start, mo["death_tick"],
+                                           facts.get("my_sight"), parser=p)
         except Exception as e:  # noqa: BLE001 - 3D bleibt ohne Aim-Spur
             replay["aim_error"] = str(e)
     replay["has_geo"] = map3d.geo_path(cfg, cfg_path, map_key) is not None
     replay["has_render"] = map3d_render.render_parts(cfg, cfg_path, map_key)
     try:
-        replay["nades"] = nades3d.scan(str(demo), t0, t1)
+        replay["nades"] = nades3d.scan(str(demo), t0, t1, parser=p)
     except Exception as e:  # noqa: BLE001 - ohne Granaten weiter
         replay["nades_error"] = str(e)
     return replay, 200
@@ -119,18 +127,22 @@ def _cache_file(cfg_path: Path, filename: str, round_num: int, tick: int, kind: 
 def cached_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: int, kind: str) -> tuple[dict, int]:
     """Szene mit 3D aus dem Cache, sonst bauen und ablegen (nur Erfolge)."""
     path = _cache_file(cfg_path, filename, round_num, tick, kind)
-    if path.exists():
-        try:
-            return json.loads(gzip.decompress(path.read_bytes())), 200
-        except Exception:  # noqa: BLE001 - kaputte Datei: neu bauen
-            path.unlink(missing_ok=True)
-    replay, status = build_clip(cfg, cfg_path, filename, round_num, tick, kind)
-    if status == 200:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_bytes(gzip.compress(json.dumps(replay, separators=(",", ":")).encode(), 5))
-        tmp.replace(path)
-    return replay, status
+    with _warm_lock:
+        lock = _clip_locks.setdefault(path.name, threading.Lock())
+    # Klick und Vorberechnung wollen oft dieselbe Szene: der zweite wartet auf den ersten
+    with lock:
+        if path.exists():
+            try:
+                return json.loads(gzip.decompress(path.read_bytes())), 200
+            except Exception:  # noqa: BLE001 - kaputte Datei: neu bauen
+                path.unlink(missing_ok=True)
+        replay, status = build_clip(cfg, cfg_path, filename, round_num, tick, kind)
+        if status == 200:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(f".{threading.get_ident()}.tmp")
+            tmp.write_bytes(gzip.compress(json.dumps(replay, separators=(",", ":")).encode(), 5))
+            tmp.replace(path)
+        return replay, status
 
 
 def prewarm(cfg: dict, cfg_path: Path, filename: str, items: list[dict]) -> None:

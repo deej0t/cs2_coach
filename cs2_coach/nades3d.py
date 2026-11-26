@@ -98,10 +98,10 @@ def effects(events: dict, start: int, end: int) -> list[dict]:
     return sorted(out, key=lambda e: e["t0"])
 
 
-def scan(demo_path: str, start: int, end: int) -> dict:
+def scan(demo_path: str, start: int, end: int, parser=None) -> dict:
     """Flugbahnen und Wirkungen im Fenster [start, end] aus der Demo."""
     from demoparser2 import DemoParser
-    p = DemoParser(demo_path)
+    p = parser or DemoParser(demo_path)
     rows = []
     try:
         g = p.parse_grenades()

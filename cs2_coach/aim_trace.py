@@ -167,13 +167,16 @@ def mistakes(series: list[list], shots: list[dict], sight_tick: int | None) -> l
     return sorted(out, key=lambda m: m["tick"])
 
 
+FIELDS = ["X", "Y", "Z", "yaw", "pitch", "ducking"]
+
+
 def scan(demo_path: str, me: str, enemy: str, start_tick: int, end_tick: int,
-         sight_tick: int | None = None) -> dict:
+         sight_tick: int | None = None, parser=None) -> dict:
     """Liest das Fenster aus der Demo (jeder Tick, nur du und der Gegner)."""
     from demoparser2 import DemoParser
-    p = DemoParser(demo_path)
+    p = parser or DemoParser(demo_path)
     ticks = list(range(max(start_tick, 0), end_tick + 1))
-    df = p.parse_ticks(["X", "Y", "Z", "yaw", "pitch", "ducking"], ticks=ticks)
+    df = p.parse_ticks(FIELDS, ticks=ticks)
     rows = [{"tick": t, "steamid": str(s), "X": x, "Y": y, "Z": z, "yaw": yw, "pitch": pt, "ducking": bool(d)}
             for t, s, x, y, z, yw, pt, d in zip(df["tick"], df["steamid"], df["X"], df["Y"], df["Z"],
                                                 df["yaw"], df["pitch"], df["ducking"]) if str(s) in (me, enemy)]
