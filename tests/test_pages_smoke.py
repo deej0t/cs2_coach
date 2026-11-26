@@ -108,3 +108,19 @@ def test_map3d_downloads_answer_404_without_export(client):
     for path in ("/api/momente/geo/nomap", "/api/momente/render/nomap", "/api/momente/models/weapon_nix.glb.gz",
                  "/api/momente/models/..%2Fconfig.yaml"):
         assert client.get(path).status_code == 404
+
+
+def test_moment_clip_cache_roundtrip(tmp_path, monkeypatch):
+    """Gecachte Szene wird unveraendert gelesen; nur Erfolge landen im Cache."""
+    from cs2_coach.web import moments_page as mp
+    calls = []
+
+    def fake(cfg, cfg_path, filename, r, t, kind, with3d=True):
+        calls.append(r)
+        return ({"map": "mirage", "x": r}, 200) if r == 1 else ({"error": "x"}, 404)
+    monkeypatch.setattr(mp, "build_clip", fake)
+    cfgp = tmp_path / "config.yaml"
+    assert mp.cached_clip({}, cfgp, "a.json", 1, 5, "kill") == ({"map": "mirage", "x": 1}, 200)
+    assert mp.cached_clip({}, cfgp, "a.json", 1, 5, "kill")[0]["x"] == 1 and calls == [1]
+    assert mp.cached_clip({}, cfgp, "a.json", 2, 5, "kill")[1] == 404
+    assert not mp._cache_file(cfgp, "a.json", 2, 5, "kill").exists()

@@ -7,13 +7,16 @@ Spielvideo - dafuer muesste CS2 mit GPU laufen.
 
 from __future__ import annotations
 
+import gzip
+import hashlib
 import json
 import re
+import threading
 from pathlib import Path
 
-from flask import Blueprint, jsonify, render_template, request, send_file
+from flask import Blueprint, Response, jsonify, render_template, request, send_file
 
-from .. import aim_trace, costly_moments, key_moments, map3d, map3d_render, models3d
+from .. import aim_trace, costly_moments, key_moments, map3d, map3d_render, models3d, nades3d
 from ..maps import MAP_RADAR_DATA
 from ..obsidian import export_sort_key
 
@@ -39,6 +42,116 @@ def _load(export_dir: Path, filename: str) -> dict | None:
 
 def _me(cfg: dict, data: dict) -> str:
     return str(cfg.get("steam_id") or (data.get("player") or {}).get("steam_id") or "")
+
+
+# ── Szenen bauen, cachen, vorberechnen ─────────────────────────────────────
+CLIP_VERSION = 3            # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
+CACHE_DIR = ".moments_cache"
+_warming: set[str] = set()
+_warm_lock = threading.Lock()
+
+
+def build_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: int, kind: str,
+               with3d: bool = True) -> tuple[dict, int]:
+    """Eine Szene: Replay der Runde, Moment-Markierungen, Duell, und mit ``with3d`` 3D-Posen,
+    Aim-Spur und Granaten. Rueckgabe (Daten, HTTP-Status)."""
+    from .app import build_round_replay
+    edir = _export_dir(cfg)
+    data = _load(edir, filename) if edir else None
+    if data is None:
+        return {"error": "Export nicht gefunden"}, 404
+    match = data.get("match") or {}
+    demo = Path(cfg.get("demo_folder", "")) / (match.get("demo_file") or "-")
+    if not demo.exists():
+        return {"error": f"Demo fehlt: {match.get('demo_file')}"}, 404
+    map_key = (match.get("map") or "").lower()
+    if map_key not in MAP_RADAR_DATA:
+        return {"error": f"Map ohne Radardaten: {map_key}"}, 400
+    me = _me(cfg, data)
+    replay = build_round_replay(str(demo), round_num, me, map_key)
+    if "error" in replay:
+        return replay, 400
+    replay["map"] = map_key
+    replay["scale"] = MAP_RADAR_DATA[map_key]["scale"]
+    is_kill = kind == "kill"
+    mo = (key_moments.annotate_kill if is_kill else key_moments.annotate)(replay, tick, replay["scale"])
+    mo["events"] = []
+    facts = {}
+    if mo.get("killer") and mo.get("killer_idx") is not None:
+        name = replay["players"][mo["killer_idx"]]["name"]
+        try:
+            facts = key_moments.scan_duel(str(demo), me, mo["killer"], mo["death_tick"])
+            notes, mo["events"] = key_moments.duel_notes(facts, name, kill=is_kill)
+            mo["notes"] = mo["notes"][:1] + notes + mo["notes"][1:]
+        except Exception as e:  # noqa: BLE001 - Clip bleibt nutzbar ohne Duell-Detail
+            mo["notes"].append({"tone": "info", "text": f"Duell-Detail nicht lesbar: {e}"})
+    replay["moment"] = mo
+    if not with3d:
+        return replay, 200
+    # 32 Hz statt der 8 Hz der 2D-Frames - der Browser interpoliert dazwischen
+    fr = replay["frames"]
+    t0, t1 = fr[mo["clip"][0]]["t"], fr[mo["clip"][1]]["t"]
+    clip_ticks = list(range(t0, t1 + 1, key_moments.VIEW3D_STEP))
+    try:
+        replay["view3d"] = key_moments.scan_3d(str(demo), replay["players"], clip_ticks)
+    except Exception as e:  # noqa: BLE001 - 2D bleibt
+        replay["view3d_error"] = str(e)
+    if mo.get("killer"):
+        start = max(t0, mo["death_tick"] - 4 * key_moments.TICKRATE)
+        try:
+            replay["aim"] = aim_trace.scan(str(demo), me, mo["killer"], start, mo["death_tick"], facts.get("my_sight"))
+        except Exception as e:  # noqa: BLE001 - 3D bleibt ohne Aim-Spur
+            replay["aim_error"] = str(e)
+    replay["has_geo"] = map3d.geo_path(cfg, cfg_path, map_key) is not None
+    replay["has_render"] = map3d_render.render_parts(cfg, cfg_path, map_key)
+    try:
+        replay["nades"] = nades3d.scan(str(demo), t0, t1)
+    except Exception as e:  # noqa: BLE001 - ohne Granaten weiter
+        replay["nades_error"] = str(e)
+    return replay, 200
+
+
+def _cache_file(cfg_path: Path, filename: str, round_num: int, tick: int, kind: str) -> Path:
+    key = hashlib.sha1(f"{filename}|{round_num}|{tick}|{kind}|{CLIP_VERSION}".encode()).hexdigest()[:24]
+    return Path(cfg_path).parent / CACHE_DIR / f"{key}.json.gz"
+
+
+def cached_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: int, kind: str) -> tuple[dict, int]:
+    """Szene mit 3D aus dem Cache, sonst bauen und ablegen (nur Erfolge)."""
+    path = _cache_file(cfg_path, filename, round_num, tick, kind)
+    if path.exists():
+        try:
+            return json.loads(gzip.decompress(path.read_bytes())), 200
+        except Exception:  # noqa: BLE001 - kaputte Datei: neu bauen
+            path.unlink(missing_ok=True)
+    replay, status = build_clip(cfg, cfg_path, filename, round_num, tick, kind)
+    if status == 200:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_bytes(gzip.compress(json.dumps(replay, separators=(",", ":")).encode(), 5))
+        tmp.replace(path)
+    return replay, status
+
+
+def prewarm(cfg: dict, cfg_path: Path, filename: str, items: list[dict]) -> None:
+    """Alle Szenen eines Matches nacheinander im Hintergrund in den Cache rechnen."""
+    todo = [it for it in items if not _cache_file(cfg_path, filename, it["round"], it["tick"], it["kind"]).exists()]
+    with _warm_lock:
+        if not todo or filename in _warming:
+            return
+        _warming.add(filename)
+
+    def run():
+        try:
+            for it in todo:
+                try:
+                    cached_clip(cfg, cfg_path, filename, it["round"], it["tick"], it["kind"])
+                except Exception:  # noqa: BLE001 - eine kaputte Szene haelt die anderen nicht auf
+                    pass
+        finally:
+            with _warm_lock:
+                _warming.discard(filename)
+    threading.Thread(target=run, name="moments-prewarm", daemon=True).start()
 
 
 def create_blueprint(load_config, config_path) -> Blueprint:
@@ -86,57 +199,34 @@ def create_blueprint(load_config, config_path) -> Blueprint:
                   "headline": m["headline"]} for m in good]
         items += [{"kind": "death", "round": m["round"], "tick": m["tick"], "value": -round(m.get("cost", 0)),
                    "headline": m["headline"]} for m in moments]
-        return jsonify({"items": items, "error": error, "demo_ok": demo_ok})
+        map_key = ((data.get("match") or {}).get("map") or "").lower()
+        if demo_ok and items:
+            # Szenen im Hintergrund vorberechnen: der erste Klick soll nicht 5-15 s warten
+            prewarm(cfg, Path(config_path()), filename, items)
+        return jsonify({"items": items, "error": error, "demo_ok": demo_ok,
+                        "map": map_key, "render_parts": map3d_render.render_parts(cfg, Path(config_path()), map_key)})
 
     @bp.route("/api/momente/<path:filename>/<int:round_num>/<int:tick>")
     def clip(filename, round_num, tick):
-        from .app import build_round_replay
         cfg = load_config()
-        edir = _export_dir(cfg)
-        data = _load(edir, filename) if edir else None
-        if data is None:
-            return jsonify({"error": "Export nicht gefunden"}), 404
-        match = data.get("match") or {}
-        demo = Path(cfg.get("demo_folder", "")) / (match.get("demo_file") or "-")
-        if not demo.exists():
-            return jsonify({"error": f"Demo fehlt: {match.get('demo_file')}"}), 404
-        map_key = (match.get("map") or "").lower()
-        if map_key not in MAP_RADAR_DATA:
-            return jsonify({"error": f"Map ohne Radardaten: {map_key}"}), 400
-        replay = build_round_replay(str(demo), round_num, _me(cfg, data), map_key)
-        if "error" in replay:
-            return jsonify(replay), 400
-        replay["map"] = map_key
-        replay["scale"] = MAP_RADAR_DATA[map_key]["scale"]
-        is_kill = request.args.get("kind") == "kill"
-        scale = MAP_RADAR_DATA[map_key]["scale"]
-        mo = (key_moments.annotate_kill if is_kill else key_moments.annotate)(replay, tick, scale)
-        mo["events"] = []
-        facts = {}
-        if mo.get("killer") and mo.get("killer_idx") is not None:
-            name = replay["players"][mo["killer_idx"]]["name"]
-            try:
-                facts = key_moments.scan_duel(str(demo), _me(cfg, data), mo["killer"], mo["death_tick"])
-                notes, mo["events"] = key_moments.duel_notes(facts, name, kill=is_kill)
-                mo["notes"] = mo["notes"][:1] + notes + mo["notes"][1:]
-            except Exception as e:  # noqa: BLE001 - Clip bleibt nutzbar ohne Duell-Detail
-                mo["notes"].append({"tone": "info", "text": f"Duell-Detail nicht lesbar: {e}"})
-        replay["moment"] = mo
+        kind = request.args.get("kind") or "death"
         if request.args.get("3d"):
-            # 32 Hz statt der 8 Hz der 2D-Frames - der Browser interpoliert dazwischen
-            fr = replay["frames"]
-            clip_ticks = list(range(fr[mo["clip"][0]]["t"], fr[mo["clip"][1]]["t"] + 1, key_moments.VIEW3D_STEP))
-            try:
-                replay["view3d"] = key_moments.scan_3d(str(demo), replay["players"], clip_ticks)
-            except Exception as e:  # noqa: BLE001 - 2D bleibt
-                replay["view3d_error"] = str(e)
-            if mo.get("killer"):
-                start = max(clip_ticks[0] if clip_ticks else 0, mo["death_tick"] - 4 * key_moments.TICKRATE)
-                try:
-                    replay["aim"] = aim_trace.scan(str(demo), _me(cfg, data), mo["killer"], start,
-                                                   mo["death_tick"], facts.get("my_sight"))
-                except Exception as e:  # noqa: BLE001 - 3D bleibt ohne Aim-Spur
-                    replay["aim_error"] = str(e)
+            path = _cache_file(Path(config_path()), filename, round_num, tick, kind)
+            if not path.exists():
+                cached_clip(cfg, Path(config_path()), filename, round_num, tick, kind)
+            if path.exists():
+                # fertige Szene direkt als gzip ausliefern (~60 statt ~400 KB, kein JSON-Umbau).
+                # Ob es Kartendateien gibt, sagt die Momente-Liste (frisch) - nicht der Cache.
+                resp = Response(path.read_bytes(), mimetype="application/json")
+                resp.headers["Content-Encoding"] = "gzip"
+                return resp
+            replay, status = build_clip(cfg, Path(config_path()), filename, round_num, tick, kind)
+        else:
+            replay, status = build_clip(cfg, Path(config_path()), filename, round_num, tick, kind, with3d=False)
+        if status != 200:
+            return jsonify(replay), status
+        map_key = replay.get("map", "")
+        # Kartendateien koennen nach dem Cachen dazugekommen sein - immer frisch
         replay["has_geo"] = map3d.geo_path(cfg, Path(config_path()), map_key) is not None
         replay["has_render"] = map3d_render.render_parts(cfg, Path(config_path()), map_key)
         return jsonify(replay)

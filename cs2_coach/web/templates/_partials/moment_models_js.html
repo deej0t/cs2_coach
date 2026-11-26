@@ -224,5 +224,27 @@ class ViewModel {
     }
 }
 
-window.kmModels = { getManifest, prepare, Figure, ViewModel, wclass };
+// Einzelnes Modell (z. B. Granate im Flug) in Spieleinheiten
+async function prop(key) {
+    const m = await getManifest();
+    const f = m && m.weapons[key];
+    if (!f) return null;
+    const w = weaponWrap(await load(f));
+    const c = new THREE.Group();
+    c.matrixAutoUpdate = false;
+    c.matrix.copy(CONV);
+    c.add(w);
+    return c;
+}
+
+// Vorab laden, waehrend der Server die Szene rechnet: Agenten und Gewehr-Animationen
+function prefetch() {
+    getManifest().then(m => {
+        if (!m) return;
+        ['ct', 't'].forEach(s => { if (m.agents[s]) load(m.agents[s]).catch(() => {}); });
+        MOVES.forEach(mv => { const f = m.clips['rifle_' + mv]; if (f) load(f).catch(() => {}); });
+    });
+}
+
+window.kmModels = { getManifest, prepare, Figure, ViewModel, wclass, prop, prefetch };
 </script>

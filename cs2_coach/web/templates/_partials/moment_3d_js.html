@@ -10,6 +10,7 @@ const VFOV = 73.7;           // vertikal zu 106° horizontal bei 16:9 (CS2-Stand
 const EYE = 64, EYE_DUCK = 46;
 const geoCache = {};
 
+let nades = null;
 let renderer, scene, camera, world, playersGroup, overlay, mode = 'me', data = null, viewModel = null;
 
 function canvasEl() { return document.getElementById('km-3d'); }
@@ -36,6 +37,7 @@ function init() {
     overlay = new THREE.Group();
     scene.add(overlay);
     if (window.kmModels) viewModel = new window.kmModels.ViewModel(camera);
+    if (window.kmNades) nades = window.kmNades.create(scene);
     flyInit(cv);
     resize();
     window.addEventListener('resize', resize);
@@ -62,7 +64,7 @@ async function loadRender(mapKey, parts) {
     const all = await Promise.all(Array.from({ length: parts }, (_, i) =>
         loader.loadAsync(base + '?part=' + i, ev => {
             done[i] = ev.loaded;
-            if (msg) msg.textContent = 'Map wird geladen... ' + Math.round(done.reduce((a, b) => a + b, 0) / 1048576) + ' MB';
+            if (msg && (!msg.textContent || msg.textContent.startsWith('Texturen'))) msg.textContent = 'Texturen werden geladen... ' + Math.round(done.reduce((a, b) => a + b, 0) / 1048576) + ' MB';
         })));
     const g = new THREE.Group();
     all.forEach(gltf => {
@@ -77,13 +79,29 @@ async function loadRender(mapKey, parts) {
     return g;
 }
 
-async function loadGeo(mapKey) {
-    if (geoCache[mapKey]) return geoCache[mapKey];
-    const parts = (window.km.data && window.km.data.has_render) || 0;
-    if (parts) {
-        try { geoCache[mapKey] = await loadRender(mapKey, Number(parts)); return geoCache[mapKey]; }
-        catch (e) { console.warn('texturierte Map nicht ladbar, nehme Kollisionsmodell', e); }
+// Texturierte Map: einmal je Map laden (auch vorab, waehrend die Szene noch gerechnet wird)
+const renderCache = {}, renderReady = {};
+function renderPromise(mapKey, parts) {
+    if (!renderCache[mapKey]) {
+        renderCache[mapKey] = loadRender(mapKey, Number(parts)).then(g => {
+            renderReady[mapKey] = g;
+            const msg = document.getElementById('km-3d-msg');
+            if (msg && msg.textContent.startsWith('Texturen')) msg.textContent = '';
+            return g;
+        }).catch(e => { console.warn('texturierte Map nicht ladbar, bleibt beim Kollisionsmodell', e); return null; });
     }
+    return renderCache[mapKey];
+}
+
+function setWorld(g) {
+    if (!g || world === g) return;
+    if (world) scene.remove(world);
+    world = g; scene.add(g);
+}
+
+async function loadGeo(mapKey) {
+    // schlichtes Kollisionsmodell (1-16 MB) - sofort sichtbar, bis die Texturen da sind
+    if (geoCache[mapKey]) return geoCache[mapKey];
     const r = await fetch('{{ url_for("moments_page.geo", map_key="MAPKEY") }}'.replace('MAPKEY', mapKey));
     if (!r.ok) throw new Error('Für diese Map gibt es noch keine 3D-Geometrie');
     const buf = await r.arrayBuffer();
@@ -168,6 +186,7 @@ function buildFigures() {
         playersGroup.add(g);
         figures[i] = { g, ray, model: null };
     });
+    if (nades) nades.build(data.nades);
     ticks3d = Object.keys(data.view3d).map(Number).sort((a, b) => a - b);
     // Je Tick: Spieler-Index -> Zeile, fuer schnelles Nachschlagen
     data.byTick = {};
@@ -289,6 +308,7 @@ function draw() {
     if (!renderer || !data || !data.byTick || !window.km.data || !ticks3d.length) return;
     const mo = data.moment;
     const tNow = currentTick();
+    if (nades) nades.update(tNow);
     const [A, B, f] = sample(tNow);
     const viewer = mode === 'me' ? mo.me_idx : (mode === 'enemy' ? mo.killer_idx : null);
     let view = null;
@@ -392,8 +412,15 @@ async function show(newMode) {
             km.data.aim = j.aim; km.data.aim_error = j.aim_error;
             if (window.ktBuildEvents) window.ktBuildEvents();
         }
-        const g = await loadGeo(km.data.map);
-        if (world !== g) { if (world) scene.remove(world); world = g; scene.add(g); }
+        const mk = km.data.map, parts = km.data.has_render || 0;
+        if (renderReady[mk]) setWorld(renderReady[mk]);
+        else {
+            const rp = parts ? renderPromise(mk, parts) : null;
+            if (km.data.has_geo !== false) {
+                try { setWorld(await loadGeo(mk)); } catch (e) { if (!rp) throw e; }
+            }
+            if (rp) rp.then(g => { if (g && data && data.map === mk) setWorld(g); });
+        }
         if (data !== km.data) {
             data = km.data; buildFigures();
             if (window.kmAim) window.kmAim.reset();
@@ -413,6 +440,8 @@ async function show(newMode) {
 }
 
 window.km3d = {
+    // vorab laden, sobald die Map bekannt ist (Liste der Momente) - spart beim ersten Klick die Downloadzeit
+    prefetch: (mapKey, parts) => { if (parts) renderPromise(mapKey, parts); loadGeo(mapKey).catch(() => {}); },
     draw: () => {},   // die 3D-Schleife zeichnet selbst
     reset: () => { data = null; show(mode); },
     show,

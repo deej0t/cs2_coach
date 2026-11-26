@@ -1,0 +1,145 @@
+<script type="module">
+// Granaten in der 3D-Ansicht (nades3d.py): Flugbahn mit Spur und Granatenmodell,
+// danach die Wirkung - Rauchwolke, Feuerteppich, Blitz, Explosion, Decoy.
+// Alles in Spieleinheiten, Z oben; Zeit = Tick (vom Player).
+import * as THREE from 'three';
+
+const COL = { smoke: 0xcbd5e1, flash: 0xffffff, he: 0x65a30d, molotov: 0xf97316, decoy: 0xeab308 };
+const MODEL = { smoke: 'smokegrenade', flash: 'flashbang', he: 'hegrenade', molotov: 'molotov', decoy: 'decoy' };
+const TRAIL = 40;   // Spurlaenge in Ticks
+
+function glowTexture() {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.4, 'rgba(255,255,255,0.6)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+}
+let GLOW = null;
+
+// Rauch: Haufen weicher Kugeln, oben abgeflacht - grob die Form einer CS2-Smoke (r ~ 144)
+function smokeObj() {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshLambertMaterial({ color: 0xd4d4d8, transparent: true, opacity: 0.93, depthWrite: true });
+    let seed = 7;
+    const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    for (let i = 0; i < 26; i++) {
+        const a = rnd() * Math.PI * 2, r = 30 + rnd() * 95, h = 10 + rnd() * 110;
+        const s = new THREE.Mesh(new THREE.IcosahedronGeometry(45 + rnd() * 30, 1), mat);
+        s.position.set(Math.cos(a) * r, Math.sin(a) * r, h * (1 - r / 260));
+        g.add(s);
+    }
+    g.userData.mat = mat;
+    return g;
+}
+// Feuer: flache Scheibe plus flackernde Flammenkegel
+function fireObj() {
+    const g = new THREE.Group();
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(120, 32),
+        new THREE.MeshBasicMaterial({ color: 0xea580c, transparent: true, opacity: 0.55, depthWrite: false }));
+    disc.position.z = 2;
+    g.add(disc);
+    const fm = new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.85, depthWrite: false });
+    g.userData.flames = [];
+    for (let i = 0; i < 22; i++) {
+        const a = i * 2.39, r = 12 + (i * 37 % 100);
+        const f = new THREE.Mesh(new THREE.ConeGeometry(9, 34, 6), fm);
+        f.rotation.x = Math.PI / 2;
+        f.position.set(Math.cos(a) * r, Math.sin(a) * r, 17);
+        f.userData.phase = i * 0.7;
+        g.add(f); g.userData.flames.push(f);
+    }
+    return g;
+}
+function burstObj(color, size) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color, transparent: true, depthWrite: false,
+                                                          blending: THREE.AdditiveBlending }));
+    s.scale.set(size, size, 1);
+    const g = new THREE.Group(); g.add(s); g.userData.sprite = s; g.userData.size = size;
+    return g;
+}
+
+class Nades {
+    constructor(scene) {
+        this.group = new THREE.Group();
+        scene.add(this.group);
+        if (!GLOW) GLOW = glowTexture();
+        this.paths = []; this.effects = [];
+    }
+    build(nades) {
+        this.group.clear(); this.paths = []; this.effects = [];
+        if (!nades) return;
+        (nades.paths || []).forEach(p => {
+            const color = COL[p.type] || 0xffffff;
+            const pos = new Float32Array(p.pts.length * 3);
+            p.pts.forEach((q, i) => { pos[i * 3] = q[1]; pos[i * 3 + 1] = q[2]; pos[i * 3 + 2] = q[3]; });
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            const trail = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 }));
+            trail.frustumCulled = false;
+            const body = new THREE.Group();
+            const glow = burstObj(color, 18); body.add(glow);
+            const ball = new THREE.Mesh(new THREE.SphereGeometry(2.2, 10, 8), new THREE.MeshBasicMaterial({ color }));
+            body.add(ball);
+            // echtes Granatenmodell, sobald geladen (models3d)
+            if (window.kmModels && window.kmModels.prop) {
+                window.kmModels.prop(MODEL[p.type]).then(m => { if (m) { body.add(m); ball.visible = false; } }).catch(() => {});
+            }
+            this.group.add(trail); this.group.add(body);
+            this.paths.push({ p, trail, body });
+        });
+        (nades.effects || []).forEach(e => {
+            let obj;
+            if (e.type === 'smoke') obj = smokeObj();
+            else if (e.type === 'molotov') obj = fireObj();
+            else if (e.type === 'flash') obj = burstObj(0xffffff, 420);
+            else if (e.type === 'he') obj = burstObj(0xfb923c, 300);
+            else obj = burstObj(0xfde047, 40);
+            obj.position.set(e.x, e.y, e.z);
+            obj.visible = false;
+            this.group.add(obj);
+            this.effects.push({ e, obj });
+        });
+    }
+    update(t) {
+        for (const { p, trail, body } of this.paths) {
+            const pts = p.pts, first = pts[0][0], last = pts[pts.length - 1][0];
+            const on = t >= first && t <= last;
+            body.visible = on; trail.visible = on;
+            if (!on) continue;
+            let i = 0;
+            while (i < pts.length - 2 && pts[i + 1][0] <= t) i++;
+            const a = pts[i], b = pts[Math.min(i + 1, pts.length - 1)], f = b[0] > a[0] ? (t - a[0]) / (b[0] - a[0]) : 0;
+            body.position.set(a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, a[3] + (b[3] - a[3]) * f);
+            body.rotation.set(t * 0.31, t * 0.17, 0);
+            let j = i; while (j > 0 && pts[j][0] > t - TRAIL) j--;
+            trail.geometry.setDrawRange(j, i - j + 1);
+        }
+        for (const { e, obj } of this.effects) {
+            const on = t >= e.t0 && t <= e.t1;
+            obj.visible = on;
+            if (!on) continue;
+            const age = (t - e.t0) / 64, left = (e.t1 - t) / 64;
+            if (e.type === 'smoke') {
+                // aufbluehen in ~1 s, am Ende ausduennen
+                const grow = Math.min(1, 0.25 + age * 0.75);
+                obj.scale.set(grow, grow, grow);
+                obj.userData.mat.opacity = 0.93 * Math.min(1, left / 1.5);
+            } else if (e.type === 'molotov') {
+                obj.userData.flames.forEach(fl => { const k = 0.7 + 0.5 * Math.abs(Math.sin(t * 0.25 + fl.userData.phase)); fl.scale.set(1, k, 1); });
+                obj.scale.setScalar(Math.min(1, 0.3 + age * 1.5));
+            } else if (e.type === 'decoy') {
+                obj.userData.sprite.material.opacity = Math.sin(t * 0.6) > 0 ? 1 : 0.2;
+            } else {
+                // Blitz / Explosion: kurz aufleuchten, dann abklingen
+                const k = Math.max(0, 1 - age / 0.6);
+                obj.userData.sprite.material.opacity = k;
+                const sz = obj.userData.size * (0.6 + age);
+                obj.userData.sprite.scale.set(sz, sz, 1);
+            }
+        }
+    }
+}
+
+window.kmNades = { create: scene => new Nades(scene) };
+</script>

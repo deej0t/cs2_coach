@@ -362,6 +362,8 @@ function kmLoad(el) {
         .then(function (res) {
             if (!res.ok) { title.textContent = res.j.error || 'Fehler'; return; }
             km.data = res.j;
+            // Kartendateien laut frischer Momente-Liste (die Szene kann aus dem Cache von vorher sein)
+            if (ktMapInfo.map === km.data.map) { km.data.has_render = ktMapInfo.parts; km.data.has_geo = true; }
             title.textContent = 'Runde ' + el.dataset.round + (km.kind === 'kill' ? ' · Kill' : ' · Tod');
             var ul = document.getElementById('km-notes');
             (km.data.moment.notes || []).forEach(function (n) {
@@ -378,6 +380,7 @@ function kmLoad(el) {
         .catch(function (e) { title.textContent = 'Fehler: ' + e.message; });
 }
 
+var ktMapInfo = {};
 function ktChips() {
     var box = document.getElementById('kt-chips');
     fetch('{{ url_for("moments_page.moment_list", filename=km_file) }}').then(function (r) { return r.json(); }).then(function (j) {
@@ -397,6 +400,10 @@ function ktChips() {
             if (j.demo_ok) d.onclick = function () { kmLoad(d); };
             box.appendChild(d);
         });
+        // Map und Modelle schon laden, waehrend der Server die erste Szene rechnet
+        ktMapInfo = { map: j.map, parts: j.render_parts || 0 };
+        if (j.map && window.km3d) window.km3d.prefetch(j.map, j.render_parts || 0);
+        if (window.kmModels) window.kmModels.prefetch();
         var first = box.querySelector('.kt-chip');
         if (first && j.demo_ok) kmLoad(first);
     }).catch(function (e) { box.textContent = 'Fehler: ' + e.message; });
@@ -434,4 +441,5 @@ document.addEventListener('DOMContentLoaded', ktChips);
 </script>
 {% include '_partials/aim_trace_js.html' %}
 {% include '_partials/moment_models_js.html' %}
+{% include '_partials/moment_nades_js.html' %}
 {% include '_partials/moment_3d_js.html' %}
