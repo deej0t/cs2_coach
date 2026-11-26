@@ -117,8 +117,18 @@ plugins_aktualisieren() {
     gamedata_aktualisieren "$tmp" &&
     chown -R 99:100 "$GAME/addons"
     local ok=$?
+    # MultiAddonManager (Quake-Sounds) haengt sich wie CSS in ISource2Server ein: nach dem
+    # Update 1.42.0.1 stuerzte der Server 2 Tage lang ab, obwohl CSS 1.0.381 schon passte -
+    # v1.7.4 war veraltet, v1.7.5 lag seit dem 24.11. bereit. Fehler hier sind nicht fatal.
+    local mam=""
+    if [ -d "$GAME/addons/multiaddonmanager" ]; then
+        mam=$(curl -sf https://api.github.com/repos/Source2ZE/MultiAddonManager/releases/latest |
+              grep -o '"browser_download_url": *"[^"]*-steamrt3\.tar\.gz"' | grep -o 'https[^"]*') &&
+        curl -sfLo "$tmp/mam.tar.gz" "$mam" && tar xzf "$tmp/mam.tar.gz" -C "$GAME" &&
+        chown -R 99:100 "$GAME/addons" || mam="MultiAddonManager-Update fehlgeschlagen"
+    fi
     rm -rf "$tmp"
-    logger -t cs2-waechter "Plugins aktualisiert: $mms, $(basename "$css") (rc=$ok)"
+    logger -t cs2-waechter "Plugins aktualisiert: $mms, $(basename "$css") ${mam:+, $(basename "$mam")} (rc=$ok)"
     return $ok
 }
 
