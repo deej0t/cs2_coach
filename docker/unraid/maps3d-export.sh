@@ -45,8 +45,17 @@ for n in "${names[@]}"; do
 done
 rm -rf "$WORK/tmp"
 
+# Spielermodelle, Waffen, Animationen (models3d.py) aus pak01 - die Liste kennt der Container
+PAK="$(dirname "$MAPS")/pak01_dir.vpk"
+if [ "$#" -eq 0 ] && [ -f "$PAK" ]; then
+    list=$(docker exec cs2-coach python -m cs2_coach.models3d --list | paste -sd, -)
+    rm -rf "$WORK/models"
+    "$TOOLS/bin/Source2Viewer-CLI" -i "$PAK" -f "$list" --gltf_export_format glb --gltf_textures_adapt         -o "$WORK/models" >/dev/null && echo "Modelle exportiert" || echo "Modell-Export fehlgeschlagen"
+fi
+
 # Umwandeln im Container (numpy ist dort vorhanden); Ziel = maps3d/ neben der Config
 docker exec cs2-coach python -m cs2_coach.map3d /data/maps3d_glb /data/maps3d
 # Texturen-Kantenlaenge: MAPS3D_TEX=256 halbiert die Downloadgroesse (~45 MB -> ~20 MB je Map)
 docker exec cs2-coach python -m cs2_coach.map3d_render /data/maps3d_glb/render /data/maps3d "${MAPS3D_TEX:-512}"
+[ -d "$WORK/models" ] && docker exec cs2-coach python -m cs2_coach.models3d /data/maps3d_glb/models /data/maps3d
 rm -rf "$WORK"

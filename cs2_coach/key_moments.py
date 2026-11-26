@@ -365,25 +365,46 @@ VIEW3D_STEP = 2             # jeder 2. Tick = 32 Hz fuer die 3D-Ansicht
 
 
 def scan_3d(demo_path: str, players: list[dict], ticks: list[int]) -> dict:
-    """Je Clip-Tick: [Spieler-Index, x, y, z, yaw, pitch, hp, geduckt] in Spieleinheiten.
+    """Je Clip-Tick eine Zeile je Spieler, in Spieleinheiten:
+
+    [Index, x, y, z, yaw, pitch, hp, geduckt, Seite (2=T, 3=CT), Waffen-Schluessel
+    (models3d.WEAPONS), Waffenname, Munition im Magazin, Ruestung, geblendet, Zielfernrohr].
 
     Spieler-Index wie im Replay (``players``), damit 2D und 3D dieselben
     Personen meinen. Nur fuer die Clip-Ticks - eine ganze Runde waere
-    unnoetig gross.
+    unnoetig gross. Seite aus team_num desselben Ticks (Roster != Seite, s. CLAUDE.md).
     """
     from demoparser2 import DemoParser
+
+    from .models3d import weapon_key
     if not ticks:
         return {}
     idx = {p["steamid"]: i for i, p in enumerate(players)}
-    df = DemoParser(demo_path).parse_ticks(["X", "Y", "Z", "yaw", "pitch", "health", "ducking"], ticks=ticks)
+    fields = ["X", "Y", "Z", "yaw", "pitch", "health", "ducking", "team_num", "active_weapon_name",
+              "active_weapon_ammo", "armor_value", "flash_duration", "is_scoped"]
+    df = DemoParser(demo_path).parse_ticks(fields, ticks=ticks)
     out: dict[int, list] = {}
-    cols = [df[c] if c in df.columns else [None] * len(df) for c in
-            ("tick", "steamid", "X", "Y", "Z", "yaw", "pitch", "health", "ducking")]
-    for t, sid, x, y, z, yaw, pitch, hp, duck in zip(*cols):
+    cols = [df[c] if c in df.columns else [None] * len(df) for c in ["tick", "steamid"] + fields]
+    for t, sid, x, y, z, yaw, pitch, hp, duck, side, wname, ammo, armor, flash, scoped in zip(*cols):
         i = idx.get(str(sid))
         vals = (x, y, z)
         if i is None or any(v is None or not math.isfinite(float(v)) for v in vals):
             continue
+        wname = wname if isinstance(wname, str) else ""
         out.setdefault(int(t), []).append([i, round(float(x), 1), round(float(y), 1), round(float(z), 1),
-                                           safe_angle(yaw), safe_angle(pitch), int(hp or 0), bool(duck)])
+                                           round(_float(yaw), 1), round(_float(pitch), 1), int(hp or 0), bool(duck),
+                                           _int(side), weapon_key(wname) or "", wname, _int(ammo), _int(armor),
+                                           bool(_float(flash) > 0), bool(scoped)])
     return out
+
+
+def _float(v) -> float:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return 0.0
+    return f if math.isfinite(f) else 0.0
+
+
+def _int(v) -> int:
+    return int(_float(v))

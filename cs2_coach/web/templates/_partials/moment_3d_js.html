@@ -1,7 +1,3 @@
-<script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
-               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
-</script>
 <script type="module">
 // 3D-Ansicht der Schluesselmomente: Kollisionsgeometrie der Map (map3d.py) plus
 // Spieler aus der Demo. Kamera aus deinen Augen, aus denen des Gegners oder frei.
@@ -15,7 +11,7 @@ const VFOV = 73.7;           // vertikal zu 106° horizontal bei 16:9 (CS2-Stand
 const EYE = 64, EYE_DUCK = 46;
 const geoCache = {};
 
-let renderer, scene, camera, controls, world, playersGroup, overlay, mode = 'me', data = null;
+let renderer, scene, camera, controls, world, playersGroup, overlay, mode = 'me', data = null, viewModel = null;
 
 function canvasEl() { return document.getElementById('km-3d'); }
 
@@ -27,9 +23,12 @@ function init() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x9fb4c7);
     scene.fog = new THREE.Fog(0x9fb4c7, 1500, 6000);
-    camera = new THREE.PerspectiveCamera(VFOV, 16 / 9, 4, 20000);
+    camera = new THREE.PerspectiveCamera(VFOV, 16 / 9, 1, 20000);
     camera.up.set(0, 0, 1);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x6b5b45, 1.6));
+    scene.add(camera);   // die Ego-Waffe haengt an der Kamera
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x6b5b45, 1.6);
+    hemi.position.set(0, 0, 1);   // Himmel oben = +Z (Spielkoordinaten)
+    scene.add(hemi);
     const sun = new THREE.DirectionalLight(0xffffff, 1.4);
     sun.position.set(0.4, 0.3, 1);
     scene.add(sun);
@@ -37,6 +36,7 @@ function init() {
     scene.add(playersGroup);
     overlay = new THREE.Group();
     scene.add(overlay);
+    if (window.kmModels) viewModel = new window.kmModels.ViewModel(camera);
     controls = new OrbitControls(camera, cv);
     controls.enabled = false;
     resize();
@@ -54,27 +54,36 @@ function resize() {
     renderer.render(scene, camera);
 }
 
-async function loadRender(mapKey) {
-    // Texturierte Map (map3d_render.py): schon in Spieleinheiten, Z oben - keine Umrechnung
-    const url = '{{ url_for("moments_page.render", map_key="MAPKEY") }}'.replace('MAPKEY', mapKey);
-    const gltf = await new GLTFLoader().loadAsync(url, ev => {
-        const msg = document.getElementById('km-3d-msg');
-        if (msg && ev.total) msg.textContent = 'Map wird geladen... ' + Math.round(ev.loaded / ev.total * 100) + ' %';
-        else if (msg) msg.textContent = 'Map wird geladen... ' + Math.round(ev.loaded / 1048576) + ' MB';
+async function loadRender(mapKey, parts) {
+    // Texturierte Map (map3d_render.py): schon in Spieleinheiten, Z oben - keine Umrechnung.
+    // Grosse Maps liegen in mehreren Teilen (Groessengrenze des Tunnels), alle parallel laden.
+    const base = '{{ url_for("moments_page.render", map_key="MAPKEY") }}'.replace('MAPKEY', mapKey);
+    const done = new Array(parts).fill(0);
+    const msg = document.getElementById('km-3d-msg');
+    const loader = new GLTFLoader();
+    const all = await Promise.all(Array.from({ length: parts }, (_, i) =>
+        loader.loadAsync(base + '?part=' + i, ev => {
+            done[i] = ev.loaded;
+            if (msg) msg.textContent = 'Map wird geladen... ' + Math.round(done.reduce((a, b) => a + b, 0) / 1048576) + ' MB';
+        })));
+    const g = new THREE.Group();
+    all.forEach(gltf => {
+        gltf.scene.traverse(o => {
+            if (o.isMesh && o.material) {
+                o.material.side = o.material.alphaTest || o.material.transparent ? THREE.DoubleSide : o.material.side;
+                o.material.roughness = 1; o.material.metalness = 0;
+            }
+        });
+        g.add(gltf.scene);
     });
-    gltf.scene.traverse(o => {
-        if (o.isMesh && o.material) {
-            o.material.side = o.material.alphaTest || o.material.transparent ? THREE.DoubleSide : o.material.side;
-            o.material.roughness = 1; o.material.metalness = 0;
-        }
-    });
-    return gltf.scene;
+    return g;
 }
 
 async function loadGeo(mapKey) {
     if (geoCache[mapKey]) return geoCache[mapKey];
-    if (data && data.has_render || (window.km.data && window.km.data.has_render)) {
-        try { geoCache[mapKey] = await loadRender(mapKey); return geoCache[mapKey]; }
+    const parts = (window.km.data && window.km.data.has_render) || 0;
+    if (parts) {
+        try { geoCache[mapKey] = await loadRender(mapKey, Number(parts)); return geoCache[mapKey]; }
         catch (e) { console.warn('texturierte Map nicht ladbar, nehme Kollisionsmodell', e); }
     }
     const r = await fetch('{{ url_for("moments_page.geo", map_key="MAPKEY") }}'.replace('MAPKEY', mapKey));
@@ -122,6 +131,7 @@ function playerMesh(team, isFocus) {
     body.rotation.x = Math.PI / 2;
     body.position.z = 36;
     g.add(body);
+    g.userData.body = body;
     if (isFocus) {
         // Ring am Boden: die beiden Duellanten sind sofort zu finden
         const ring = new THREE.Mesh(new THREE.RingGeometry(26, 34, 32),
@@ -158,13 +168,40 @@ function buildFigures() {
         }
         g.visible = false;
         playersGroup.add(g);
-        figures[i] = { g, ray };
+        figures[i] = { g, ray, model: null };
     });
     ticks3d = Object.keys(data.view3d).map(Number).sort((a, b) => a - b);
     // Je Tick: Spieler-Index -> Zeile, fuer schnelles Nachschlagen
     data.byTick = {};
     ticks3d.forEach(t => { const m = {}; data.view3d[t].forEach(r => { m[r[0]] = r; }); data.byTick[t] = m; });
     camFreeSet = false;
+}
+
+async function buildModels() {
+    // Agentenmodelle statt Kapseln, sobald models3d exportiert ist; sonst bleiben die Kapseln
+    if (!window.kmModels || !(await window.kmModels.prepare(data))) return;
+    const sideOf = {};
+    ticks3d.forEach(t => data.view3d[t].forEach(r => { if (!sideOf[r[0]] && (r[8] === 2 || r[8] === 3)) sideOf[r[0]] = r[8]; }));
+    const jobs = [];
+    for (const key in figures) {
+        const side = sideOf[key];
+        if (!side) continue;
+        const m = new window.kmModels.Figure(side);
+        if (!m.ready) continue;
+        m.root.visible = false;
+        playersGroup.add(m.root);
+        figures[key].model = m;
+        jobs.push(m.ready);
+    }
+    await Promise.all(jobs);
+}
+
+function lastShotKick(t) {
+    // Rueckstoss der Ego-Waffe: kurz nach jedem eigenen Schuss (aim_trace)
+    const shots = (data.aim && data.aim.shots) || [];
+    let k = 0;
+    for (const s of shots) { const d = t - s.tick; if (d >= 0 && d < 8) k = Math.max(k, 1 - d / 8); }
+    return k;
 }
 
 function lerpAngle(a, b, f) { const d = ((b - a + 540) % 360) - 180; return a + d * f; }
@@ -192,21 +229,34 @@ function pose(a, b, f) {
     if (!b) b = a;
     return { x: a[1] + (b[1] - a[1]) * f, y: a[2] + (b[2] - a[2]) * f, z: a[3] + (b[3] - a[3]) * f,
              yaw: lerpAngle(a[4], b[4], f), pitch: a[5] + (b[5] - a[5]) * f,
-             hp: f < 0.5 ? a[6] : b[6], duck: f < 0.5 ? a[7] : b[7] };
+             hp: f < 0.5 ? a[6] : b[6], duck: f < 0.5 ? a[7] : b[7],
+             side: a[8], wkey: (f < 0.5 ? a : b)[9] || '', wname: (f < 0.5 ? a : b)[10] || '',
+             ammo: (f < 0.5 ? a : b)[11], armor: (f < 0.5 ? a : b)[12], flashed: !!(f < 0.5 ? a : b)[13],
+             scoped: !!(f < 0.5 ? a : b)[14],
+             // Geschwindigkeit in Einheiten/s aus den beiden Stuetzstellen (2 Ticks Abstand)
+             vel: [(b[1] - a[1]) * 32, (b[2] - a[2]) * 32] };
 }
 
 function draw() {
     if (!renderer || !data || !data.byTick || !window.km.data || !ticks3d.length) return;
     const mo = data.moment;
-    const [A, B, f] = sample(currentTick());
+    const tNow = currentTick();
+    const [A, B, f] = sample(tNow);
     const viewer = mode === 'me' ? mo.me_idx : (mode === 'enemy' ? mo.killer_idx : null);
     let view = null;
     for (const key in figures) {
         const i = Number(key), p = pose(A[i], B[i], f), fig = figures[i];
-        if (!p || p.hp <= 0) { fig.g.visible = false; if (fig.ray) fig.ray.visible = false; continue; }
-        fig.g.visible = i !== viewer;   // eigene Kapsel ausblenden, die Kamera steht darin
+        if (!p || p.hp <= 0) { fig.g.visible = false; if (fig.ray) fig.ray.visible = false;
+                                if (fig.model) fig.model.root.visible = false; continue; }
+        fig.g.visible = i !== viewer;   // eigene Figur ausblenden, die Kamera steht darin
         fig.g.position.set(p.x, p.y, p.z);
-        fig.g.scale.z = p.duck ? 0.72 : 1;
+        const real = fig.model && fig.model.ok;
+        fig.g.userData.body.visible = !real;
+        fig.g.userData.body.scale.y = p.duck ? 0.72 : 1;
+        if (real) {
+            fig.model.root.visible = i !== viewer;
+            if (i !== viewer) fig.model.update(p, p.vel, tNow);
+        }
         _eye.set(p.x, p.y, p.z + (p.duck ? EYE_DUCK : EYE));
         if (fig.ray) {
             const pos = fig.ray.geometry.attributes.position;
@@ -216,13 +266,24 @@ function draw() {
             pos.needsUpdate = true;
             fig.ray.visible = i !== viewer;
         }
-        if (i === viewer) view = { eye: _eye.clone(), yaw: p.yaw, pitch: p.pitch };
+        if (i === viewer) view = { eye: _eye.clone(), yaw: p.yaw, pitch: p.pitch, p };
     }
     if (view) {
         controls.enabled = false;
         camera.position.copy(view.eye);
         camera.lookAt(view.eye.clone().add(dirFrom(view.yaw, view.pitch)));
-    } else if (!camFreeSet) {
+        if (viewModel) {
+            viewModel.set(view.p.wkey, view.p.side);
+            viewModel.update(!view.p.scoped, mode === 'me' ? lastShotKick(tNow) : 0);
+        }
+        // Zielfernrohr: Sichtfeld wie im Spiel enger (erste Zoomstufe ~ 40° horizontal)
+        const fov = view.p.scoped ? 25 : VFOV;
+        if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    } else {
+        if (viewModel) viewModel.update(false, 0);
+        if (camera.fov !== VFOV) { camera.fov = VFOV; camera.updateProjectionMatrix(); }
+    }
+    if (!view && !camFreeSet) {
         // Frei / Zuschauer: die beiden Duellanten von schraeg oben, mit der Maus drehbar
         const a = pose(A[mo.me_idx], B[mo.me_idx], f);
         const b = pose(A[mo.killer_idx], B[mo.killer_idx], f) || a;
@@ -235,11 +296,11 @@ function draw() {
         camFreeSet = true;
     }
     renderer.render(scene, camera);
-    aimOverlay(A, B, f, mode);
+    aimOverlay(A, B, f, mode, view && view.p);
 }
 
 const _head = new THREE.Vector3();
-function aimOverlay(A, B, f, m) {
+function aimOverlay(A, B, f, m, viewerPose) {
     // Kopf des Gegners auf den Bildschirm projizieren, fuer die Aim-Einblendung (aim_trace_js)
     if (!window.kmAim) return;
     const mo = data.moment, cv = canvasEl();
@@ -251,7 +312,7 @@ function aimOverlay(A, B, f, m) {
         if (_head.z < 1) head = { x: (_head.x + 1) / 2 * w, y: (1 - _head.y) / 2 * h };
     }
     const pxPerDeg = (h / 2) / Math.tan(camera.fov * Math.PI / 360) * Math.tan(Math.PI / 180);
-    window.kmAim.frame(currentTick(), m, head, pxPerDeg);
+    window.kmAim.frame(currentTick(), m, head, pxPerDeg, viewerPose);
 }
 
 function loop() {
@@ -281,7 +342,12 @@ async function show(newMode) {
         }
         const g = await loadGeo(km.data.map);
         if (world !== g) { if (world) scene.remove(world); world = g; scene.add(g); }
-        if (data !== km.data) { data = km.data; buildFigures(); if (window.kmAim) window.kmAim.reset(); }
+        if (data !== km.data) {
+            data = km.data; buildFigures();
+            if (window.kmAim) window.kmAim.reset();
+            msg.textContent = 'Spielermodelle werden geladen...';
+            await buildModels();
+        }
         msg.textContent = '';
         if (newMode !== 'free') controls.enabled = false;
         if (newMode === 'free') camFreeSet = false;

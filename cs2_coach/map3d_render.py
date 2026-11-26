@@ -131,8 +131,8 @@ def _texture(src_dir: Path, doc: dict, tex_idx: int, size: int, cache: dict):
     return res
 
 
-def convert(glb: Path, out: Path, tex_size: int = 512) -> dict:
-    """Render-glb (mit Texturen daneben) -> kompaktes glb in Spieleinheiten, Z oben."""
+def collect(glb: Path):
+    """Render-glb lesen: (doc, Gruppen je Material, Ordner der Texturen) in Spieleinheiten."""
     import numpy as np
     doc, binary = _read_glb(glb)
     src_dir = Path(glb).parent
@@ -175,8 +175,39 @@ def convert(glb: Path, out: Path, tex_size: int = 512) -> dict:
             g["uv"].append(uv)
             g["idx"].append(idx + g["n"])
             g["n"] += len(pos)
+    return doc, groups, src_dir
 
-    # ── neues glb schreiben ──
+
+def part_path(out: Path, i: int) -> Path:
+    """Teil 0 = ``<map>.render.glb.gz``, weitere ``<map>.render<i>.glb.gz``."""
+    out = Path(out)
+    return out if i == 0 else out.with_name(out.name.replace(".render.glb.gz", f".render{i}.glb.gz"))
+
+
+def convert(glb: Path, out: Path, tex_size: int = 512, parts: int = 1, collected=None) -> dict:
+    """Render-glb (mit Texturen daneben) -> kompakte glb in Spieleinheiten, Z oben.
+
+    ``parts`` > 1 verteilt die Materialien (nach Vertexzahl ausgeglichen) auf mehrere
+    Dateien - so bleibt jede unter der Groessengrenze des Tunnels.
+    """
+    doc, groups, src_dir = collected or collect(glb)
+    order = sorted(groups, key=lambda mi: -groups[mi]["n"])
+    buckets: list[list[int]] = [[] for _ in range(parts)]
+    load = [0] * parts
+    for mi in order:
+        k = load.index(min(load))
+        buckets[k].append(mi)
+        load[k] += groups[mi]["n"]
+    tex_cache: dict = {}
+    infos = [_write(doc, {mi: groups[mi] for mi in b}, src_dir, part_path(out, i), tex_size, tex_cache)
+             for i, b in enumerate(buckets)]
+    return {"vertices": sum(i["vertices"] for i in infos), "triangles": sum(i["triangles"] for i in infos),
+            "materials": sum(i["materials"] for i in infos), "textures": sum(i["textures"] for i in infos),
+            "bytes": max(i["bytes"] for i in infos), "total_bytes": sum(i["bytes"] for i in infos), "parts": parts}
+
+
+def _write(doc: dict, groups: dict, src_dir: Path, out: Path, tex_size: int, tex_cache: dict) -> dict:
+    import numpy as np
     bin_parts: list[bytes] = []
     blen = 0
 
@@ -203,7 +234,7 @@ def convert(glb: Path, out: Path, tex_size: int = 512) -> dict:
                "scene": 0, "scenes": [{"nodes": []}], "nodes": [], "meshes": [], "materials": [],
                "textures": [], "images": [], "samplers": [{"wrapS": 10497, "wrapT": 10497, "minFilter": 9987, "magFilter": 9729}],
                "accessors": [], "bufferViews": [], "buffers": []}
-    tex_cache, tex_out = {}, {}
+    tex_out: dict = {}
     verts = tris = 0
     for mi, g in groups.items():
         mat = doc["materials"][mi]
@@ -263,20 +294,35 @@ MAX_BYTES = 90 * 1024 * 1024   # Cloudflare (Free) liefert Antworten nur bis 100
 
 
 def convert_capped(glb: Path, out: Path, tex_size: int = 512, max_bytes: int = MAX_BYTES) -> dict:
-    """Wie convert, halbiert aber die Texturen, bis die Datei unter ``max_bytes`` liegt (min. 64 px)."""
+    """Wie convert, aber jede Datei unter ``max_bytes``: erst bis zu 4 Teile, dann Texturen halbieren (min. 64 px)."""
+    collected = collect(glb)
     size = tex_size
     while True:
-        info = convert(glb, out, size)
-        info["tex_size"] = size
+        for parts in (1, 2, 3, 4):
+            info = convert(glb, out, size, parts, collected)
+            info["tex_size"] = size
+            if info["bytes"] <= max_bytes:
+                break
         if info["bytes"] <= max_bytes or size <= 64:
-            return info
+            break
         size //= 2
+    for i in range(info["parts"], 10):   # Reste eines frueheren Laufs mit mehr Teilen
+        part_path(out, i).unlink(missing_ok=True)
+    return info
 
 
-def render_path(cfg: dict, config_path: Path, map_key: str) -> Path | None:
+def render_path(cfg: dict, config_path: Path, map_key: str, part: int = 0) -> Path | None:
     from .map3d import geo_dir
-    p = geo_dir(cfg, config_path) / f"{map_key.lower()}.render.glb.gz"
+    p = part_path(geo_dir(cfg, config_path) / f"{map_key.lower()}.render.glb.gz", part)
     return p if p.exists() else None
+
+
+def render_parts(cfg: dict, config_path: Path, map_key: str) -> int:
+    """Anzahl der Teildateien der texturierten Map (0 = keine)."""
+    n = 0
+    while render_path(cfg, config_path, map_key, n) is not None:
+        n += 1
+    return n
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -291,7 +337,7 @@ def main(argv: list[str] | None = None) -> None:
         map_key = glb.stem.removeprefix("de_")
         info = convert_capped(glb, dst / f"{map_key}.render.glb.gz", size)
         print(f"{map_key}: {info['vertices']} Vertices, {info['triangles']} Dreiecke, "
-              f"{info['materials']} Materialien, {info['textures']} Texturen ({info['tex_size']} px), {info['bytes'] // 1048576} MB"
+              f"{info['materials']} Materialien, {info['textures']} Texturen ({info['tex_size']} px), {info['total_bytes'] // 1048576} MB in {info['parts']} Teil(en)"
               + ("  ZU GROSS fuer Cloudflare" if info["bytes"] > MAX_BYTES else ""))
 
 

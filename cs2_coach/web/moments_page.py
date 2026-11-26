@@ -8,11 +8,12 @@ Spielvideo - dafuer muesste CS2 mit GPU laufen.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from flask import Blueprint, jsonify, render_template, request, send_file
 
-from .. import aim_trace, costly_moments, key_moments, map3d, map3d_render
+from .. import aim_trace, costly_moments, key_moments, map3d, map3d_render, models3d
 from ..maps import MAP_RADAR_DATA
 from ..obsidian import export_sort_key
 
@@ -121,7 +122,7 @@ def create_blueprint(load_config, config_path) -> Blueprint:
                 except Exception as e:  # noqa: BLE001 - 3D bleibt ohne Aim-Spur
                     replay["aim_error"] = str(e)
         replay["has_geo"] = map3d.geo_path(cfg, Path(config_path()), map_key) is not None
-        replay["has_render"] = map3d_render.render_path(cfg, Path(config_path()), map_key) is not None
+        replay["has_render"] = map3d_render.render_parts(cfg, Path(config_path()), map_key)
         return jsonify(replay)
 
     @bp.route("/api/momente/geo/<map_key>")
@@ -137,9 +138,24 @@ def create_blueprint(load_config, config_path) -> Blueprint:
     @bp.route("/api/momente/render/<map_key>")
     def render(map_key):
         """Texturierte Map (map3d_render.py), vorkomprimiertes glb."""
-        path = map3d_render.render_path(load_config(), Path(config_path()), map_key)
+        part = request.args.get("part", 0, type=int)
+        path = map3d_render.render_path(load_config(), Path(config_path()), map_key, part)
         if path is None:
             return jsonify({"error": "Für diese Map gibt es noch keine texturierte 3D-Map"}), 404
+        resp = send_file(path, mimetype="model/gltf-binary", max_age=7 * 86400)
+        resp.headers["Content-Encoding"] = "gzip"
+        return resp
+
+    @bp.route("/api/momente/models/<name>")
+    def model(name):
+        """Spielermodelle, Waffen, Animationen (models3d.py) und deren manifest.json."""
+        if not re.fullmatch(r"[a-z0-9_]+\.glb\.gz|manifest\.json", name):
+            return jsonify({"error": "unbekannte Datei"}), 404
+        path = models3d.models_dir(load_config(), Path(config_path())) / name
+        if not path.exists():
+            return jsonify({"error": "Modelle noch nicht exportiert"}), 404
+        if name == "manifest.json":
+            return send_file(path, mimetype="application/json", max_age=3600)
         resp = send_file(path, mimetype="model/gltf-binary", max_age=7 * 86400)
         resp.headers["Content-Encoding"] = "gzip"
         return resp

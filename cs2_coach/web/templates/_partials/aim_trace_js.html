@@ -93,7 +93,37 @@
 
     // HUD ueber der 3D-Ego-Sicht. head = Bildschirmposition des Gegnerkopfs (px) oder null,
     // pxPerDeg = Pixel je Grad nahe der Bildmitte.
-    function hud(t, mode, head, pxPerDeg) {
+    // CS2-artiges HUD fuer die Person, aus deren Augen die Kamera schaut (deine Sicht / Gegner)
+    function gameHud(c, w, h, vp) {
+        if (!vp) return;
+        if (vp.flashed) { c.fillStyle = 'rgba(255,255,255,0.75)'; c.fillRect(0, 0, w, h); }
+        if (vp.scoped) {
+            // Zielfernrohr: schwarzer Rand, feines Fadenkreuz
+            const r = Math.min(w, h) * 0.46;
+            c.save(); c.fillStyle = '#000'; c.beginPath(); c.rect(0, 0, w, h); c.arc(w / 2, h / 2, r, 0, 7, true); c.fill('evenodd');
+            c.strokeStyle = '#000'; c.lineWidth = 1.5; c.beginPath();
+            c.moveTo(0, h / 2); c.lineTo(w, h / 2); c.moveTo(w / 2, 0); c.lineTo(w / 2, h); c.stroke(); c.restore();
+        }
+        const big = '700 30px system-ui, sans-serif', small = '600 12px system-ui, sans-serif';
+        c.textBaseline = 'alphabetic';
+        const panel = (x, wd) => { c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillRect(x, h - 52, wd, 44); };
+        panel(10, 190);
+        c.font = small; c.fillStyle = '#d1d5db'; c.textAlign = 'left';
+        c.fillText('✚', 20, h - 22); c.fillText('⛨', 108, h - 22);
+        c.font = big; c.fillStyle = vp.hp <= 25 ? '#f87171' : '#f3f4f6';
+        c.fillText(String(vp.hp), 36, h - 18);
+        c.fillStyle = '#f3f4f6'; c.fillText(String(vp.armor || 0), 124, h - 18);
+        panel(w - 230, 220);
+        c.textAlign = 'right';
+        c.font = small; c.fillStyle = '#d1d5db'; c.fillText(vp.wname || '', w - 20, h - 36);
+        if (vp.wkey && !/knife|grenade|flash|molotov|decoy|c4/.test(vp.wkey)) {
+            c.font = big; c.fillStyle = vp.ammo === 0 ? '#f87171' : '#f3f4f6';
+            c.fillText(String(vp.ammo ?? ''), w - 20, h - 12);
+        }
+        c.textAlign = 'left';
+    }
+
+    function hud(t, mode, head, pxPerDeg, vp) {
         var cv = document.getElementById('km-aim-hud'), base = document.getElementById('km-3d');
         if (!cv || !base) return;
         var w = base.clientWidth, h = base.clientHeight;
@@ -101,6 +131,7 @@
         if (cv.height !== h) cv.height = h;
         var c = cv.getContext('2d');
         c.clearRect(0, 0, w, h);
+        if (mode === 'me' || mode === 'enemy') gameHud(c, w, h, vp);
         if (!aim || mode !== 'me') return;
         var cx = w / 2, cy = h / 2, r = rowAt(t);
         // Fadenkreuz
@@ -131,9 +162,9 @@
             c.fillStyle = col; c.fillText(txt, 16, y + 3);
         };
         if (r && Math.abs(r[0] - t) < 8) {
-            box(h - 64, 'Fehler zum Kopf: ' + r[3].toFixed(1) + '°  (' + (r[1] >= 0 ? '→ ' : '← ') + Math.abs(r[1]).toFixed(1) + '°, '
+            box(h - 110, 'Fehler zum Kopf: ' + r[3].toFixed(1) + '°  (' + (r[1] >= 0 ? '→ ' : '← ') + Math.abs(r[1]).toFixed(1) + '°, '
                 + (r[2] >= 0 ? '↑ ' : '↓ ') + Math.abs(r[2]).toFixed(1) + '°)', r[3] <= 3 ? '#4ade80' : (r[3] <= 10 ? '#fbbf24' : '#f87171'));
-            box(h - 40, 'Tempo: ' + r[4] + ' u/s' + (r[4] > 80 ? ' – in Bewegung' : ''), r[4] > 80 ? '#f87171' : '#e5e7eb');
+            box(h - 86, 'Tempo: ' + r[4] + ' u/s' + (r[4] > 80 ? ' – in Bewegung' : ''), r[4] > 80 ? '#f87171' : '#e5e7eb');
         }
         var cur = (aim.mistakes || []).filter(function (m) { return m.tick <= t && t - m.tick < 48; }).pop();
         if (cur) box(40, cur.text, cur.tone === 'bad' ? '#f87171' : (cur.tone === 'good' ? '#4ade80' : '#e5e7eb'));
@@ -141,7 +172,7 @@
 
     window.kmAim = {
         reset: setup,
-        frame: function (t, mode, head, pxPerDeg) { if (aim !== data()) setup(); chart(t); hud(t, mode, head, pxPerDeg); },
+        frame: function (t, mode, head, pxPerDeg, vp) { if (aim !== data()) setup(); chart(t); hud(t, mode, head, pxPerDeg, vp); },
     };
 })();
 </script>

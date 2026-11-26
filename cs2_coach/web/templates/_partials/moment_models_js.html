@@ -1,0 +1,228 @@
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+<script type="module">
+// Spielermodelle, Waffen und Animationen fuer die 3D-Ansicht (models3d.py).
+// Die glb liegen in Metern mit Y oben; CONV dreht sie in Spieleinheiten mit Z oben
+// (gleiche Umrechnung wie map3d_render). Modelle schauen danach in +X - wie yaw 0.
+// Die Clips tragen nur Knochen-Animationen; three.js bindet sie per Knochenname.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+const BASE = '{{ url_for("moments_page.model", name="NAME") }}';
+const MOVES = ['idle', 'idle_crouch', 'run_n', 'run_s', 'run_e', 'run_w', 'crouch_n', 'crouch_s', 'crouch_e', 'crouch_w'];
+const PISTOLS = new Set(['cz75a', 'deagle', 'elite', 'fiveseven', 'glock', 'hkp2000', 'p250', 'revolver', 'taser', 'tec9', 'usp_silencer']);
+const MELEE = new Set(['knife', 'c4', 'flashbang', 'hegrenade', 'smokegrenade', 'molotov', 'incgrenade', 'decoy']);
+const S = 1 / 0.0254;
+const CONV = new THREE.Matrix4().set(0, 0, S, 0,  S, 0, 0, 0,  0, S, 0, 0,  0, 0, 0, 1);
+const loader = new GLTFLoader();
+const cache = {};
+let manifest = null, manifestTried = false;
+
+function url(name) { return BASE.replace('NAME', name); }
+function load(name) { if (!cache[name]) cache[name] = loader.loadAsync(url(name)); return cache[name]; }
+
+async function getManifest() {
+    if (manifestTried) return manifest;
+    manifestTried = true;
+    try { const r = await fetch(url('manifest.json')); if (r.ok) manifest = await r.json(); } catch (e) { manifest = null; }
+    return manifest;
+}
+
+function wclass(key) { return PISTOLS.has(key) ? 'pistol' : (MELEE.has(key) || (key || '').startsWith('knife') ? 'knife' : 'rifle'); }
+function wfile(key, side) {
+    if (!manifest || !key) return null;
+    if (key === 'knife') key = side === 2 ? 'knife_t' : 'knife_ct';
+    return manifest.weapons[key] || null;
+}
+
+// Waffe so verpacken, dass ihr Knochen "weapon" auf dem Elternknochen sitzt (wpn bzw. Viewmodel)
+function weaponWrap(gltf) {
+    const sc = SkeletonUtils.clone(gltf.scene);
+    sc.traverse(o => { if (o.isMesh) { o.frustumCulled = false; if (/legacy/.test(o.name)) o.visible = false; } });
+    let wb = null;
+    sc.traverse(o => { if (o.name === 'weapon') wb = o; });
+    sc.updateMatrixWorld(true);
+    const wrap = new THREE.Group();
+    wrap.matrixAutoUpdate = false;
+    if (wb) wrap.matrix.copy(wb.matrixWorld.clone().invert());
+    wrap.add(sc);
+    return wrap;
+}
+
+async function prepare(data) {
+    // alles laden, was dieser Clip braucht: Agenten der beteiligten Seiten, Waffen, Clips der Klassen
+    const m = await getManifest();
+    if (!m) return false;
+    const sides = new Set(), weapons = new Set(), classes = new Set(['rifle']);
+    Object.values(data.view3d).forEach(rows => rows.forEach(r => {
+        if (r[8] === 2 || r[8] === 3) sides.add(r[8]);
+        if (r[9]) { weapons.add(wfile(r[9], r[8])); classes.add(wclass(r[9])); }
+    }));
+    const jobs = [];
+    sides.forEach(s => { const f = m.agents[s === 2 ? 't' : 'ct']; if (f) jobs.push(load(f)); });
+    weapons.forEach(f => { if (f) jobs.push(load(f)); });
+    classes.forEach(c => MOVES.forEach(mv => { const f = m.clips[c + '_' + mv]; if (f) jobs.push(load(f)); }));
+    await Promise.all(jobs.map(p => p.catch(() => null)));
+    return true;
+}
+
+const _q = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _axis = new THREE.Vector3();
+function rotateWorld(bone, axis, ang) {
+    if (!bone) return;
+    bone.parent.getWorldQuaternion(_pq);
+    _q.setFromAxisAngle(axis, ang);
+    const local = _pq.clone().invert().multiply(_q).multiply(_pq);
+    bone.quaternion.premultiply(local);
+    bone.updateMatrixWorld(true);
+}
+
+class Figure {
+    // Agent mit Animation, Blickneigung und Waffe in der Hand
+    constructor(side) {
+        this.side = side;
+        this.root = new THREE.Group();
+        this.ok = false;
+        const f = manifest && manifest.agents[side === 2 ? 't' : 'ct'];
+        if (!f) return;
+        this.ready = load(f).then(g => {
+            const body = SkeletonUtils.clone(g.scene);
+            body.traverse(o => {
+                if (o.isMesh) { o.frustumCulled = false; if (/firstperson|defusekit/.test(o.name)) o.visible = false; }
+            });
+            const conv = new THREE.Group();
+            conv.matrixAutoUpdate = false;
+            conv.matrix.copy(CONV);
+            conv.add(body);
+            this.root.add(conv);
+            this.bones = {};
+            body.traverse(o => { if (['wpn', 'spine_1', 'spine_2', 'neck_0', 'head_0'].includes(o.name)) this.bones[o.name] = o; });
+            this.mixer = new THREE.AnimationMixer(body);
+            this.actions = {};
+            this.ok = true;
+        }).catch(() => {});
+    }
+
+    async action(name) {
+        if (this.actions[name] !== undefined) return this.actions[name];
+        this.actions[name] = null;
+        const f = manifest.clips[name];
+        if (!f) return null;
+        const g = await load(f).catch(() => null);
+        if (!g || !g.animations.length) return null;
+        // Nur die Verschiebung der Wurzel raus (die Position kommt aus der Demo);
+        // ihre Drehung bleibt - sie traegt die Grundausrichtung des Modells
+        const clip = g.animations[0].clone();
+        clip.tracks = clip.tracks.filter(t => t.name !== 'root_motion.position');
+        this.actions[name] = this.mixer.clipAction(clip);
+        return this.actions[name];
+    }
+
+    setWeapon(key) {
+        if (!this.ok || key === this.wkey) return;
+        this.wkey = key;
+        if (this.wobj) { this.wobj.parent && this.wobj.parent.remove(this.wobj); this.wobj = null; }
+        const f = wfile(key, this.side);
+        if (!f || !this.bones.wpn) return;
+        load(f).then(g => {
+            if (this.wkey !== key) return;
+            this.wobj = weaponWrap(g);
+            this.bones.wpn.add(this.wobj);
+        }).catch(() => {});
+    }
+
+    // p: interpolierte Pose, vel: [vx, vy] in Einheiten/s, t: Tick (fuer die Clip-Zeit)
+    update(p, vel, t) {
+        if (!this.ok) return;
+        this.root.position.set(p.x, p.y, p.z);
+        this.root.rotation.set(0, 0, p.yaw * Math.PI / 180);
+        const speed = Math.hypot(vel[0], vel[1]);
+        let move;
+        if (speed < 30) move = p.duck ? 'idle_crouch' : 'idle';
+        else {
+            const rel = ((Math.atan2(vel[1], vel[0]) * 180 / Math.PI - p.yaw + 540) % 360) - 180;
+            const dir = Math.abs(rel) < 45 ? 'n' : (Math.abs(rel) > 135 ? 's' : (rel > 0 ? 'w' : 'e'));
+            move = (p.duck ? 'crouch_' : 'run_') + dir;
+        }
+        const name = wclass(p.wkey) + '_' + move;
+        const act = this.actions[name];
+        if (act === undefined) { this.action(name); }
+        if (act) {
+            if (this.cur !== act) { if (this.cur) this.cur.stop(); act.play(); this.cur = act; }
+            const rate = speed < 30 ? 1 : Math.min(Math.max(speed / (p.duck ? 80 : 220), 0.4), 1.6);
+            act.time = ((t / 64) * rate) % act.getClip().duration;
+            this.mixer.update(0);
+        }
+        this.setWeapon(p.wkey);
+        // Blickneigung auf Wirbelsaeule und Hals verteilen (pitch positiv = nach unten)
+        this.root.updateMatrixWorld(true);
+        const y = p.yaw * Math.PI / 180;
+        _axis.set(Math.sin(y), -Math.cos(y), 0);
+        const ang = -p.pitch * Math.PI / 180;
+        rotateWorld(this.bones.spine_1, _axis, ang * 0.3);
+        rotateWorld(this.bones.spine_2, _axis, ang * 0.3);
+        rotateWorld(this.bones.neck_0, _axis, ang * 0.4);
+    }
+}
+
+// Waffe in der Ego-Sicht: haengt an der Kamera. Ihre Lage kommt aus der echten
+// Haltung des Agenten (wpn-Knochen relativ zum Kopf in der Steh-Animation), nur
+// ein Stueck nach vorne/rechts/unten geschoben, damit sie wie im Spiel unten rechts sitzt.
+// Kamera-Raum: -Z vorne, +Y oben, +X rechts. Spiel-Rahmen: +X vorne, +Y links, +Z oben.
+const G2C = new THREE.Matrix4().set(0, -1, 0, 0,  0, 0, 1, 0,  -1, 0, 0, 0,  0, 0, 0, 1);
+const VM_SHIFT = [3, -4, -5];   // vorne, links (negativ = rechts), oben (negativ = unten) in Spieleinheiten
+class ViewModel {
+    constructor(camera) {
+        this.group = new THREE.Group();
+        this.group.matrixAutoUpdate = false;
+        camera.add(this.group);
+        this.hold = {};       // Klasse -> Matrix (Knochen wpn relativ zum Auge, Spiel-Rahmen)
+    }
+    async calibrate(side, cls) {
+        const key = side + cls;
+        if (this.hold[key] !== undefined) return this.hold[key];
+        this.hold[key] = null;
+        const fig = new Figure(side);
+        if (!fig.ready) return null;
+        await fig.ready;
+        const act = await fig.action(cls + '_idle');
+        if (!fig.ok || !act || !fig.bones.wpn || !fig.bones.head_0) return null;
+        act.play(); act.time = 0; fig.mixer.update(0);
+        fig.root.updateMatrixWorld(true);
+        const head = new THREE.Vector3().setFromMatrixPosition(fig.bones.head_0.matrixWorld);
+        this.hold[key] = new THREE.Matrix4().makeTranslation(-head.x, -head.y, -head.z).multiply(fig.bones.wpn.matrixWorld);
+        return this.hold[key];
+    }
+    set(key, side) {
+        if (key === this.key) return;
+        this.key = key;
+        this.group.clear();
+        const f = wfile(key, side);
+        if (!f) { if (!manifest) this.key = undefined; return; }   // Liste noch nicht da: naechstes Bild nochmal
+        const cls = wclass(key);
+        Promise.all([load(f), this.calibrate(side, cls)]).then(([g, hold]) => {
+            if (this.key !== key || !hold) return;
+            const w = weaponWrap(g);
+            w.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.renderOrder = 10;
+                o.material = o.material.clone(); o.material.depthTest = false; o.material.fog = false; } });
+            const h = new THREE.Group();
+            h.matrixAutoUpdate = false;
+            h.matrix.copy(hold);
+            h.add(w);
+            this.group.add(h);
+        }).catch(() => {});
+    }
+    update(visible, kick) {
+        this.group.visible = visible && !!this.key;
+        // Rueckstoss: kurz zurueck und hoch
+        const k = Math.max(0, kick || 0);
+        const m = new THREE.Matrix4().makeTranslation(VM_SHIFT[0] - 2.5 * k, VM_SHIFT[1], VM_SHIFT[2] + 0.6 * k)
+            .multiply(new THREE.Matrix4().makeRotationY(-0.06 * k));
+        this.group.matrix.copy(G2C).multiply(m);
+    }
+}
+
+window.kmModels = { getManifest, prepare, Figure, ViewModel, wclass };
+</script>

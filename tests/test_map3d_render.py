@@ -71,3 +71,21 @@ def test_convert_capped_halves_textures_until_small(tmp_path):
     assert info["tex_size"] == 64       # bis zur Untergrenze halbiert, dann aufgegeben
     info = convert_capped(glb, tmp_path / "c.gz", 512, max_bytes=10**9)
     assert info["tex_size"] == 512
+
+
+def test_convert_splits_into_parts(tmp_path):
+    from cs2_coach.map3d_render import part_path
+    glb = _glb(tmp_path)
+    out = tmp_path / "m.render.glb.gz"
+    info = convert(glb, out, 64, parts=2)
+    assert info["parts"] == 2 and part_path(out, 1).name == "m.render1.glb.gz"
+    assert out.exists() and part_path(out, 1).exists()
+
+
+def test_convert_capped_prefers_parts_and_removes_stale(tmp_path):
+    from cs2_coach.map3d_render import convert_capped, part_path
+    glb = _glb(tmp_path)
+    out = tmp_path / "m.render.glb.gz"
+    part_path(out, 3).write_bytes(b"alt")
+    info = convert_capped(glb, out, 64, max_bytes=10**9)
+    assert info["parts"] == 1 and not part_path(out, 3).exists()
