@@ -12,7 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, render_template, request, send_file
 
-from .. import aim_trace, costly_moments, key_moments, map3d
+from .. import aim_trace, costly_moments, key_moments, map3d, map3d_render
 from ..maps import MAP_RADAR_DATA
 from ..obsidian import export_sort_key
 
@@ -121,6 +121,7 @@ def create_blueprint(load_config, config_path) -> Blueprint:
                 except Exception as e:  # noqa: BLE001 - 3D bleibt ohne Aim-Spur
                     replay["aim_error"] = str(e)
         replay["has_geo"] = map3d.geo_path(cfg, Path(config_path()), map_key) is not None
+        replay["has_render"] = map3d_render.render_path(cfg, Path(config_path()), map_key) is not None
         return jsonify(replay)
 
     @bp.route("/api/momente/geo/<map_key>")
@@ -130,6 +131,16 @@ def create_blueprint(load_config, config_path) -> Blueprint:
         if path is None:
             return jsonify({"error": "Für diese Map gibt es noch keine 3D-Geometrie"}), 404
         resp = send_file(path, mimetype="application/octet-stream", max_age=7 * 86400)
+        resp.headers["Content-Encoding"] = "gzip"
+        return resp
+
+    @bp.route("/api/momente/render/<map_key>")
+    def render(map_key):
+        """Texturierte Map (map3d_render.py), vorkomprimiertes glb."""
+        path = map3d_render.render_path(load_config(), Path(config_path()), map_key)
+        if path is None:
+            return jsonify({"error": "Für diese Map gibt es noch keine texturierte 3D-Map"}), 404
+        resp = send_file(path, mimetype="model/gltf-binary", max_age=7 * 86400)
         resp.headers["Content-Encoding"] = "gzip"
         return resp
 

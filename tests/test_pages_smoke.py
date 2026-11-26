@@ -101,3 +101,9 @@ def test_export_detail_contains_kill_map(client):
 def test_coaching_page_lists_findings(client):
     resp = client.get("/coaching")
     assert resp.status_code == 200
+
+
+def test_map3d_downloads_answer_404_without_export(client):
+    """Geometrie-Routen (Kollision, texturierte Map) ohne Export: sauberes 404, kein 5xx."""
+    for path in ("/api/momente/geo/nomap", "/api/momente/render/nomap"):
+        assert client.get(path).status_code == 404

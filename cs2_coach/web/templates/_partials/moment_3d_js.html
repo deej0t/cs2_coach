@@ -8,6 +8,7 @@
 // Koordinaten = Spieleinheiten, Z oben - wie in der Demo, keine Umrechnung.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const COLORS = { self: 0x4ade80, mate: 0x60a5fa, enemy: 0xf87171, unknown: 0x9ca3af };
 const VFOV = 73.7;           // vertikal zu 106° horizontal bei 16:9 (CS2-Standard)
@@ -53,8 +54,29 @@ function resize() {
     renderer.render(scene, camera);
 }
 
+async function loadRender(mapKey) {
+    // Texturierte Map (map3d_render.py): schon in Spieleinheiten, Z oben - keine Umrechnung
+    const url = '{{ url_for("moments_page.render", map_key="MAPKEY") }}'.replace('MAPKEY', mapKey);
+    const gltf = await new GLTFLoader().loadAsync(url, ev => {
+        const msg = document.getElementById('km-3d-msg');
+        if (msg && ev.total) msg.textContent = 'Map wird geladen... ' + Math.round(ev.loaded / ev.total * 100) + ' %';
+        else if (msg) msg.textContent = 'Map wird geladen... ' + Math.round(ev.loaded / 1048576) + ' MB';
+    });
+    gltf.scene.traverse(o => {
+        if (o.isMesh && o.material) {
+            o.material.side = o.material.alphaTest || o.material.transparent ? THREE.DoubleSide : o.material.side;
+            o.material.roughness = 1; o.material.metalness = 0;
+        }
+    });
+    return gltf.scene;
+}
+
 async function loadGeo(mapKey) {
     if (geoCache[mapKey]) return geoCache[mapKey];
+    if (data && data.has_render || (window.km.data && window.km.data.has_render)) {
+        try { geoCache[mapKey] = await loadRender(mapKey); return geoCache[mapKey]; }
+        catch (e) { console.warn('texturierte Map nicht ladbar, nehme Kollisionsmodell', e); }
+    }
     const r = await fetch('{{ url_for("moments_page.geo", map_key="MAPKEY") }}'.replace('MAPKEY', mapKey));
     if (!r.ok) throw new Error('Für diese Map gibt es noch keine 3D-Geometrie');
     const buf = await r.arrayBuffer();
