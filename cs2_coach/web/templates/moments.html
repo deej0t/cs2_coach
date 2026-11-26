@@ -22,6 +22,7 @@
     .km-notes li.good { border-left-color: #4ade80; }
     .km-notes li.bad { border-left-color: #f87171; }
     #km-3d-wrap:fullscreen #km-3d { height: 100vh !important; border-radius: 0 !important; }
+    #km-3d-wrap:fullscreen #km-aim-hud { height: 100vh !important; }
 </style>
 
 <form method="get" style="margin-bottom: var(--space-4);">
@@ -62,6 +63,7 @@
             <button class="btn btn-ghost" id="km-play" onclick="kmToggle()">▶</button>
             <button class="btn btn-ghost" onclick="kmRestart()">⟲</button>
             <select id="km-speed" class="input" style="width:auto;min-height:26px;padding:2px 8px;font-size:11px;">
+                <option value="0.1">0.1×</option>
                 <option value="0.25">0.25×</option>
                 <option value="0.5" selected>0.5×</option>
                 <option value="1">1×</option>
@@ -77,7 +79,15 @@
         <div id="km-3d-wrap" style="display:none;position:relative;width:100%;background:#9fb4c7;border-radius:var(--radius-md);">
             <canvas id="km-3d" style="width:100%;height:min(calc((100vw - 380px) * 9 / 16), 78vh);min-height:360px;border-radius:var(--radius-md);display:block;"></canvas>
             <button class="btn btn-ghost" id="km-3d-full" title="Vollbild (Esc beendet)" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;">⛶ Vollbild</button>
+            <canvas id="km-aim-hud" style="position:absolute;left:0;top:0;width:100%;height:min(calc((100vw - 380px) * 9 / 16), 78vh);min-height:360px;pointer-events:none;"></canvas>
             <div id="km-3d-msg" style="position:absolute;top:8px;left:10px;font-size:13px;color:#111;font-weight:600;"></div>
+            <div id="km-aim" style="display:none;margin-top:6px;background:var(--color-bg);padding:8px;border-radius:var(--radius-sm);">
+                <div style="font-size:12px;font-weight:600;margin-bottom:4px;">{{ _('Aim-Spur') }}
+                    <span style="font-weight:400;color:var(--color-neutral-500);">– <span style="color:#fbbf24">■</span> {{ _('Fehler zum Kopf') }} · <span style="color:#60a5fa">■</span> {{ _('links/rechts') }} · <span style="color:#c084fc">■</span> {{ _('hoch/tief') }} · <span style="color:#4ade80">●</span> {{ _('Treffer') }} · <span style="color:#f87171">●</span> {{ _('Fehlschuss') }} · {{ _('rot hinterlegt = in Bewegung. Klick springt hin.') }}</span></div>
+                <canvas id="km-aim-chart" style="width:100%;height:140px;display:block;cursor:pointer;"></canvas>
+                <ul class="km-notes" id="km-aim-list"></ul>
+                <p style="font-size:11px;color:var(--color-neutral-600);margin:4px 0 0;">{{ _('Demo-Blickwinkel ohne Rückstoß: beim Spray liegt richtig gegengezogenes Fadenkreuz unter dem Kopf – bewertet wird nur der erste Schuss einer Salve.') }}</p>
+            </div>
             <p style="font-size:11px;color:var(--color-neutral-600);margin-top:4px;">{{ _('Schlichtes Kollisionsmodell der Map, keine Spielgrafik. Linie = Blickrichtung. Sichtfeld wie CS2 (106°).') }}</p>
         </div>
         <canvas id="km-canvas" width="640" height="640" style="width:100%;max-width:640px;border-radius:var(--radius-md);background:var(--color-bg);"></canvas>
@@ -256,5 +266,6 @@ function kmMark(ctx, s, m) {
     ctx.restore();
 }
 </script>
+{% include '_partials/aim_trace_js.html' %}
 {% include '_partials/moment_3d_js.html' %}
 {% endblock %}

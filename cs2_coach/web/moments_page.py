@@ -12,7 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, render_template, request, send_file
 
-from .. import costly_moments, key_moments, map3d
+from .. import aim_trace, costly_moments, key_moments, map3d
 from ..maps import MAP_RADAR_DATA
 from ..obsidian import export_sort_key
 
@@ -95,6 +95,7 @@ def create_blueprint(load_config, config_path) -> Blueprint:
         scale = MAP_RADAR_DATA[map_key]["scale"]
         mo = (key_moments.annotate_kill if is_kill else key_moments.annotate)(replay, tick, scale)
         mo["events"] = []
+        facts = {}
         if mo.get("killer") and mo.get("killer_idx") is not None:
             name = replay["players"][mo["killer_idx"]]["name"]
             try:
@@ -112,6 +113,13 @@ def create_blueprint(load_config, config_path) -> Blueprint:
                 replay["view3d"] = key_moments.scan_3d(str(demo), replay["players"], clip_ticks)
             except Exception as e:  # noqa: BLE001 - 2D bleibt
                 replay["view3d_error"] = str(e)
+            if mo.get("killer"):
+                start = max(clip_ticks[0] if clip_ticks else 0, mo["death_tick"] - 4 * key_moments.TICKRATE)
+                try:
+                    replay["aim"] = aim_trace.scan(str(demo), _me(cfg, data), mo["killer"], start,
+                                                   mo["death_tick"], facts.get("my_sight"))
+                except Exception as e:  # noqa: BLE001 - 3D bleibt ohne Aim-Spur
+                    replay["aim_error"] = str(e)
         replay["has_geo"] = map3d.geo_path(cfg, Path(config_path()), map_key) is not None
         return jsonify(replay)
 

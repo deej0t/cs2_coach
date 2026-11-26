@@ -213,6 +213,23 @@ function draw() {
         camFreeSet = true;
     }
     renderer.render(scene, camera);
+    aimOverlay(A, B, f, mode);
+}
+
+const _head = new THREE.Vector3();
+function aimOverlay(A, B, f, m) {
+    // Kopf des Gegners auf den Bildschirm projizieren, fuer die Aim-Einblendung (aim_trace_js)
+    if (!window.kmAim) return;
+    const mo = data.moment, cv = canvasEl();
+    const w = cv.clientWidth, h = cv.clientHeight;
+    let head = null;
+    const k = mo.killer_idx != null ? pose(A[mo.killer_idx], B[mo.killer_idx], f) : null;
+    if (k && m === 'me') {
+        _head.set(k.x, k.y, k.z + (k.duck ? EYE_DUCK : EYE)).project(camera);
+        if (_head.z < 1) head = { x: (_head.x + 1) / 2 * w, y: (1 - _head.y) / 2 * h };
+    }
+    const pxPerDeg = (h / 2) / Math.tan(camera.fov * Math.PI / 360) * Math.tan(Math.PI / 180);
+    window.kmAim.frame(currentTick(), m, head, pxPerDeg);
 }
 
 function loop() {
@@ -238,10 +255,11 @@ async function show(newMode) {
             const j = await r.json();
             if (!r.ok || !j.view3d) throw new Error(j.error || j.view3d_error || 'keine 3D-Daten');
             km.data.view3d = j.view3d;
+            km.data.aim = j.aim; km.data.aim_error = j.aim_error;
         }
         const g = await loadGeo(km.data.map);
         if (world !== g) { if (world) scene.remove(world); world = g; scene.add(g); }
-        if (data !== km.data) { data = km.data; buildFigures(); }
+        if (data !== km.data) { data = km.data; buildFigures(); if (window.kmAim) window.kmAim.reset(); }
         msg.textContent = '';
         if (newMode !== 'free') controls.enabled = false;
         if (newMode === 'free') camFreeSet = false;

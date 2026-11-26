@@ -1,0 +1,147 @@
+<script>
+// Aim-Spur eines Duells (aim_trace.py): Zeitleiste des Fadenkreuz-Fehlers zum
+// Kopf des Gegners plus Einblendung in der 3D-Ego-Sicht (Kopf-Marker, wohin
+// jeder Schuss relativ zum Kopf ging, aktueller Fehler, Auffaelligkeiten).
+(function () {
+    var COL = { tot: '#fbbf24', h: '#60a5fa', v: '#c084fc', hit: '#4ade80', miss: '#f87171', move: 'rgba(248,113,113,0.15)' };
+    var aim = null, chartMax = 30;
+
+    function data() { return window.km && window.km.data && window.km.data.aim; }
+
+    function rowAt(t) {
+        var s = aim.series, lo = 0, hi = s.length - 1;
+        if (!s.length) return null;
+        if (t <= s[0][0]) return s[0];
+        if (t >= s[hi][0]) return s[hi];
+        while (hi - lo > 1) { var m = (lo + hi) >> 1; if (s[m][0] <= t) lo = m; else hi = m; }
+        return s[lo];
+    }
+
+    function setup() {
+        aim = data();
+        var box = document.getElementById('km-aim');
+        if (!aim || !aim.series || !aim.series.length) {
+            box.style.display = 'none';
+            if (window.km && window.km.data && window.km.data.aim_error)
+                { box.style.display = ''; box.innerHTML = '<p style="font-size:12px">Aim-Spur nicht lesbar: ' + window.km.data.aim_error + '</p>'; }
+            return;
+        }
+        box.style.display = '';
+        chartMax = Math.min(45, Math.max(10, Math.ceil(Math.max.apply(null, aim.series.map(function (r) { return r[3]; })) / 5) * 5));
+        var ul = document.getElementById('km-aim-list');
+        ul.innerHTML = '';
+        (aim.mistakes || []).forEach(function (m) {
+            var li = document.createElement('li');
+            li.className = m.tone;
+            li.style.cursor = 'pointer';
+            li.textContent = ((m.tick - aim.series[0][0]) / 64).toFixed(2) + ' s · ' + m.text;
+            li.onclick = function () { seek(m.tick); };
+            ul.appendChild(li);
+        });
+    }
+
+    function seek(tick) {
+        var km = window.km, fr = km.data.frames, best = 0;
+        for (var i = 0; i < fr.length; i++) { if (fr[i].t <= tick) best = i; else break; }
+        if (km.timer) kmStop();
+        km.frame = best;
+        km.stepMs = 0;
+        kmDraw();
+    }
+
+    function chart(t) {
+        var cv = document.getElementById('km-aim-chart');
+        if (!cv || !aim) return;
+        var w = cv.clientWidth || 600, h = cv.clientHeight || 140;
+        if (cv.width !== w) cv.width = w;
+        if (cv.height !== h) cv.height = h;
+        var c = cv.getContext('2d'), s = aim.series, t0 = s[0][0], t1 = s[s.length - 1][0] || t0 + 1;
+        var X = function (tk) { return 30 + (tk - t0) / Math.max(t1 - t0, 1) * (w - 40); };
+        var Y = function (d) { return h / 2 - d / chartMax * (h / 2 - 8); };          // h/v: vorzeichenbehaftet um die Mitte
+        var YT = function (d) { return h - 6 - Math.min(d, chartMax) / chartMax * (h - 14); }; // gesamt: von unten
+        c.clearRect(0, 0, w, h);
+        c.fillStyle = 'rgba(0,0,0,0.04)'; c.fillRect(0, 0, w, h);
+        s.forEach(function (r, i) {   // Bewegung > 80 u/s: Hintergrund rot
+            if (r[4] > 80 && i + 1 < s.length) { c.fillStyle = COL.move; c.fillRect(X(r[0]), 0, X(s[i + 1][0]) - X(r[0]) + 1, h); }
+        });
+        c.strokeStyle = 'rgba(128,128,128,0.4)'; c.beginPath(); c.moveTo(30, Y(0)); c.lineTo(w - 10, Y(0)); c.stroke();
+        c.fillStyle = '#888'; c.font = '10px system-ui'; c.textAlign = 'right'; c.textBaseline = 'middle';
+        c.fillText('+' + chartMax + '°', 27, Y(chartMax)); c.fillText('0°', 27, Y(0)); c.fillText('-' + chartMax + '°', 27, Y(-chartMax));
+        [['h', 1], ['v', 2]].forEach(function (k) {
+            c.strokeStyle = COL[k[0]]; c.lineWidth = 1.2; c.beginPath();
+            s.forEach(function (r, i) { var y = Y(Math.max(-chartMax, Math.min(chartMax, r[k[1]]))); if (i) c.lineTo(X(r[0]), y); else c.moveTo(X(r[0]), y); });
+            c.stroke();
+        });
+        c.strokeStyle = COL.tot; c.lineWidth = 2; c.beginPath();
+        s.forEach(function (r, i) { if (i) c.lineTo(X(r[0]), YT(r[3])); else c.moveTo(X(r[0]), YT(r[3])); });
+        c.stroke();
+        (aim.shots || []).forEach(function (sh) {
+            c.fillStyle = sh.hit ? COL.hit : COL.miss;
+            c.beginPath(); c.arc(X(sh.tick), YT(sh.err), sh.first ? 5 : 3.5, 0, 7); c.fill();
+            if (sh.moving) { c.strokeStyle = COL.miss; c.lineWidth = 1; c.beginPath(); c.arc(X(sh.tick), YT(sh.err), 7, 0, 7); c.stroke(); }
+        });
+        (aim.mistakes || []).forEach(function (m) {
+            if (m.tone !== 'bad') return;
+            c.fillStyle = COL.miss; c.font = 'bold 11px system-ui'; c.textAlign = 'center'; c.fillText('!', X(m.tick), 8);
+        });
+        if (t != null) { c.strokeStyle = '#111'; c.lineWidth = 1; c.beginPath(); c.moveTo(X(t), 0); c.lineTo(X(t), h); c.stroke(); }
+        cv.onclick = function (e) {
+            var r = cv.getBoundingClientRect(), f = (e.clientX - r.left - 30) / (r.width - 40);
+            seek(t0 + Math.max(0, Math.min(1, f)) * (t1 - t0));
+        };
+    }
+
+    // HUD ueber der 3D-Ego-Sicht. head = Bildschirmposition des Gegnerkopfs (px) oder null,
+    // pxPerDeg = Pixel je Grad nahe der Bildmitte.
+    function hud(t, mode, head, pxPerDeg) {
+        var cv = document.getElementById('km-aim-hud'), base = document.getElementById('km-3d');
+        if (!cv || !base) return;
+        var w = base.clientWidth, h = base.clientHeight;
+        if (cv.width !== w) cv.width = w;
+        if (cv.height !== h) cv.height = h;
+        var c = cv.getContext('2d');
+        c.clearRect(0, 0, w, h);
+        if (!aim || mode !== 'me') return;
+        var cx = w / 2, cy = h / 2, r = rowAt(t);
+        // Fadenkreuz
+        c.strokeStyle = '#4ade80'; c.lineWidth = 2; c.beginPath();
+        c.moveTo(cx - 10, cy); c.lineTo(cx - 3, cy); c.moveTo(cx + 3, cy); c.lineTo(cx + 10, cy);
+        c.moveTo(cx, cy - 10); c.lineTo(cx, cy - 3); c.moveTo(cx, cy + 3); c.lineTo(cx, cy + 10); c.stroke();
+        // Kopf: aus der 3D-Projektion, sonst aus dem Fehlerwinkel
+        var hx = null, hy = null;
+        if (head) { hx = head.x; hy = head.y; }
+        else if (r) { hx = cx - r[1] * pxPerDeg; hy = cy + r[2] * pxPerDeg; }
+        if (hx != null && r && Math.abs(r[0] - t) < 8) {
+            c.strokeStyle = '#f87171'; c.lineWidth = 2; c.beginPath(); c.arc(hx, hy, 9, 0, 7); c.stroke();
+            c.setLineDash([4, 4]); c.strokeStyle = 'rgba(251,191,36,0.9)'; c.beginPath(); c.moveTo(cx, cy); c.lineTo(hx, hy); c.stroke(); c.setLineDash([]);
+            // Schuesse der letzten Sekunde relativ zum Kopf: so lag das Fadenkreuz beim Abdruecken
+            (aim.shots || []).forEach(function (sh) {
+                if (sh.tick > t || t - sh.tick > 64) return;
+                var a = 1 - (t - sh.tick) / 64;
+                c.globalAlpha = 0.35 + 0.65 * a;
+                c.fillStyle = sh.hit ? COL.hit : COL.miss;
+                c.beginPath(); c.arc(hx + sh.h * pxPerDeg, hy - sh.v * pxPerDeg, 4, 0, 7); c.fill();
+                c.globalAlpha = 1;
+            });
+        }
+        var box = function (y, txt, col) {
+            c.font = '600 13px system-ui, sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+            var tw = c.measureText(txt).width;
+            c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(10, y, tw + 12, 20);
+            c.fillStyle = col; c.fillText(txt, 16, y + 3);
+        };
+        if (r && Math.abs(r[0] - t) < 8) {
+            box(h - 64, 'Fehler zum Kopf: ' + r[3].toFixed(1) + '°  (' + (r[1] >= 0 ? '→ ' : '← ') + Math.abs(r[1]).toFixed(1) + '°, '
+                + (r[2] >= 0 ? '↑ ' : '↓ ') + Math.abs(r[2]).toFixed(1) + '°)', r[3] <= 3 ? '#4ade80' : (r[3] <= 10 ? '#fbbf24' : '#f87171'));
+            box(h - 40, 'Tempo: ' + r[4] + ' u/s' + (r[4] > 80 ? ' – in Bewegung' : ''), r[4] > 80 ? '#f87171' : '#e5e7eb');
+        }
+        var cur = (aim.mistakes || []).filter(function (m) { return m.tick <= t && t - m.tick < 48; }).pop();
+        if (cur) box(40, cur.text, cur.tone === 'bad' ? '#f87171' : (cur.tone === 'good' ? '#4ade80' : '#e5e7eb'));
+    }
+
+    window.kmAim = {
+        reset: setup,
+        frame: function (t, mode, head, pxPerDeg) { if (aim !== data()) setup(); chart(t); hud(t, mode, head, pxPerDeg); },
+    };
+})();
+</script>
