@@ -61,3 +61,13 @@ def test_convert_game_units_only_used_vertices(tmp_path):
     acc = doc["accessors"][doc["meshes"][0]["primitives"][0]["attributes"]["POSITION"]]
     assert np.allclose(acc["min"], [100, 200, 300], atol=1e-3)
     assert doc["images"][0]["mimeType"] == "image/jpeg"
+
+
+def test_convert_capped_halves_textures_until_small(tmp_path):
+    glb = _glb(tmp_path)
+    full = convert(glb, tmp_path / "a.gz", 64)["bytes"]
+    from cs2_coach.map3d_render import convert_capped
+    info = convert_capped(glb, tmp_path / "b.gz", 512, max_bytes=full - 1)
+    assert info["tex_size"] == 64       # bis zur Untergrenze halbiert, dann aufgegeben
+    info = convert_capped(glb, tmp_path / "c.gz", 512, max_bytes=10**9)
+    assert info["tex_size"] == 512

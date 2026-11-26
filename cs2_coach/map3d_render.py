@@ -259,6 +259,20 @@ def convert(glb: Path, out: Path, tex_size: int = 512) -> dict:
             "textures": len(out_doc["images"]), "bytes": out.stat().st_size}
 
 
+MAX_BYTES = 90 * 1024 * 1024   # Cloudflare (Free) liefert Antworten nur bis 100 MB aus
+
+
+def convert_capped(glb: Path, out: Path, tex_size: int = 512, max_bytes: int = MAX_BYTES) -> dict:
+    """Wie convert, halbiert aber die Texturen, bis die Datei unter ``max_bytes`` liegt (min. 64 px)."""
+    size = tex_size
+    while True:
+        info = convert(glb, out, size)
+        info["tex_size"] = size
+        if info["bytes"] <= max_bytes or size <= 64:
+            return info
+        size //= 2
+
+
 def render_path(cfg: dict, config_path: Path, map_key: str) -> Path | None:
     from .map3d import geo_dir
     p = geo_dir(cfg, config_path) / f"{map_key.lower()}.render.glb.gz"
@@ -272,12 +286,13 @@ def main(argv: list[str] | None = None) -> None:
     src, dst = Path(args[0]), Path(args[1])
     size = int(args[2]) if len(args) > 2 else 512
     for glb in sorted(src.glob("*/maps/de_*.glb")):
-        if glb.stem.endswith("_physics"):
+        if glb.stem.endswith(("_physics", "_vanity")):   # Hauptmenue-Kulissen braucht keine Demo
             continue
         map_key = glb.stem.removeprefix("de_")
-        info = convert(glb, dst / f"{map_key}.render.glb.gz", size)
+        info = convert_capped(glb, dst / f"{map_key}.render.glb.gz", size)
         print(f"{map_key}: {info['vertices']} Vertices, {info['triangles']} Dreiecke, "
-              f"{info['materials']} Materialien, {info['textures']} Texturen, {info['bytes'] // 1048576} MB")
+              f"{info['materials']} Materialien, {info['textures']} Texturen ({info['tex_size']} px), {info['bytes'] // 1048576} MB"
+              + ("  ZU GROSS fuer Cloudflare" if info["bytes"] > MAX_BYTES else ""))
 
 
 if __name__ == "__main__":

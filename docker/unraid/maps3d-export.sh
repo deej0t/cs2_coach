@@ -27,7 +27,7 @@ if [ ! -x "$TOOLS/bin/Source2Viewer-CLI" ]; then
     chmod +x "$TOOLS/bin/Source2Viewer-CLI"
 fi
 
-if [ "$#" -gt 0 ]; then names=("$@"); else names=(); for f in "$MAPS"/de_*.vpk; do n=$(basename "$f" .vpk); names+=("$n"); done; fi
+if [ "$#" -gt 0 ]; then names=("$@"); else names=(); for f in "$MAPS"/de_*.vpk; do n=$(basename "$f" .vpk); case "$n" in *_vanity) continue;; esac; names+=("$n"); done; fi
 
 for n in "${names[@]}"; do
     n="de_${n#de_}"
