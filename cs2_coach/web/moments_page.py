@@ -44,6 +44,23 @@ def _me(cfg: dict, data: dict) -> str:
 def create_blueprint(load_config, config_path) -> Blueprint:
     bp = Blueprint("moments_page", __name__)
 
+    def _moments_for(cfg: dict, data: dict) -> tuple[list, list, str]:
+        """(teuerste Tode, wertvollste Kills, Fehlertext) eines Exports, mit Ueberschriften."""
+        moments, good, error = [], [], ""
+        stem = Path((data.get("match") or {}).get("demo_file") or "").stem
+        try:
+            own, kills = key_moments.priced(cfg, Path(config_path()), _me(cfg, data),
+                                            prefer=[stem] if stem else None, scan_new=1)
+            moments = costly_moments.for_match(data, own, top=6)
+            good = key_moments.best_kills(data, kills, top=5)
+        except Exception as e:  # noqa: BLE001 - Seite bleibt nutzbar, zeigt den Grund
+            error = f"Siegchance nicht berechenbar: {e}"
+        for m in moments:
+            m["headline"] = key_moments.headline(m)
+        for m in good:
+            m["headline"] = key_moments.kill_headline(m)
+        return moments, good, error
+
     @bp.route("/momente")
     def page():
         cfg = load_config()
@@ -51,26 +68,25 @@ def create_blueprint(load_config, config_path) -> Blueprint:
         files = sorted(edir.glob("*_coach.json"), key=export_sort_key, reverse=True)[:MAX_EXPORTS] \
             if edir and edir.exists() else []
         chosen = request.args.get("file") or (files[0].name if files else "")
-        data = _load(edir, chosen) if edir and chosen else None
-        moments, good, error = [], [], ""
-        if data:
-            stem = Path((data.get("match") or {}).get("demo_file") or "").stem
-            try:
-                own, kills = key_moments.priced(cfg, Path(config_path()), _me(cfg, data),
-                                                prefer=[stem] if stem else None, scan_new=1)
-                moments = costly_moments.for_match(data, own, top=6)
-                good = key_moments.best_kills(data, kills, top=5)
-            except Exception as e:  # noqa: BLE001 - Seite bleibt nutzbar, zeigt den Grund
-                error = f"Siegchance nicht berechenbar: {e}"
-            for m in moments:
-                m["headline"] = key_moments.headline(m)
-            for m in good:
-                m["headline"] = key_moments.kill_headline(m)
-        demo_ok = bool(data and cfg.get("demo_folder") and (Path(cfg["demo_folder"]) /
+        # Die Momente laedt der Player selbst nach (/api/momente/liste) - die Siegchance ist teuer
+        return render_template("moments.html", files=[f.name for f in files], chosen=chosen, config=cfg)
+
+    @bp.route("/api/momente/liste/<path:filename>")
+    def moment_list(filename):
+        """Momente eines Exports fuer den Player (Match-Seite laedt sie nach, die Siegchance ist teuer)."""
+        cfg = load_config()
+        edir = _export_dir(cfg)
+        data = _load(edir, filename) if edir else None
+        if data is None:
+            return jsonify({"error": "Export nicht gefunden"}), 404
+        moments, good, error = _moments_for(cfg, data)
+        demo_ok = bool(cfg.get("demo_folder") and (Path(cfg["demo_folder"]) /
                        ((data.get("match") or {}).get("demo_file") or "-")).exists())
-        return render_template("moments.html", files=[f.name for f in files], chosen=chosen,
-                               match=(data or {}).get("match") or {}, moments=moments, good=good,
-                               demo_ok=demo_ok, error=error, config=cfg)
+        items = [{"kind": "kill", "round": m["round"], "tick": m["tick"], "value": round(m.get("gain", 0)),
+                  "headline": m["headline"]} for m in good]
+        items += [{"kind": "death", "round": m["round"], "tick": m["tick"], "value": -round(m.get("cost", 0)),
+                   "headline": m["headline"]} for m in moments]
+        return jsonify({"items": items, "error": error, "demo_ok": demo_ok})
 
     @bp.route("/api/momente/<path:filename>/<int:round_num>/<int:tick>")
     def clip(filename, round_num, tick):

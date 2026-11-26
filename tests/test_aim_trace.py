@@ -37,3 +37,10 @@ def test_trace_hit_and_overshoot():
     out = aim_trace.trace(rows, [{"tick": 8, "steamid": ME}], hurts, ME, EN, sight_tick=0)
     assert out["shots"][0]["hit"]
     assert any("überschossen" in m["text"] for m in out["mistakes"])
+
+
+def test_shots_before_sight_are_not_judged():
+    rows = [r for t in range(0, 40) for r in (row(t, ME, t * 2.0, 0, yaw=90), row(t, EN, 1000, 0))]
+    out = aim_trace.trace(rows, [{"tick": 2, "steamid": ME}], [], ME, EN, sight_tick=30)
+    assert out["shots"][0]["before_sight"]
+    assert not any("verfehlt" in m["text"] or "Bewegung" in m["text"] for m in out["mistakes"])

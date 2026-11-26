@@ -383,6 +383,14 @@
 
 {% include "_partials/kill_map.html" %}
 
+<!-- ══════ Schlüsselmomente: Szene im Breitbild mit Zeitstrahl ══════ -->
+<div class="card elev-sm" id="momente" style="margin-bottom:var(--space-5);padding:var(--space-3);overflow:visible;background:none;box-shadow:none;">
+    <div class="card-kicker" style="margin-bottom:10px;">{{ _('Schlüsselmomente') }}
+        <span style="text-transform:none;letter-spacing:0;color:var(--color-neutral-500);">– {{ _('deine wertvollsten Kills und teuersten Tode als Szene') }}</span></div>
+    {% set km_file = filename %}
+    {% include '_partials/moment_theater.html' %}
+</div>
+
 <!-- ══════ Death Analysis ══════ -->
 {% if analysis and analysis.death_summary and analysis.death_summary.total > 0 %}
 {% set ds = analysis.death_summary %}

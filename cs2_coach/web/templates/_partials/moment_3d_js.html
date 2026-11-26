@@ -3,7 +3,6 @@
 // Spieler aus der Demo. Kamera aus deinen Augen, aus denen des Gegners oder frei.
 // Koordinaten = Spieleinheiten, Z oben - wie in der Demo, keine Umrechnung.
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const COLORS = { self: 0x4ade80, mate: 0x60a5fa, enemy: 0xf87171, unknown: 0x9ca3af };
@@ -11,7 +10,7 @@ const VFOV = 73.7;           // vertikal zu 106° horizontal bei 16:9 (CS2-Stand
 const EYE = 64, EYE_DUCK = 46;
 const geoCache = {};
 
-let renderer, scene, camera, controls, world, playersGroup, overlay, mode = 'me', data = null, viewModel = null;
+let renderer, scene, camera, world, playersGroup, overlay, mode = 'me', data = null, viewModel = null;
 
 function canvasEl() { return document.getElementById('km-3d'); }
 
@@ -37,8 +36,7 @@ function init() {
     overlay = new THREE.Group();
     scene.add(overlay);
     if (window.kmModels) viewModel = new window.kmModels.ViewModel(camera);
-    controls = new OrbitControls(camera, cv);
-    controls.enabled = false;
+    flyInit(cv);
     resize();
     window.addEventListener('resize', resize);
 }
@@ -207,12 +205,62 @@ function lastShotKick(t) {
 function lerpAngle(a, b, f) { const d = ((b - a + 540) % 360) - 180; return a + d * f; }
 
 function currentTick() {
-    const km = window.km, frames = km.data.frames;
-    const fr = frames[km.frame];
-    if (!fr) return ticks3d[0];
-    const nx = frames[Math.min(km.frame + 1, frames.length - 1)];
-    const f = km.timer && km.stepMs ? Math.min((performance.now() - km.stepAt) / km.stepMs, 1) : 0;
-    return fr.t + (nx.t - fr.t) * f;
+    // der Player (moment_theater) fuehrt die Zeit tickgenau
+    const t = window.km && window.km.tick;
+    return t || ticks3d[0];
+}
+
+// ── Freie Kamera: fliegen mit WASD, umsehen mit gezogener Maus ───────────
+const fly = { yaw: 45, pitch: 35, keys: {}, speed: 450, drag: false, lx: 0, ly: 0, last: 0 };
+const FLY_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight'];
+function flyInit(cv) {
+    cv.addEventListener('mousedown', e => { if (mode !== 'free') return; fly.drag = true; fly.lx = e.clientX; fly.ly = e.clientY; e.preventDefault(); });
+    window.addEventListener('mouseup', () => { fly.drag = false; });
+    window.addEventListener('mousemove', e => {
+        if (!fly.drag) return;
+        fly.yaw -= (e.clientX - fly.lx) * 0.2;
+        fly.pitch = Math.max(-89, Math.min(89, fly.pitch + (e.clientY - fly.ly) * 0.2));
+        fly.lx = e.clientX; fly.ly = e.clientY;
+    });
+    cv.addEventListener('contextmenu', e => { if (mode === 'free') e.preventDefault(); });
+    cv.addEventListener('wheel', e => {
+        if (mode !== 'free') return;
+        fly.speed = Math.max(50, Math.min(3000, fly.speed * (e.deltaY < 0 ? 1.2 : 1 / 1.2)));
+        flash('Tempo ' + Math.round(fly.speed) + ' u/s');
+        e.preventDefault();
+    }, { passive: false });
+    document.addEventListener('keydown', e => {
+        if (mode !== 'free' || /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+        if (e.code === 'KeyC') { camFreeSet = false; e.preventDefault(); return; }
+        if (FLY_KEYS.includes(e.code)) { fly.keys[e.code] = true; e.preventDefault(); }
+    });
+    document.addEventListener('keyup', e => { delete fly.keys[e.code]; });
+    window.addEventListener('blur', () => { fly.keys = {}; });
+}
+let flashTimer = null;
+function flash(text) {
+    const msg = document.getElementById('km-3d-msg');
+    msg.textContent = text;
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => { if (msg.textContent === text) msg.textContent = ''; }, 900);
+}
+function flyStep() {
+    const now = performance.now(), dt = Math.min((now - (fly.last || now)) / 1000, 0.1);
+    fly.last = now;
+    const k = fly.keys, fwd = dirFrom(fly.yaw, fly.pitch);
+    const right = new THREE.Vector3(Math.sin(fly.yaw * Math.PI / 180), -Math.cos(fly.yaw * Math.PI / 180), 0);
+    const mv = new THREE.Vector3();
+    if (k.KeyW) mv.add(fwd);
+    if (k.KeyS) mv.sub(fwd);
+    if (k.KeyD) mv.add(right);
+    if (k.KeyA) mv.sub(right);
+    if (k.KeyE) mv.z += 1;
+    if (k.KeyQ) mv.z -= 1;
+    if (mv.lengthSq() > 0) {
+        const sp = fly.speed * (k.ShiftLeft || k.ShiftRight ? 3 : 1) * (k.ControlLeft || k.ControlRight ? 0.3 : 1);
+        camera.position.addScaledVector(mv.normalize(), sp * dt);
+    }
+    camera.lookAt(camera.position.clone().add(fwd));
 }
 
 function sample(t) {
@@ -269,7 +317,6 @@ function draw() {
         if (i === viewer) view = { eye: _eye.clone(), yaw: p.yaw, pitch: p.pitch, p };
     }
     if (view) {
-        controls.enabled = false;
         camera.position.copy(view.eye);
         camera.lookAt(view.eye.clone().add(dirFrom(view.yaw, view.pitch)));
         if (viewModel) {
@@ -288,13 +335,16 @@ function draw() {
         const a = pose(A[mo.me_idx], B[mo.me_idx], f);
         const b = pose(A[mo.killer_idx], B[mo.killer_idx], f) || a;
         if (a) {
-            controls.target.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
-            camera.position.set(controls.target.x - 500, controls.target.y - 500, controls.target.z + 650);
+            // schraeg von oben auf die Mitte der beiden, Blick dorthin
+            const tx = (a.x + b.x) / 2, ty = (a.y + b.y) / 2, tz = (a.z + b.z) / 2;
+            camera.position.set(tx - 500, ty - 500, tz + 650);
+            const dx = tx - camera.position.x, dy = ty - camera.position.y, dz = tz - camera.position.z;
+            fly.yaw = Math.atan2(dy, dx) * 180 / Math.PI;
+            fly.pitch = -Math.atan2(dz, Math.hypot(dx, dy)) * 180 / Math.PI;
         }
-        controls.enabled = true;
-        controls.update();
         camFreeSet = true;
     }
+    if (!view) flyStep();
     renderer.render(scene, camera);
     aimOverlay(A, B, f, mode, view && view.p);
 }
@@ -316,7 +366,8 @@ function aimOverlay(A, B, f, m, viewerPose) {
 }
 
 function loop() {
-    if (mode === '2d' || !document.getElementById('km-3d-wrap').offsetParent) { loopOn = false; return; }
+    const layer = document.getElementById('km-3d-layer');
+    if (mode === '2d' || layer.style.display === 'none' || !layer.offsetParent) { loopOn = false; return; }
     draw();
     requestAnimationFrame(loop);
 }
@@ -325,9 +376,9 @@ function startLoop() { if (!loopOn) { loopOn = true; requestAnimationFrame(loop)
 async function show(newMode) {
     mode = newMode;
     const km = window.km;
-    const box = document.getElementById('km-3d-wrap'), cv2d = document.getElementById('km-canvas');
+    const box = document.getElementById('km-3d-layer'), cv2d = document.getElementById('km-canvas');
     document.querySelectorAll('[data-km-view]').forEach(b => b.classList.toggle('btn-primary', b.dataset.kmView === newMode));
-    if (newMode === '2d' || !km.data) { box.style.display = 'none'; cv2d.style.display = ''; return; }
+    if (newMode === '2d' || !km.data) { box.style.display = 'none'; cv2d.style.display = ''; km.dirty = true; return; }
     box.style.display = ''; cv2d.style.display = 'none';
     init();
     const msg = document.getElementById('km-3d-msg');
@@ -339,6 +390,7 @@ async function show(newMode) {
             if (!r.ok || !j.view3d) throw new Error(j.error || j.view3d_error || 'keine 3D-Daten');
             km.data.view3d = j.view3d;
             km.data.aim = j.aim; km.data.aim_error = j.aim_error;
+            if (window.ktBuildEvents) window.ktBuildEvents();
         }
         const g = await loadGeo(km.data.map);
         if (world !== g) { if (world) scene.remove(world); world = g; scene.add(g); }
@@ -349,8 +401,12 @@ async function show(newMode) {
             await buildModels();
         }
         msg.textContent = '';
-        if (newMode !== 'free') controls.enabled = false;
-        if (newMode === 'free') camFreeSet = false;
+        if (newMode === 'free') {
+            camFreeSet = false;
+            // beim ersten Mal die Steuerung zeigen
+            const lg = document.getElementById('kt-legend');
+            if (lg && !show.legendShown) { lg.style.display = 'block'; show.legendShown = true; }
+        }
         resize();
         startLoop();
     } catch (e) { msg.textContent = e.message; }
@@ -358,7 +414,7 @@ async function show(newMode) {
 
 window.km3d = {
     draw: () => {},   // die 3D-Schleife zeichnet selbst
-    reset: () => { data = null; if (controls) controls.enabled = false; show(mode === '2d' ? '2d' : mode); },
+    reset: () => { data = null; show(mode); },
     show,
 };
 document.querySelectorAll('[data-km-view]').forEach(b => b.addEventListener('click', () => show(b.dataset.kmView)));
@@ -370,5 +426,5 @@ document.addEventListener('fullscreenchange', () => {
     requestAnimationFrame(() => { resize(); draw(); });
 });
 if (window.ResizeObserver) new ResizeObserver(() => { resize(); draw(); }).observe(canvasEl());
-mode = '2d';
+mode = 'me';   // Standard: Szene aus deinen Augen
 </script>

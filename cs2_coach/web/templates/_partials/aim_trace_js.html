@@ -40,14 +40,7 @@
         });
     }
 
-    function seek(tick) {
-        var km = window.km, fr = km.data.frames, best = 0;
-        for (var i = 0; i < fr.length; i++) { if (fr[i].t <= tick) best = i; else break; }
-        if (km.timer) kmStop();
-        km.frame = best;
-        km.stepMs = 0;
-        kmDraw();
-    }
+    function seek(tick) { if (window.kmStop) kmStop(); if (window.kmSeek) window.kmSeek(tick); }
 
     function chart(t) {
         var cv = document.getElementById('km-aim-chart');
@@ -55,8 +48,10 @@
         var w = cv.clientWidth || 600, h = cv.clientHeight || 140;
         if (cv.width !== w) cv.width = w;
         if (cv.height !== h) cv.height = h;
-        var c = cv.getContext('2d'), s = aim.series, t0 = s[0][0], t1 = s[s.length - 1][0] || t0 + 1;
-        var X = function (tk) { return 30 + (tk - t0) / Math.max(t1 - t0, 1) * (w - 40); };
+        var c = cv.getContext('2d'), s = aim.series, rg = window.kmRange && window.kmRange();
+        // gleiche Zeitachse wie der Zeitstrahl darueber (ganzer Clip), sonst nur das Aim-Fenster
+        var t0 = rg ? rg.start : s[0][0], t1 = rg ? rg.end : (s[s.length - 1][0] || t0 + 1);
+        var X = function (tk) { return 30 + (tk - t0) / Math.max(t1 - t0, 1) * (w - 40); };   // wie kt-tl: links 30, rechts 10
         var Y = function (d) { return h / 2 - d / chartMax * (h / 2 - 8); };          // h/v: vorzeichenbehaftet um die Mitte
         var YT = function (d) { return h - 6 - Math.min(d, chartMax) / chartMax * (h - 14); }; // gesamt: von unten
         c.clearRect(0, 0, w, h);

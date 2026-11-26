@@ -107,12 +107,14 @@ def trace(rows: list[dict], shots: list[dict], hurts: list[dict], me: str, enemy
         if row is None or abs(row[0] - s["tick"]) > 4:
             continue
         hit = next((h for h in my_hits if 0 <= h["tick"] - s["tick"] <= 2), None)
+        # Schuesse vor dem Sichtkontakt galten jemand anderem (oder Prefire) - nicht bewerten
+        before = sight_tick is not None and s["tick"] < sight_tick - 8 and not hit
         first = last is None or s["tick"] - last > SPRAY_GAP_TICKS
         last = s["tick"]
         head_deg = math.degrees(math.atan2(HEAD_RADIUS, max(row[5], 1)))
         out_shots.append({"tick": s["tick"], "weapon": s.get("weapon", ""), "h": row[1], "v": row[2],
                           "err": row[3], "speed": row[4], "moving": row[4] > MOVE_THRESHOLD,
-                          "first": first, "head_deg": round(head_deg, 2),
+                          "first": first, "head_deg": round(head_deg, 2), "before_sight": before,
                           "hit": bool(hit), "hitgroup": hit.get("hitgroup") if hit else None,
                           "dmg": hit.get("dmg") if hit else 0})
     return {"series": series, "shots": out_shots, "mistakes": mistakes(series, out_shots, sight_tick)}
@@ -148,6 +150,7 @@ def mistakes(series: list[list], shots: list[dict], sight_tick: int | None) -> l
                     out.append({"tick": peak[0], "tone": "bad",
                                 "text": f"Flick überschossen: {abs(peak[1]):.1f}° über den Kopf hinaus."})
                 break
+    shots = [s for s in shots if not s.get("before_sight")]
     for s in shots:
         if s["moving"]:
             out.append({"tick": s["tick"], "tone": "bad",

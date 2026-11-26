@@ -1,0 +1,437 @@
+{# Schluesselmomente als Player im Breitbild (angelehnt an ONYX): Szene, Zeitstrahl mit
+   Ereignis-Markern, Aim-Kurve als zweite Spur, Ereignisliste rechts.
+   Erwartet ``km_file`` (Export-Dateiname). Die Momente werden nachgeladen
+   (/api/momente/liste) - die Siegchance-Bewertung ist zu teuer fuer den Seitenaufbau. #}
+<style>
+    /* Breitbild: der Player bricht aus der Inhaltsspalte aus (zentriert, bis 1760 px) */
+    .kt { --ktw: min(1760px, calc(100vw - 40px)); width: var(--ktw); margin-left: calc(50% - var(--ktw) / 2); }
+    .kt-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: var(--space-3); }
+    .kt-chip { flex: 0 0 auto; width: 230px; padding: 8px 10px; border-radius: var(--radius-md); cursor: pointer;
+               background: var(--color-surface); box-shadow: var(--shadow-sm); border: 1px solid transparent; font-size: 12px; }
+    .kt-chip.active { border-color: var(--color-accent); }
+    .kt-chip b { font-family: var(--font-heading); font-size: 16px; }
+    .kt-chip span { color: var(--color-neutral-500); display: block; margin-top: 2px; line-height: 1.35; }
+    .kt-main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--space-3); align-items: start; }
+    @media (max-width: 1100px) { .kt-main { grid-template-columns: 1fr; } }
+    .kt-player { background: #0b0d12; border-radius: var(--radius-md); overflow: hidden; display: flex; flex-direction: column; }
+    .kt-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #9fb4c7; }
+    .kt-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .kt-stage #km-canvas { background: #0b0d12; object-fit: contain; }
+    #km-aim-hud { pointer-events: none; }
+    .kt-views { position: absolute; top: 8px; left: 8px; display: flex; gap: 4px; z-index: 3; }
+    .kt-views button, .kt-ctl { background: rgba(0,0,0,0.6); color: #e5e7eb; border: 1px solid rgba(255,255,255,0.12);
+               border-radius: 6px; font-size: 12px; padding: 4px 9px; cursor: pointer; }
+    .kt-views button.btn-primary { background: var(--color-accent); color: #111; border-color: transparent; }
+    .kt-topright { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 3; }
+    #km-3d-msg { position: absolute; top: 44px; left: 10px; font-size: 13px; color: #111; font-weight: 600; z-index: 3; }
+    .kt-legend { position: absolute; right: 10px; bottom: 60px; z-index: 3; background: rgba(0,0,0,0.72); color: #e5e7eb;
+                 font-size: 12px; padding: 8px 12px; border-radius: 8px; line-height: 1.7; display: none; }
+    .kt-legend kbd { display: inline-block; min-width: 18px; text-align: center; padding: 0 5px; margin-right: 2px;
+                     border-radius: 4px; background: #374151; border: 1px solid #4b5563; font-size: 11px; color: #fff; }
+    .kt-transport { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #12151c; color: #e5e7eb; font-size: 12px; }
+    .kt-transport select { background: #1f2430; color: #e5e7eb; border: 1px solid #374151; border-radius: 6px; font-size: 12px; padding: 2px 6px; }
+    #kt-tl { width: 100%; height: 64px; display: block; cursor: pointer; background: #12151c; }
+    .kt-lane { background: #0f1218; padding: 4px 10px 8px; color: #9ca3af; font-size: 11px; }
+    #km-aim-chart { width: 100%; height: 110px; display: block; cursor: pointer; }
+    .kt-events { background: var(--color-surface); border-radius: var(--radius-md); padding: 8px; max-height: 760px;
+                 overflow-y: auto; font-size: 12px; box-sizing: border-box; }
+    .kt-events h4 { margin: 2px 4px 8px; font-size: 11px; letter-spacing: 0.08em; color: var(--color-neutral-500); }
+    .kt-ev { list-style: none; padding: 0; margin: 0; }
+    .kt-ev li { display: grid; grid-template-columns: 52px 62px 1fr; gap: 6px; align-items: start; padding: 5px 6px;
+                border-radius: 6px; cursor: pointer; }
+    .kt-ev li:hover { background: rgba(127,127,127,0.12); }
+    .kt-ev li.now { background: rgba(251,191,36,0.16); }
+    .kt-ev .t { font-family: ui-monospace, monospace; color: var(--color-neutral-500); }
+    .kt-ev .b { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 5px; text-align: center; color: #111; }
+    .km-notes { list-style: none; padding: 0; margin: var(--space-3) 0 0; font-size: 12px; }
+    .km-notes li { padding: 6px 10px; border-radius: var(--radius-sm); margin-bottom: 6px;
+                   background: var(--color-bg); border-left: 3px solid #9ca3af; }
+    .km-notes li.good { border-left-color: #4ade80; }
+    .km-notes li.bad { border-left-color: #f87171; }
+    #km-3d-wrap:fullscreen { border-radius: 0; }
+    #km-3d-wrap:fullscreen .kt-stage { aspect-ratio: auto; flex: 1 1 auto; }
+</style>
+
+<div class="kt" id="kt" data-file="{{ km_file }}">
+    <div class="kt-chips" id="kt-chips"><span style="font-size:12px;color:var(--color-neutral-500);">{{ _('Momente werden bewertet...') }}</span></div>
+    <div class="kt-main">
+        <div class="kt-player" id="km-3d-wrap">
+            <div class="kt-stage">
+                <div id="km-3d-layer" style="position:absolute;inset:0;display:none;">
+                    <canvas id="km-3d"></canvas>
+                    <canvas id="km-aim-hud"></canvas>
+                </div>
+                <canvas id="km-canvas" width="1024" height="1024"></canvas>
+                <div class="kt-views">
+                    <button data-km-view="me" title="1">{{ _('Deine Sicht') }}</button>
+                    <button data-km-view="enemy" title="2">{{ _('Gegner') }}</button>
+                    <button data-km-view="free" title="3">{{ _('Frei') }}</button>
+                    <button data-km-view="2d" class="btn-primary" title="4">2D</button>
+                </div>
+                <div class="kt-topright">
+                    <button class="kt-ctl" id="kt-keys" title="{{ _('Steuerung') }} (H)">⌨ {{ _('Steuerung') }}</button>
+                    <button class="kt-ctl" id="km-3d-full" title="{{ _('Vollbild') }} (F)">⛶</button>
+                </div>
+                <div id="km-3d-msg"></div>
+                <div class="kt-legend" id="kt-legend">
+                    <div><kbd>Leertaste</kbd> {{ _('Abspielen / Pause') }}</div>
+                    <div><kbd>←</kbd><kbd>→</kbd> {{ _('¼ s zurück / vor') }} · <kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> {{ _('1 Tick') }}</div>
+                    <div><kbd>1</kbd> {{ _('deine Sicht') }} <kbd>2</kbd> {{ _('Gegner') }} <kbd>3</kbd> {{ _('frei') }} <kbd>4</kbd> 2D · <kbd>F</kbd> {{ _('Vollbild') }} · <kbd>H</kbd> {{ _('Hilfe') }}</div>
+                    <div style="margin-top:4px;color:#fbbf24;">{{ _('Freie Kamera') }}</div>
+                    <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> {{ _('fliegen') }} · <kbd>E</kbd>/<kbd>Q</kbd> {{ _('hoch / runter') }}</div>
+                    <div><kbd>Shift</kbd> {{ _('schnell') }} · <kbd>Strg</kbd> {{ _('langsam') }} · {{ _('Maus ziehen: umsehen') }} · {{ _('Mausrad: Tempo') }}</div>
+                    <div><kbd>C</kbd> {{ _('Kamera zurück zu den Duellanten') }}</div>
+                </div>
+            </div>
+            <div class="kt-transport">
+                <button class="kt-ctl" id="km-play" title="{{ _('Leertaste') }}">▶</button>
+                <button class="kt-ctl" id="kt-restart" title="{{ _('Von vorn') }}">⟲</button>
+                <select id="km-speed">
+                    <option value="0.1">0.1×</option><option value="0.25">0.25×</option>
+                    <option value="0.5" selected>0.5×</option><option value="1">1×</option>
+                </select>
+                <span id="km-time" style="font-family:ui-monospace,monospace;"></span>
+                <span id="km-title" style="margin-left:auto;font-weight:600;"></span>
+            </div>
+            <canvas id="kt-tl"></canvas>
+            <div class="kt-lane" id="km-aim" style="display:none;">
+                <div style="margin-bottom:2px;">{{ _('Aim-Spur') }} – <span style="color:#fbbf24">■</span> {{ _('Fehler zum Kopf') }} · <span style="color:#60a5fa">■</span> {{ _('links/rechts') }} · <span style="color:#c084fc">■</span> {{ _('hoch/tief') }} · <span style="color:#4ade80">●</span> {{ _('Treffer') }} · <span style="color:#f87171">●</span> {{ _('Fehlschuss') }} · {{ _('rot hinterlegt = in Bewegung') }}</div>
+                <canvas id="km-aim-chart"></canvas>
+                <ul id="km-aim-list" style="display:none;"></ul>
+            </div>
+        </div>
+        <aside class="kt-events">
+            <h4>{{ _('EREIGNISSE') }} <span id="kt-ev-n"></span></h4>
+            <ul class="kt-ev" id="kt-ev"></ul>
+            <ul class="km-notes" id="km-notes"></ul>
+            <p style="font-size:11px;color:var(--color-neutral-600);margin:8px 4px 0;">{{ _('Rekonstruktion aus der Demo, kein Spielvideo. Demo-Blickwinkel ohne Rückstoß: beim Spray liegt richtig gegengezogenes Fadenkreuz unter dem Kopf – bewertet wird nur der erste Schuss einer Salve.') }}</p>
+        </aside>
+    </div>
+</div>
+
+<script>
+{% include '_partials/replay_scene_js.html' %}
+
+// ── Zustand: Wiedergabe tickgenau (64 Hz), gezeichnet mit der Bildrate ──────
+var km = { data: null, tick: 0, playing: false, hold: 0, held: false, last: 0, dirty: true, img: null, kind: '', url: '', events: [] };
+window.km = km;
+var KM_TONE = { bad: '#f87171', good: '#4ade80', enemy: '#f87171', info: '#e5e7eb' };
+var KT_FILE = document.getElementById('kt').dataset.file;
+var KT_CLIP = '{{ url_for("moments_page.clip", filename=km_file, round_num=1, tick=0) }}';
+
+function kmFrameAt(t) {
+    var fr = km.data.frames, lo = 0, hi = fr.length - 1;
+    if (t <= fr[0].t) return 0;
+    if (t >= fr[hi].t) return hi;
+    while (hi - lo > 1) { var m = (lo + hi) >> 1; if (fr[m].t <= t) lo = m; else hi = m; }
+    return lo;
+}
+// globale Funktion: auch aim_trace_js nutzt sie (null ohne geladenen Moment)
+function kmRange() {
+    if (!km.data) return null;
+    var mo = km.data.moment, fr = km.data.frames;
+    return { start: fr[mo.clip[0]].t, end: fr[mo.clip[1]].t, focus: mo.death_tick || fr[mo.focus].t };
+}
+
+function kmSeek(t) {
+    if (!km.data) return;
+    var r = kmRange();
+    km.tick = Math.max(r.start, Math.min(r.end, t));
+    km.held = km.tick >= r.focus;
+    km.hold = 0;
+    km.dirty = true;
+}
+window.kmSeek = kmSeek;
+
+function kmPlay() {
+    if (!km.data) return;
+    if (km.tick >= kmRange().end) kmSeek(kmRange().start);
+    km.playing = true; km.last = performance.now();
+    document.getElementById('km-play').textContent = '❚❚';
+}
+function kmStop() {
+    km.playing = false;
+    document.getElementById('km-play').textContent = '▶';
+    km.dirty = true;
+}
+function kmToggle() { if (km.playing) kmStop(); else kmPlay(); }
+function kmRestart() { if (!km.data) return; kmSeek(kmRange().start); kmPlay(); }
+
+function kmLoop(ts) {
+    if (km.data && km.playing) {
+        var dt = Math.min(ts - km.last, 100) / 1000, r = kmRange();
+        var speed = parseFloat(document.getElementById('km-speed').value);
+        if (km.hold > 0) km.hold -= dt;
+        else {
+            // letzte Sekunde vor dem Moment in halbem Tempo, im Moment kurz anhalten
+            var slow = km.tick > r.focus - 64 && km.tick < r.focus ? 0.5 : 1;
+            var nt = km.tick + dt * 64 * speed * slow;
+            if (!km.held && nt >= r.focus) { nt = r.focus; km.held = true; km.hold = 1.5; }
+            km.tick = nt;
+            if (km.tick >= r.end) { km.tick = r.end; kmStop(); }
+        }
+        km.dirty = true;
+    }
+    km.last = ts;
+    if (km.data && km.dirty) { kmRender(); km.dirty = false; }
+    requestAnimationFrame(kmLoop);
+}
+requestAnimationFrame(kmLoop);
+
+function kmRender() {
+    var r = kmRange();
+    var s = (km.tick - r.focus) / 64;
+    document.getElementById('km-time').textContent = (s >= 0 ? '+' : '−') + Math.abs(s).toFixed(2) + ' s  ·  '
+        + ((km.tick - r.start) / 64).toFixed(1) + ' / ' + ((r.end - r.start) / 64).toFixed(1) + ' s';
+    if (document.getElementById('km-canvas').style.display !== 'none') {
+        kmDraw2D();
+        if (window.kmAim) window.kmAim.frame(km.tick, '2d', null, 0, null);
+    }
+    ktTimeline();
+    ktEventsNow();
+}
+
+// ── 2D-Karte (wie bisher, jetzt am Tick statt am Frame) ─────────────────
+function kmDraw2D() {
+    var canvas = document.getElementById('km-canvas');
+    var fi = kmFrameAt(km.tick);
+    rpDrawScene(canvas, km.data, fi, km.img, { util: true, names: true });
+    var mo = km.data.moment, frame = km.data.frames[fi];
+    var ctx = canvas.getContext('2d'), sc = canvas.width / 1024;
+    kmCone(ctx, sc, frame, mo.me_idx, '#4ade80');
+    kmCone(ctx, sc, frame, mo.killer_idx, '#f87171');
+    kmBanners(ctx, frame);
+    if (fi >= mo.focus) (mo.marks || []).forEach(function (m) { kmMark(ctx, sc, m); });
+}
+function kmDraw() { km.dirty = true; }   // Altname (aim_trace_js, 3D)
+
+var KM_FOV = 106, KM_CONE_UNITS = 1300;
+function kmCone(ctx, s, frame, idx, color) {
+    if (idx === null || idx === undefined) return;
+    var e = (frame.p || []).find(function (p) { return p[0] === idx; });
+    if (!e || e[3] <= 0 || e[4] === undefined) return;
+    var x = e[1] * s, y = e[2] * s, a = -e[4] * Math.PI / 180, h = KM_FOV / 2 * Math.PI / 180;
+    var len = KM_CONE_UNITS / (km.data.scale || 5) * s;
+    ctx.save();
+    var g = ctx.createRadialGradient(x, y, 0, x, y, len);
+    g.addColorStop(0, color + '66'); g.addColorStop(1, color + '00');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, len, a - h, a + h); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); ctx.stroke();
+    ctx.restore();
+}
+function kmBanners(ctx, frame) {
+    var y = 50;
+    (km.data.moment.events || []).forEach(function (ev) {
+        if (frame.t < ev.tick || frame.t > ev.tick + 96) return;
+        ctx.font = '700 22px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        var w = ctx.measureText(ev.text).width + 20;
+        ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(14, y - 4, w, 32);
+        ctx.fillStyle = KM_TONE[ev.tone] || '#e5e7eb'; ctx.fillText(ev.text, 24, y);
+        y += 38;
+    });
+}
+function kmMark(ctx, s, m) {
+    var c = KM_TONE[m.tone] || '#e5e7eb';
+    ctx.save();
+    ctx.strokeStyle = c; ctx.lineWidth = 3;
+    if (m.type === 'circle') {
+        ctx.beginPath(); ctx.arc(m.x * s, m.y * s, m.r, 0, Math.PI * 2); ctx.stroke();
+        if (m.label) {
+            ctx.font = '700 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+            ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+            ctx.strokeText(m.label, m.x * s, m.y * s - m.r - 2);
+            ctx.fillStyle = c; ctx.fillText(m.label, m.x * s, m.y * s - m.r - 2);
+        }
+    } else {
+        if (m.type === 'dash') ctx.setLineDash([6, 5]);
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(m.x1 * s, m.y1 * s); ctx.lineTo(m.x2 * s, m.y2 * s); ctx.stroke();
+    }
+    ctx.restore();
+}
+
+// ── Ereignisse: aus Duell-Detail, Aim-Spur und den Kills der Runde ───────
+var KT_KIND = { sight: ['SICHT', '#60a5fa'], enemy: ['GEGNER', '#f87171'], shot: ['SCHUSS', '#fbbf24'],
+                hit: ['TREFFER', '#4ade80'], miss: ['DANEBEN', '#f87171'], bad: ['FEHLER', '#f87171'],
+                info: ['INFO', '#9ca3af'], kill: ['KILL', '#4ade80'], death: ['TOD', '#f87171'], frag: ['KILL', '#e5e7eb'] };
+function ktBuildEvents() {
+    var d = km.data, mo = d.moment, r = kmRange(), ev = [];
+    var names = {}; (d.players || []).forEach(function (p) { names[p.steamid] = p.name; });
+    var me = (d.players[mo.me_idx] || {}).steamid;
+    (mo.events || []).forEach(function (e) {
+        ev.push({ tick: e.tick, kind: e.tone === 'bad' ? 'enemy' : (/Schuss/.test(e.text) ? 'shot' : 'sight'), text: e.text });
+    });
+    var aim = d.aim || {};
+    (aim.shots || []).forEach(function (s) {
+        if (s.before_sight || (!s.first && !s.hit)) return;   // vor dem Sichtkontakt / mitten in der Salve: nicht listen
+        ev.push({ tick: s.tick, kind: s.hit ? 'hit' : 'miss',
+                  text: (s.hit ? 'Treffer' + (s.hitgroup ? ' (' + s.hitgroup + ', ' + s.dmg + ')' : '') : 'Schuss daneben')
+                        + ' – ' + s.err.toFixed(1) + '° vom Kopf' + (s.moving ? ', in Bewegung' : '') });
+    });
+    (aim.mistakes || []).forEach(function (m) { ev.push({ tick: m.tick, kind: m.tone === 'bad' ? 'bad' : 'info', text: m.text }); });
+    (d.kills || []).forEach(function (k) {
+        if (k.tick < r.start || k.tick > r.end) return;
+        var kind = k.attacker === me ? 'kill' : (k.victim === me ? 'death' : 'frag');
+        ev.push({ tick: k.tick, kind: kind, text: (names[k.attacker] || '?') + ' ✕ ' + (names[k.victim] || '?')
+                  + (k.weapon ? ' (' + k.weapon + ')' : '') + (k.headshot ? ' ⊙' : '') });
+    });
+    ev.sort(function (a, b) { return a.tick - b.tick; });
+    km.events = ev;
+    var ul = document.getElementById('kt-ev');
+    ul.innerHTML = '';
+    document.getElementById('kt-ev-n').textContent = '(' + ev.length + ')';
+    ev.forEach(function (e, i) {
+        var k = KT_KIND[e.kind] || KT_KIND.info, li = document.createElement('li');
+        var s = (e.tick - r.focus) / 64;
+        li.innerHTML = '<span class="t">' + (s >= 0 ? '+' : '−') + Math.abs(s).toFixed(2) + '</span><span class="b" style="background:'
+            + k[1] + '">' + k[0] + '</span><span></span>';
+        li.lastChild.textContent = e.text;
+        li.onclick = function () { kmStop(); kmSeek(e.tick); };
+        e.li = li;
+        ul.appendChild(li);
+    });
+}
+function ktEventsNow() {
+    var cur = null;
+    km.events.forEach(function (e) { if (e.tick <= km.tick) cur = e; if (e.li) e.li.classList.remove('now'); });
+    if (cur && cur.li) {
+        cur.li.classList.add('now');
+        if (km.playing) {
+            var box = cur.li.parentNode.parentNode, top = cur.li.offsetTop - box.offsetTop;
+            if (top < box.scrollTop || top > box.scrollTop + box.clientHeight - 40) box.scrollTop = top - 60;
+        }
+    }
+}
+
+// ── Zeitstrahl: Sekunden relativ zum Moment, Marker je Ereignis, Abspielkopf ──
+function ktTimeline() {
+    var cv = document.getElementById('kt-tl'), w = cv.clientWidth || 800, h = cv.clientHeight || 64;
+    if (cv.width !== w) cv.width = w;
+    if (cv.height !== h) cv.height = h;
+    var c = cv.getContext('2d'), r = kmRange(), L = 30, R = w - 10;
+    var X = function (t) { return L + (t - r.start) / Math.max(r.end - r.start, 1) * (R - L); };
+    c.clearRect(0, 0, w, h);
+    c.fillStyle = '#12151c'; c.fillRect(0, 0, w, h);
+    c.fillStyle = 'rgba(255,255,255,0.06)'; c.fillRect(L, 22, R - L, 30);
+    c.fillStyle = 'rgba(251,191,36,0.25)'; c.fillRect(L, 22, X(km.tick) - L, 30);
+    c.font = '10px ui-monospace, monospace'; c.fillStyle = '#6b7280'; c.textAlign = 'center'; c.textBaseline = 'top';
+    for (var s = Math.ceil((r.start - r.focus) / 64); s <= (r.end - r.focus) / 64; s++) {
+        var x = X(r.focus + s * 64);
+        c.fillRect(x, 16, 1, s === 0 ? 40 : 5);
+        c.fillText((s > 0 ? '+' : '') + s + 's', x, 3);
+    }
+    km.events.forEach(function (e) {
+        var k = KT_KIND[e.kind] || KT_KIND.info, x = X(e.tick);
+        var row = { kill: 0, death: 0, frag: 0, sight: 1, enemy: 1, shot: 2, hit: 2, miss: 2, bad: 3, info: 3 }[e.kind] || 3;
+        c.fillStyle = k[1];
+        if (e.kind === 'kill' || e.kind === 'death' || e.kind === 'frag') { c.fillRect(x - 1, 22, 3, 30); }
+        else { c.beginPath(); c.arc(x, 27 + row * 7, 3, 0, 7); c.fill(); }
+    });
+    var px = X(km.tick);
+    c.fillStyle = '#fbbf24'; c.fillRect(px - 1, 14, 2, h - 14);
+    c.beginPath(); c.moveTo(px - 5, 12); c.lineTo(px + 5, 12); c.lineTo(px, 18); c.fill();
+}
+(function () {
+    var cv = document.getElementById('kt-tl'), drag = false;
+    function at(e) {
+        if (!km.data) return;
+        var b = cv.getBoundingClientRect(), r = kmRange();
+        var f = (e.clientX - b.left - 30) / (b.width - 40);
+        kmSeek(r.start + Math.max(0, Math.min(1, f)) * (r.end - r.start));
+    }
+    cv.addEventListener('mousedown', function (e) { drag = true; kmStop(); at(e); });
+    window.addEventListener('mousemove', function (e) { if (drag) at(e); });
+    window.addEventListener('mouseup', function () { drag = false; });
+})();
+
+// ── Momente laden ───────────────────────────────────────────────────────
+function kmLoad(el) {
+    document.querySelectorAll('.kt-chip').forEach(function (x) { x.classList.remove('active'); });
+    el.classList.add('active');
+    kmStop();
+    var title = document.getElementById('km-title');
+    title.textContent = 'Runde ' + el.dataset.round + ' — wird geladen...';
+    document.getElementById('km-notes').innerHTML = '';
+    var url = KT_CLIP.replace(/\/1\/0$/, '/' + el.dataset.round + '/' + el.dataset.tick) + '?kind=' + el.dataset.kind;
+    km.kind = el.dataset.kind;
+    km.url = url;
+    // gleich mit 3D-Daten und Aim-Spur: die Ereignisliste braucht beides
+    fetch(url + '&3d=1').then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+            if (!res.ok) { title.textContent = res.j.error || 'Fehler'; return; }
+            km.data = res.j;
+            title.textContent = 'Runde ' + el.dataset.round + (km.kind === 'kill' ? ' · Kill' : ' · Tod');
+            var ul = document.getElementById('km-notes');
+            (km.data.moment.notes || []).forEach(function (n) {
+                var li = document.createElement('li');
+                li.className = n.tone; li.textContent = n.text; ul.appendChild(li);
+            });
+            ktBuildEvents();
+            kmSeek(kmRange().start);
+            if (window.km3d) window.km3d.reset();
+            km.img = new Image();
+            km.img.onload = km.img.onerror = function () { km.dirty = true; kmPlay(); };
+            km.img.src = '{{ url_for("static", filename="radars/") }}' + km.data.map + '.png';
+        })
+        .catch(function (e) { title.textContent = 'Fehler: ' + e.message; });
+}
+
+function ktChips() {
+    var box = document.getElementById('kt-chips');
+    fetch('{{ url_for("moments_page.moment_list", filename=km_file) }}').then(function (r) { return r.json(); }).then(function (j) {
+        box.innerHTML = '';
+        if (!j.items || !j.items.length) {
+            box.innerHTML = '<span style="font-size:12px;color:var(--color-neutral-500);">' + (j.error || 'Keine bewerteten Momente für dieses Match.') + '</span>';
+            return;
+        }
+        if (!j.demo_ok) box.insertAdjacentHTML('beforeend', '<span style="font-size:12px;color:#f87171;">Demo nicht gefunden – keine Szene abspielbar.</span>');
+        j.items.forEach(function (m) {
+            var d = document.createElement('div');
+            d.className = 'kt-chip';
+            d.dataset.kind = m.kind; d.dataset.round = m.round; d.dataset.tick = m.tick;
+            d.innerHTML = '<b style="color:' + (m.kind === 'kill' ? '#4ade80' : '#f87171') + '">' + (m.value > 0 ? '+' : '−')
+                + Math.abs(m.value) + '</b> Siegchance<span></span>';
+            d.lastChild.textContent = m.headline;
+            if (j.demo_ok) d.onclick = function () { kmLoad(d); };
+            box.appendChild(d);
+        });
+        var first = box.querySelector('.kt-chip');
+        if (first && j.demo_ok) kmLoad(first);
+    }).catch(function (e) { box.textContent = 'Fehler: ' + e.message; });
+}
+
+// ── Bedienung ───────────────────────────────────────────────────────────
+document.getElementById('km-play').onclick = kmToggle;
+document.getElementById('kt-restart').onclick = kmRestart;
+document.getElementById('kt-keys').onclick = function () {
+    var l = document.getElementById('kt-legend'); l.style.display = l.style.display === 'block' ? 'none' : 'block';
+};
+document.addEventListener('keydown', function (e) {
+    if (!km.data || /INPUT|SELECT|TEXTAREA/.test((e.target || {}).tagName || '')) return;
+    var view = function (v) { var b = document.querySelector('[data-km-view="' + v + '"]'); if (b) b.click(); };
+    switch (e.code) {
+        case 'Space': kmToggle(); break;
+        case 'ArrowLeft': kmStop(); kmSeek(km.tick - (e.shiftKey ? 1 : 16)); break;
+        case 'ArrowRight': kmStop(); kmSeek(km.tick + (e.shiftKey ? 1 : 16)); break;
+        case 'Digit1': view('me'); break;
+        case 'Digit2': view('enemy'); break;
+        case 'Digit3': view('free'); break;
+        case 'Digit4': view('2d'); break;
+        case 'KeyF': document.getElementById('km-3d-full').click(); break;
+        case 'KeyH': document.getElementById('kt-keys').click(); break;
+        default: return;
+    }
+    e.preventDefault();
+});
+// Ereignisliste so hoch wie der Player - kein schwarzer Leerraum unter der Szene
+if (window.ResizeObserver) new ResizeObserver(function () {
+    var p = document.getElementById('km-3d-wrap'), ev = document.querySelector('.kt-events');
+    if (p && ev && !document.fullscreenElement) ev.style.maxHeight = p.offsetHeight + 'px';
+}).observe(document.getElementById('km-3d-wrap'));
+document.addEventListener('DOMContentLoaded', ktChips);
+</script>
+{% include '_partials/aim_trace_js.html' %}
+{% include '_partials/moment_models_js.html' %}
+{% include '_partials/moment_3d_js.html' %}
