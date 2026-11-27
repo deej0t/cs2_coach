@@ -270,6 +270,9 @@ def scan_duel(demo_path: str, me: str, killer: str, death_tick: int, parser=None
 # (zwei Seiten, Summe 100 %) - derselbe Preis wie bei costly_moments, nur
 # aus der anderen Richtung gelesen.
 
+_PRICED: dict = {}     # (Config, Demo-Liste) -> priced_deaths, je Prozess
+
+
 def priced(cfg: dict, config_path, me: str, prefer: list[str] | None = None, scan_new: int = 0):
     """(eigene Tode, eigene Kills) mit Preis, Schluessel (Demo-Stamm, Runde).
 
@@ -283,8 +286,15 @@ def priced(cfg: dict, config_path, me: str, prefer: list[str] | None = None, sca
     matches = collect(cfg, config_path, log=lambda *_: None, max_new=scan_new, prefer=prefer)
     if len(matches) < 2:
         return {}, {}
+    # Bepreisen passt 20 Siegchance-Tabellen an (Server ~3 s) - aendert sich nur mit neuen Demos
+    sig = (str(config_path), tuple(sorted(m["demo"] for m in matches)))
+    priced = _PRICED.get(sig)
+    if priced is None:
+        priced = priced_deaths(matches)
+        _PRICED.clear()
+        _PRICED[sig] = priced
     deaths, kills = {}, {}
-    for d in priced_deaths(matches):
+    for d in priced:
         key = (d["demo"], d["round"])
         if d["sid"] == me:
             deaths[key] = d
