@@ -16,7 +16,9 @@
     <table class="table" style="font-size:13px;margin-top:8px;"><tbody>
     {% for n, p in pending.items() %}
     <tr><td><b>{{ n }}</b></td><td>{{ p.display }}</td>
-        <td><a href="https://steamcommunity.com/profiles/{{ p.steam_id }}" target="_blank" rel="noopener" style="font-family:ui-monospace,monospace;">{{ p.steam_id }}</a></td>
+        <td><a href="https://steamcommunity.com/profiles/{{ p.steam_id }}" target="_blank" rel="noopener" style="font-family:ui-monospace,monospace;">{{ p.steam_id }}</a>
+            {% if p.verified %}<span style="color:#4ade80;font-size:11px;" title="{{ _('Steam-ID per Steam-Login bestätigt') }}">✓ Steam</span>
+            {% else %}<span style="color:#fbbf24;font-size:11px;" title="{{ _('Steam-ID nur eingetippt – Profil prüfen, bevor du annimmst') }}">⚠ {{ _('ungeprüft') }}</span>{% endif %}</td>
         <td style="color:var(--color-neutral-500);">{{ p.at|replace('T', ' ') }}</td>
         <td style="text-align:right;white-space:nowrap;"><form method="post" style="margin:0;display:inline;"><input type="hidden" name="name" value="{{ n }}">
             <button class="btn btn-primary" name="action" value="accept" style="font-size:11px;">{{ _('Akzeptieren') }}</button>

@@ -96,3 +96,20 @@ def test_steam_only_registration_has_no_password_login(base):
     users.request_access(base, "steam000007", None, "76561190000000007")
     users.decide(base, "steam000007", True)
     assert not users.verify(base, "steam000007", "") and not users.verify(base, "steam000007", "irgendwas1")
+
+
+def test_steam_id_cannot_be_claimed_twice(base):
+    admin_sid = str(__import__("yaml").safe_load(base.read_text(encoding="utf-8")).get("steam_id") or "")
+    users.request_access(base, "erster", "geheim1234", "76561190000000011")
+    assert users.load_pending(base)["erster"]["verified"] is False
+    with pytest.raises(ValueError, match="Steam-ID"):
+        users.request_access(base, "zweiter", "geheim1234", "76561190000000011")
+    if admin_sid:
+        with pytest.raises(ValueError, match="Steam-ID"):
+            users.request_access(base, "dritter", "geheim1234", admin_sid)
+    users.decide(base, "erster", True)
+    with pytest.raises(ValueError, match="Steam-ID"):
+        users.add_user(base, "vierter", "geheim1234", "76561190000000011")
+    users.add_user(base, "erster", "", "76561190000000011")      # eigene ID behalten geht
+    users.request_access(base, "steam000012", None, "76561190000000012")
+    assert users.load_pending(base)["steam000012"]["verified"] is True

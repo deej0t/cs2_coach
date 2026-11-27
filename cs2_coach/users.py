@@ -88,6 +88,28 @@ def _save_users(base_config: Path, mates: dict) -> None:
     tmp.replace(path)
 
 
+def _admin_steam_id(base_config: Path) -> str:
+    try:
+        import yaml
+        return str((yaml.safe_load(Path(base_config).read_text(encoding="utf-8")) or {}).get("steam_id") or "")
+    except (OSError, ValueError, ImportError):
+        return ""
+
+
+def steam_id_owner(base_config: Path, steam_id: str, mates: dict, pending: dict) -> str | None:
+    """Wem gehoert diese Steam-ID schon? "admin", Mate-/Anfragename oder None.
+
+    Ohne diese Pruefung koennte sich jemand mit fremder Steam-ID registrieren und
+    bekaeme nach der Freigabe dessen Matches als "selbst gespielt" (views_of)."""
+    if steam_id and steam_id == _admin_steam_id(base_config):
+        return "admin"
+    for group in (mates, pending):
+        for n, m in group.items():
+            if m.get("steam_id") == steam_id:
+                return n
+    return None
+
+
 def add_user(base_config: Path, name: str, password: str, steam_id: str, display: str = "") -> None:
     """Mate anlegen (oder Passwort/Steam-ID aendern). Wirft ValueError bei ungueltigen Angaben."""
     from .web.auth import hash_password
@@ -99,6 +121,9 @@ def add_user(base_config: Path, name: str, password: str, steam_id: str, display
         raise ValueError("Steam-ID: 17 Ziffern (steamID64)")
     with _lock:
         mates = load_users(base_config)
+        owner = steam_id_owner(base_config, steam_id, mates, load_pending(base_config))
+        if owner not in (None, name):
+            raise ValueError(f"Steam-ID gehoert schon {owner}")
         entry = mates.get(name, {})
         if password:
             if len(password) < 8:
@@ -251,9 +276,12 @@ def request_access(base_config: Path, name: str, password: str | None, steam_id:
         mates, pending = load_users(base_config), load_pending(base_config)
         if name in mates or name in pending:
             raise ValueError("Name ist schon vergeben")
+        if steam_id_owner(base_config, steam_id, mates, pending):
+            raise ValueError("Diese Steam-ID ist schon registriert - melde dich mit Steam an")
         if len(pending) >= MAX_PENDING:
             raise ValueError("Zu viele offene Anfragen - bitte spaeter nochmal")
         pending[name] = {"pw": hash_password(password) if password else None, "steam_id": steam_id, "display": display.strip()[:40] or name,
+                         "verified": password is None,     # per Steam-Login bestaetigt, nicht eingetippt
                          "at": datetime.now().isoformat(timespec="minutes")}
         _save_all(base_config, mates, pending)
     return name
