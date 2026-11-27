@@ -10,6 +10,22 @@
     <b>{{ _('Kein Admin-Passwort gesetzt') }}</b> – {{ _('ohne Passwort ist die Anmeldung aus und Mates können sich nicht einloggen. Erst unter Einstellungen ein Passwort setzen.') }}
 </div>
 {% endif %}
+{% if pending %}
+<div class="card elev-sm" style="margin-bottom:var(--space-5);border-left:3px solid #fbbf24;">
+    <span class="card-kicker">{{ _('Offene Registrierungen') }}</span>
+    <table class="table" style="font-size:13px;margin-top:8px;"><tbody>
+    {% for n, p in pending.items() %}
+    <tr><td><b>{{ n }}</b></td><td>{{ p.display }}</td>
+        <td><a href="https://steamcommunity.com/profiles/{{ p.steam_id }}" target="_blank" rel="noopener" style="font-family:ui-monospace,monospace;">{{ p.steam_id }}</a></td>
+        <td style="color:var(--color-neutral-500);">{{ p.at|replace('T', ' ') }}</td>
+        <td style="text-align:right;white-space:nowrap;"><form method="post" style="margin:0;display:inline;"><input type="hidden" name="name" value="{{ n }}">
+            <button class="btn btn-primary" name="action" value="accept" style="font-size:11px;">{{ _('Akzeptieren') }}</button>
+            <button class="btn btn-ghost" name="action" value="reject" style="font-size:11px;">{{ _('Ablehnen') }}</button></form></td></tr>
+    {% endfor %}
+    </tbody></table>
+</div>
+{% endif %}
+<p style="font-size:12px;color:var(--color-neutral-500);">{{ _('Registrierungslink für Mates:') }} <a href="{{ url_for('users_page.register') }}">{{ request.host_url.rstrip('/') }}{{ url_for('users_page.register') }}</a></p>
 <div class="card elev-sm" style="margin-bottom:var(--space-5);">
     <span class="card-kicker">{{ _('Mate anlegen / ändern') }}</span>
     <form method="post" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:8px;align-items:end;">

@@ -98,6 +98,7 @@
         <input type="password" id="password" name="password" autocomplete="current-password" required>
         <input type="hidden" name="next" value="{{ next_url }}">
         <button type="submit">{{ _('Anmelden') }}</button>
+        <p style="text-align:center;font-size:12px;margin:12px 0 0;"><a href="{{ url_for('users_page.register') }}" style="color:var(--color-accent);">{{ _('Noch kein Zugang? Registrieren') }}</a></p>
     </form>
 </body>
 </html>

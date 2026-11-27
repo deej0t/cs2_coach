@@ -40,7 +40,10 @@ def create_blueprint(base_config) -> Blueprint:
             action = request.form.get("action")
             name = request.form.get("name", "")
             try:
-                if action == "delete":
+                if action in ("accept", "reject"):
+                    users.decide(base, name, action == "accept")
+                    flash(f"{name} " + ("freigeschaltet." if action == "accept" else "abgelehnt."), "success")
+                elif action == "delete":
                     users.remove_user(base, name)
                     flash(f"Login von {name} entfernt (seine Daten bleiben unter users/{name}/).", "success")
                 else:
@@ -59,7 +62,7 @@ def create_blueprint(base_config) -> Blueprint:
                          "exports": len(list(exports.glob("*_coach.json"))) if exports.exists() else 0,
                          "sync": bool(over.get("cs2_auth_token") and over.get("last_sharecode"))})
         from . import auth
-        return render_template("users_admin.html", rows=rows, config=users_web_cfg(),
+        return render_template("users_admin.html", rows=rows, pending=users.load_pending(base), config=users_web_cfg(),
                                auth_on=auth.is_enabled(base))
 
     @bp.route("/settings/konto", methods=["GET", "POST"])
@@ -90,6 +93,54 @@ def create_blueprint(base_config) -> Blueprint:
                    "set": bool(over.get(k))} for k, label, secret in ACCOUNT_FIELDS]
         return render_template("users_account.html", name=name, steam_id=over.get("steam_id", ""),
                                fields=fields, config=users_web_cfg())
+
+    @bp.route("/registrieren", methods=["GET", "POST"])
+    def register():
+        """Oeffentlich: Mate-Zugang beantragen. Der Admin nimmt unter /benutzer an oder lehnt ab."""
+        from . import auth
+        base = Path(base_config())
+        if not auth.is_enabled(base):
+            return redirect(url_for("index"))
+        done = False
+        if request.method == "POST":
+            ip = request.remote_addr or "?"
+            if auth.lockout_remaining(ip):
+                flash("Zu viele Versuche. Bitte spaeter erneut.", "error")
+            elif request.form.get("website"):        # Koeder-Feld: nur Bots fuellen es aus
+                done = True
+            else:
+                auth.record_failure(ip)               # zaehlt jede Anfrage: max. 5 je IP in 5 min
+                try:
+                    name = users.request_access(base, request.form.get("name", ""), request.form.get("password", ""),
+                                                request.form.get("steam_id", ""), request.form.get("display", ""))
+                    _notify_admin(f"**CS2 Coach** - neue Registrierung: **{name}** wartet auf Freigabe (Mates).")
+                    done = True
+                except ValueError as e:
+                    flash(str(e), "error")
+        return render_template("register.html", done=done)
+
+    def _notify_admin(text: str) -> None:
+        from .app import _read_base_config
+        hook = (_read_base_config().get("discord_webhook") or "").strip()
+        if not hook:
+            return
+        try:
+            import requests
+            requests.post(hook, json={"content": text}, timeout=10)
+        except Exception:  # noqa: BLE001 - Registrierung klappt auch ohne Nachricht
+            pass
+
+    @bp.route("/spieler")
+    def players():
+        """Alle Spieler der Instanz: Profil (Dashboard) und Aim-Profil jedes Einzelnen ansehen."""
+        from .app import _read_base_config
+        base = Path(base_config())
+        rows = []
+        for name, cfg, _ in users.all_players(_read_base_config(), base):
+            rows.append({"als": name or "admin", "display": (users.load_users(base).get(name, {}).get("display")
+                                                            if name else None) or cfg.get("player_name") or name or "Admin",
+                         "matches": len(users.demo_index(cfg)), "me": name == users_web.current_user()})
+        return render_template("players.html", rows=rows, config=users_web_cfg())
 
     @bp.app_template_global("match_views")
     def match_views(data: dict) -> list[dict]:

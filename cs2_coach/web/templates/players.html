@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — {{ _('Spieler') }}{% endblock %}
+{% block content %}
+<h2 style="margin-bottom:4px;">{{ _('Spieler') }}</h2>
+<p style="color:var(--color-neutral-500);font-size:13px;margin-top:0;">{{ _('Dashboard und Aim-Profil jedes Spielers dieser Instanz – nur ansehen.') }}</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:var(--space-3);">
+{% for r in rows %}
+<div class="card elev-sm">
+    <span class="card-kicker">{{ _('du') if r.me else _('Spieler') }}</span>
+    <div class="card-title">{{ r.display }}</div>
+    <div style="font-size:12px;color:var(--color-neutral-500);">{{ r.matches }} {{ _('Matches') }}</div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+        <a class="btn btn-ghost" href="{{ url_for('index') }}{{ '' if r.me else '?als=' ~ r.als }}">{{ _('Dashboard') }}</a>
+        <a class="btn btn-ghost" href="{{ url_for('aim_profile_page.page') }}{{ '' if r.me else '?als=' ~ r.als }}">{{ _('Aim-Profil') }}</a>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% endblock %}

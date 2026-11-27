@@ -63,3 +63,16 @@ def test_views_of_lists_players_with_export(base):
         (d / f"x_{cfg.get('user', 'admin')}_coach.json").write_text('{"match": {"demo_file": "m1.dem"}}', encoding="utf-8")
     views = users.views_of(admin, base, "m1.dem")
     assert [v["user"] for v in views] == [None, "mate"] and views[1]["file"] == "x_mate_coach.json"
+
+
+def test_register_pending_then_accept(base):
+    users.request_access(base, "Neu", "geheim1234", "76561190000000003", "Neuer")
+    assert "neu" in users.load_pending(base) and not users.verify(base, "neu", "geheim1234")
+    with pytest.raises(ValueError):
+        users.request_access(base, "neu", "geheim1234", "76561190000000003")
+    users.decide(base, "neu", True)
+    assert users.verify(base, "neu", "geheim1234") and not users.load_pending(base)
+    assert users.load_overlay(base, "neu")["steam_id"] == "76561190000000003"
+    users.request_access(base, "weg", "geheim1234", "76561190000000004")
+    users.decide(base, "weg", False)
+    assert "weg" not in users.load_users(base) and not users.load_pending(base)

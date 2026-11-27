@@ -39,7 +39,7 @@ def is_admin() -> bool:
 
 # ── Fremde Sicht auf ein gemeinsames Match (?als=<name|admin>) ───────────────
 #: Seiten, auf denen eine fremde Sicht erlaubt ist (Match-Seite, ihre Szenen und ihr Replay)
-VIEW_AS_ENDPOINTS = ("view_export", "api_replay", "moments_page.clip", "moments_page.moment_list")
+VIEW_AS_ENDPOINTS = ("index", "aim_profile_page.page", "view_export", "api_replay", "moments_page.clip", "moments_page.moment_list")
 _ADMIN = "admin"
 
 
@@ -66,6 +66,10 @@ def resolve_view_as(base: Path, base_cfg: dict, endpoint: str | None, args, view
     if target is not None and target not in users.load_users(base):
         return "Unbekannter Spieler"
     if target == current_user():
+        return None
+    if endpoint in ("index", "aim_profile_page.page"):
+        # Profil (Dashboard, Aim-Profil) ist fuer alle Angemeldeten sichtbar
+        g._view_as = want if target else _ADMIN
         return None
     filename = (view_args or {}).get("filename", "")
     tcfg = users.merged_config(base_cfg, base, target) if target else base_cfg

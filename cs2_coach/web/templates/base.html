@@ -380,6 +380,7 @@
             <a href="{{ url_for('compare') }}" data-page="compare"><i data-lucide="trophy"></i> {{ _('Fortschritt') }}</a>
             <a href="{{ url_for('levers_page.page') }}" data-page="levers"><i data-lucide="scan-search"></i> {{ _('Hebel-Suche') }}</a>
             <a href="{{ url_for('moments_page.page') }}" data-page="moments"><i data-lucide="clapperboard"></i> {{ _('Schlüsselmomente') }}</a>
+            <a href="{{ url_for('users_page.players') }}" data-page="players"><i data-lucide="contact"></i> {{ _('Spieler') }}</a>
             <a href="{{ url_for('aim_profile_page.page') }}" data-page="aim"><i data-lucide="crosshair"></i> {{ _('Aim-Profil') }}</a>
             <a href="{{ url_for('sessions') }}" data-page="sessions"><i data-lucide="calendar-days"></i> Sessions</a>
         </div>
@@ -462,7 +463,8 @@
         {% endif %}
     </nav>
     <div class="{% block container_class %}container{% endblock %}">
-        {% block content %}{% endblock %}
+        {% if request.args.get('als') %}<div style="background:rgba(251,191,36,.12);border:1px solid #fbbf24;border-radius:8px;padding:6px 12px;margin-bottom:12px;font-size:13px;">{{ _('Profil von') }} <b>{{ config.get('player_name') or request.args.get('als') }}</b> – {{ _('nur ansehen') }} · <a href="{{ request.path }}">{{ _('zurück zu deiner Sicht') }}</a></div>{% endif %}
+{% block content %}{% endblock %}
     </div>
 
     <script src="https://unpkg.com/nprogress@0.2.0/nprogress.js"></script>

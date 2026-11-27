@@ -84,7 +84,7 @@ def load_users(base_config: Path) -> dict[str, dict]:
 def _save_users(base_config: Path, mates: dict) -> None:
     path = Path(base_config).parent / USERS_FILE
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"mates": mates}, indent=1), encoding="utf-8")
+    tmp.write_text(json.dumps({"mates": mates, "pending": load_pending(base_config)}, indent=1), encoding="utf-8")
     tmp.replace(path)
 
 
@@ -214,3 +214,59 @@ def views_of(base_cfg: dict, base_config: Path, demo_file: str) -> list[dict]:
                 or cfg.get("player_name") or name or "Admin"
             out.append({"user": name, "display": disp, "file": f})
     return out
+
+
+# -- Registrierung: Anfragen warten, bis der Admin sie annimmt -----------------
+MAX_PENDING = 20
+
+
+def load_pending(base_config: Path) -> dict[str, dict]:
+    try:
+        return json.loads((Path(base_config).parent / USERS_FILE).read_text(encoding="utf-8")).get("pending", {})
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_all(base_config: Path, mates: dict, pending: dict) -> None:
+    path = Path(base_config).parent / USERS_FILE
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"mates": mates, "pending": pending}, indent=1), encoding="utf-8")
+    tmp.replace(path)
+
+
+def request_access(base_config: Path, name: str, password: str, steam_id: str, display: str = "") -> str:
+    """Registrierung ablegen (Passwort nur als Hash). Rueckgabe: normierter Name. ValueError bei Fehlern."""
+    from datetime import datetime
+
+    from .web.auth import hash_password
+    name, steam_id = name.strip().lower(), steam_id.strip()
+    if not NAME_RE.match(name) or name == "admin":
+        raise ValueError("Name: 2-24 Zeichen, a-z, 0-9, _ oder -")
+    if not (steam_id.isdigit() and len(steam_id) == 17):
+        raise ValueError("Steam-ID: 17 Ziffern (steamID64)")
+    if len(password) < 8:
+        raise ValueError("Passwort: mindestens 8 Zeichen")
+    with _lock:
+        mates, pending = load_users(base_config), load_pending(base_config)
+        if name in mates or name in pending:
+            raise ValueError("Name ist schon vergeben")
+        if len(pending) >= MAX_PENDING:
+            raise ValueError("Zu viele offene Anfragen - bitte spaeter nochmal")
+        pending[name] = {"pw": hash_password(password), "steam_id": steam_id, "display": display.strip()[:40] or name,
+                         "at": datetime.now().isoformat(timespec="minutes")}
+        _save_all(base_config, mates, pending)
+    return name
+
+
+def decide(base_config: Path, name: str, accept: bool) -> None:
+    """Anfrage annehmen (wird Mate) oder ablehnen (wird geloescht)."""
+    with _lock:
+        mates, pending = load_users(base_config), load_pending(base_config)
+        entry = pending.pop(name, None)
+        if entry and accept:
+            mates[name] = {k: entry[k] for k in ("pw", "steam_id", "display")}
+        _save_all(base_config, mates, pending)
+    if entry and accept:
+        over = load_overlay(base_config, name)
+        over.update(steam_id=entry["steam_id"], player_name=entry["display"])
+        save_overlay(base_config, name, over)

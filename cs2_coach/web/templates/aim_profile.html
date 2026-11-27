@@ -22,7 +22,7 @@
 
 <div style="display:flex;gap:6px;margin-bottom:var(--space-4);flex-wrap:wrap;">
     {% for k, label in groups.items() %}
-    <a class="btn btn-ghost {{ 'btn-primary' if k == group }}" href="?waffen={{ k }}">{{ label }}</a>
+    <a class="btn btn-ghost {{ 'btn-primary' if k == group }}" href="?waffen={{ k }}{{ ('&als=' ~ request.args.als) if request.args.als }}">{{ label }}</a>
     {% endfor %}
 </div>
 
