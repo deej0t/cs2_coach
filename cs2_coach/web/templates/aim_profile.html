@@ -70,6 +70,60 @@
     </div>
 </div>
 
+{% if g.situations %}
+{% set ov = g.overall %}
+<div class="card elev-sm" style="margin-bottom:var(--space-5);overflow-x:auto;">
+    <span class="card-kicker">{{ _('Lage im Duell') }} – {{ groups[group] }}</span>
+    <p style="font-size:13px;margin:6px 0 8px;">
+        {{ _('In welcher Lage kämpfst du deine Duelle – und gewinnst du sie dort so oft wie deine Lobby?') }}
+        {% if ov %}{{ _('Insgesamt gewinnst du') }} <b>{{ ov.mean_a }} %</b> {{ _('deiner Duelle, die Lobby') }} {{ ov.mean_b }} %.{% endif %}
+    </p>
+    <table class="table" style="font-size:13px;">
+        <thead><tr><th>{{ _('Lage') }}</th>
+            <th style="text-align:right;">{{ _('so oft bei dir') }}</th><th style="text-align:right;">{{ _('Lobby') }}</th><th>{{ _('Häufigkeit') }}</th>
+            <th style="text-align:right;">{{ _('davon gewonnen') }}</th><th style="text-align:right;">{{ _('Lobby') }}</th><th>{{ _('Siegquote') }}</th><th></th></tr></thead>
+        <tbody>
+        {% for x in g.situations %}
+        {% set sc = x.share_cmp %}{% set wc = x.win_cmp %}
+        <tr>
+            <td><b>{{ x.title }}</b><div style="font-size:11px;color:var(--color-neutral-500);">{{ x.n_me }} {{ _('Duelle') }}</div></td>
+            <td style="text-align:right;">{{ x.share_me }} %</td>
+            <td style="text-align:right;color:var(--color-neutral-500);">{{ x.share_lobby }} %</td>
+            <td style="white-space:nowrap;font-size:12px;">
+                {% if sc %}
+                {% set v = sc.verdict %}
+                {% if x.direction == 'neutral' %}
+                {% set lab = _('häufiger') if (v == 'solid_positive' or sc.ci_low > 0) else (_('seltener') if (v == 'solid_negative' or sc.ci_high < 0) else (_('gleich') if v == 'solid_negligible' else _('unentschieden'))) %}
+                {% set col = 'var(--color-neutral-400)' %}
+                {% else %}
+                {% set lab = _('günstiger') if v == 'solid_positive' else (_('ungünstiger') if v == 'solid_negative' else (_('gleich') if v == 'solid_negligible' else (_('eher günstiger') if sc.ci_low > 0 else (_('eher ungünstiger') if sc.ci_high < 0 else _('unentschieden'))))) %}
+                {% set col = '#4ade80' if sc.ci_low > 0 else ('#f87171' if sc.ci_high < 0 else 'var(--color-neutral-500)') %}
+                {% endif %}
+                <span class="tag" style="border-color:{{ col }};color:{{ col }};">{{ lab }}</span>
+                <span style="color:var(--color-neutral-500);">d={{ sc.effect }} [{{ sc.ci_low }} … {{ sc.ci_high }}]</span>
+                {% else %}<span style="color:var(--color-neutral-600);">{{ _('zu wenige') }}</span>{% endif %}
+            </td>
+            <td style="text-align:right;">{{ x.win_me if x.win_me is not none else '–' }} %</td>
+            <td style="text-align:right;color:var(--color-neutral-500);">{{ x.win_lobby if x.win_lobby is not none else '–' }} %</td>
+            <td style="white-space:nowrap;font-size:12px;">
+                {% if wc %}
+                {% set v = wc.verdict %}
+                {% set col = '#4ade80' if wc.ci_low > 0 else ('#f87171' if wc.ci_high < 0 else 'var(--color-neutral-500)') %}
+                <span class="tag" style="border-color:{{ col }};color:{{ col }};">{{ _('besser') if v == 'solid_positive' else (_('schlechter') if v == 'solid_negative' else (_('gleich') if v == 'solid_negligible' else (_('eher besser') if wc.ci_low > 0 else (_('eher schlechter') if wc.ci_high < 0 else _('unentschieden'))))) }}</span>
+                <span style="color:var(--color-neutral-500);">d={{ wc.effect }} [{{ wc.ci_low }} … {{ wc.ci_high }}]</span>
+                {% else %}<span style="color:var(--color-neutral-600);">{{ _('zu wenige') }}</span>{% endif %}
+            </td>
+            <td>{% if g.examples[x.key] %}<a class="btn btn-ghost" style="font-size:11px;padding:2px 8px;white-space:nowrap;" href="{{ url_for('aim_profile_page.series', key=x.key, waffen=group) }}" title="{{ _('Deine verlorenen Duelle in dieser Lage') }}">▶ {{ _('Serie') }}</a>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <div style="font-size:11px;color:var(--color-neutral-600);margin-top:8px;line-height:1.5;">
+        {{ _('„Zuerst“ = mehr als 1/8 s früher gesehen (Radar-Sichtbarkeit der Demo, für alle gleich verzögert). Allein = nächster lebender Mitspieler beim Kill über 1000 Einheiten. „Günstiger“ = du gerätst seltener in eine ungünstige bzw. öfter in eine günstige Lage als die Lobby. Reinlaufen ist weder gut noch schlecht – dort zählt nur die Siegquote. Die Serie zeigt deine verlorenen Duelle in der Lage. Bonferroni über alle 12 Vergleiche.') }}
+    </div>
+</div>
+{% endif %}
+
 <div class="card elev-sm" style="margin-bottom:var(--space-5);overflow-x:auto;">
     <span class="card-kicker">{{ _('Alle Werte') }} – {{ groups[group] }}</span>
     <table class="table" style="font-size:13px;margin-top:8px;">

@@ -44,10 +44,14 @@ ON_TARGET = aim_trace.ON_TARGET_DEG
 CAP_DEG, CAP_MS = 90.0, 2000.0      # Ausreisser kappen (Flicks von hinten, sehr lange Duelle)
 
 CACHE_DIR = "aim_cache"
-CACHE_KEY = "aim-v1"
+CACHE_KEY = "aim-v2"                # v2: Lage je Duell (wer zuerst, Gegner mit Sicht, allein, reingelaufen)
 RESULT_FILE = ".aim_profile.json"
 SERIES_MAX = 30                     # so viele Faelle je Wert fuer die Serie im Player
-FIELDS = aim_trace.FIELDS + ["approximate_spotted_by", "team_num"]
+FIELDS = aim_trace.FIELDS + ["approximate_spotted_by", "team_num", "health", "active_weapon_name"]
+FIRST_TICKS = 8                     # mehr als 1/8 s frueher gesehen = "zuerst"
+ALONE_UNITS = 1000                  # naechster lebender Mitspieler weiter weg = allein (wie death_review)
+PEEK_SPEED = 100.0                  # schneller beim ersten Kontakt = in den Kontakt gelaufen
+MULTI_WINDOW = 32                   # Gegner mit Sicht auf dich in der letzten halben Sekunde
 
 SNIPERS = {"awp", "ssg08", "g3sg1", "scar20"}
 PISTOLS = {"glock", "hkp2000", "usp_silencer", "p250", "deagle", "elite", "fiveseven", "tec9", "cz75a", "revolver"}
@@ -160,12 +164,61 @@ def scan_demo(demo_path, parser=None) -> list[dict]:
         rnd = 1 + sum(1 for e in rounds if e < tick)
         for me, opp, won in ((a, v, True), (v, a, False)):
             rows = [x[s] | {"steamid": s} for x in win for s in (me, opp) if s in x]
-            m = measure(rows, shots, hurts, me, opp, tick)
-            if m is None:
-                continue
+            m = measure(rows, shots, hurts, me, opp, tick) or dict(EMPTY_AIM)
+            m.update(situation(win, me, opp, tick))
+            active = next((x[me].get("active_weapon_name") for x in reversed(win) if me in x
+                           and isinstance(x[me].get("active_weapon_name"), str)), "")
+            from .models3d import weapon_key
             m.update(sid=me, opp=opp, won=won, tick=tick, round=rnd,
-                     group=weapon_group(m["weapon"] or (kill_weapon if won else "")))
+                     group=weapon_group(m["weapon"] or weapon_key(active) or (kill_weapon if won else "")))
             out.append(m)
+    return out
+
+
+EMPTY_AIM = {"sight": None, "placement": None, "ttt": None, "never": None, "shot_ms": None,
+             "first_err": None, "moving": None, "weapon": "", "overshoot": None}
+
+
+def situation(win: list[dict], me: str, opp: str, end: int) -> dict:
+    """Lage eines Duells aus Sicht von ``me`` (Tick-Zeilen aller Spieler im Fenster).
+
+    ``he_first``: er sah dich > 1/8 s frueher (oder du sahst ihn gar nicht),
+    ``i_first``: umgekehrt, ``blind``: du sahst ihn vor dem Kill nie,
+    ``multi``: mindestens zwei Gegner hatten dich in der letzten halben Sekunde im Blick,
+    ``alone``: naechster lebender Mitspieler > 1000 Einheiten (beim Kill),
+    ``peek``: beim ersten Kontakt schneller als 100 u/s.
+    """
+    ticks = [int(next(iter(x.values()))["tick"]) for x in win]
+    i_see = {t for t, x in zip(ticks, win) if opp in x and me in x[opp].get("spotted_by", ())}
+    he_sees = {t for t, x in zip(ticks, win) if me in x and opp in x[me].get("spotted_by", ())}
+    mine, his = _first_contact(ticks, i_see, end), _first_contact(ticks, he_sees, end)
+    out = {"blind": mine is None, "i_first": False, "he_first": False, "multi": False, "alone": None, "peek": None}
+    if mine is None:
+        out["he_first"] = his is not None
+    elif his is None or mine < his - FIRST_TICKS:
+        out["i_first"] = True
+    elif his < mine - FIRST_TICKS:
+        out["he_first"] = True
+    my_team = next((x[me].get("team_num") for x in win if me in x), None)
+    enemies = set()
+    for t, x in zip(ticks, win):
+        if t >= end - MULTI_WINDOW and me in x:
+            enemies |= {s for s in x[me].get("spotted_by", ()) if s in x and x[s].get("team_num") != my_team}
+    out["multi"] = len(enemies) >= 2
+    last = next((x for x in reversed(win) if me in x), None)
+    if last is not None and my_team is not None:
+        mx, my = last[me].get("X"), last[me].get("Y")
+        dists = [math.hypot(r["X"] - mx, r["Y"] - my) for s, r in last.items()
+                 if s != me and r.get("team_num") == my_team and (r.get("health") or 0) > 0
+                 and r.get("X") is not None and math.isfinite(r["X"])]
+        out["alone"] = not dists or min(dists) > ALONE_UNITS
+    contact = min([t for t in (mine, his) if t is not None], default=None)
+    if contact is not None:
+        prev = next((x for t, x in zip(ticks, win) if contact - 8 <= t < contact and me in x), None)
+        cur = next((x for t, x in zip(ticks, win) if t >= contact and me in x), None)
+        if prev and cur:
+            dt = (int(cur[me]["tick"]) - int(prev[me]["tick"])) or 1
+            out["peek"] = math.hypot(cur[me]["X"] - prev[me]["X"], cur[me]["Y"] - prev[me]["Y"]) * TICKRATE / dt > PEEK_SPEED
     return out
 
 
@@ -295,9 +348,69 @@ def _flip(c) -> dict | None:
     return d
 
 
+#: Lagen: (Schluessel, Titel, Richtung) - "less": seltener ist besser, "more": haeufiger ist besser,
+#: "neutral": weder noch (in den Kontakt laufen kann richtig sein)
+SITUATIONS = (("he_first", "Er sah dich zuerst", "less"),
+              ("blind", "Gegner vor dem Tod/Kill nie gesehen", "less"),
+              ("i_first", "Du sahst ihn zuerst", "more"),
+              ("multi", "Zwei oder mehr Gegner mit Sicht auf dich", "less"),
+              ("alone", "Allein (nächster Mitspieler > 1000 u)", "less"),
+              ("peek", "In den Kontakt gelaufen (> 100 u/s)", "neutral"))
+
+
+@dataclass
+class Situation:
+    key: str
+    title: str
+    direction: str
+    share_me: float | None       # Anteil deiner Duelle in dieser Lage (%)
+    share_lobby: float | None
+    share_cmp: dict | None       # A = du, B = Lobby; positiv = fuer dich guenstiger (bei neutral: haeufiger)
+    win_me: float | None         # Duelle in dieser Lage gewonnen (%)
+    win_lobby: float | None
+    win_cmp: dict | None         # A = du, B = Lobby; positiv = du gewinnst sie oefter
+    n_me: int = 0
+
+
+def situations(duels: list[dict], me: str, group: str = "rifle") -> tuple[list[Situation], dict | None]:
+    """Wie oft bist du in welcher Lage - und wie oft gewinnst du sie - gegen die Lobby.
+
+    Bonferroni ueber alle 2 x len(SITUATIONS) Vergleiche. Zusaetzlich deine
+    Duell-Siegquote insgesamt gegen die Lobby (Zusammenhang, als Rahmen).
+    """
+    pool = [d for d in duels if group == "all" or d.get("group") == group]
+    mine = [d for d in pool if d["sid"] == me]
+    lobby = [d for d in pool if d["sid"] != me]
+    k = 2 * len(SITUATIONS)
+    pct = lambda x, n: round(100 * x / n, 1) if n else None  # noqa: E731
+    out = []
+    for key, title, direction in SITUATIONS:
+        mi = [d for d in mine if d.get(key) is not None]
+        lo = [d for d in lobby if d.get(key) is not None]
+        km, kl = sum(1 for d in mi if d[key]), sum(1 for d in lo if d[key])
+        if direction == "less":
+            share = _flip(compare_rates(kl, len(lo), km, len(mi), comparisons=k))
+        else:
+            share = _cmp(compare_rates(km, len(mi), kl, len(lo), comparisons=k))
+        wm = [d for d in mi if d[key]]
+        wl = [d for d in lo if d[key]]
+        win = _cmp(compare_rates(sum(1 for d in wm if d["won"]), len(wm),
+                                 sum(1 for d in wl if d["won"]), len(wl), comparisons=k))
+        out.append(Situation(key, title, direction, pct(km, len(mi)), pct(kl, len(lo)), share,
+                             pct(sum(1 for d in wm if d["won"]), len(wm)), pct(sum(1 for d in wl if d["won"]), len(wl)),
+                             win, len(mi)))
+    overall = _cmp(compare_rates(sum(1 for d in mine if d["won"]), len(mine),
+                                 sum(1 for d in lobby if d["won"]), len(lobby)))
+    return out, overall
+
+
 def examples(duels: list[dict], me: str, key: str, group: str = "rifle", top: int = 6) -> list[dict]:
     """Deine deutlichsten Faelle zu einem Wert (zum Ansehen im Player), neueste Demos zuerst."""
     pool = [d for d in duels if d["sid"] == me and (group == "all" or d.get("group") == group)]
+    if key in {k for k, _, _ in SITUATIONS}:
+        # Lagen: deine verlorenen Duelle in dieser Lage (dort lohnt das Hinsehen)
+        hits = [d for d in pool if d.get(key) and not d["won"]]
+        return sorted(hits, key=lambda d: (d["demo"], d["tick"]), reverse=True)[:top]
     if key in dict((k, 1) for k, _ in RATES):
         hits = [d for d in pool if d.get(key)]
         return sorted(hits, key=lambda d: (d["demo"], d["tick"]), reverse=True)[:top]
@@ -320,8 +433,11 @@ def run(cfg: dict, config_path: Path, max_new: int = 500) -> dict:
            "waiting": stats.get("waiting", 0), "groups": {}}
     for g in GROUPS:
         rows = profile(duels, me, g)
-        res["groups"][g] = {"rows": [asdict(r) for r in rows],
-                            "examples": {r.key: examples(duels, me, r.key, g, top=SERIES_MAX) for r in rows}}
+        sits, overall = situations(duels, me, g)
+        ex = {r.key: examples(duels, me, r.key, g, top=SERIES_MAX) for r in rows}
+        ex.update({x.key: examples(duels, me, x.key, g, top=SERIES_MAX) for x in sits})
+        res["groups"][g] = {"rows": [asdict(r) for r in rows], "situations": [asdict(x) for x in sits],
+                            "overall": overall, "examples": ex}
     res["exports"] = _export_files(cfg, {d["demo"] for g in res["groups"].values()
                                          for ex in g["examples"].values() for d in ex})
     (Path(config_path).parent / RESULT_FILE).write_text(json.dumps(res), encoding="utf-8")

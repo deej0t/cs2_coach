@@ -38,6 +38,11 @@ def create_blueprint(load_config, config_path) -> Blueprint:
         group = request.args.get("waffen", "rifle")
         g = (data.get("groups") or {}).get(group) or {}
         row = next((r for r in g.get("rows", []) if r["key"] == key), None)
+        if row is None:     # Lage statt Aim-Wert: Anteil deiner Duelle in dieser Lage
+            sit = next((x for x in g.get("situations", []) if x["key"] == key), None)
+            if sit:
+                row = {"key": key, "title": sit["title"] + " – verlorene Duelle", "unit": "%",
+                       "me": sit["share_me"], "lobby": sit["share_lobby"]}
         exports = data.get("exports") or {}
         items = []
         for d in (g.get("examples") or {}).get(key, []):

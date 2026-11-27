@@ -45,3 +45,29 @@ def test_profile_flags_worse_than_lobby():
     assert rows["shot_ms"].vs_lobby["verdict"] != "solid_negative"
     ex = ap.examples(duels, ME, "placement")
     assert len(ex) == 6 and ex[0]["placement"] == 22.0
+
+
+def _win(ticks, me_seen_from, opp_seen_from, mate_dist=200.0, multi=False):
+    """Zeilen aller Spieler je Tick: ich (Team 2), Gegner (3), ein Mitspieler, evtl. zweiter Gegner."""
+    out = []
+    for t in ticks:
+        x = {ME: {"tick": t, "X": float(t), "Y": 0.0, "team_num": 2, "health": 100,
+                  "spotted_by": ({EN} if t >= opp_seen_from else set()) | ({"76561190000000009"} if multi else set())},
+             EN: {"tick": t, "X": 1000.0, "Y": 0.0, "team_num": 3, "health": 100,
+                  "spotted_by": {ME} if t >= me_seen_from else set()},
+             "76561190000000005": {"tick": t, "X": mate_dist, "Y": 0.0, "team_num": 2, "health": 100,
+                                   "spotted_by": set()}}
+        if multi:
+            x["76561190000000009"] = {"tick": t, "X": 900.0, "Y": 50.0, "team_num": 3, "health": 100,
+                                      "spotted_by": set()}
+        out.append(x)
+    return out
+
+
+def test_situation_who_saw_first_alone_multi():
+    s = ap.situation(_win(range(100), me_seen_from=50, opp_seen_from=20), ME, EN, 99)
+    assert s["he_first"] and not s["i_first"] and not s["blind"] and not s["multi"] and s["alone"] is False
+    s = ap.situation(_win(range(100), me_seen_from=10, opp_seen_from=60, mate_dist=5000, multi=True), ME, EN, 99)
+    assert s["i_first"] and s["alone"] and s["multi"]
+    s = ap.situation(_win(range(100), me_seen_from=999, opp_seen_from=30), ME, EN, 99)
+    assert s["blind"] and s["he_first"]
