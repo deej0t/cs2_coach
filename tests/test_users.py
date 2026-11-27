@@ -76,3 +76,23 @@ def test_register_pending_then_accept(base):
     users.request_access(base, "weg", "geheim1234", "76561190000000004")
     users.decide(base, "weg", False)
     assert "weg" not in users.load_users(base) and not users.load_pending(base)
+
+
+def test_steam_openid_verify():
+    from cs2_coach.web import steam_openid as so
+
+    class R:
+        def __init__(self, t): self.text = t
+    rt = "https://x.de/steam-anmelden/zurueck"
+    args = {"openid.mode": "id_res", "openid.return_to": rt + "?x=1",
+            "openid.claimed_id": "https://steamcommunity.com/openid/id/76561190000000007"}
+    assert so.verify(args, rt, post=lambda *a, **k: R("ns:x\nis_valid:true\n")) == "76561190000000007"
+    assert so.verify(args, rt, post=lambda *a, **k: R("is_valid:false")) is None
+    assert so.verify(args | {"openid.return_to": "https://boese.de/"}, rt, post=lambda *a, **k: R("is_valid:true")) is None
+    assert so.verify(args | {"openid.claimed_id": "https://evil/7656119"}, rt, post=lambda *a, **k: R("is_valid:true")) is None
+
+
+def test_steam_only_registration_has_no_password_login(base):
+    users.request_access(base, "steam000007", None, "76561190000000007")
+    users.decide(base, "steam000007", True)
+    assert not users.verify(base, "steam000007", "") and not users.verify(base, "steam000007", "irgendwas1")

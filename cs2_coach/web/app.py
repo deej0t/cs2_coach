@@ -1931,6 +1931,8 @@ def create_app() -> Flask:
     app.register_blueprint(_aim_bp(load_config, lambda: _cfg_path()))
     from .users_page import create_blueprint as _users_bp
     app.register_blueprint(_users_bp(lambda: CONFIG_PATH))
+    from .steam_openid import create_blueprint as _steam_bp
+    app.register_blueprint(_steam_bp(lambda: CONFIG_PATH, _read_base_config))
 
     @app.route("/settings")
     def settings():

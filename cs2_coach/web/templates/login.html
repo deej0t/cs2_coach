@@ -98,6 +98,7 @@
         <input type="password" id="password" name="password" autocomplete="current-password" required>
         <input type="hidden" name="next" value="{{ next_url }}">
         <button type="submit">{{ _('Anmelden') }}</button>
+        <a href="{{ url_for('steam_openid.start') }}" style="display:block;text-align:center;margin-top:10px;padding:9px;border-radius:var(--radius-sm);background:#171a21;color:#fff;text-decoration:none;font-size:14px;font-weight:600;border:1px solid #2a475e;">&#9881; {{ _('Mit Steam anmelden / registrieren') }}</a>
         <p style="text-align:center;font-size:12px;margin:12px 0 0;"><a href="{{ url_for('users_page.register') }}" style="color:var(--color-accent);">{{ _('Noch kein Zugang? Registrieren') }}</a></p>
     </form>
 </body>

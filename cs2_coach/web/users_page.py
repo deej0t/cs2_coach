@@ -29,6 +29,18 @@ ACCOUNT_FIELDS = (("player_name", "Anzeigename", False),
                   ("language", "Sprache (de/en)", False))
 
 
+def notify_admin(admin_cfg: dict, text: str) -> None:
+    """Neue Registrierung an den Discord-Webhook des Admins melden (falls eingerichtet)."""
+    hook = (admin_cfg.get("discord_webhook") or "").strip()
+    if not hook:
+        return
+    try:
+        import requests
+        requests.post(hook, json={"content": text}, timeout=10)
+    except Exception:  # noqa: BLE001 - Registrierung klappt auch ohne Nachricht
+        pass
+
+
 def create_blueprint(base_config) -> Blueprint:
     """``base_config``: Callable -> Pfad der Admin-Config."""
     bp = Blueprint("users_page", __name__)
@@ -113,22 +125,13 @@ def create_blueprint(base_config) -> Blueprint:
                 try:
                     name = users.request_access(base, request.form.get("name", ""), request.form.get("password", ""),
                                                 request.form.get("steam_id", ""), request.form.get("display", ""))
-                    _notify_admin(f"**CS2 Coach** - neue Registrierung: **{name}** wartet auf Freigabe (Mates).")
+                    from .app import _read_base_config
+                    notify_admin(_read_base_config(), f"**CS2 Coach** - neue Registrierung: **{name}** wartet auf Freigabe (Mates).")
                     done = True
                 except ValueError as e:
                     flash(str(e), "error")
         return render_template("register.html", done=done)
 
-    def _notify_admin(text: str) -> None:
-        from .app import _read_base_config
-        hook = (_read_base_config().get("discord_webhook") or "").strip()
-        if not hook:
-            return
-        try:
-            import requests
-            requests.post(hook, json={"content": text}, timeout=10)
-        except Exception:  # noqa: BLE001 - Registrierung klappt auch ohne Nachricht
-            pass
 
     @bp.route("/spieler")
     def players():

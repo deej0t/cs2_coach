@@ -234,8 +234,9 @@ def _save_all(base_config: Path, mates: dict, pending: dict) -> None:
     tmp.replace(path)
 
 
-def request_access(base_config: Path, name: str, password: str, steam_id: str, display: str = "") -> str:
-    """Registrierung ablegen (Passwort nur als Hash). Rueckgabe: normierter Name. ValueError bei Fehlern."""
+def request_access(base_config: Path, name: str, password: str | None, steam_id: str, display: str = "") -> str:
+    """Registrierung ablegen (Passwort nur als Hash; None = nur Anmeldung per Steam).
+    Rueckgabe: normierter Name. ValueError bei Fehlern."""
     from datetime import datetime
 
     from .web.auth import hash_password
@@ -244,7 +245,7 @@ def request_access(base_config: Path, name: str, password: str, steam_id: str, d
         raise ValueError("Name: 2-24 Zeichen, a-z, 0-9, _ oder -")
     if not (steam_id.isdigit() and len(steam_id) == 17):
         raise ValueError("Steam-ID: 17 Ziffern (steamID64)")
-    if len(password) < 8:
+    if password is not None and len(password) < 8:
         raise ValueError("Passwort: mindestens 8 Zeichen")
     with _lock:
         mates, pending = load_users(base_config), load_pending(base_config)
@@ -252,7 +253,7 @@ def request_access(base_config: Path, name: str, password: str, steam_id: str, d
             raise ValueError("Name ist schon vergeben")
         if len(pending) >= MAX_PENDING:
             raise ValueError("Zu viele offene Anfragen - bitte spaeter nochmal")
-        pending[name] = {"pw": hash_password(password), "steam_id": steam_id, "display": display.strip()[:40] or name,
+        pending[name] = {"pw": hash_password(password) if password else None, "steam_id": steam_id, "display": display.strip()[:40] or name,
                          "at": datetime.now().isoformat(timespec="minutes")}
         _save_all(base_config, mates, pending)
     return name
