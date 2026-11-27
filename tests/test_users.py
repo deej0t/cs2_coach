@@ -135,3 +135,24 @@ def test_duo_table_compares_together_vs_alone(base):
     assert rows[0]["together"] == {"n": 10, "wins": 8, "pct": 80}
     assert rows[0]["alone"] == {"n": 10, "wins": 2, "pct": 20}
     assert rows[0]["cmp"] is not None and rows[0]["maps"][0]["map"] == "de_mirage"
+
+
+def test_trade_table_counts_avenged_deaths(base):
+    import json
+    from cs2_coach import duo
+    admin = yaml.safe_load(base.read_text(encoding="utf-8"))
+    admin["obsidian_vault_path"] = str(base.parent / "vault")
+    users.add_user(base, "mate", "geheim1234", "76561190000000002")
+    a_dir, m_dir = users.export_dir(admin), users.export_dir(users.merged_config(admin, base, "mate"))
+    a_dir.mkdir(parents=True)
+    m_dir.mkdir(parents=True)
+    me = [{"t": "d", "r": 1, "tk": 1000, "e": "Feind"}, {"t": "d", "r": 2, "tk": 5000, "e": "Feind"},
+          {"t": "k", "r": 3, "tk": 9100, "e": "Boss"}]
+    mate = [{"t": "k", "r": 1, "tk": 1100, "e": "Feind"},       # raecht Tod 1
+            {"t": "k", "r": 2, "tk": 5000 + 64 * 10, "e": "Feind"},  # zu spaet
+            {"t": "d", "r": 3, "tk": 9000, "e": "Boss"}]          # von mir geraecht
+    (a_dir / "m_coach.json").write_text(json.dumps({"match": {"demo_file": "m.dem"}, "kill_positions": me}), encoding="utf-8")
+    (m_dir / "m_coach.json").write_text(json.dumps({"match": {"demo_file": "m.dem"}, "kill_positions": mate}), encoding="utf-8")
+    rows = duo.trade_table(admin, base, None)
+    assert rows[0]["he_for_you"] == {"n": 2, "k": 1, "pct": 50}
+    assert rows[0]["you_for_him"] == {"n": 1, "k": 1, "pct": 100}

@@ -35,4 +35,16 @@
 {% endfor %}
 </tbody></table>
 {% endif %}
+{% if trades %}
+<h3 style="margin:var(--space-6) 0 4px;">{{ _('Trade-Partner') }}</h3>
+<p style="color:var(--color-neutral-500);font-size:13px;margin-top:0;">{{ _('In gemeinsamen Matches: wie oft der Mate deinen Mörder binnen 3 Sekunden erwischt – und du seinen. Nur Info: Trades allein entscheiden laut deinen Daten keine Matches.') }}</p>
+<table class="table" style="font-size:13px;">
+<thead><tr><th>{{ _('Mate') }}</th><th>{{ _('Matches') }}</th><th>{{ _('Er rächt dich') }}</th><th>{{ _('Du rächst ihn') }}</th></tr></thead>
+<tbody>
+{% for t in trades %}
+<tr><td><b>{{ t.display }}</b></td><td>{{ t.matches }}</td>
+    {% for x in (t.he_for_you, t.you_for_him) %}<td>{% if x.n %}{{ x.pct }} % <span style="color:var(--color-neutral-500);">({{ x.k }} {{ _('von') }} {{ x.n }} {{ _('Toden') }})</span>{% else %}–{% endif %}</td>{% endfor %}</tr>
+{% endfor %}
+</tbody></table>
+{% endif %}
 {% endblock %}

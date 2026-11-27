@@ -145,7 +145,8 @@ def create_blueprint(base_config) -> Blueprint:
                          "matches": len(users.demo_index(cfg)), "me": name == users_web.current_user()})
         from .. import duo
         duos = duo.duo_table(_read_base_config(), base, users_web.current_user())
-        return render_template("players.html", rows=rows, duos=duos, config=users_web_cfg())
+        trades = duo.trade_table(_read_base_config(), base, users_web.current_user())
+        return render_template("players.html", rows=rows, duos=duos, trades=trades, config=users_web_cfg())
 
     @bp.app_template_global("match_views")
     def match_views(data: dict) -> list[dict]:
