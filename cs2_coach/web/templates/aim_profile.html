@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — {{ _('Aim-Profil') }}{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+{% set SOLID = ('solid_positive', 'solid_negative') %}
+<h2 style="margin-bottom:4px;">{{ _('Aim-Profil') }}</h2>
+<p style="color:var(--color-neutral-500);font-size:13px;margin-top:0;max-width:980px;">
+    {{ _('Wie du in Duellen zielst, gemessen ab dem Moment, in dem du den Gegner siehst – für jeden Kill aller deiner Demos, für Schütze und Opfer. Dieselbe Messung für alle anderen Spieler derselben Demos ergibt die Lobby als Vergleich. Statistik mit 95%-Bereich, Bonferroni über alle Zeilen.') }}
+</p>
+
+{% if not data %}
+<div class="card elev-sm"><p style="margin:0;">
+    {% if running %}{{ _('Deine Demos werden gerade ausgewertet (ca. 3–10 s je Demo). Die Seite aktualisiert sich, sobald das Profil steht.') }}
+    {% else %}{{ _('Noch keine Auswertung – keine Demos im Demo-Ordner?') }}{% endif %}
+</p></div>
+{% else %}
+<p style="font-size:12px;color:var(--color-neutral-500);">
+    {{ _('Stand') }} {{ data.at|replace('T', ' ') }} · {{ data.demos }} {{ _('Demos') }} · {{ data.duels }} {{ _('deiner Duell-Seiten') }} · {{ data.lobby }} {{ _('der Lobby') }}
+    {% if running %} · <span id="ap-run" style="color:var(--color-yellow);">{{ _('neue Demos werden gerade eingelesen …') }}</span>{% endif %}
+    {% if data.waiting %} · {{ data.waiting }} {{ _('Demos warten') }}{% endif %}
+</p>
+
+<div style="display:flex;gap:6px;margin-bottom:var(--space-4);flex-wrap:wrap;">
+    {% for k, label in groups.items() %}
+    <a class="btn btn-ghost {{ 'btn-primary' if k == group }}" href="?waffen={{ k }}">{{ label }}</a>
+    {% endfor %}
+</div>
+
+{% set g = data.groups[group] %}
+{% set worse = g.rows|selectattr('vs_lobby')|selectattr('vs_lobby.verdict', 'equalto', 'solid_negative')|list %}
+{% set better = g.rows|selectattr('vs_lobby')|selectattr('vs_lobby.verdict', 'equalto', 'solid_positive')|list %}
+{% set costs = g.rows|selectattr('vs_lost')|selectattr('vs_lost.verdict', 'equalto', 'solid_positive')|list %}
+{% set lean_worse = g.rows|selectattr('vs_lobby')|selectattr('vs_lobby.verdict', 'equalto', 'undecided')|selectattr('vs_lobby.ci_high', 'lt', 0)|list %}
+{% set lean_better = g.rows|selectattr('vs_lobby')|selectattr('vs_lobby.verdict', 'equalto', 'undecided')|selectattr('vs_lobby.ci_low', 'gt', 0)|list %}
+{% set lean_costs = g.rows|selectattr('vs_lost')|selectattr('vs_lost.verdict', 'equalto', 'undecided')|selectattr('vs_lost.ci_low', 'gt', 0)|list %}
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--space-4);margin-bottom:var(--space-5);">
+    <div class="card elev-sm" style="border-left:3px solid {{ '#f87171' if worse else 'var(--color-neutral-600)' }};">
+        <span class="card-kicker">{{ _('Schlechter als die Lobby') }}</span>
+        {% for r in worse %}
+        <div style="margin-top:6px;"><b>{{ r.title }}</b>: {{ r.me }}{{ r.unit }} {{ _('gegen') }} {{ r.lobby }}{{ r.unit }}
+            <span style="font-size:12px;color:var(--color-neutral-500);">({{ r.vs_lobby.note }})</span></div>
+        {% else %}<p style="margin:6px 0 0;font-size:13px;">{{ _('Kein Wert ist belastbar schlechter als in deiner Lobby.') }}</p>{% endfor %}
+        {% for r in lean_worse %}
+        <div style="margin-top:6px;font-size:13px;color:var(--color-neutral-400);">{{ _('Tendenz') }}: {{ r.title }} – {{ r.me }}{{ r.unit }} {{ _('gegen') }} {{ r.lobby }}{{ r.unit }}
+            <span style="font-size:11px;color:var(--color-neutral-500);">(d={{ r.vs_lobby.effect }} [{{ r.vs_lobby.ci_low }} … {{ r.vs_lobby.ci_high }}])</span></div>
+        {% endfor %}
+    </div>
+    <div class="card elev-sm" style="border-left:3px solid {{ 'var(--color-green)' if better else 'var(--color-neutral-600)' }};">
+        <span class="card-kicker">{{ _('Besser als die Lobby') }}</span>
+        {% for r in better %}
+        <div style="margin-top:6px;"><b>{{ r.title }}</b>: {{ r.me }}{{ r.unit }} {{ _('gegen') }} {{ r.lobby }}{{ r.unit }}
+            <span style="font-size:12px;color:var(--color-neutral-500);">({{ r.vs_lobby.note }})</span></div>
+        {% else %}<p style="margin:6px 0 0;font-size:13px;">{{ _('Noch keine belastbare Stärke gegenüber der Lobby.') }}</p>{% endfor %}
+        {% for r in lean_better %}
+        <div style="margin-top:6px;font-size:13px;color:var(--color-neutral-400);">{{ _('Tendenz') }}: {{ r.title }} – {{ r.me }}{{ r.unit }} {{ _('gegen') }} {{ r.lobby }}{{ r.unit }}
+            <span style="font-size:11px;color:var(--color-neutral-500);">(d={{ r.vs_lobby.effect }} [{{ r.vs_lobby.ci_low }} … {{ r.vs_lobby.ci_high }}])</span></div>
+        {% endfor %}
+    </div>
+    <div class="card elev-sm" style="border-left:3px solid {{ 'var(--color-yellow)' if costs else 'var(--color-neutral-600)' }};">
+        <span class="card-kicker">{{ _('Hängt mit verlorenen Duellen zusammen') }}</span>
+        {% for r in costs %}
+        <div style="margin-top:6px;"><b>{{ r.title }}</b>: {{ _('gewonnen') }} {{ r.won }}{{ r.unit }}, {{ _('verloren') }} {{ r.lost }}{{ r.unit }}</div>
+        {% else %}<p style="margin:6px 0 0;font-size:13px;">{{ _('Kein Wert trennt deine gewonnenen und verlorenen Duelle belastbar.') }}</p>{% endfor %}
+        {% for r in lean_costs %}
+        <div style="margin-top:6px;font-size:13px;color:var(--color-neutral-400);">{{ _('Tendenz') }}: {{ r.title }} – {{ _('gewonnen') }} {{ r.won }}{{ r.unit }}, {{ _('verloren') }} {{ r.lost }}{{ r.unit }}
+            <span style="font-size:11px;color:var(--color-neutral-500);">(d={{ r.vs_lost.effect }} [{{ r.vs_lost.ci_low }} … {{ r.vs_lost.ci_high }}])</span></div>
+        {% endfor %}
+        <div style="font-size:11px;color:var(--color-neutral-600);margin-top:8px;">{{ _('Zusammenhang, keine Ursache: ein verlorenes Duell endet oft, bevor du fertig gezielt hast. Der Lobby-Vergleich links ist fairer.') }}</div>
+    </div>
+</div>
+
+<div class="card elev-sm" style="margin-bottom:var(--space-5);overflow-x:auto;">
+    <span class="card-kicker">{{ _('Alle Werte') }} – {{ groups[group] }}</span>
+    <table class="table" style="font-size:13px;margin-top:8px;">
+        <thead><tr>
+            <th>{{ _('Wert') }}</th><th style="text-align:right;">{{ _('Du') }}</th><th style="text-align:right;">{{ _('Lobby') }}</th>
+            <th>{{ _('Du gegen Lobby') }}</th>
+            <th style="text-align:right;">{{ _('gewonnen') }}</th><th style="text-align:right;">{{ _('verloren') }}</th>
+            <th>{{ _('gewonnen gegen verloren') }}</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for r in g.rows %}
+        <tr>
+            <td><b>{{ r.title }}</b><div style="font-size:11px;color:var(--color-neutral-500);">{{ r.n_me }} {{ _('Duelle') }}{% if r.unit != '%' %}, {{ _('Median') }}{% endif %}</div></td>
+            <td style="text-align:right;white-space:nowrap;">{{ r.me if r.me is not none else '–' }}{{ r.unit }}</td>
+            <td style="text-align:right;white-space:nowrap;color:var(--color-neutral-500);">{{ r.lobby if r.lobby is not none else '–' }}{{ r.unit }}</td>
+            <td style="white-space:nowrap;font-size:12px;">
+                {% if r.vs_lobby %}
+                {% set v = r.vs_lobby.verdict %}
+                <span class="tag" style="border-color:{{ '#4ade80' if v == 'solid_positive' else ('#f87171' if v == 'solid_negative' else 'var(--color-neutral-600)') }};color:{{ '#4ade80' if v == 'solid_positive' else ('#f87171' if v == 'solid_negative' else 'var(--color-neutral-500)') }};">
+                    {{ _('besser') if v == 'solid_positive' else (_('schlechter') if v == 'solid_negative' else (_('gleich') if v == 'solid_negligible' else (_('eher besser') if r.vs_lobby.ci_low > 0 else (_('eher schlechter') if r.vs_lobby.ci_high < 0 else _('unentschieden'))))) }}</span>
+                <span style="color:var(--color-neutral-500);">d={{ r.vs_lobby.effect }} [{{ r.vs_lobby.ci_low }} … {{ r.vs_lobby.ci_high }}]</span>
+                {% else %}<span style="color:var(--color-neutral-600);">{{ _('zu wenige') }}</span>{% endif %}
+            </td>
+            <td style="text-align:right;white-space:nowrap;">{{ r.won if r.won is not none else '–' }}{{ r.unit }}</td>
+            <td style="text-align:right;white-space:nowrap;">{{ r.lost if r.lost is not none else '–' }}{{ r.unit }}</td>
+            <td style="white-space:nowrap;font-size:12px;">
+                {% if r.vs_lost %}
+                {% set v = r.vs_lost.verdict %}
+                <span class="tag" style="border-color:{{ '#fbbf24' if v in SOLID else 'var(--color-neutral-600)' }};color:{{ '#fbbf24' if v in SOLID else 'var(--color-neutral-500)' }};">
+                    {{ _('trennt') if v in SOLID else (_('gleich') if v == 'solid_negligible' else (_('Tendenz') if r.vs_lost.ci_low > 0 or r.vs_lost.ci_high < 0 else _('unentschieden'))) }}</span>
+                <span style="color:var(--color-neutral-500);">d={{ r.vs_lost.effect }} [{{ r.vs_lost.ci_low }} … {{ r.vs_lost.ci_high }}]</span>
+                {% else %}<span style="color:var(--color-neutral-600);">{{ _('zu wenige') }}</span>{% endif %}
+            </td>
+            <td>{% if g.examples[r.key] %}<button class="btn btn-ghost" style="font-size:11px;padding:2px 8px;" onclick="var e=document.getElementById('ex-{{ r.key }}');e.style.display=e.style.display==='none'?'':'none';">{{ _('Beispiele') }}</button>{% endif %}</td>
+        </tr>
+        {% if g.examples[r.key] %}
+        <tr id="ex-{{ r.key }}" style="display:none;"><td colspan="8" style="background:var(--color-bg);">
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            {% for d in g.examples[r.key] %}
+            {% set f = data.exports.get(d.demo) %}
+            {% set label = ((f[:10] ~ ' ' ~ f[11:].split('_')[0]) if f else d.demo[-12:]) ~ ' · ' ~ _('Runde') ~ ' ' ~ d.round ~ ' · ' ~ (_('gewonnen') if d.won else _('verloren'))
+                           ~ ((' · ' ~ (d[r.key]|round(1)) ~ r.unit) if r.unit != '%' else '') %}
+            {% if f %}<a class="tag" style="text-decoration:none;" href="{{ url_for('view_export', filename=f) }}#momente?r={{ d.round }}&t={{ d.tick }}&k={{ 'kill' if d.won else 'death' }}">▶ {{ label }}</a>
+            {% else %}<span class="tag" style="color:var(--color-neutral-500);" title="{{ _('Kein Export zu dieser Demo') }}">{{ label }}</span>{% endif %}
+            {% endfor %}
+            </div>
+        </td></tr>
+        {% endif %}
+        {% endfor %}
+        </tbody>
+    </table>
+    <div style="font-size:11px;color:var(--color-neutral-600);margin-top:8px;line-height:1.5;">
+        {{ _('Gemessen ab deinem Sichtkontakt (Radar-Sichtbarkeit der Demo, ~0,1 s verzögert, für alle gleich). „Aufs Ziel“ = Fadenkreuz höchstens 3° vom Kopf. Erster Schuss in Bewegung = über 80 u/s wie beim Counter-Strafe. Ausreißer gekappt bei 90° bzw. 2 s. Demo-Blickwinkel enthalten keinen Rückstoß – Spray wird nicht bewertet, nur der erste Schuss. Positiver Effekt = du bzw. deine gewonnenen Duelle sind besser. „Belastbar“ heißt: der ganze 95%-Bereich liegt jenseits eines kleinen Effekts (0,2); „eher“ bzw. „Tendenz“: die Richtung ist sicher, die Größe noch nicht.') }}
+    </div>
+</div>
+{% endif %}
+
+{% if running %}
+<script>
+// Waehrend im Hintergrund eingelesen wird: alle 20 s pruefen, bei neuem Stand neu laden
+(function () {
+    var at = {{ (data.at if data else none)|tojson }};
+    setInterval(function () {
+        fetch('{{ url_for("aim_profile_page.status") }}').then(function (r) { return r.json(); }).then(function (j) {
+            if (j.at !== at || !j.running) location.reload();
+        }).catch(function () {});
+    }, 20000);
+})();
+</script>
+{% endif %}
+{% endblock %}

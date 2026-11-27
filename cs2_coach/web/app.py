@@ -1919,6 +1919,8 @@ def create_app() -> Flask:
     app.register_blueprint(_levers_bp(load_config, lambda: CONFIG_PATH))
     from .moments_page import create_blueprint as _moments_bp
     app.register_blueprint(_moments_bp(load_config, lambda: CONFIG_PATH))
+    from .aim_profile_page import create_blueprint as _aim_bp
+    app.register_blueprint(_aim_bp(load_config, lambda: CONFIG_PATH))
 
     @app.route("/settings")
     def settings():

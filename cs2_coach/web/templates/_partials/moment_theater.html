@@ -381,6 +381,13 @@ function kmLoad(el) {
 }
 
 var ktMapInfo = {};
+function ktDeepLink() {
+    var h = location.hash || '', i = h.indexOf('?');
+    if (i < 0) return null;
+    var q = new URLSearchParams(h.slice(i + 1));
+    if (!q.get('r') || !q.get('t')) return null;
+    return { r: q.get('r'), t: q.get('t'), k: q.get('k') === 'kill' ? 'kill' : 'death' };
+}
 function ktChips() {
     var box = document.getElementById('kt-chips');
     fetch('{{ url_for("moments_page.moment_list", filename=km_file) }}').then(function (r) { return r.json(); }).then(function (j) {
@@ -404,6 +411,24 @@ function ktChips() {
         ktMapInfo = { map: j.map, parts: j.render_parts || 0 };
         if (j.map && window.km3d) window.km3d.prefetch(j.map, j.render_parts || 0);
         if (window.kmModels) window.kmModels.prefetch();
+        // Direktlink (z. B. aus dem Aim-Profil): #momente?r=<Runde>&t=<Tick>&k=kill|death
+        var deep = ktDeepLink();
+        if (deep && j.demo_ok) {
+            var hit = Array.prototype.find.call(box.querySelectorAll('.kt-chip'), function (c) {
+                return c.dataset.round == deep.r && c.dataset.tick == deep.t; });
+            if (!hit) {
+                hit = document.createElement('div');
+                hit.className = 'kt-chip';
+                hit.dataset.kind = deep.k; hit.dataset.round = deep.r; hit.dataset.tick = deep.t;
+                hit.innerHTML = '<b style="color:#fbbf24">▶</b> Verlinkter Moment<span></span>';
+                hit.lastChild.textContent = 'Runde ' + deep.r + (deep.k === 'kill' ? ' · Kill' : ' · Tod');
+                hit.onclick = function () { kmLoad(hit); };
+                box.insertBefore(hit, box.firstChild);
+            }
+            document.getElementById('kt').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            kmLoad(hit);
+            return;
+        }
         var first = box.querySelector('.kt-chip');
         if (first && j.demo_ok) kmLoad(first);
     }).catch(function (e) { box.textContent = 'Fehler: ' + e.message; });

@@ -17,6 +17,13 @@ import pytest
 from cs2_coach.web.app import create_app, load_config
 
 
+@pytest.fixture(autouse=True)
+def _no_background_scans(monkeypatch):
+    """Seiten duerfen hier keine echten Demo-Auswertungen im Hintergrund anstossen."""
+    from cs2_coach import aim_profile
+    monkeypatch.setattr(aim_profile, "start", lambda *a, **k: False)
+
+
 @pytest.fixture(scope="module")
 def client():
     app = create_app()

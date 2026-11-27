@@ -78,3 +78,5 @@ server_plugin/**/obj/
 server_plugin/**/out/
 maps3d/
 .moments_cache/
+aim_cache/
+.aim_profile.json
