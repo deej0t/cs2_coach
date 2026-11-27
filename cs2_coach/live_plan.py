@@ -23,6 +23,7 @@ import re
 import threading
 import time
 from pathlib import Path
+from .users import shared_dir   # Server/Demo-Zustand: einmal fuer alle Spieler
 
 PLAN_FILE = ".live_plan.json"
 LOCK_FILE = ".live_plan.lock"
@@ -120,7 +121,7 @@ def build(cfg: dict, config_path: Path, bsp: str, collect=None, library=None) ->
 
 def load(config_path: Path) -> dict:
     """Aktueller Plan (gecacht auf mtime - wird bei jedem GSI-Signal gelesen)."""
-    path = Path(config_path).parent / PLAN_FILE
+    path = shared_dir(config_path) / PLAN_FILE
     try:
         mtime = path.stat().st_mtime
     except OSError:
@@ -138,7 +139,7 @@ def ensure(cfg: dict, config_path: Path, bsp: str) -> None:
     plan = load(config_path)
     if plan.get("map") == bsp and time.time() - plan.get("id", 0) < REFRESH_H * 3600:
         return
-    lock = Path(config_path).parent / LOCK_FILE
+    lock = shared_dir(config_path) / LOCK_FILE
     try:
         if time.time() - lock.stat().st_mtime > 300:   # haengengebliebener Lauf
             lock.unlink()
@@ -153,7 +154,7 @@ def ensure(cfg: dict, config_path: Path, bsp: str) -> None:
     def run():
         try:
             data = build(cfg, config_path, bsp)
-            (Path(config_path).parent / PLAN_FILE).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            (shared_dir(config_path) / PLAN_FILE).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         finally:
             try:
                 lock.unlink()

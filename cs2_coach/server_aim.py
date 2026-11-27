@@ -28,6 +28,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from statistics import median
+from .users import shared_dir   # Server/Demo-Zustand: einmal fuer alle Spieler
 
 DEMO_DIR = "server_demos"
 RESULT_DIR = "server_aim"
@@ -47,13 +48,13 @@ def _human_sid(sid: str) -> bool:
 
 def _state(config_path: Path) -> dict:
     try:
-        return json.loads((Path(config_path).parent / STATE_FILE).read_text(encoding="utf-8"))
+        return json.loads((shared_dir(config_path) / STATE_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
 def _save_state(config_path: Path, state: dict) -> None:
-    (Path(config_path).parent / STATE_FILE).write_text(json.dumps(state), encoding="utf-8")
+    (shared_dir(config_path) / STATE_FILE).write_text(json.dumps(state), encoding="utf-8")
 
 
 def due(config_path: Path, lines: list[str], now: float | None = None) -> bool:
@@ -128,7 +129,7 @@ def analyse_pending(config_path: Path, parse=None, log=print) -> int:
     """Alle Demos in server_demos/ auswerten; gibt die Zahl der ausgewerteten zurueck."""
     if parse is None:
         from .parser import parse_demo as parse
-    base = Path(config_path).parent
+    base = shared_dir(config_path)
     out = base / RESULT_DIR
     done = 0
     try:
@@ -165,7 +166,7 @@ def analyse_pending(config_path: Path, parse=None, log=print) -> int:
 
 def start_background(config_path: Path) -> bool:
     """Auswertung im Hintergrund, wenn Demos warten - eine zur Zeit (O_EXCL-Sperre)."""
-    base = Path(config_path).parent
+    base = shared_dir(config_path)
     if not any((base / DEMO_DIR).glob("*.dem")):
         return False
     lock = base / LOCK_FILE
@@ -191,7 +192,7 @@ def start_background(config_path: Path) -> bool:
 def board(config_path: Path) -> dict:
     """Je Spieler ueber alle ausgewerteten Demos; sortiert nach Kills."""
     acc: dict[str, dict] = {}
-    files = sorted((Path(config_path).parent / RESULT_DIR).glob("*.json"))
+    files = sorted((shared_dir(config_path) / RESULT_DIR).glob("*.json"))
     for f in files:
         try:
             data = json.loads(f.read_text(encoding="utf-8"))

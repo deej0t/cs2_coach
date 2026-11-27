@@ -135,6 +135,57 @@ def sync(ctx):
         weekly_run(cfg, ctx.obj["config_path"], log=lambda m: console.print(f"  {m}"))
     except Exception as e:  # noqa: BLE001
         console.print(f"  Wochenrueckblick fehlgeschlagen: {e}")
+    _sync_mates(ctx, folder)
+
+
+def _sync_mates(ctx, folder: str) -> None:
+    """Dasselbe fuer jeden Mate (users.py): seine Demos ueber seine Steam-Sitzung laden, nur die
+    Demos analysieren, in denen er mitspielt, dann KI-Bericht, Hebel, Wochenrueckblick mit seiner Config."""
+    from . import aim_profile, users
+    from .levers import check as levers_check
+    from .report_ai import generate_pending
+    from .sync import download_new_demos
+    from .weekly import run as weekly_run
+
+    base_cfg, base_path = ctx.obj["config"], ctx.obj["config_path"]
+    mates = users.all_players(base_cfg, base_path)[1:]
+    if not mates:
+        return
+    log = lambda m: console.print(f"  {m}")  # noqa: E731
+    # Wer spielt in welcher Demo? Aus dem gemeinsamen Aim-Cache (liest neue Demos einmal fuer alle)
+    try:
+        duels = aim_profile.collect(base_cfg, base_path, max_new=100)
+    except Exception as e:  # noqa: BLE001
+        console.print(f"  Aim-Cache fehlgeschlagen: {e}")
+        duels = []
+    for name, mcfg, mpath in mates:
+        console.print(f"[bold]Mate {name}[/bold]")
+        with users.as_user(name):
+            try:
+                download_new_demos(mcfg, log=log)
+            except Exception as e:  # noqa: BLE001 - ohne eigene Steam-Anmeldung nur gemeinsame Matches
+                log(f"Download fehlgeschlagen: {e}")
+            sid = str(mcfg.get("steam_id") or "")
+            stems = {d["demo"] for d in duels if d.get("sid") == sid}
+            files = [f"{s}.dem" for s in sorted(stems)]
+            saved = dict(ctx.obj)
+            ctx.obj.update(config=mcfg, config_path=mpath)
+            try:
+                if folder and Path(folder).is_dir() and files:
+                    ctx.invoke(batch, demo_dir=folder, player=None, steamid=None, only_outdated=True, only=files)
+                # KI nur mit eigener Einrichtung des Mates (users_page: eigener Schluessel bzw. Ollama-Adresse)
+                ai = mcfg.get("gemini_api_key") if mcfg.get("ai_provider", "gemini") == "gemini" else mcfg.get("ollama_url")
+                for step, fn in (("KI-Nachbesprechung", lambda: generate_pending(mcfg, mpath, log=log) if ai else None),
+                                 ("Hebel-Suche", lambda: list(levers_check(mcfg, mpath, log=log))),
+                                 ("Wochenrueckblick", lambda: weekly_run(mcfg, mpath, log=log)),
+                                 ("Aim-Profil", lambda: aim_profile.run(mcfg, mpath, max_new=0))):
+                    try:
+                        fn()
+                    except Exception as e:  # noqa: BLE001 - ein Schritt haelt die anderen nicht auf
+                        log(f"{step} fehlgeschlagen: {e}")
+            finally:
+                ctx.obj.clear()
+                ctx.obj.update(saved)
 
 
 @cli.command()
@@ -181,6 +232,17 @@ def briefing(ctx, send, force):
     text = run(ctx.obj["config"], ctx.obj["config_path"], send=send, force=force, log=log)
     if text:
         console.print(text)
+    if send:
+        # Mates mit eigenem Webhook/Telegram bekommen ihr eigenes Briefing (users.py)
+        from . import users
+        for name, mcfg, mpath in users.all_players(ctx.obj["config"], ctx.obj["config_path"])[1:]:
+            if not (mcfg.get("briefing_webhook") or mcfg.get("discord_webhook") or mcfg.get("telegram_bot_token")):
+                continue
+            with users.as_user(name):
+                try:
+                    run(mcfg, mpath, send=True, force=force, log=log)
+                except Exception as e:  # noqa: BLE001 - ein Mate haelt die anderen nicht auf
+                    console.print(f"[dim]Briefing {name}: {e}[/dim]")
 
 
 @cli.command()
@@ -273,8 +335,9 @@ def analyze(ctx, demo_path, player, steamid, no_export, raw, raw_out, raw_stdout
 @click.option("--steamid", "-s", default=None, help="SteamID64 des Spielers")
 @click.option("--only-outdated", is_flag=True,
               help="Nur Demos, deren Export veraltet ist oder fehlt")
+@click.option("--only", multiple=True, hidden=True, help="Nur diese Demo-Dateinamen (Sync fuer Mates)")
 @click.pass_context
-def batch(ctx, demo_dir, player, steamid, only_outdated):
+def batch(ctx, demo_dir, player, steamid, only_outdated, only=()):
     """Analysiere alle .dem-Dateien in einem Ordner und exportiere Raw-JSON.
 
     Mit --only-outdated werden Demos uebersprungen, deren Export bereits
@@ -291,6 +354,8 @@ def batch(ctx, demo_dir, player, steamid, only_outdated):
 
     demo_path = Path(demo_dir)
     dem_files = sorted(demo_path.glob("*.dem"))
+    if only:
+        dem_files = [d for d in dem_files if d.name in set(only)]
 
     if not dem_files:
         console.print(f"[red]Keine .dem-Dateien gefunden in: {demo_dir}[/red]")

@@ -121,6 +121,9 @@ var KM_TONE = { bad: '#f87171', good: '#4ade80', enemy: '#f87171', info: '#e5e7e
 var KT_FILE = document.getElementById('kt').dataset.file;
 // Szene-URL je Export (Serien mischen Momente aus mehreren Matches)
 var KT_CLIP_TMPL = '{{ url_for("moments_page.clip", filename="XFILEX", round_num=1, tick=0) }}';
+// Fremde Sicht auf ein gemeinsames Match (?als=) an alle Abrufe weiterreichen
+var KT_ALS = new URLSearchParams(location.search).get('als');
+var KT_ALSQ = KT_ALS ? 'als=' + encodeURIComponent(KT_ALS) : '';
 var KT_SERIES = (function () { var e = document.getElementById('kt-series'); return e ? JSON.parse(e.textContent) : null; })();
 
 function kmFrameAt(t) {
@@ -359,7 +362,8 @@ function kmLoad(el) {
     title.textContent = 'Runde ' + el.dataset.round + ' — wird geladen...';
     document.getElementById('km-notes').innerHTML = '';
     var file = el.dataset.file || KT_FILE;
-    var url = KT_CLIP_TMPL.replace('XFILEX', file).replace(/\/1\/0$/, '/' + el.dataset.round + '/' + el.dataset.tick) + '?kind=' + el.dataset.kind;
+    var url = KT_CLIP_TMPL.replace('XFILEX', file).replace(/\/1\/0$/, '/' + el.dataset.round + '/' + el.dataset.tick) + '?kind=' + el.dataset.kind
+        + (KT_ALSQ && !el.dataset.file ? '&' + KT_ALSQ : '');
     km.chip = el;
     km.kind = el.dataset.kind;
     km.url = url;
@@ -426,7 +430,7 @@ function ktNext() {
 function ktChips() {
     if (KT_SERIES) { ktSeries(); return; }
     var box = document.getElementById('kt-chips');
-    fetch('{{ url_for("moments_page.moment_list", filename=km_file) if km_file else "" }}').then(function (r) { return r.json(); }).then(function (j) {
+    fetch('{{ url_for("moments_page.moment_list", filename=km_file) if km_file else "" }}' + (KT_ALSQ ? '?' + KT_ALSQ : '')).then(function (r) { return r.json(); }).then(function (j) {
         box.innerHTML = '';
         if (!j.items || !j.items.length) {
             box.innerHTML = '<span style="font-size:12px;color:var(--color-neutral-500);">' + (j.error || 'Keine bewerteten Momente für dieses Match.') + '</span>';

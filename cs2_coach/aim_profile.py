@@ -228,7 +228,8 @@ def collect(cfg: dict, config_path: Path, max_new: int = 500, log=lambda *_: Non
     folder = (cfg.get("demo_folder") or "").strip()
     if not folder or not Path(folder).is_dir():
         return []
-    cache_dir = Path(config_path).parent / CACHE_DIR
+    from .users import shared_dir
+    cache_dir = shared_dir(config_path) / CACHE_DIR   # Duelle aller Spieler: einmal fuer alle
     out, new, waiting = [], 0, 0
     for demo in sorted(Path(folder).glob("*.dem")):
         cache = cache_dir / f"{demo.stem}.json"

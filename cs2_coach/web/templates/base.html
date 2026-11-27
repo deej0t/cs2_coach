@@ -369,7 +369,7 @@
             <div class="sidebar-group-label">{{ _('Heute') }}</div>
             <a href="{{ url_for('index') }}" data-page="index"><i data-lucide="layout-dashboard"></i> Dashboard</a>
             <a href="{{ url_for('daily.page') }}" data-page="daily"><i data-lucide="send"></i> {{ _('Tages-Briefing') }}</a>
-            <a href="{{ url_for('live.page') }}" data-page="live"><i data-lucide="radio"></i> {{ _('Live-Coach') }}</a>
+            {% if not current_user %}<a href="{{ url_for('live.page') }}" data-page="live"><i data-lucide="radio"></i> {{ _('Live-Coach') }}</a>{% endif %}
             <a href="{{ url_for('coaching') }}" data-page="coaching"><i data-lucide="clipboard-check"></i> {{ _('Empfehlungen') }}</a>
             <a href="{{ url_for('goals') }}" data-page="goals"><i data-lucide="target"></i> {{ _('Ziele') }}</a>
         </div>
@@ -385,7 +385,7 @@
         </div>
         <div class="sidebar-group">
             <div class="sidebar-group-label">Training</div>
-            <a href="{{ url_for('training_page.page') }}" data-page="training"><i data-lucide="dumbbell"></i> {{ _('Duell-Training') }}</a>
+            {% if not current_user %}<a href="{{ url_for('training_page.page') }}" data-page="training"><i data-lucide="dumbbell"></i> {{ _('Duell-Training') }}</a>{% endif %}
             <a href="{{ url_for('lineups_page.page') }}" data-page="lineups"><i data-lucide="map-pin"></i> Lineups</a>
             <a href="{{ url_for('warmup') }}" data-page="warmup"><i data-lucide="timer"></i> Warm-up</a>
             <a href="{{ url_for('practice') }}" data-page="practice"><i data-lucide="server"></i> Practice Server</a>
@@ -441,8 +441,13 @@
         </details>
         <div class="sidebar-group">
             <div class="sidebar-group-label">System</div>
+            {% if current_user %}
+            <a href="{{ url_for('users_page.account') }}" data-page="account"><i data-lucide="user-cog"></i> {{ _('Mein Konto') }}</a>
+            {% else %}
             <a href="{{ url_for('status') }}"      data-page="status"><i data-lucide="heart-pulse"></i> {{ _('Systemstatus') }}</a>
             <a href="{{ url_for('settings') }}"    data-page="settings"><i data-lucide="settings"></i> {{ _('Einstellungen') }}</a>
+            <a href="{{ url_for('users_page.admin') }}" data-page="users"><i data-lucide="users"></i> {{ _('Mates') }}</a>
+            {% endif %}
             {% if auth_enabled %}<a href="{{ url_for('logout') }}" data-page="logout"><i data-lucide="log-out"></i> {{ _('Abmelden') }}</a>{% endif %}
         </div>
         {% if config and config.get('player_name') %}

@@ -47,6 +47,7 @@ from pathlib import Path
 
 from . import server_stats as ss
 from .practice import _calc_view_angle, _map_to_bspname
+from .users import shared_dir   # Server/Demo-Zustand: einmal fuer alle Spieler
 
 # Cache auf Wunsch des Spielers dabei ("die Map Cache fehlt"); er spielt sie oft (20 Matches).
 DEFAULT_MAPS = ["de_ancient", "de_anubis", "de_cache", "de_dust2", "de_inferno", "de_mirage", "de_nuke",
@@ -283,7 +284,7 @@ def prepare(cfg: dict, config_path: Path, scenarios: list[Scenario], parser_fact
     lead = lead_seconds(cfg)
     if not folder or not me:
         return {}
-    cache_dir = Path(config_path).parent / "training_cache"
+    cache_dir = shared_dir(config_path) / "training_cache"
     out: dict[int, dict] = {}
     by_demo: dict[str, list[int]] = {}
     for i, sc in enumerate(scenarios):
@@ -351,7 +352,7 @@ def build_scenarios(exports_dir: Path, maps: list[str] | None = None) -> dict[st
 
 class _Lock:
     def __init__(self, config_path: Path):
-        self.path = Path(config_path).parent / LOCK_FILE
+        self.path = shared_dir(config_path) / LOCK_FILE
 
     def __enter__(self):
         for _ in range(100):
@@ -373,13 +374,13 @@ class _Lock:
 
 def load_state(config_path: Path) -> dict:
     try:
-        return json.loads((Path(config_path).parent / STATE_FILE).read_text(encoding="utf-8"))
+        return json.loads((shared_dir(config_path) / STATE_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
 def save_state(config_path: Path, state: dict) -> None:
-    path = Path(config_path).parent / STATE_FILE
+    path = shared_dir(config_path) / STATE_FILE
     if not state:
         path.unlink(missing_ok=True)
         return
@@ -391,7 +392,7 @@ class _Starting:
     FILE, STALE = ".training_starting", 300
 
     def __init__(self, config_path: Path):
-        self.file = Path(config_path).parent / self.FILE
+        self.file = shared_dir(config_path) / self.FILE
 
     def __enter__(self):
         self.file.write_text(str(time.time()), encoding="utf-8")
@@ -402,7 +403,7 @@ class _Starting:
 
     @classmethod
     def running(cls, config_path: Path) -> bool:
-        f = Path(config_path).parent / cls.FILE
+        f = shared_dir(config_path) / cls.FILE
         try:
             return time.time() - f.stat().st_mtime < cls.STALE
         except OSError:
@@ -410,7 +411,7 @@ class _Starting:
 
 
 def is_active(config_path: Path) -> bool:
-    return (Path(config_path).parent / STATE_FILE).exists()
+    return (shared_dir(config_path) / STATE_FILE).exists()
 
 
 # --------------------------------------------------------------------------
@@ -487,7 +488,7 @@ DEFUSE_MIN = 20  # so viele gemessene Laeufe, bevor der Faktor 1,2 (geschaetzt) 
 def defuse_factor(config_path: Path) -> float | None:
     """Gemessener Umweg-Faktor (Median) fuer 'haette es zum Entschaerfen gereicht', sonst None."""
     try:
-        vals = json.loads((Path(config_path).parent / DEFUSE_FILE).read_text(encoding="utf-8"))
+        vals = json.loads((shared_dir(config_path) / DEFUSE_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     return _median(vals) if len(vals) >= DEFUSE_MIN else None
@@ -748,7 +749,7 @@ def calibration_from(duels: list[dict]) -> dict | None:
 
 def load_calibration(config_path: Path) -> dict | None:
     try:
-        return json.loads((Path(config_path).parent / CALIB_FILE).read_text(encoding="utf-8"))
+        return json.loads((shared_dir(config_path) / CALIB_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
 
@@ -891,14 +892,14 @@ def _side(team: str) -> str:
 def load_party(config_path: Path) -> dict:
     """{"invited": [Namen], "joined": {steam64: Name}} - bleibt ueber Trainings hinweg."""
     try:
-        data = json.loads((Path(config_path).parent / PARTY_FILE).read_text(encoding="utf-8"))
+        data = json.loads((shared_dir(config_path) / PARTY_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         data = {}
     return {"invited": list(data.get("invited") or []), "joined": dict(data.get("joined") or {})}
 
 
 def save_party(config_path: Path, party: dict) -> None:
-    (Path(config_path).parent / PARTY_FILE).write_text(json.dumps(party, ensure_ascii=False), encoding="utf-8")
+    (shared_dir(config_path) / PARTY_FILE).write_text(json.dumps(party, ensure_ascii=False), encoding="utf-8")
 
 
 def _human_sids(state: dict) -> list[str]:
@@ -1972,7 +1973,7 @@ class Director:
 
 
 def sessions_dir(config_path: Path) -> Path:
-    return Path(config_path).parent / SESSIONS_DIR
+    return shared_dir(config_path) / SESSIONS_DIR
 
 
 _DEFUSED = re.compile(ss._player("a") + r' triggered "Defused_The_Bomb"')

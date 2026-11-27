@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, Mapping
+from .users import shared_dir   # Server/Demo-Zustand: einmal fuer alle Spieler
 
 LOG_DIR = "server_logs"
 TOKEN_FILE = ".serverlog_token"
@@ -57,7 +58,7 @@ STEAM64_BASE = 76561197960265728
 
 
 def log_dir(config_path: Path) -> Path:
-    return Path(config_path).parent / LOG_DIR
+    return shared_dir(config_path) / LOG_DIR
 
 
 def load_or_create_token(config_path: Path) -> str:
@@ -68,7 +69,7 @@ def load_or_create_token(config_path: Path) -> str:
     Schluessel verlieren. O_EXCL wie beim Secret Key, damit parallel
     startende Gunicorn-Worker denselben Token bekommen.
     """
-    path = Path(config_path).parent / TOKEN_FILE
+    path = shared_dir(config_path) / TOKEN_FILE
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError:

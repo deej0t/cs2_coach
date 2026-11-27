@@ -31,6 +31,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from statistics import median
+from .users import shared_dir   # Server/Demo-Zustand: einmal fuer alle Spieler
 
 STATE_FILE = ".live_state.json"
 LOCK_FILE = ".live_state.lock"
@@ -61,7 +62,7 @@ GRENADE_NAMES = {"weapon_hegrenade": "HE", "weapon_molotov": "Molotov", "weapon_
 def load_or_create_token(config_path: Path) -> str:
     """Geheimer Teil der GSI-URL (wie .serverlog_token: O_EXCL, damit alle Worker denselben haben)."""
     import secrets
-    path = Path(config_path).parent / TOKEN_FILE
+    path = shared_dir(config_path) / TOKEN_FILE
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError:
@@ -79,7 +80,7 @@ def load_or_create_token(config_path: Path) -> str:
 
 class _Lock:
     def __init__(self, config_path: Path):
-        self.path = Path(config_path).parent / LOCK_FILE
+        self.path = shared_dir(config_path) / LOCK_FILE
 
     def __enter__(self):
         for _ in range(200):
@@ -104,13 +105,13 @@ class _Lock:
 
 def load_state(config_path: Path) -> dict:
     try:
-        return json.loads((Path(config_path).parent / STATE_FILE).read_text(encoding="utf-8"))
+        return json.loads((shared_dir(config_path) / STATE_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
 def save_state(config_path: Path, state: dict) -> None:
-    (Path(config_path).parent / STATE_FILE).write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    (shared_dir(config_path) / STATE_FILE).write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
 
 
 # -- Ziel aus den eigenen Siegen ------------------------------------------------------
@@ -353,7 +354,7 @@ def update(state: dict, payload: dict, cfg: dict, plan: dict | None = None) -> d
 def save_match(config_path: Path, state: dict) -> Path | None:
     if not state.get("summary"):
         return None
-    folder = Path(config_path).parent / MATCHES_DIR
+    folder = shared_dir(config_path) / MATCHES_DIR
     folder.mkdir(exist_ok=True)
     path = folder / f"{state['started'].replace(':', '-')}_{state['map']}.json"
     path.write_text(json.dumps({k: state[k] for k in ("map", "started", "target", "rounds", "summary")},
@@ -364,7 +365,7 @@ def save_match(config_path: Path, state: dict) -> Path | None:
 def ingest(cfg: dict, config_path: Path, payload: dict) -> None:
     from .training_server import is_active
     try:  # fuer die Startseite: "verbunden (vor 4 s)" - der Zustand selbst aendert sich im Menue nicht
-        (Path(config_path).parent / SIGNAL_FILE).touch()
+        (shared_dir(config_path) / SIGNAL_FILE).touch()
     except OSError:
         pass
     if is_active(config_path):

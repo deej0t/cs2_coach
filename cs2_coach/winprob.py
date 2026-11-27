@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
+from .users import shared_dir   # Server/Demo-Zustand: einmal fuer alle Spieler
 
 TICKRATE = 64
 CACHE_DIR = "winprob_cache"
@@ -217,7 +218,7 @@ def collect(cfg: dict, config_path: Path, parser_factory=None, log=print, max_ne
     folder = (cfg.get("demo_folder") or "").strip()
     if not folder or not Path(folder).is_dir():
         return []
-    cache_dir = Path(config_path).parent / CACHE_DIR
+    cache_dir = shared_dir(config_path) / CACHE_DIR
     out, scanned, new, waiting = [], 0, 0, 0
     first = set(prefer or [])
     for demo in sorted(Path(folder).glob("*.dem"), key=lambda d: (d.stem not in first, d.name)):

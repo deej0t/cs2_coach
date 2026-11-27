@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — {{ _('Mates') }}{% endblock %}
+{% block content %}
+<h2 style="margin-bottom:4px;">{{ _('Mates') }}</h2>
+<p style="color:var(--color-neutral-500);font-size:13px;margin-top:0;max-width:760px;">
+    {{ _('Jeder Mate meldet sich mit seinem Namen an und sieht seine eigenen Matches, Momente, Aim- und Positions-Profile. Seinen Steam-Sync, Benachrichtigungen und KI-Schlüssel trägt er selbst unter „Mein Konto“ ein – deine Schlüssel sieht er nicht. Demos und Demo-Caches werden geteilt.') }}
+</p>
+{% if not auth_on %}
+<div class="card elev-sm" style="margin-bottom:var(--space-4);border-left:3px solid #f87171;">
+    <b>{{ _('Kein Admin-Passwort gesetzt') }}</b> – {{ _('ohne Passwort ist die Anmeldung aus und Mates können sich nicht einloggen. Erst unter Einstellungen ein Passwort setzen.') }}
+</div>
+{% endif %}
+<div class="card elev-sm" style="margin-bottom:var(--space-5);">
+    <span class="card-kicker">{{ _('Mate anlegen / ändern') }}</span>
+    <form method="post" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:8px;align-items:end;">
+        <label style="font-size:12px;">{{ _('Login-Name') }}<input class="input" name="name" required pattern="[a-zA-Z0-9_-]{2,24}"></label>
+        <label style="font-size:12px;">{{ _('Anzeigename') }}<input class="input" name="display"></label>
+        <label style="font-size:12px;">{{ _('Steam-ID (17 Ziffern)') }}<input class="input" name="steam_id" required pattern="[0-9]{17}"></label>
+        <label style="font-size:12px;">{{ _('Passwort (mind. 8, leer = unverändert)') }}<input class="input" type="password" name="password" autocomplete="new-password"></label>
+        <button class="btn btn-primary" name="action" value="save">{{ _('Speichern') }}</button>
+    </form>
+</div>
+<div class="card elev-sm">
+    <span class="card-kicker">{{ _('Angelegte Mates') }}</span>
+    {% if rows %}
+    <table class="table" style="font-size:13px;margin-top:8px;">
+        <thead><tr><th>{{ _('Login') }}</th><th>{{ _('Name') }}</th><th>{{ _('Steam-ID') }}</th><th style="text-align:right;">{{ _('Matches') }}</th><th>{{ _('Steam-Sync') }}</th><th></th></tr></thead>
+        <tbody>
+        {% for r in rows %}
+        <tr><td><b>{{ r.name }}</b></td><td>{{ r.display }}</td><td style="font-family:ui-monospace,monospace;">{{ r.steam_id }}</td>
+            <td style="text-align:right;">{{ r.exports }}</td>
+            <td>{{ _('eingerichtet') if r.sync else _('fehlt') }}</td>
+            <td style="text-align:right;"><form method="post" onsubmit="return confirm('Login von {{ r.name }} entfernen?');" style="margin:0;">
+                <input type="hidden" name="name" value="{{ r.name }}"><button class="btn btn-ghost" name="action" value="delete" style="font-size:11px;">{{ _('Entfernen') }}</button></form></td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}<p style="margin:6px 0 0;font-size:13px;">{{ _('Noch keine Mates.') }}</p>{% endif %}
+</div>
+{% endblock %}

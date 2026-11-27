@@ -310,11 +310,18 @@ def _session_file() -> Path:
     """
     env = os.environ.get("CS2COACH_CONFIG", "").strip()
     base = Path(env).parent if env else Path(__file__).resolve().parent.parent
+    from .users import ACTIVE, USERS_DIR
+    name = ACTIVE.get()
+    if name:        # Mate: eigene Steam-Sitzung, eigene Matches (users.py)
+        return base / USERS_DIR / name / ".steam_session"
     return base / ".steam_session"
 
 
 def _migrate_legacy_session() -> None:
-    """Bestehende Anmeldung einmalig an den neuen Ort umziehen."""
+    """Bestehende Anmeldung einmalig an den neuen Ort umziehen (nur die des Admins)."""
+    from .users import ACTIVE
+    if ACTIVE.get():
+        return
     new = _session_file()
     if new.exists() or not _LEGACY_SESSION_FILE.exists():
         return
@@ -801,7 +808,9 @@ def load_steam_session() -> "requests.Session | None":
 
 def clear_steam_session() -> None:
     """Remove stored Steam session."""
-    for path in (_session_file(), _LEGACY_SESSION_FILE):
+    from .users import ACTIVE
+    # Ein Mate meldet nur sich selbst ab - die alte Datei gehoert dem Admin
+    for path in (_session_file(),) if ACTIVE.get() else (_session_file(), _LEGACY_SESSION_FILE):
         try:
             path.unlink(missing_ok=True)
         except OSError:

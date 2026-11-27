@@ -350,6 +350,7 @@
     </div>
 </div>
 
+{% include "_partials/match_views.html" %}
 {% include "_partials/match_compare.html" %}
 
 <!-- ══════ Duel Matrix ══════ -->
@@ -1052,7 +1053,7 @@ function playRound(round) {
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     title.textContent = 'Runde ' + round + ' — wird geladen...';
 
-    fetch('{{ url_for("api_replay", filename=filename, round_num=0) }}'.replace(/0$/, round))
+    fetch('{{ url_for("api_replay", filename=filename, round_num=0) }}'.replace(/0$/, round) + location.search)
         .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
         .then(function(res) {
             if (!res.ok) { title.textContent = 'Runde ' + round + ' — ' + (res.j.error || 'Fehler'); return; }

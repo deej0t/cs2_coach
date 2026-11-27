@@ -35,6 +35,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import server_stats as ss
+from .users import shared_dir   # Server/Demo-Zustand: einmal fuer alle Spieler
 
 STATE_FILE = ".aim_fun.json"
 DEFAULT_MAPS = ("aim_multigame",)
@@ -72,7 +73,7 @@ _lock = threading.Lock()
 # --------------------------------------------------------------------------
 
 def _path(config_path: Path) -> Path:
-    return Path(config_path).parent / STATE_FILE
+    return shared_dir(config_path) / STATE_FILE
 
 
 def load(config_path: Path) -> dict:

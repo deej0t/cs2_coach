@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
+from .users import shared_dir   # Server/Demo-Zustand: einmal fuer alle Spieler
 
 VOTE_FILE = ".mapvote.json"
 VOTE_SECONDS = 30
@@ -24,13 +25,13 @@ COMMANDS = {"map", "karte", "rtv", "ja", "yes"}
 
 def _load(config_path: Path) -> dict:
     try:
-        return json.loads((Path(config_path).parent / VOTE_FILE).read_text(encoding="utf-8"))
+        return json.loads((shared_dir(config_path) / VOTE_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
 def _save(config_path: Path, vote: dict) -> None:
-    (Path(config_path).parent / VOTE_FILE).write_text(json.dumps(vote), encoding="utf-8")
+    (shared_dir(config_path) / VOTE_FILE).write_text(json.dumps(vote), encoding="utf-8")
 
 
 def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, arg: str,

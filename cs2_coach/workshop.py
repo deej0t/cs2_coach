@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from .users import shared_dir   # Server/Demo-Zustand: einmal fuer alle Spieler
 
 FILE = ".workshop_maps.json"
 COMMANDS = {"workshop", "ws"}
@@ -25,13 +26,13 @@ def load(config_path: Path | None) -> dict[str, str]:
     if config_path is None:
         return {}
     try:
-        return json.loads((Path(config_path).parent / FILE).read_text(encoding="utf-8"))
+        return json.loads((shared_dir(config_path) / FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
 
 
 def _save(config_path: Path, maps: dict[str, str]) -> None:
-    (Path(config_path).parent / FILE).write_text(json.dumps(maps, indent=1), encoding="utf-8")
+    (shared_dir(config_path) / FILE).write_text(json.dumps(maps, indent=1), encoding="utf-8")
 
 
 def parse_id(text: str) -> str | None:

@@ -80,3 +80,5 @@ maps3d/
 .moments_cache/
 aim_cache/
 .aim_profile.json
+users/
+.users.json

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — {{ _('Mein Konto') }}{% endblock %}
+{% block content %}
+<h2 style="margin-bottom:4px;">{{ _('Mein Konto') }} – {{ name }}</h2>
+<p style="color:var(--color-neutral-500);font-size:13px;margin-top:0;max-width:760px;">
+    {{ _('Steam-ID') }} <span style="font-family:ui-monospace,monospace;">{{ steam_id }}</span> ({{ _('ändert der Admin') }}).
+    {{ _('Für den automatischen Abruf deiner Matches brauchst du deinen Steam-Authentifizierungscode und den letzten Share-Code – beides unter') }}
+    <a href="https://help.steampowered.com/de/wizard/HelpWithGameIssue/?appid=730&issueid=128" target="_blank" rel="noopener">Steam-Hilfe → CS2 → Match-Verlauf</a>.
+    {{ _('Geheime Felder werden nicht angezeigt; leer lassen = unverändert.') }}
+</p>
+<form method="post" class="card elev-sm" style="max-width:760px;display:grid;gap:10px;">
+    {% for f in fields %}
+    <label style="font-size:12px;display:grid;gap:4px;">{{ _(f.label) }}
+        {% if f.secret %}
+        <input class="input" type="password" name="{{ f.key }}" autocomplete="off" placeholder="{{ _('gesetzt – leer lassen = unverändert') if f.set else _('nicht gesetzt') }}">
+        {% else %}
+        <input class="input" name="{{ f.key }}" value="{{ f.value }}">
+        {% endif %}
+    </label>
+    {% endfor %}
+    <label style="font-size:12px;display:grid;gap:4px;">{{ _('Neues Passwort (mind. 8 Zeichen, leer = unverändert)') }}
+        <input class="input" type="password" name="new_password" autocomplete="new-password"></label>
+    <button class="btn btn-primary" style="justify-self:start;">{{ _('Speichern') }}</button>
+</form>
+{% endblock %}

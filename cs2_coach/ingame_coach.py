@@ -22,6 +22,7 @@ import textwrap
 import time
 from datetime import datetime
 from pathlib import Path
+from .users import shared_dir   # Server/Demo-Zustand: einmal fuer alle Spieler
 
 COMMANDS = {"coach", "frage", "tipp"}
 MAX_ANSWER = 330
@@ -124,7 +125,7 @@ def player_facts(cfg: dict, config_path: Path, now: float | None = None) -> str:
     if not exports:
         facts = "Keine Matchdaten vorhanden."
     else:
-        plan = current_plan(exports, Path(config_path).parent / ".training_state.json",
+        plan = current_plan(exports, shared_dir(config_path) / ".training_state.json",
                             datetime.now().strftime("%Y-%m-%d %H:%M"))
         facts = build_facts(exports, plan, "")[0] + "\n\n" + measure_lines(exports)
     _facts_cache[key] = (now, facts)
@@ -132,12 +133,12 @@ def player_facts(cfg: dict, config_path: Path, now: float | None = None) -> str:
 
 
 def save_last_duel(config_path: Path, duel: dict) -> None:
-    (Path(config_path).parent / LAST_DUEL_FILE).write_text(json.dumps(duel, ensure_ascii=False), encoding="utf-8")
+    (shared_dir(config_path) / LAST_DUEL_FILE).write_text(json.dumps(duel, ensure_ascii=False), encoding="utf-8")
 
 
 def load_last_duel(config_path: Path) -> dict | None:
     try:
-        return json.loads((Path(config_path).parent / LAST_DUEL_FILE).read_text(encoding="utf-8"))
+        return json.loads((shared_dir(config_path) / LAST_DUEL_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
 

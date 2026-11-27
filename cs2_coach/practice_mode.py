@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from .users import shared_dir   # Server/Demo-Zustand: einmal fuer alle Spieler
 
 STATE_FILE = ".practice.json"
 RETHROW = {"rethrow", "nochmal"}
@@ -51,7 +52,7 @@ _VALUE = re.compile(r"^\s*(\S+)\s*=\s*(.*?)\s*$")
 
 
 def _path(config_path: Path) -> Path:
-    return Path(config_path).parent / STATE_FILE
+    return shared_dir(config_path) / STATE_FILE
 
 
 def load(config_path: Path) -> dict:

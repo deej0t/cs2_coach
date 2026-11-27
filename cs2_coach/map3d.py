@@ -92,7 +92,8 @@ def convert(glb: Path, out: Path) -> dict:
 
 def geo_dir(cfg: dict, config_path: Path) -> Path:
     """Ablage der .geo.gz: ``maps3d/`` neben der Config (wie die anderen Caches)."""
-    return Path(cfg.get("maps3d_dir") or Path(config_path).parent / "maps3d")
+    from .users import shared_dir
+    return Path(cfg.get("maps3d_dir") or shared_dir(config_path) / "maps3d")
 
 
 def geo_path(cfg: dict, config_path: Path, map_key: str) -> Path | None:

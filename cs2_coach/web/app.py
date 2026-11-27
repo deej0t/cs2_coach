@@ -29,7 +29,8 @@ from ..evidence import MIN_PER_GROUP, compare_groups, compare_rates
 from .. import chat_store
 from ..export_version import export_status
 from ..utility_analysis import he_effectiveness, throw_relevance
-from . import auth
+from . import auth, users_web
+from .. import users
 from ..ai_chat import (
     build_player_context, stream_gemini, stream_ollama, check_ollama_status,
     call_gemini, call_ollama, build_practice_context, PRACTICE_PLAN_SYSTEM,
@@ -219,18 +220,31 @@ def _post_discord(webhook_url: str, result, cfg: dict) -> None:
         pass  # Fire-and-forget
 
 
-def load_config() -> dict:
+def _read_base_config() -> dict:
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     return {}
 
 
+# Je angemeldetem Spieler (Admin oder Mate, users_web): Config, ihr Pfad, Speichern (Mate: nur eigene Schluessel)
+def load_config() -> dict:
+    return users_web.load(CONFIG_PATH, _read_base_config)
+
+
+def _cfg_path() -> Path:
+    return users_web.config_path(CONFIG_PATH)
+
+
 def _write_config(data: dict) -> None:
+    users_web.write(CONFIG_PATH, dict(data), _write_base_config)
+
+
+def _write_base_config(data: dict) -> None:
     """Persist the config to disk, preserving every key it is given."""
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         f.write("# CS2-Coach Konfiguration\n")
-        yaml.dump(dict(data), f, default_flow_style=False, allow_unicode=True)
+        yaml.dump(dict(data), f, allow_unicode=True, default_flow_style=False)
 
 
 def create_app() -> Flask:
@@ -246,23 +260,26 @@ def create_app() -> Flask:
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # no static file caching in dev
 
-    cfg = load_config()
+    cfg = users_web.ConfigProxy(_read_base_config(), lambda: CONFIG_PATH)
 
     @app.context_processor
     def _inject_auth_state():
-        return {"auth_enabled": auth.is_enabled(CONFIG_PATH)}
+        return {"auth_enabled": auth.is_enabled(CONFIG_PATH), "current_user": users_web.current_user()}
 
     # ── Authentication ──────────────────────────────────────────────
     # Only active once a password is configured; otherwise the app stays
     # open so an update can never lock anyone out of a running instance.
     @app.before_request
     def _require_login():
+        users.ACTIVE.set(session.get("user") or None)   # Steam-Sitzung u. a. je Spieler
         if not auth.is_enabled(CONFIG_PATH):
             return None
         if request.endpoint in auth.PUBLIC_ENDPOINTS:
             return None
         if session.get("authenticated"):
-            return None
+            err = users_web.guard(CONFIG_PATH, cfg.base, request)
+            return None if not err else (jsonify({"error": err}), 403) if request.path.startswith("/api/") \
+                else redirect(url_for("index"))
         if request.path.startswith("/api/"):
             return jsonify({"error": "Nicht angemeldet"}), 401
         wants_html = "text/html" in request.headers.get("Accept", "")
@@ -290,10 +307,15 @@ def create_app() -> Flask:
                 flash(f"Zu viele Fehlversuche. Bitte {wait}s warten.", "error")
                 return render_template("login.html", next_url=next_url), 429
 
-            if auth.verify_password(CONFIG_PATH, request.form.get("password", "")):
+            name = request.form.get("username", "").strip().lower()
+            pw = request.form.get("password", "")
+            ok = auth.verify_password(CONFIG_PATH, pw) if name in ("", "admin") \
+                else users.verify(CONFIG_PATH, name, pw)
+            if ok:
                 auth.record_success(ip)
                 session.clear()
                 session["authenticated"] = True
+                session["user"] = name if name not in ("", "admin") else None
                 session.permanent = True
                 return redirect(next_url)
 
@@ -345,7 +367,7 @@ def create_app() -> Flask:
     @app.route("/", methods=["GET", "POST"])
     def index():
         from ..dashboard import build as _dashboard
-        return render_template("index.html", d=_dashboard(cfg, CONFIG_PATH), config=cfg)
+        return render_template("index.html", d=_dashboard(cfg, _cfg_path()), config=cfg)
 
     @app.route("/analyze", methods=["GET", "POST"])
     def analyze():
@@ -919,7 +941,7 @@ def create_app() -> Flask:
             mc = None
         return render_template("export_detail.html", data=data, analysis=analysis,
                                filename=filename, demo_path=demo_path, mc=mc,
-                               player_avg=avg, ai_report=_report_ai_load(CONFIG_PATH, filename),
+                               player_avg=avg, ai_report=_report_ai_load(_cfg_path(), filename),
                                kill_map_data=_build_kill_map_data_from_export(data),
                                config=cfg)
 
@@ -1302,11 +1324,7 @@ def create_app() -> Flask:
             if latest_code != last_code:
                 cfg["last_sharecode"] = latest_code
                 try:
-                    import yaml as _yaml
-                    config_data = dict(cfg)
-                    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                        f.write("# CS2-Coach Konfiguration\n")
-                        _yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+                    _write_config(dict(cfg))
                 except Exception:
                     pass
 
@@ -1324,11 +1342,7 @@ def create_app() -> Flask:
             return jsonify({"error": "Ungueltiger Share-Code"}), 400
         cfg["last_sharecode"] = code
         try:
-            import yaml as _yaml
-            config_data = dict(cfg)
-            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                f.write("# CS2-Coach Konfiguration\n")
-                _yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+            _write_config(dict(cfg))
         except Exception:
             pass
         return jsonify({"ok": True, "code": code})
@@ -1389,11 +1403,7 @@ def create_app() -> Flask:
             # Save username in config (password is NOT saved)
             cfg["steam_username"] = username
             try:
-                import yaml as _yaml
-                config_data = dict(cfg)
-                with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                    f.write("# CS2-Coach Konfiguration\n")
-                    _yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+                _write_config(dict(cfg))
             except Exception:
                 pass
             return jsonify({"ok": True, "message": "Steam-Login erfolgreich!"})
@@ -1615,9 +1625,7 @@ def create_app() -> Flask:
         custom_path = request.form.get("cfg_path", "").strip()
         if custom_path:
             cfg["practice_cfg_path"] = custom_path
-            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-                f.write("# CS2-Coach Konfiguration\n")
-                yaml.dump(dict(cfg), f, default_flow_style=False, allow_unicode=True)
+            _write_config(dict(cfg))
 
         # Resolve custom output coach subfolder
         output_coach = None
@@ -1901,26 +1909,28 @@ def create_app() -> Flask:
         from .. import health
         current = load_config()
         return render_template(
-            "status.html", checks=health.run_checks(current, CONFIG_PATH),
+            "status.html", checks=health.run_checks(current, _cfg_path()),
             webhook_set=bool(current.get("health_webhook") or current.get("discord_webhook")),
             config=current)
 
     from .daily_briefing import create_blueprint as _daily_bp
-    app.register_blueprint(_daily_bp(load_config, lambda: CONFIG_PATH))
+    app.register_blueprint(_daily_bp(load_config, lambda: _cfg_path()))
     from .server_board import create_blueprint as _server_bp
     app.register_blueprint(_server_bp(lambda: CONFIG_PATH, load_config))
     from .training_page import create_blueprint as _training_bp
-    app.register_blueprint(_training_bp(load_config, lambda: CONFIG_PATH))
+    app.register_blueprint(_training_bp(load_config, lambda: _cfg_path()))
     from .live_page import create_blueprint as _live_bp
-    app.register_blueprint(_live_bp(load_config, lambda: CONFIG_PATH))
+    app.register_blueprint(_live_bp(load_config, lambda: _cfg_path()))
     from .lineups_page import create_blueprint as _lineups_bp
-    app.register_blueprint(_lineups_bp(load_config, lambda: CONFIG_PATH))
+    app.register_blueprint(_lineups_bp(load_config, lambda: _cfg_path()))
     from .levers_page import create_blueprint as _levers_bp
-    app.register_blueprint(_levers_bp(load_config, lambda: CONFIG_PATH))
+    app.register_blueprint(_levers_bp(load_config, lambda: _cfg_path()))
     from .moments_page import create_blueprint as _moments_bp
-    app.register_blueprint(_moments_bp(load_config, lambda: CONFIG_PATH))
+    app.register_blueprint(_moments_bp(load_config, lambda: _cfg_path()))
     from .aim_profile_page import create_blueprint as _aim_bp
-    app.register_blueprint(_aim_bp(load_config, lambda: CONFIG_PATH))
+    app.register_blueprint(_aim_bp(load_config, lambda: _cfg_path()))
+    from .users_page import create_blueprint as _users_bp
+    app.register_blueprint(_users_bp(lambda: CONFIG_PATH))
 
     @app.route("/settings")
     def settings():
@@ -1972,9 +1982,7 @@ def create_app() -> Flask:
             "ollama_url": request.form.get("ollama_url", cfg.get("ollama_url", "http://localhost:11434")).strip(),
             "ai_model": request.form.get("ai_model", cfg.get("ai_model", "")).strip(),
         })
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            f.write("# CS2-Coach Konfiguration\n")
-            yaml.dump(new_cfg, f, default_flow_style=False, allow_unicode=True)
+        _write_config(new_cfg)
         # Reload into running app
         cfg.clear()
         cfg.update(new_cfg)

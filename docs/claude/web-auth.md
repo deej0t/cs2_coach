@@ -10,3 +10,11 @@ tags: [cs2-coach, claude-context]
 - `settings_save()` must start from `dict(cfg)` so unknown keys (like the auth hash) survive a settings save.
 - Public routes: `/share/<file>` and `/static`. `/api/*` answers 401 instead of redirecting; the frontend must translate that into "session expired", not "connection error".
 - Only remember a `next` target for GET navigations that want HTML (otherwise `/favicon.ico` becomes the login target). Login locks per IP for 5 minutes after 5 failed attempts.
+
+## Mates (Mehrbenutzer, 2026-11-27)
+- `users.py` (Kern) + `web/users_web.py` (je Anfrage) + `web/users_page.py` (`/benutzer` Admin, `/settings/konto` Mate). Ohne `.users.json` ändert sich nichts. Mate-Logins brauchen ein Admin-Passwort (ohne ist Auth aus).
+- Login: Feld „Name“ leer/`admin` = Admin, sonst Mate (`session["user"]`). `users.ACTIVE` (ContextVar) wird je Anfrage gesetzt – u. a. Steam-Sitzung je Spieler (`sharecode._session_file` → `users/<name>/.steam_session`; Altdaten-Umzug/Logout der alten Datei nur Admin).
+- `cfg` in app.py ist ein `ConfigProxy`: Mate = Admin-Config **ohne** `USER_KEYS` + `users/<name>/config.yaml`, Vault = `users/<name>/vault`. Schreiben (`_write_config`) speichert für Mates nur `USER_KEYS` – Admin-Schlüssel sieht/überschreibt ein Mate nie (Test `test_users.py`).
+- Zustand je Spieler neben seiner Config (Hebel, Briefing, Aim-Profil, KI-Berichte, Telegram-Chat, Szenen-Cache). Gemeinsam (`users.shared_dir`): Demo-Caches (winprob, aim_cache), Maps/Modelle, Server, Training, GSI, Map-Vote.
+- Admin-Bereiche (`users_web.ADMIN_ONLY_PREFIXES`) leiten Mates um. Fremde Sicht `?als=<name|admin>` nur auf Match-Seite/Szenen/Replay (`VIEW_AS_ENDPOINTS`), Mate nur für selbst gespielte Matches (eigener Export zur selben Demo), dabei nur GET. Prüfung gesammelt in `users_web.guard`.
+- Sync (`cli sync` → `_sync_mates`): je Mate eigene GCPD-Demos über seine Steam-Sitzung (Steam per QR auf der Share-Code-Seite verbinden), Analyse nur der Demos, in denen er laut gemeinsamem Aim-Cache mitspielt, dann KI (nur mit eigenem Schlüssel), Hebel, Wochenrückblick, Aim-Profil. `cli briefing --send` schickt auch Mates mit eigenem Webhook/Telegram ihr Briefing. Lokal: 27 gemeinsame Demos eines Mates in 16 min analysiert.

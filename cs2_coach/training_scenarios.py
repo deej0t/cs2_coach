@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
+from .users import shared_dir   # Server/Demo-Zustand: einmal fuer alle Spieler
 
 MODES = {"warmup": "Warmup", "duell": "Duell", "situation": "Situation", "retake": "Retake", "halten": "Site halten",
          "eichen": "Reaktion eichen", "wiederholen": "Verlorene wiederholen",
@@ -211,7 +212,7 @@ def collect(cfg: dict, config_path: Path, bsp: str, mode: str, limit: int = 20,
     if not vault or not folder or not me:
         return []
     lead = lead_seconds(cfg)
-    cache_dir = Path(config_path).parent / "training_cache"
+    cache_dir = shared_dir(config_path) / "training_cache"
     key = f"scan-v{SCAN_VERSION}-lead{lead:g}"
     out: list[dict] = []
     scanned = 0
