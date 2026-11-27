@@ -12,7 +12,8 @@ from pathlib import Path
 
 from flask import Blueprint, redirect, render_template, request, url_for
 
-from .. import own_lineups
+from .. import own_lineups, users
+from . import users_web
 from ..grenade_lineups import LABELS, collect, library, nade_keys, style_text
 from ..maps import game_to_radar
 from ..training_server import DEFAULT_MAPS
@@ -33,6 +34,14 @@ def _points(g: dict, short: str, own: bool) -> dict | None:
 def create_blueprint(load_config, config_path) -> Blueprint:
     bp = Blueprint("lineups_page", __name__)
 
+    def _team_path() -> Path:
+        # Im Spiel gespeichert wird neben der Admin-Config (Server ist gemeinsam):
+        # dieselbe Datei fuer alle = Team-Bibliothek, "by" sagt, von wem.
+        return users.shared_dir(config_path()) / "config.yaml"
+
+    def _may_delete(g: dict, cfg: dict) -> bool:
+        return users_web.is_admin() or (g.get("by") or "").lower() == (cfg.get("player_name") or "").lower() != ""
+
     @bp.route("/lineups")
     def page():
         cfg = load_config()
@@ -40,7 +49,7 @@ def create_blueprint(load_config, config_path) -> Blueprint:
         maps = list(cfg.get("training_maps") or DEFAULT_MAPS)
         bsp = request.args.get("map") or maps[0]
         short = bsp.removeprefix("de_")
-        own = own_lineups.load(path).get(bsp, [])
+        own = [{**g, "deletable": _may_delete(g, cfg)} for g in own_lineups.load(_team_path()).get(bsp, [])]
         demo = library(collect(cfg, path, bsp, log=lambda *a: None, max_new=0), limit=30)
         lines = [p for g in own if (p := _points(g, short, True))] + \
                 [p for g in demo if (p := _points(g, short, False))]
@@ -49,10 +58,10 @@ def create_blueprint(load_config, config_path) -> Blueprint:
 
     @bp.route("/lineups/delete", methods=["POST"])
     def delete():
-        path = Path(config_path())
+        path, cfg = _team_path(), load_config()
         bsp, name = request.form.get("map", ""), request.form.get("name", "")
         data = own_lineups.load(path)
-        data[bsp] = [g for g in data.get(bsp, []) if g["name"] != name]
+        data[bsp] = [g for g in data.get(bsp, []) if g["name"] != name or not _may_delete(g, cfg)]
         own_lineups._save(path, data)
         return redirect(url_for("lineups_page.page", map=bsp))
 

@@ -31,18 +31,18 @@
     </svg>
 
     <div class="card elev-sm" style="min-width: 260px; flex: 1;">
-        <span class="card-kicker">Eigene Lineups auf {{ short }}</span>
+        <span class="card-kicker">Team-Lineups auf {{ short }}</span>
         <p style="font-size: 12px; color: var(--color-neutral-500);">
             {% for t, c in colors.items() %}<span style="color: {{ c }};">●</span> {{ labels[t] }}&nbsp; {% endfor %}
         </p>
         {% for g in own %}
         <div style="display:flex; justify-content: space-between; align-items: center; padding: 6px 0; border-top: 1px solid var(--color-neutral-800);">
             <span><span style="color: {{ colors[g.type] }};">●</span> <b>{{ g.name }}</b>
-                <span style="color: var(--color-neutral-500); font-size: 12px;">{{ g.side }} {{ labels[g.type] }}</span></span>
-            <form method="post" action="{{ url_for('lineups_page.delete') }}" onsubmit="return confirm('{{ g.name }} löschen?')">
+                <span style="color: var(--color-neutral-500); font-size: 12px;">{{ g.side }} {{ labels[g.type] }}{% if g.by %} · von {{ g.by }}{% endif %}</span></span>
+            {% if g.deletable %}<form method="post" action="{{ url_for('lineups_page.delete') }}" onsubmit="return confirm('{{ g.name }} löschen?')">
                 <input type="hidden" name="map" value="{{ bsp }}"><input type="hidden" name="name" value="{{ g.name }}">
                 <button class="btn btn-ghost" style="padding: 2px 8px;">✕</button>
-            </form>
+            </form>{% endif %}
         </div>
         {% else %}
         <p style="font-size: 13px;">Noch keine. Im Spiel werfen, dann <code>!speichern &lt;Name&gt;</code>.</p>

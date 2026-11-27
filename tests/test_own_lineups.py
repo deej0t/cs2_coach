@@ -43,3 +43,13 @@ def test_nothing_landed_saves_nothing(tmp_path, monkeypatch):
     cfg = tmp_path / "c.yaml"
     assert "Kein gelandeter Wurf" in ol.handle(cfg, Server("coach_nade_last none"), "dj", "speichern", "X", "3")[0]
     assert ol.load(cfg) == {}
+
+
+def test_team_library_protects_other_players_lineups(tmp_path, monkeypatch):
+    import cs2_coach.training_server as ts
+    monkeypatch.setattr(ts, "_current_map_from", lambda status: "de_mirage")
+    cfg, s = tmp_path / "c.yaml", Server()
+    ol.handle(cfg, s, "dj", "speichern", "Window", "3")
+    assert "gehoert schon dj" in ol.handle(cfg, s, "mate", "speichern", "Window", "4")[0]
+    assert "Kein Lineup" in ol.handle(cfg, s, "mate", "loeschen", "Window", "4")[0]
+    assert len(ol.load(cfg)["de_mirage"]) == 1

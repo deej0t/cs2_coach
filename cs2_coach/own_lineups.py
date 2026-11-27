@@ -68,7 +68,8 @@ def handle(config_path: Path, send, name: str, cmd: str, arg: str, uid: str | No
                 + ". Ueben: !granaten meine"]
     label = _name(arg)
     if cmd in ("loeschen", "delete"):
-        keep = [g for g in mine if g["name"].lower() != label.lower()]
+        # Team-Bibliothek: nur eigene Lineups loeschen
+        keep = [g for g in mine if g["name"].lower() != label.lower() or (g.get("by") or name) != name]
         if len(keep) == len(mine):
             return [f"Kein Lineup '{label}' auf {bsp}."]
         data[bsp] = keep
@@ -80,6 +81,8 @@ def handle(config_path: Path, send, name: str, cmd: str, arg: str, uid: str | No
     if lineup is None:
         return ["Kein gelandeter Wurf gefunden - erst werfen, landen lassen, dann !speichern <Name>."]
     label = label or f"{LABELS[lineup['type']]} {len(mine) + 1}"
+    if any(g["name"].lower() == label.lower() and (g.get("by") or name) != name for g in mine):
+        return [f"'{label}' gehoert schon {next(g['by'] for g in mine if g['name'].lower() == label.lower())} - anderer Name?"]
     mine = [g for g in mine if g["name"].lower() != label.lower()]
     if len(mine) >= MAX_PER_MAP:
         return [f"Schon {MAX_PER_MAP} Lineups auf {bsp} - erst eins mit !loeschen <Name> entfernen."]
