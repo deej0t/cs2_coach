@@ -143,7 +143,9 @@ def create_blueprint(base_config) -> Blueprint:
             rows.append({"als": name or "admin", "display": (users.load_users(base).get(name, {}).get("display")
                                                             if name else None) or cfg.get("player_name") or name or "Admin",
                          "matches": len(users.demo_index(cfg)), "me": name == users_web.current_user()})
-        return render_template("players.html", rows=rows, config=users_web_cfg())
+        from .. import duo
+        duos = duo.duo_table(_read_base_config(), base, users_web.current_user())
+        return render_template("players.html", rows=rows, duos=duos, config=users_web_cfg())
 
     @bp.app_template_global("match_views")
     def match_views(data: dict) -> list[dict]:

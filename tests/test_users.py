@@ -113,3 +113,25 @@ def test_steam_id_cannot_be_claimed_twice(base):
     users.add_user(base, "erster", "", "76561190000000011")      # eigene ID behalten geht
     users.request_access(base, "steam000012", None, "76561190000000012")
     assert users.load_pending(base)["steam000012"]["verified"] is True
+
+
+def test_duo_table_compares_together_vs_alone(base):
+    from cs2_coach import duo
+    admin = yaml.safe_load(base.read_text(encoding="utf-8"))
+    admin["obsidian_vault_path"] = str(base.parent / "vault")
+    users.add_user(base, "mate", "geheim1234", "76561190000000002")
+    a_dir = users.export_dir(admin)
+    m_dir = users.export_dir(users.merged_config(admin, base, "mate"))
+    a_dir.mkdir(parents=True)
+    m_dir.mkdir(parents=True)
+    for i in range(20):
+        res = "Sieg" if (i < 10 and i % 5) or (i >= 10 and i % 5 == 0) else "Niederlage"
+        (a_dir / f"m{i}_coach.json").write_text(
+            f'{{"match": {{"map": "de_mirage", "result": "{res}", "demo_file": "m{i}.dem"}}}}', encoding="utf-8")
+        if i < 10:
+            (m_dir / f"m{i}_coach.json").write_text(f'{{"match": {{"demo_file": "m{i}.dem"}}}}', encoding="utf-8")
+    rows = duo.duo_table(admin, base, None)
+    assert len(rows) == 1 and rows[0]["user"] == "mate"
+    assert rows[0]["together"] == {"n": 10, "wins": 8, "pct": 80}
+    assert rows[0]["alone"] == {"n": 10, "wins": 2, "pct": 20}
+    assert rows[0]["cmp"] is not None and rows[0]["maps"][0]["map"] == "de_mirage"
