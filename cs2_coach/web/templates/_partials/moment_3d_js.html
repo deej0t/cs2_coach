@@ -391,6 +391,7 @@ function draw() {
     }
     if (!view) flyStep();
     renderer.render(scene, camera);
+    if (viewModel) viewModel.render(renderer);
     aimOverlay(A, B, f, mode, view && view.p);
 }
 

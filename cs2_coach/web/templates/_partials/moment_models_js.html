@@ -195,53 +195,79 @@ class Figure {
 const G2C = new THREE.Matrix4().set(0, -1, 0, 0,  0, 0, 1, 0,  -1, 0, 0, 0,  0, 0, 0, 1);
 const VM_SHIFT = [3, -4, -5];   // vorne, links (negativ = rechts), oben (negativ = unten) in Spieleinheiten
 class ViewModel {
+    // Eigene Szene, gezeichnet nach der Welt mit frischem Tiefenpuffer (moment_3d_js):
+    // Arme und Waffe verdecken sich richtig und stecken nie in Waenden - wie ein Viewmodel im Spiel.
     constructor(camera) {
+        this.camera = camera;
+        this.scene = new THREE.Scene();
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x6b5b45, 1.7);
+        hemi.position.set(0, 1, 0);
+        this.scene.add(hemi);
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(0.3, 1, 0.6);
+        this.scene.add(sun);
         this.group = new THREE.Group();
         this.group.matrixAutoUpdate = false;
-        camera.add(this.group);
-        this.hold = {};       // Klasse -> Matrix (Knochen wpn relativ zum Auge, Spiel-Rahmen)
+        this.scene.add(this.group);
+        this.cache = {};      // Seite+Waffe -> Promise<Object3D> (Arme + Waffe in Haltung, Ursprung = Auge)
     }
-    async calibrate(side, cls) {
-        const key = side + cls;
-        if (this.hold[key] !== undefined) return this.hold[key];
-        this.hold[key] = null;
-        const fig = new Figure(side);
-        if (!fig.ready) return null;
-        await fig.ready;
-        const act = await fig.action(cls + '_idle');
-        if (!fig.ok || !act || !fig.bones.wpn || !fig.bones.head_0) return null;
-        act.play(); act.time = 0; fig.mixer.update(0);
-        fig.root.updateMatrixWorld(true);
-        const head = new THREE.Vector3().setFromMatrixPosition(fig.bones.head_0.matrixWorld);
-        this.hold[key] = new THREE.Matrix4().makeTranslation(-head.x, -head.y, -head.z).multiply(fig.bones.wpn.matrixWorld);
-        return this.hold[key];
+    // Agent in der Steh-Haltung der Waffenklasse, sichtbar nur First-Person-Arme und die Waffe
+    build(side, key) {
+        const id = side + ':' + key;
+        if (this.cache[id]) return this.cache[id];
+        this.cache[id] = (async () => {
+            const f = wfile(key, side);
+            if (!f) return null;
+            const fig = new Figure(side);
+            if (!fig.ready) return null;
+            await fig.ready;
+            const act = await fig.action(wclass(key) + '_idle');
+            if (!fig.ok || !act || !fig.bones.wpn || !fig.bones.head_0) return null;
+            act.play(); act.time = 0; fig.mixer.update(0);
+            const w = weaponWrap(await load(f));
+            fig.bones.wpn.add(w);
+            let arms = 0;
+            fig.root.traverse(o => {
+                if (!o.isMesh) return;
+                o.frustumCulled = false;
+                const fp = /firstperson/.test(o.name);
+                if (fp) arms++;
+                if (o.material) { o.material = o.material.clone(); o.material.fog = false; }
+                // Koerper weg, Arme + Waffe bleiben
+                if (!w.getObjectById(o.id)) o.visible = fp;
+            });
+            fig.root.updateMatrixWorld(true);
+            const head = new THREE.Vector3().setFromMatrixPosition(fig.bones.head_0.matrixWorld);
+            const holder = new THREE.Group();
+            holder.position.set(-head.x, -head.y, -head.z);
+            holder.add(fig.root);
+            holder.userData.arms = arms;
+            return holder;
+        })().catch(() => null);
+        return this.cache[id];
     }
     set(key, side) {
         if (key === this.key) return;
         this.key = key;
         this.group.clear();
-        const f = wfile(key, side);
-        if (!f) { if (!manifest) this.key = undefined; return; }   // Liste noch nicht da: naechstes Bild nochmal
-        const cls = wclass(key);
-        Promise.all([load(f), this.calibrate(side, cls)]).then(([g, hold]) => {
-            if (this.key !== key || !hold) return;
-            const w = weaponWrap(g);
-            w.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.renderOrder = 10;
-                o.material = o.material.clone(); o.material.depthTest = false; o.material.fog = false; } });
-            const h = new THREE.Group();
-            h.matrixAutoUpdate = false;
-            h.matrix.copy(hold);
-            h.add(w);
-            this.group.add(h);
-        }).catch(() => {});
+        if (!wfile(key, side)) { if (!manifest) this.key = undefined; return; }   // Liste noch nicht da: naechstes Bild nochmal
+        this.build(side, key).then(obj => { if (obj && this.key === key) { this.group.clear(); this.group.add(obj); } });
     }
     update(visible, kick) {
-        this.group.visible = visible && !!this.key;
+        this.visible = visible && !!this.key && this.group.children.length > 0;
         // Rueckstoss: kurz zurueck und hoch
         const k = Math.max(0, kick || 0);
         const m = new THREE.Matrix4().makeTranslation(VM_SHIFT[0] - 2.5 * k, VM_SHIFT[1], VM_SHIFT[2] + 0.6 * k)
             .multiply(new THREE.Matrix4().makeRotationY(-0.06 * k));
-        this.group.matrix.copy(G2C).multiply(m);
+        this.camera.updateMatrixWorld();
+        this.group.matrix.copy(this.camera.matrixWorld).multiply(G2C).multiply(m);
+    }
+    render(renderer) {
+        if (!this.visible) return;
+        renderer.autoClear = false;
+        renderer.clearDepth();
+        renderer.render(this.scene, this.camera);
+        renderer.autoClear = true;
     }
 }
 
