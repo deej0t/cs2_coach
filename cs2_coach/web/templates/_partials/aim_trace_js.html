@@ -88,7 +88,7 @@
 
     // HUD ueber der 3D-Ego-Sicht. head = Bildschirmposition des Gegnerkopfs (px) oder null,
     // pxPerDeg = Pixel je Grad nahe der Bildmitte.
-    function hud(t, mode, head, pxPerDeg, vp) {
+    function hud(t, mode, head, pxPerDeg, vp, pre) {
         var cv = document.getElementById('km-aim-hud'), base = document.getElementById('km-3d');
         if (!cv || !base) return;
         var w = base.clientWidth, h = base.clientHeight;
@@ -99,6 +99,7 @@
         if ((mode === 'me' || mode === 'enemy') && window.kmHud) window.kmHud.draw(c, w, h, vp, t);
         if (!aim || mode !== 'me') return;
         var cx = w / 2, cy = h / 2, r = rowAt(t);
+        if (pre) preAim(c, w, h, cx, cy, pre);
         // Fadenkreuz
         c.strokeStyle = '#4ade80'; c.lineWidth = 2; c.beginPath();
         c.moveTo(cx - 10, cy); c.lineTo(cx - 3, cy); c.moveTo(cx + 3, cy); c.lineTo(cx + 10, cy);
@@ -135,9 +136,29 @@
         if (cur) box(h * 0.16, cur.text, cur.tone === 'bad' ? '#f87171' : (cur.tone === 'good' ? '#4ade80' : '#e5e7eb'));
     }
 
+    // Vor dem Sichtkontakt: gestrichelte Linie vom Fadenkreuz zur Stelle, an der der Gegner auftaucht
+    function preAim(c, w, h, cx, cy, pre) {
+        var tx = pre.x, ty = pre.y;
+        if (pre.behind) { tx = w - tx; ty = h - ty; }            // hinter dir: Richtung umdrehen
+        var dx = tx - cx, dy = ty - cy, len = Math.hypot(dx, dy) || 1;
+        var m = Math.min(w, h) * 0.45;
+        if (pre.behind || len > m) { tx = cx + dx / len * m; ty = cy + dy / len * m; }   // am Rand festhalten
+        var col = pre.deg <= 5 ? '#4ade80' : (pre.deg <= 15 ? '#fbbf24' : '#f87171');
+        c.save();
+        c.setLineDash([7, 6]); c.strokeStyle = col; c.lineWidth = 2;
+        c.beginPath(); c.moveTo(cx, cy); c.lineTo(tx, ty); c.stroke();
+        c.setLineDash([]);
+        var txt = 'Er taucht in ' + pre.secs.toFixed(1) + ' s hier auf – Fadenkreuz ' + pre.deg.toFixed(0) + '° daneben';
+        c.font = '600 14px system-ui, sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+        var tw = c.measureText(txt).width, bx = Math.min(Math.max(tx + 14, 10), w - tw - 24), by = Math.min(Math.max(ty - 30, 10), h - 40);
+        c.fillStyle = 'rgba(0,0,0,0.65)'; c.fillRect(bx, by, tw + 14, 22);
+        c.fillStyle = col; c.fillText(txt, bx + 7, by + 4);
+        c.restore();
+    }
+
     window.kmAim = {
         reset: setup,
-        frame: function (t, mode, head, pxPerDeg, vp) { if (aim !== data()) setup(); chart(t); hud(t, mode, head, pxPerDeg, vp); },
+        frame: function (t, mode, head, pxPerDeg, vp, pre) { if (aim !== data()) setup(); chart(t); hud(t, mode, head, pxPerDeg, vp, pre); },
     };
 })();
 </script>

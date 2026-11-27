@@ -44,3 +44,9 @@ def test_shots_before_sight_are_not_judged():
     out = aim_trace.trace(rows, [{"tick": 2, "steamid": ME}], [], ME, EN, sight_tick=30)
     assert out["shots"][0]["before_sight"]
     assert not any("verfehlt" in m["text"] or "Bewegung" in m["text"] for m in out["mistakes"])
+
+
+def test_trace_reports_where_enemy_appeared():
+    rows = [r for t in range(10) for r in (row(t, ME, 0, 0), row(t, EN, 1000, 50, z=10))]
+    out = aim_trace.trace(rows, [], [], ME, EN, sight_tick=4)
+    assert out["sight"] == 4 and out["sight_head"] == [1000, 50, 10 + aim_trace.HEAD_STAND]

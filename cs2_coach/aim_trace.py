@@ -117,7 +117,16 @@ def trace(rows: list[dict], shots: list[dict], hurts: list[dict], me: str, enemy
                           "first": first, "head_deg": round(head_deg, 2), "before_sight": before,
                           "hit": bool(hit), "hitgroup": hit.get("hitgroup") if hit else None,
                           "dmg": hit.get("dmg") if hit else 0})
-    return {"series": series, "shots": out_shots, "mistakes": mistakes(series, out_shots, sight_tick)}
+    # Wo tauchte der Gegner auf? Kopf beim Sichtkontakt - dahin haette das Fadenkreuz vorher gehoert
+    sight_head = None
+    if sight_tick is not None:
+        t = min(by, key=lambda x: abs(x - sight_tick)) if by else None
+        b = by.get(t, {}).get(enemy) if t is not None else None
+        if b and all(_f(b.get(k)) is not None for k in ("X", "Y", "Z")):
+            sight_head = [round(b["X"], 1), round(b["Y"], 1),
+                          round(b["Z"] + (HEAD_DUCK if b.get("ducking") else HEAD_STAND), 1)]
+    return {"series": series, "shots": out_shots, "mistakes": mistakes(series, out_shots, sight_tick),
+            "sight": sight_tick, "sight_head": sight_head}
 
 
 def mistakes(series: list[list], shots: list[dict], sight_tick: int | None) -> list[dict]:

@@ -45,7 +45,7 @@ def _me(cfg: dict, data: dict) -> str:
 
 
 # ── Szenen bauen, cachen, vorberechnen ─────────────────────────────────────
-CLIP_VERSION = 4            # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
+CLIP_VERSION = 5            # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
 CACHE_DIR = ".moments_cache"
 _warming: set[str] = set()
 _warm_lock = threading.Lock()
