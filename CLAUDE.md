@@ -44,4 +44,5 @@
 | `docs/claude/web-auth.md` | Login, Passwort-Hash, Public Routes |
 | `docs/claude/testing.md` | Regression-Fixtures, Recorder, Test-Fallen |
 | `docs/claude/ops-server.md` | Unraid, Docker-Deploy, CS2-Container, Waechter, NUT/USV, Lüfter, RAM, docker.img |
+| `docs/claude/moments-3d.md` | 3D-Szene/Player, Szenen-Cache, demo_cache, Map-/Modell-Export, Animationen, Aim-/Positions-Profil |
 | `docs/claude/layout.md` | Vollständige Modulliste mit Zeilenzahlen |

@@ -1,0 +1,20 @@
+# Schlüsselmomente in 3D, Aim-Profil
+
+## Bausteine
+- **Player** `web/templates/_partials/moment_theater.html` (Match-Seite `#momente`, `/momente`, Serien `/aim-profil/serie/<key>`). Zeit = `km.tick` (64 Hz), rAF-Schleife; `kmSeek/kmStop/kmRange` global. Direktlink `#momente?r=<Runde>&t=<Tick>&k=kill|death`. Serien: `km_series` (Liste mit file/round/tick/kind/map/parts).
+- JS-Module (Reihenfolge wichtig, Importmap steht in `moment_models_js.html` und muss vor jedem Modul kommen): `moment_hud_js` → `aim_trace_js` → `moment_models_js` → `moment_nades_js` → `moment_3d_js`.
+- **Szene bauen** `moments_page.build_clip` → Replay + Duell + `scan_3d` + `aim_trace.scan` + `nades3d.scan` + HUD. Cache `.moments_cache/<sha>.json.gz`, Schlüssel enthält `CLIP_VERSION` – **bei jeder Inhaltsänderung erhöhen**. Ausgeliefert wird die gz-Datei direkt (3 ms, ~50 KB). `/api/momente/liste` rechnet alle Szenen eines Matches im Hintergrund vor (`prewarm`, Sperre je Szene).
+- **demo_cache.CachedParser**: alle Events in EINEM `parse_events`-Durchlauf, je Demo im Speicher (2 Demos); `preload_ticks` für alle Tick-Felder einer Szene. Server: Szene ohne Cache 19 s → 5 s (erste), ~3 s (weitere). Für nicht existierende Dateien (Tests mit Fake-Parser) kein Gedächtnis.
+- `scan_3d`-Zeilen sind positionsbasiert (Indizes im Docstring) – neue Felder nur anhängen. Inventar nur bei Änderung (None = unverändert). Uhr-Raster ab dem ersten Clip-Tick (Start kann ungerade sein).
+
+## Assets (Unraid: `bash /boot/config/scripts/maps3d-export.sh [map…|models]`)
+- Source2Viewer-CLI 21.1 auf dem Host (`/mnt/user/appdata/s2v`), Spieldateien aus dem CS2-Container. Lokal geht dasselbe mit der Windows-CLI gegen `D:\SteamLibrary\…\csgo`.
+- `map3d.py`: Kollision (`world_physics`) → `.geo.gz` (1–16 MB), sofort sichtbar.
+- `map3d_render.py`: Render-Map mit Texturen → `<map>.render[N].glb.gz`. Achsen: Spiel = (z, x, y)/0,0254 aus glTF (geprüft: 97 % der Demo-Positionen auf Boden, x/y vertauscht 53 %). **Jede Datei < 90 MB** (Cloudflare Free: 100 MB) – erst bis 4 Teile, dann Texturen halbieren.
+- `models3d.py`: Agenten (CT SAS, T Phoenix), 44 Waffen, 30 Clips (rifle/pistol/knife × Stehen/Ducken/Laufen n/s/e/w), 110 HUD-SVGs (`icons.json`). Demo-Waffennamen → Schlüssel über `weapon_key` (Anzeige-Namen wie „USP-S“).
+- Clips: nur `root_motion.position` entfernen – die Drehung trägt die Grundausrichtung (ohne sie 90° verdreht). Clips laufen bei Rate 1 nur ~64 u/s (stehend), ~60 (geduckt) → Rate = Tempo/64. Richtungen geprüft (run_e = rechts). Blickneigung auf spine_1/spine_2/neck_0 **von der Grundhaltung aus** (sonst summiert sie sich auf). Waffe: Knochen `weapon` der Waffe auf `wpn` des Agenten; Ego-Waffe aus derselben Haltung relativ zu `head_0`.
+
+## Aim-Spur / Aim-Profil
+- `aim_trace.py`: Fehler zum Kopf je Tick (Kopf = Fuß + 64 bzw. 46 geduckt), Schüsse vor dem Sichtkontakt (−8 Ticks) werden nicht bewertet. Demo-Blickwinkel ohne Rückstoß → nur erster Schuss einer Salve bewertet.
+- `aim_profile.py`: jeder Kill zweimal (Schütze gewonnen, Opfer verloren), ab Sichtkontakt (`approximate_spotted_by`); Lobby = alle anderen. Cache `aim_cache/<demo>.json` (`CACHE_KEY`), Ergebnis `.aim_profile.json`; Seite startet Nachlesen im Hintergrund. `ttt` nur, wenn Placement > 3° (sonst Median 0 ms). Smoke-Test schaltet `aim_profile.start` ab.
+- **Messung 2026-11-27, Server, 158 Demos, 3620 eigene Duell-Seiten gegen 30 129 der Lobby, Gewehre:** nichts belastbar schlechter als die Lobby; gleich (belastbar): Placement 2,9 vs 3,1°, Zeit bis aufs Ziel 172 vs 172 ms, erster Schuss 94 vs 109 ms; eher besser (Richtung sicher, < 0,2): erster Schuss in Bewegung 26,8 vs 36,4 % (d=0,21 [0,15…0,27]), Flick überschossen 7,1 vs 11,5 %, nie aufs Ziel 12,8 vs 17,9 %, daneben beim 1. Schuss 1,6 vs 2,1°. Gewonnen vs verloren: kein Wert belastbar.
