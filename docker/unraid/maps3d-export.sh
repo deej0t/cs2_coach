@@ -27,7 +27,10 @@ if [ ! -x "$TOOLS/bin/Source2Viewer-CLI" ]; then
     chmod +x "$TOOLS/bin/Source2Viewer-CLI"
 fi
 
-if [ "$#" -gt 0 ]; then names=("$@"); else names=(); for f in "$MAPS"/de_*.vpk; do n=$(basename "$f" .vpk); case "$n" in *_vanity) continue;; esac; names+=("$n"); done; fi
+# "models" als einziges Argument: nur Spielermodelle/Waffen/Animationen/HUD-Symbole neu (keine Maps)
+MODELS_ONLY=0
+if [ "${1:-}" = "models" ]; then MODELS_ONLY=1; set --; fi
+if [ "$MODELS_ONLY" = 1 ]; then names=(); elif [ "$#" -gt 0 ]; then names=("$@"); else names=(); for f in "$MAPS"/de_*.vpk; do n=$(basename "$f" .vpk); case "$n" in *_vanity) continue;; esac; names+=("$n"); done; fi
 
 for n in "${names[@]}"; do
     n="de_${n#de_}"
@@ -47,15 +50,17 @@ rm -rf "$WORK/tmp"
 
 # Spielermodelle, Waffen, Animationen (models3d.py) aus pak01 - die Liste kennt der Container
 PAK="$(dirname "$MAPS")/pak01_dir.vpk"
-if [ "$#" -eq 0 ] && [ -f "$PAK" ]; then
+if { [ "$#" -eq 0 ] || [ "$MODELS_ONLY" = 1 ]; } && [ -f "$PAK" ]; then
     list=$(docker exec cs2-coach python -m cs2_coach.models3d --list | paste -sd, -)
     rm -rf "$WORK/models"
     "$TOOLS/bin/Source2Viewer-CLI" -i "$PAK" -f "$list" --gltf_export_format glb --gltf_textures_adapt         -o "$WORK/models" >/dev/null && echo "Modelle exportiert" || echo "Modell-Export fehlgeschlagen"
 fi
 
 # Umwandeln im Container (numpy ist dort vorhanden); Ziel = maps3d/ neben der Config
+if [ "$MODELS_ONLY" = 0 ]; then
 docker exec cs2-coach python -m cs2_coach.map3d /data/maps3d_glb /data/maps3d
 # Texturen-Kantenlaenge: MAPS3D_TEX=256 halbiert die Downloadgroesse (~45 MB -> ~20 MB je Map)
 docker exec cs2-coach python -m cs2_coach.map3d_render /data/maps3d_glb/render /data/maps3d "${MAPS3D_TEX:-512}"
+fi
 [ -d "$WORK/models" ] && docker exec cs2-coach python -m cs2_coach.models3d /data/maps3d_glb/models /data/maps3d
 rm -rf "$WORK"

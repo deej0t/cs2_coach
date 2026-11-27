@@ -19,7 +19,7 @@ from collections import OrderedDict
 
 EVENTS = ("round_end", "round_freeze_end", "player_death", "weapon_fire", "player_hurt",
           "smokegrenade_detonate", "smokegrenade_expired", "inferno_startburn", "inferno_expire",
-          "flashbang_detonate", "hegrenade_detonate", "decoy_started", "decoy_detonate")
+          "flashbang_detonate", "hegrenade_detonate", "decoy_started", "decoy_detonate", "bomb_planted")
 MAX_DEMOS = 2               # so viele Demos bleiben im Speicher (je ~10-40 MB)
 
 _store: OrderedDict[str, dict] = OrderedDict()

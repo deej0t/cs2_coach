@@ -1,0 +1,218 @@
+<script>
+// CS2-HUD fuer die Person, aus deren Augen die Kamera schaut (deine Sicht / Gegner):
+// oben Rundenuhr, Spielstand und die zehn Spieler, unten links Geld/Leben/Ruestung,
+// unten rechts Munition und Waffenleiste, oben rechts der Killfeed.
+// Symbole sind die Vektorgrafiken aus dem Spiel (models3d.collect_icons -> icons.json).
+(function () {
+    var ICON_URL = '{{ url_for("moments_page.model", name="icons.json") }}';
+    var CT = '#9cc0f9', T = '#f1c27a', CT_BG = 'rgba(93,121,174,0.85)', T_BG = 'rgba(222,155,53,0.85)';
+    var icons = {}, iconsTried = false;
+
+    function loadIcons() {
+        if (iconsTried) return;
+        iconsTried = true;
+        fetch(ICON_URL).then(function (r) { return r.ok ? r.json() : {}; }).then(function (j) {
+            Object.keys(j).forEach(function (k) {
+                var img = new Image();
+                img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(j[k]);
+                icons[k] = img;
+            });
+        }).catch(function () {});
+    }
+
+    function iconKey(key, side) {
+        if (!key) return null;
+        if (key === 'knife') return side === 2 ? 'knife_t' : 'knife';
+        if (key === 'knife_ct') return 'knife';
+        return key;
+    }
+
+    // Symbol in Hoehe h zeichnen (Seitenverhaeltnis bleibt), Rueckgabe: Breite
+    function icon(c, name, x, y, h, alpha, alignRight) {
+        var img = icons[name];
+        if (!img || !img.complete || !img.naturalWidth) return 0;
+        var w = h * img.naturalWidth / img.naturalHeight;
+        c.globalAlpha = alpha === undefined ? 1 : alpha;
+        c.drawImage(img, alignRight ? x - w : x, y, w, h);
+        c.globalAlpha = 1;
+        return w;
+    }
+
+    function rowsAt(d, t) {
+        // letzte 3D-Zeilen bis t (Spieler-Index -> Zeile)
+        var ts = d._ticks || (d._ticks = Object.keys(d.view3d).map(Number).sort(function (a, b) { return a - b; }));
+        var lo = 0, hi = ts.length - 1;
+        if (!ts.length) return {};
+        if (t <= ts[0]) hi = 0;
+        else { while (hi - lo > 1) { var m = (lo + hi) >> 1; if (ts[m] <= t) lo = m; else hi = m; } hi = ts[hi] <= t ? hi : lo; }
+        return d.byTick ? d.byTick[ts[hi]] || {} : {};
+    }
+
+    function inventoryAt(d, idx, t) {
+        // Inventar steht nur in Zeilen, in denen es sich geaendert hat: rueckwaerts suchen
+        var ts = d._ticks;
+        for (var k = ts.length - 1; k >= 0; k--) {
+            if (ts[k] > t) continue;
+            var r = d.byTick[ts[k]] && d.byTick[ts[k]][idx];
+            if (r && r[16]) return r[16];
+        }
+        for (var k2 = 0; k2 < ts.length; k2++) { var r2 = d.byTick[ts[k2]] && d.byTick[ts[k2]][idx]; if (r2 && r2[16]) return r2[16]; }
+        return [];
+    }
+
+    function clockAt(d, t) {
+        var cl = (d.hud && d.hud.clock) || [], best = null;
+        for (var i = 0; i < cl.length; i++) { if (cl[i][0] <= t) best = cl[i]; else break; }
+        return best || cl[0] || null;
+    }
+
+    function box(c, x, y, w, h, fill) { c.fillStyle = fill; c.fillRect(x, y, w, h); }
+    function text(c, s, x, y, size, color, align, weight) {
+        c.font = (weight || 700) + ' ' + size + 'px "Stratum2", "Segoe UI", system-ui, sans-serif';
+        c.textAlign = align || 'left'; c.textBaseline = 'middle';
+        c.lineWidth = Math.max(2, size / 8); c.strokeStyle = 'rgba(0,0,0,0.55)'; c.strokeText(s, x, y);
+        c.fillStyle = color; c.fillText(s, x, y);
+        return c.measureText(s).width;
+    }
+
+    var PRIMARY = /^(ak47|aug|awp|bizon|famas|g3sg1|galilar|m249|m4a1|m4a1_silencer|mac10|mag7|mp5sd|mp7|mp9|negev|nova|p90|sawedoff|scar20|sg556|ssg08|ump45|xm1014)$/;
+    var PISTOL = /^(cz75a|deagle|elite|fiveseven|glock|hkp2000|p250|revolver|tec9|usp_silencer)$/;
+    var NADE = /^(flashbang|hegrenade|smokegrenade|molotov|incgrenade|decoy)$/;
+    function slotOf(k) {
+        if (PRIMARY.test(k)) return 1;
+        if (PISTOL.test(k)) return 2;
+        if (/^knife/.test(k) || k === 'taser') return 3;
+        if (NADE.test(k)) return 4;
+        if (k === 'c4') return 5;
+        return 0;
+    }
+
+    function draw(c, w, h, vp, t) {
+        var d = window.km && window.km.data;
+        if (!vp || !d || !d.view3d) return;
+        loadIcons();
+        var u = h / 1080;                       // HUD skaliert mit der Bildhoehe (Referenz 1080p)
+        if (vp.flashed) { c.fillStyle = 'rgba(255,255,255,0.78)'; c.fillRect(0, 0, w, h); }
+        if (vp.scoped) {
+            var r = Math.min(w, h) * 0.46;
+            c.save(); c.fillStyle = '#000'; c.beginPath(); c.rect(0, 0, w, h); c.arc(w / 2, h / 2, r, 0, 7, true); c.fill('evenodd');
+            c.strokeStyle = '#000'; c.lineWidth = 1.5; c.beginPath();
+            c.moveTo(0, h / 2); c.lineTo(w, h / 2); c.moveTo(w / 2, 0); c.lineTo(w / 2, h); c.stroke(); c.restore();
+        }
+        var rows = rowsAt(d, t), players = d.players || [];
+
+        // ── oben: Uhr, Spielstand, Spieler ──
+        var cl = clockAt(d, t), cx = w / 2, top = 8 * u;
+        var bomb = d.hud && d.hud.bomb_tick && t >= d.hud.bomb_tick;
+        box(c, cx - 62 * u, top, 124 * u, 96 * u, 'rgba(0,0,0,0.55)');
+        if (bomb) {
+            var left = Math.max(0, 40 - (t - d.hud.bomb_tick) / 64);
+            icon(c, 'c4', cx - 52 * u, top + 8 * u, 30 * u);
+            text(c, left.toFixed(left < 10 ? 1 : 0), cx + 22 * u, top + 24 * u, 30 * u, '#f87171', 'center');
+        } else if (cl && cl[1] !== null) {
+            var s = Math.ceil(cl[1]);
+            text(c, Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'), cx, top + 24 * u, 32 * u, s <= 10 ? '#f87171' : '#fff', 'center');
+        }
+        if (cl) {
+            text(c, String(cl[2] ?? ''), cx - 26 * u, top + 60 * u, 30 * u, CT, 'center');
+            text(c, String(cl[3] ?? ''), cx + 26 * u, top + 60 * u, 30 * u, T, 'center');
+        }
+        var alive = { 2: 0, 3: 0 }, team = { 2: [], 3: [] };
+        players.forEach(function (p, i) {
+            var r = rows[i];
+            if (!r || (r[8] !== 2 && r[8] !== 3)) return;
+            team[r[8]].push({ i: i, p: p, r: r });
+            if (r[6] > 0) alive[r[8]]++;
+        });
+        text(c, '♟' + alive[3], cx - 26 * u, top + 86 * u, 16 * u, CT, 'center', 600);
+        text(c, '♟' + alive[2], cx + 26 * u, top + 86 * u, 16 * u, T, 'center', 600);
+        [3, 2].forEach(function (side) {
+            team[side].slice(0, 5).forEach(function (m, k) {
+                var sw = 62 * u, gap = 6 * u;
+                var x = side === 3 ? cx - 70 * u - (k + 1) * (sw + gap) + gap : cx + 70 * u + k * (sw + gap);
+                var dead = m.r[6] <= 0;
+                box(c, x, top, sw, sw, dead ? 'rgba(20,20,20,0.7)' : (side === 3 ? CT_BG : T_BG));
+                if (m.i === vp.idx) { c.strokeStyle = '#fff'; c.lineWidth = 3 * u; c.strokeRect(x, top, sw, sw); }
+                var nm = (m.p.name || '?').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase() || '?';
+                text(c, nm, x + sw / 2, top + sw / 2, 19 * u, dead ? '#6b7280' : '#fff', 'center');
+                if (dead) text(c, '✕', x + sw / 2, top + sw / 2, 40 * u, 'rgba(248,113,113,0.8)', 'center');
+                else {
+                    box(c, x, top + sw + 3 * u, sw, 5 * u, 'rgba(0,0,0,0.6)');
+                    box(c, x, top + sw + 3 * u, sw * Math.max(0, m.r[6]) / 100, 5 * u, m.r[6] <= 25 ? '#f87171' : '#e5e7eb');
+                }
+            });
+        });
+
+        // ── unten links: Geld, Leben, Ruestung ──
+        var by = h - 46 * u;
+        var me = rows[vp.idx] || [];
+        var money = me[15], helmet = me[17];
+        var x0 = 30 * u;
+        if (money !== undefined) x0 += text(c, '$' + money, x0, by, 40 * u, '#87c288') + 50 * u;
+        icon(c, 'hud_health_cross', x0, by - 18 * u, 36 * u);
+        x0 += 46 * u;
+        x0 += text(c, String(vp.hp), x0, by, 50 * u, vp.hp <= 25 ? '#f87171' : '#fff') + 40 * u;
+        icon(c, helmet ? 'hud_armor_helmet' : 'hud_armor', x0, by - 20 * u, 40 * u);
+        x0 += 50 * u;
+        text(c, String(vp.armor || 0), x0, by, 50 * u, '#fff');
+
+        // ── unten rechts: Munition ──
+        var rx = w - 30 * u;
+        if (vp.wkey && slotOf(vp.wkey) <= 2 && slotOf(vp.wkey) > 0) {
+            var mags = me[19];
+            if (mags !== undefined) {
+                var mw = text(c, String(mags), rx, by + 4 * u, 30 * u, '#cbd5e1', 'right');
+                icon(c, 'hud_ammo_reserve_magazine', rx - mw - 6 * u, by - 14 * u, 30 * u, 0.9, true);
+                rx -= mw + 46 * u;
+            }
+            text(c, String(vp.ammo ?? ''), rx, by, 56 * u, vp.ammo === 0 ? '#f87171' : '#fff', 'right');
+        }
+
+        // ── rechts: Waffenleiste (Slots 1-5), aktive Waffe hell ──
+        var inv = inventoryAt(d, vp.idx, t).slice();
+        if (vp.wkey && inv.indexOf(vp.wkey) < 0) inv.push(vp.wkey);
+        var slots = {};
+        inv.forEach(function (k) { var s = slotOf(k); if (s) (slots[s] = slots[s] || []).push(k); });
+        var yy = by - 90 * u;
+        [5, 4, 3, 2, 1].forEach(function (s) {
+            if (!slots[s]) return;
+            var x = w - 70 * u;
+            slots[s].forEach(function (k) {
+                var on = k === vp.wkey || (k === 'knife' && /^knife/.test(vp.wkey || ''));
+                var ih = (s === 1 ? 34 : (s === 4 ? 26 : 28)) * u;
+                var iw = icon(c, iconKey(k, vp.side), x, yy - ih / 2, ih, on ? 1 : 0.38, true);
+                x -= iw + 10 * u;
+            });
+            text(c, String(s), w - 36 * u, yy - 10 * u, 18 * u, '#cbd5e1', 'center', 600);
+            yy -= 48 * u;
+        });
+
+        // ── oben rechts: Killfeed der letzten 5 s ──
+        var feed = (d.kills || []).filter(function (k) { return k.tick <= t && t - k.tick < 320; }).slice(-5);
+        var ky = 52 * u, sideOf = {};   // unter den Knoepfen Steuerung/Vollbild
+        Object.keys(rows).forEach(function (i) { var r = rows[i]; sideOf[(players[i] || {}).steamid] = r[8]; });
+        var nameOf = {}; players.forEach(function (p) { nameOf[p.steamid] = p.name; });
+        var viewerSid = (players[vp.idx] || {}).steamid;
+        feed.forEach(function (k) {
+            var parts = [], wk = (k.weapon || '').replace(/^weapon_/, '');
+            var ik = iconKey(wk === 'knife' || /knife|bayonet/.test(wk) ? 'knife' : wk, sideOf[k.attacker]);
+            c.font = '700 ' + (20 * u) + 'px "Segoe UI", system-ui, sans-serif';
+            var aw = c.measureText(nameOf[k.attacker] || '?').width, vw = c.measureText(nameOf[k.victim] || '?').width;
+            var img = icons[ik], iw = img && img.naturalWidth ? 26 * u * img.naturalWidth / img.naturalHeight : 30 * u;
+            var extra = (k.headshot ? 30 * u : 0) + (k.penetrated ? 0 : 0);
+            var bw = aw + vw + iw + extra + 50 * u, bx = w - 16 * u - bw;
+            var mine = k.attacker === viewerSid || k.victim === viewerSid;
+            box(c, bx, ky, bw, 36 * u, mine ? 'rgba(10,10,10,0.75)' : 'rgba(0,0,0,0.45)');
+            if (mine) { c.strokeStyle = '#e11d48'; c.lineWidth = 2 * u; c.strokeRect(bx, ky, bw, 36 * u); }
+            var xx = bx + 12 * u;
+            xx += text(c, nameOf[k.attacker] || '?', xx, ky + 18 * u, 20 * u, sideOf[k.attacker] === 2 ? T : CT) + 12 * u;
+            xx += icon(c, ik, xx, ky + 5 * u, 26 * u) + 8 * u;
+            if (k.headshot) xx += icon(c, 'hud_icon_headshot', xx, ky + 6 * u, 24 * u) + 8 * u;
+            text(c, nameOf[k.victim] || '?', xx, ky + 18 * u, 20 * u, sideOf[k.victim] === 2 ? T : CT);
+            ky += 42 * u;
+        });
+    }
+
+    window.kmHud = { draw: draw, loadIcons: loadIcons };
+})();
+</script>

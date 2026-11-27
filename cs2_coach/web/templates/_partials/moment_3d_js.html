@@ -334,7 +334,7 @@ function draw() {
             pos.needsUpdate = true;
             fig.ray.visible = i !== viewer;
         }
-        if (i === viewer) view = { eye: _eye.clone(), yaw: p.yaw, pitch: p.pitch, p };
+        if (i === viewer) { p.idx = i; view = { eye: _eye.clone(), yaw: p.yaw, pitch: p.pitch, p }; }
     }
     if (view) {
         camera.position.copy(view.eye);

@@ -99,6 +99,8 @@ class Figure {
             this.root.add(conv);
             this.bones = {};
             body.traverse(o => { if (['wpn', 'spine_1', 'spine_2', 'neck_0', 'head_0'].includes(o.name)) this.bones[o.name] = o; });
+            this.rest = {};
+            ['spine_1', 'spine_2', 'neck_0'].forEach(n => { if (this.bones[n]) this.rest[n] = this.bones[n].quaternion.clone(); });
             this.mixer = new THREE.AnimationMixer(body);
             this.actions = {};
             this.ok = true;
@@ -138,21 +140,40 @@ class Figure {
         if (!this.ok) return;
         this.root.position.set(p.x, p.y, p.z);
         this.root.rotation.set(0, 0, p.yaw * Math.PI / 180);
-        const speed = Math.hypot(vel[0], vel[1]);
-        let move;
-        if (speed < 30) move = p.duck ? 'idle_crouch' : 'idle';
-        else {
-            const rel = ((Math.atan2(vel[1], vel[0]) * 180 / Math.PI - p.yaw + 540) % 360) - 180;
-            const dir = Math.abs(rel) < 45 ? 'n' : (Math.abs(rel) > 135 ? 's' : (rel > 0 ? 'w' : 'e'));
-            move = (p.duck ? 'crouch_' : 'run_') + dir;
-        }
-        const name = wclass(p.wkey) + '_' + move;
-        const act = this.actions[name];
-        if (act === undefined) { this.action(name); }
-        if (act) {
-            if (this.cur !== act) { if (this.cur) this.cur.stop(); act.play(); this.cur = act; }
-            const rate = speed < 30 ? 1 : Math.min(Math.max(speed / (p.duck ? 80 : 220), 0.4), 1.6);
-            act.time = ((t / 64) * rate) % act.getClip().duration;
+        // Tempo glaetten: die 32-Hz-Stuetzstellen flackern, harte Schwellen liessen die Figur springen
+        const jump = this.lastT === undefined || Math.abs(t - this.lastT) > 16;
+        if (jump || !this.vel) this.vel = [vel[0], vel[1]];
+        else { this.vel[0] += (vel[0] - this.vel[0]) * 0.25; this.vel[1] += (vel[1] - this.vel[1]) * 0.25; }
+        const vx = this.vel[0], vy = this.vel[1], speed = Math.hypot(vx, vy);
+        // Laufrichtung relativ zum Blick: vorne/hinten/links/rechts als Anteile (wie ein Blendspace im Spiel)
+        const rel = Math.atan2(vy, vx) - p.yaw * Math.PI / 180;
+        const fw = Math.cos(rel), lf = Math.sin(rel);
+        const moving = Math.min(1, Math.max(0, (speed - 15) / 60));
+        const dirs = { n: Math.max(0, fw), s: Math.max(0, -fw), w: Math.max(0, lf), e: Math.max(0, -lf) };
+        const sum = dirs.n + dirs.s + dirs.w + dirs.e || 1;
+        const cls = wclass(p.wkey), pre = cls + '_';
+        const want = {};
+        want[pre + (p.duck ? 'idle_crouch' : 'idle')] = 1 - moving;
+        for (const d in dirs) want[pre + (p.duck ? 'crouch_' : 'run_') + d] = moving * dirs[d] / sum;
+        // Beinphase laeuft fortlaufend weiter (Tempowechsel ohne Sprung), beim Springen im Zeitstrahl neu
+        // Die Clips laufen bei Rate 1 mit ~64 (stehend) bzw. ~60 (geduckt) Einheiten/s - gemessen am
+        // Fuss mit Bodenkontakt. Schneller abspielen, sonst rutschen die Fuesse ueber den Boden.
+        const rate = Math.min(Math.max(speed / (p.duck ? 60 : 64), 0.5), 4.2);
+        this.phase = jump ? t / 64 : (this.phase || 0) + (t - this.lastT) / 64 * (moving > 0 ? rate : 1);
+        this.lastT = t;
+        // Grundhaltung der Knochen, die wir unten neigen - sonst summiert sich die Neigung Bild fuer Bild
+        for (const n in this.rest) this.bones[n].quaternion.copy(this.rest[n]);
+        let ready = true;
+        for (const name in want) if (this.actions[name] === undefined) { this.action(name); ready = false; }
+        if (ready) {
+            for (const name in this.actions) {
+                const act = this.actions[name];
+                if (!act) continue;
+                const w = want[name] || 0;
+                if (!act.isRunning()) act.play();
+                act.setEffectiveWeight(w);
+                if (w > 0) act.time = this.phase % act.getClip().duration;
+            }
             this.mixer.update(0);
         }
         this.setWeapon(p.wkey);

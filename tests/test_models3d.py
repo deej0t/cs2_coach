@@ -42,3 +42,15 @@ def test_shrink_drop_meshes_keeps_animation(tmp_path):
     jl = struct.unpack("<I", out[12:16])[0]
     d = json.loads(out[20:20 + jl])
     assert "meshes" not in d and "mesh" not in d["nodes"][0] and d["animations"][0]["name"] == "idle"
+
+
+def test_collect_icons_names_equipment_and_hud(tmp_path):
+    eq = tmp_path / models3d.ICON_DIR
+    eq.mkdir(parents=True)
+    (eq / "ak47.svg").write_text("<svg/>", encoding="utf-8")
+    hud = tmp_path / "panorama/images/hud/deathnotice"
+    hud.mkdir(parents=True)
+    (hud / "icon_headshot.svg").write_text("<svg hs/>", encoding="utf-8")
+    icons = models3d.collect_icons(tmp_path)
+    assert icons == {"ak47": "<svg/>", "hud_icon_headshot": "<svg hs/>"}
+    assert models3d.ICON_DIR in models3d.export_list()

@@ -92,10 +92,29 @@ def weapon_class(key: str | None) -> str:
     return "rifle"
 
 
+# HUD-Symbole aus dem Spiel (Vektorgrafik): alle Waffen/Ausruestung plus diese HUD-Teile
+ICON_DIR = "panorama/images/icons/equipment/"
+HUD_ICONS = ("health_cross", "armor", "armor_helmet", "ammo_reserve_magazine", "deathnotice/icon_headshot",
+             "deathnotice/blind_kill", "deathnotice/smoke_kill", "deathnotice/noscope", "deathnotice/inairkill")
+
+
 def export_list() -> list[str]:
-    """Alle VPK-Pfade (mit _c), die der Export braucht - fuer das Unraid-Skript."""
+    """Alle VPK-Pfade (mit _c, Ordner als Praefix), die der Export braucht - fuer das Unraid-Skript."""
     out = [p + ".vmdl_c" for p in AGENTS.values()] + [p + ".vmdl_c" for p in WEAPONS.values()]
+    out += [ICON_DIR] + [f"panorama/images/hud/{n}.vsvg_c" for n in HUD_ICONS]
     return out + [p + "_c" for p in clip_paths().values()]
+
+
+def collect_icons(src: Path) -> dict[str, str]:
+    """SVG-Texte: Ausruestung unter ihrem Namen (``ak47``), HUD-Teile als ``hud_<name>``."""
+    icons = {}
+    for f in sorted((Path(src) / ICON_DIR).glob("*.svg")):
+        icons[f.stem] = f.read_text(encoding="utf-8", errors="replace")
+    for n in HUD_ICONS:
+        f = Path(src) / "panorama/images/hud" / f"{n}.svg"
+        if f.exists():
+            icons["hud_" + n.split("/")[-1]] = f.read_text(encoding="utf-8", errors="replace")
+    return icons
 
 
 def _read_glb(path: Path):
@@ -185,6 +204,10 @@ def convert_all(src: Path, dst: Path, tex_size: int = 512) -> dict:
         one("weapon", key, path, )
     for key, path in clip_paths().items():
         one("clip", key, path.removesuffix(".vnmclip"), drop_meshes=True)
+    icons = collect_icons(src)
+    if icons:
+        (out_dir / "icons.json").write_text(json.dumps(icons, separators=(",", ":")), encoding="utf-8")
+        manifest["icons"] = "icons.json"
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     return manifest
 

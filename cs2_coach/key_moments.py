@@ -372,14 +372,25 @@ VIEW3D_STEP = 2             # jeder 2. Tick = 32 Hz fuer die 3D-Ansicht
 
 
 VIEW3D_FIELDS = ["X", "Y", "Z", "yaw", "pitch", "health", "ducking", "team_num", "active_weapon_name",
-                 "active_weapon_ammo", "armor_value", "flash_duration", "is_scoped"]
+                 "active_weapon_ammo", "armor_value", "flash_duration", "is_scoped", "balance", "inventory",
+                 "has_helmet", "has_defuser", "total_ammo_left", "game_time", "round_start_time",
+                 "team_rounds_total", "is_bomb_planted"]
 
 
-def scan_3d(demo_path: str, players: list[dict], ticks: list[int], parser=None) -> dict:
+ROUND_SECONDS = 115         # CS2-Rundenzeit nach der Freezetime
+HUD_STEP = 8                # Uhr/Spielstand: jeder 8. Tick reicht (8 Hz)
+
+
+def scan_3d(demo_path: str, players: list[dict], ticks: list[int], parser=None, hud: dict | None = None) -> dict:
     """Je Clip-Tick eine Zeile je Spieler, in Spieleinheiten:
 
-    [Index, x, y, z, yaw, pitch, hp, geduckt, Seite (2=T, 3=CT), Waffen-Schluessel
-    (models3d.WEAPONS), Waffenname, Munition im Magazin, Ruestung, geblendet, Zielfernrohr].
+    [0 Index, 1-3 x/y/z, 4 yaw, 5 pitch, 6 hp, 7 geduckt, 8 Seite (2=T, 3=CT), 9 Waffen-Schluessel
+    (models3d.WEAPONS), 10 Waffenname, 11 Munition im Magazin, 12 Ruestung, 13 geblendet, 14 Zielfernrohr,
+    15 Geld, 16 Inventar (Liste; None = unveraendert seit der letzten Zeile dieses Spielers),
+    17 Helm, 18 Defuse-Kit, 19 Reservemagazine].
+
+    ``hud`` (optional) wird gefuellt mit ``clock``: [[Tick, Rundenzeit uebrig in s, Siege CT, Siege T,
+    Bombe gelegt], ...] im HUD_STEP-Raster.
 
     Spieler-Index wie im Replay (``players``), damit 2D und 3D dieselben
     Personen meinen. Nur fuer die Clip-Ticks - eine ganze Runde waere
@@ -394,17 +405,39 @@ def scan_3d(demo_path: str, players: list[dict], ticks: list[int], parser=None) 
     fields = VIEW3D_FIELDS
     df = (parser or DemoParser(demo_path)).parse_ticks(fields, ticks=ticks)
     out: dict[int, list] = {}
-    cols = [df[c] if c in df.columns else [None] * len(df) for c in ["tick", "steamid"] + fields]
-    for t, sid, x, y, z, yaw, pitch, hp, duck, side, wname, ammo, armor, flash, scoped in zip(*cols):
-        i = idx.get(str(sid))
-        vals = (x, y, z)
-        if i is None or any(v is None or not math.isfinite(float(v)) for v in vals):
+    clock: dict[int, list] = {}
+    last_inv: dict[int, tuple] = {}
+    names = ["tick", "steamid"] + fields
+    cols = [df[c] if c in df.columns else [None] * len(df) for c in names]
+    for row in zip(*cols):
+        r = dict(zip(names, row))
+        t = int(r["tick"])
+        side = _int(r["team_num"])
+        if hud is not None and t % HUD_STEP == 0 and side in (2, 3):
+            c = clock.setdefault(t, [t, None, None, None, False])
+            if c[1] is None and _float(r["game_time"]) > 0:
+                c[1] = round(max(0.0, ROUND_SECONDS - (_float(r["game_time"]) - _float(r["round_start_time"]))), 1)
+            c[2 if side == 3 else 3] = _int(r["team_rounds_total"])
+            c[4] = c[4] or bool(r["is_bomb_planted"])
+        i = idx.get(str(r["steamid"]))
+        x, y, z = r["X"], r["Y"], r["Z"]
+        if i is None or any(v is None or not math.isfinite(float(v)) for v in (x, y, z)):
             continue
-        wname = wname if isinstance(wname, str) else ""
-        out.setdefault(int(t), []).append([i, round(float(x), 1), round(float(y), 1), round(float(z), 1),
-                                           round(_float(yaw), 1), round(_float(pitch), 1), int(hp or 0), bool(duck),
-                                           _int(side), weapon_key(wname) or "", wname, _int(ammo), _int(armor),
-                                           bool(_float(flash) > 0), bool(scoped)])
+        wname = r["active_weapon_name"] if isinstance(r["active_weapon_name"], str) else ""
+        inv = r["inventory"]
+        # Inventar als Modell-/Symbolschluessel (models3d), unbekannte Namen klein geschrieben
+        inv = tuple(weapon_key(w) or str(w).lower() for w in inv) if inv is not None and not isinstance(inv, float) else ()
+        inv_out = list(inv) if last_inv.get(i) != inv else None
+        last_inv[i] = inv
+        out.setdefault(t, []).append([i, round(float(x), 1), round(float(y), 1), round(float(z), 1),
+                                      round(_float(r["yaw"]), 1), round(_float(r["pitch"]), 1), int(r["health"] or 0),
+                                      bool(r["ducking"]), side, weapon_key(wname) or "", wname,
+                                      _int(r["active_weapon_ammo"]), _int(r["armor_value"]),
+                                      bool(_float(r["flash_duration"]) > 0), bool(r["is_scoped"]),
+                                      _int(r["balance"]), inv_out, bool(r["has_helmet"]), bool(r["has_defuser"]),
+                                      _int(r["total_ammo_left"])])
+    if hud is not None:
+        hud["clock"] = [clock[t] for t in sorted(clock)]
     return out
 
 

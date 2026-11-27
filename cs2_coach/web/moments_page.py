@@ -45,7 +45,7 @@ def _me(cfg: dict, data: dict) -> str:
 
 
 # ── Szenen bauen, cachen, vorberechnen ─────────────────────────────────────
-CLIP_VERSION = 3            # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
+CLIP_VERSION = 4            # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
 CACHE_DIR = ".moments_cache"
 _warming: set[str] = set()
 _warm_lock = threading.Lock()
@@ -100,7 +100,30 @@ def build_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: i
         return replay, 200
     # 32 Hz statt der 8 Hz der 2D-Frames - der Browser interpoliert dazwischen
     try:
-        replay["view3d"] = key_moments.scan_3d(str(demo), replay["players"], clip_ticks, parser=p)
+        hud: dict = {}
+        replay["view3d"] = key_moments.scan_3d(str(demo), replay["players"], clip_ticks, parser=p, hud=hud)
+        # Bombe dieser Runde: Zeitpunkt der Legung (Bombentimer 40 s) aus den Events
+        try:
+            bp = p.parse_event("bomb_planted")
+            rs = replay.get("start_tick", t0)
+            hud["bomb_tick"] = next((int(x) for x in sorted(bp["tick"]) if rs <= int(x) <= t1), None) if len(bp) else None
+        except Exception:  # noqa: BLE001 - ohne Bombentimer
+            hud["bomb_tick"] = None
+        replay["hud"] = hud
+        # Killfeed: Kopfschuss/Durchschuss/geblendet je Kill (das Replay kennt nur Taeter, Opfer, Waffe)
+        try:
+            pdf = p.parse_event("player_death")
+            flags = {(int(r["tick"]), str(r["user_steamid"])): r for r in pdf.to_dict("records")}
+            for k in replay.get("kills") or []:
+                r = flags.get((int(k["tick"]), str(k["victim"])))
+                if r:
+                    k["headshot"] = bool(r.get("headshot"))
+                    k["penetrated"] = bool(r.get("penetrated"))
+                    k["blind"] = bool(r.get("attackerblind"))
+                    k["smoke"] = bool(r.get("thrusmoke"))
+                    k["noscope"] = bool(r.get("noscope"))
+        except Exception:  # noqa: BLE001 - Killfeed ohne Zusatzsymbole
+            pass
     except Exception as e:  # noqa: BLE001 - 2D bleibt
         replay["view3d_error"] = str(e)
     if mo.get("killer"):
@@ -267,12 +290,12 @@ def create_blueprint(load_config, config_path) -> Blueprint:
     @bp.route("/api/momente/models/<name>")
     def model(name):
         """Spielermodelle, Waffen, Animationen (models3d.py) und deren manifest.json."""
-        if not re.fullmatch(r"[a-z0-9_]+\.glb\.gz|manifest\.json", name):
+        if not re.fullmatch(r"[a-z0-9_]+\.glb\.gz|manifest\.json|icons\.json", name):
             return jsonify({"error": "unbekannte Datei"}), 404
         path = models3d.models_dir(load_config(), Path(config_path())) / name
         if not path.exists():
             return jsonify({"error": "Modelle noch nicht exportiert"}), 404
-        if name == "manifest.json":
+        if name.endswith(".json"):
             return send_file(path, mimetype="application/json", max_age=3600)
         resp = send_file(path, mimetype="model/gltf-binary", max_age=7 * 86400)
         resp.headers["Content-Encoding"] = "gzip"
