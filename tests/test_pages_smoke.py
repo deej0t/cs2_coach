@@ -158,3 +158,9 @@ def test_cached_parser_reads_events_once(monkeypatch, tmp_path):
     p.preload_ticks(["X", "Y"], [1, 2, 3])
     df = p.parse_ticks(["X"], ticks=[2, 3])
     assert list(df["tick"]) == [2, 3] and "Y" not in df.columns and calls["ticks"] == 1
+
+
+def test_aim_series_renders(client):
+    """Serie aus dem Aim-Profil: rendert mit und ohne Profil/Faelle, auch fuer unbekannte Werte."""
+    for key in ("moving", "placement", "gibtsnicht"):
+        assert client.get(f"/aim-profil/serie/{key}?waffen=rifle").status_code < 500

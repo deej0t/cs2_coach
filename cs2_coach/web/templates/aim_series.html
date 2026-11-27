@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}CS2 Coach — {{ _('Aim-Serie') }}{% endblock %}
+{% block container_class %}container-wide{% endblock %}
+{% block content %}
+<a href="{{ url_for('aim_profile_page.page', waffen=group) }}" style="font-size:12px;">← {{ _('Aim-Profil') }}</a>
+<h2 style="margin:4px 0;">{{ _('Serie') }}: {{ row.title if row else _('unbekannter Wert') }} <span style="font-size:14px;color:var(--color-neutral-500);">– {{ group_label }}</span></h2>
+<p style="color:var(--color-neutral-500);font-size:13px;margin-top:0;">
+    {{ _('Deine deutlichsten Fälle nacheinander, über alle Matches – erst Muster sehen, dann gezielt üben. Jede Szene läuft bis zum Ende, dann kommt automatisch die nächste.') }}
+    {% if row %}{{ _('Du') }} {{ row.me }}{{ row.unit }}, {{ _('Lobby') }} {{ row.lobby }}{{ row.unit }}.{% endif %}
+</p>
+{% if items %}
+{% set km_series = items %}
+{% set km_file = '' %}
+{% include '_partials/moment_theater.html' %}
+{% else %}
+<div class="card elev-sm"><p style="margin:0;">{{ _('Zu diesem Wert gibt es (noch) keine Fälle mit Export – das Profil wird gerade neu gerechnet oder die Demos haben keinen Export.') }}</p></div>
+{% endif %}
+{% endblock %}

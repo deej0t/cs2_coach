@@ -103,12 +103,13 @@
                 <span style="color:var(--color-neutral-500);">d={{ r.vs_lost.effect }} [{{ r.vs_lost.ci_low }} … {{ r.vs_lost.ci_high }}]</span>
                 {% else %}<span style="color:var(--color-neutral-600);">{{ _('zu wenige') }}</span>{% endif %}
             </td>
-            <td>{% if g.examples[r.key] %}<button class="btn btn-ghost" style="font-size:11px;padding:2px 8px;" onclick="var e=document.getElementById('ex-{{ r.key }}');e.style.display=e.style.display==='none'?'':'none';">{{ _('Beispiele') }}</button>{% endif %}</td>
+            <td style="white-space:nowrap;">{% if g.examples[r.key] %}<a class="btn btn-ghost" style="font-size:11px;padding:2px 8px;" href="{{ url_for('aim_profile_page.series', key=r.key, waffen=group) }}">▶ {{ _('Serie') }}</a>
+                <button class="btn btn-ghost" style="font-size:11px;padding:2px 8px;" onclick="var e=document.getElementById('ex-{{ r.key }}');e.style.display=e.style.display==='none'?'':'none';">{{ _('Einzeln') }}</button>{% endif %}</td>
         </tr>
         {% if g.examples[r.key] %}
         <tr id="ex-{{ r.key }}" style="display:none;"><td colspan="8" style="background:var(--color-bg);">
             <div style="display:flex;flex-wrap:wrap;gap:6px;">
-            {% for d in g.examples[r.key] %}
+            {% for d in g.examples[r.key][:8] %}
             {% set f = data.exports.get(d.demo) %}
             {% set label = ((f[:10] ~ ' ' ~ f[11:].split('_')[0]) if f else d.demo[-12:]) ~ ' · ' ~ _('Runde') ~ ' ' ~ d.round ~ ' · ' ~ (_('gewonnen') if d.won else _('verloren'))
                            ~ ((' · ' ~ (d[r.key]|round(1)) ~ r.unit) if r.unit != '%' else '') %}

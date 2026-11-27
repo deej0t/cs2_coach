@@ -52,7 +52,8 @@
     #km-3d-wrap:fullscreen .kt-stage { aspect-ratio: auto; flex: 1 1 auto; }
 </style>
 
-<div class="kt" id="kt" data-file="{{ km_file }}">
+<div class="kt" id="kt" data-file="{{ km_file or '' }}">
+{% if km_series %}<script type="application/json" id="kt-series">{{ km_series|tojson }}</script>{% endif %}
     <div class="kt-chips" id="kt-chips"><span style="font-size:12px;color:var(--color-neutral-500);">{{ _('Momente werden bewertet...') }}</span></div>
     <div class="kt-main">
         <div class="kt-player" id="km-3d-wrap">
@@ -91,6 +92,7 @@
                     <option value="0.5" selected>0.5×</option><option value="1">1×</option>
                 </select>
                 <span id="km-time" style="font-family:ui-monospace,monospace;"></span>
+                {% if km_series %}<label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="kt-auto" checked> {{ _('automatisch weiter') }}</label>{% endif %}
                 <span id="km-title" style="margin-left:auto;font-weight:600;"></span>
             </div>
             <canvas id="kt-tl"></canvas>
@@ -117,7 +119,9 @@ var km = { data: null, tick: 0, playing: false, hold: 0, held: false, last: 0, d
 window.km = km;
 var KM_TONE = { bad: '#f87171', good: '#4ade80', enemy: '#f87171', info: '#e5e7eb' };
 var KT_FILE = document.getElementById('kt').dataset.file;
-var KT_CLIP = '{{ url_for("moments_page.clip", filename=km_file, round_num=1, tick=0) }}';
+// Szene-URL je Export (Serien mischen Momente aus mehreren Matches)
+var KT_CLIP_TMPL = '{{ url_for("moments_page.clip", filename="XFILEX", round_num=1, tick=0) }}';
+var KT_SERIES = (function () { var e = document.getElementById('kt-series'); return e ? JSON.parse(e.textContent) : null; })();
 
 function kmFrameAt(t) {
     var fr = km.data.frames, lo = 0, hi = fr.length - 1;
@@ -168,7 +172,7 @@ function kmLoop(ts) {
             var nt = km.tick + dt * 64 * speed * slow;
             if (!km.held && nt >= r.focus) { nt = r.focus; km.held = true; km.hold = 1.5; }
             km.tick = nt;
-            if (km.tick >= r.end) { km.tick = r.end; kmStop(); }
+            if (km.tick >= r.end) { km.tick = r.end; kmStop(); ktNext(); }
         }
         km.dirty = true;
     }
@@ -354,7 +358,9 @@ function kmLoad(el) {
     var title = document.getElementById('km-title');
     title.textContent = 'Runde ' + el.dataset.round + ' — wird geladen...';
     document.getElementById('km-notes').innerHTML = '';
-    var url = KT_CLIP.replace(/\/1\/0$/, '/' + el.dataset.round + '/' + el.dataset.tick) + '?kind=' + el.dataset.kind;
+    var file = el.dataset.file || KT_FILE;
+    var url = KT_CLIP_TMPL.replace('XFILEX', file).replace(/\/1\/0$/, '/' + el.dataset.round + '/' + el.dataset.tick) + '?kind=' + el.dataset.kind;
+    km.chip = el;
     km.kind = el.dataset.kind;
     km.url = url;
     // gleich mit 3D-Daten und Aim-Spur: die Ereignisliste braucht beides
@@ -363,7 +369,7 @@ function kmLoad(el) {
             if (!res.ok) { title.textContent = res.j.error || 'Fehler'; return; }
             km.data = res.j;
             // Kartendateien laut frischer Momente-Liste (die Szene kann aus dem Cache von vorher sein)
-            if (ktMapInfo.map === km.data.map) { km.data.has_render = ktMapInfo.parts; km.data.has_geo = true; }
+            if (ktMapInfo[km.data.map] !== undefined) { km.data.has_render = ktMapInfo[km.data.map]; km.data.has_geo = true; }
             title.textContent = 'Runde ' + el.dataset.round + (km.kind === 'kill' ? ' · Kill' : ' · Tod');
             var ul = document.getElementById('km-notes');
             (km.data.moment.notes || []).forEach(function (n) {
@@ -380,7 +386,7 @@ function kmLoad(el) {
         .catch(function (e) { title.textContent = 'Fehler: ' + e.message; });
 }
 
-var ktMapInfo = {};
+var ktMapInfo = {};   // Map -> Teile der texturierten Map (frisch vom Server)
 function ktDeepLink() {
     var h = location.hash || '', i = h.indexOf('?');
     if (i < 0) return null;
@@ -388,9 +394,39 @@ function ktDeepLink() {
     if (!q.get('r') || !q.get('t')) return null;
     return { r: q.get('r'), t: q.get('t'), k: q.get('k') === 'kill' ? 'kill' : 'death' };
 }
-function ktChips() {
+// Serie (Aim-Profil): Momente aus mehreren Matches nacheinander, automatisch weiter
+function ktSeries() {
     var box = document.getElementById('kt-chips');
-    fetch('{{ url_for("moments_page.moment_list", filename=km_file) }}').then(function (r) { return r.json(); }).then(function (j) {
+    box.innerHTML = '';
+    KT_SERIES.forEach(function (m, i) {
+        var d = document.createElement('div');
+        d.className = 'kt-chip';
+        d.dataset.kind = m.kind; d.dataset.round = m.round; d.dataset.tick = m.tick; d.dataset.file = m.file;
+        d.innerHTML = '<b style="color:' + (m.kind === 'kill' ? '#4ade80' : '#f87171') + '">' + (i + 1) + '/' + KT_SERIES.length
+            + '</b> ' + (m.kind === 'kill' ? 'gewonnen' : 'verloren') + '<span></span>';
+        d.lastChild.textContent = m.label;
+        d.onclick = function () { kmLoad(d); };
+        box.appendChild(d);
+        ktMapInfo[m.map] = m.parts || 0;
+    });
+    var maps = {};
+    KT_SERIES.forEach(function (m) { maps[m.map] = m.parts || 0; });
+    Object.keys(maps).slice(0, 2).forEach(function (mk) { if (window.km3d) window.km3d.prefetch(mk, maps[mk]); });
+    if (window.kmModels) window.kmModels.prefetch();
+    var first = box.querySelector('.kt-chip');
+    if (first) kmLoad(first);
+}
+function ktNext() {
+    // Serie: nach dem Ende einer Szene die naechste laden
+    if (!KT_SERIES || !km.chip || !document.getElementById('kt-auto').checked) return;
+    var nx = km.chip.nextElementSibling;
+    if (nx) { nx.scrollIntoView({ block: 'nearest', inline: 'center' }); setTimeout(function () { kmLoad(nx); }, 1200); }
+}
+
+function ktChips() {
+    if (KT_SERIES) { ktSeries(); return; }
+    var box = document.getElementById('kt-chips');
+    fetch('{{ url_for("moments_page.moment_list", filename=km_file) if km_file else "" }}').then(function (r) { return r.json(); }).then(function (j) {
         box.innerHTML = '';
         if (!j.items || !j.items.length) {
             box.innerHTML = '<span style="font-size:12px;color:var(--color-neutral-500);">' + (j.error || 'Keine bewerteten Momente für dieses Match.') + '</span>';
@@ -408,7 +444,7 @@ function ktChips() {
             box.appendChild(d);
         });
         // Map und Modelle schon laden, waehrend der Server die erste Szene rechnet
-        ktMapInfo = { map: j.map, parts: j.render_parts || 0 };
+        ktMapInfo[j.map] = j.render_parts || 0;
         if (j.map && window.km3d) window.km3d.prefetch(j.map, j.render_parts || 0);
         if (window.kmModels) window.kmModels.prefetch();
         // Direktlink (z. B. aus dem Aim-Profil): #momente?r=<Runde>&t=<Tick>&k=kill|death

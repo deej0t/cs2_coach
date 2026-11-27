@@ -401,6 +401,7 @@ def scan_3d(demo_path: str, players: list[dict], ticks: list[int], parser=None, 
     from .models3d import weapon_key
     if not ticks:
         return {}
+    ticks = sorted(ticks)
     idx = {p["steamid"]: i for i, p in enumerate(players)}
     fields = VIEW3D_FIELDS
     df = (parser or DemoParser(demo_path)).parse_ticks(fields, ticks=ticks)
@@ -413,7 +414,8 @@ def scan_3d(demo_path: str, players: list[dict], ticks: list[int], parser=None, 
         r = dict(zip(names, row))
         t = int(r["tick"])
         side = _int(r["team_num"])
-        if hud is not None and t % HUD_STEP == 0 and side in (2, 3):
+        # Raster ab dem ersten Clip-Tick: der kann ungerade sein, "t % 8" traf dann nie
+        if hud is not None and (t - ticks[0]) % HUD_STEP == 0 and side in (2, 3):
             c = clock.setdefault(t, [t, None, None, None, False])
             if c[1] is None and _float(r["game_time"]) > 0:
                 c[1] = round(max(0.0, ROUND_SECONDS - (_float(r["game_time"]) - _float(r["round_start_time"]))), 1)

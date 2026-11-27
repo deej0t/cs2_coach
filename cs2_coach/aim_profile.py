@@ -46,6 +46,7 @@ CAP_DEG, CAP_MS = 90.0, 2000.0      # Ausreisser kappen (Flicks von hinten, sehr
 CACHE_DIR = "aim_cache"
 CACHE_KEY = "aim-v1"
 RESULT_FILE = ".aim_profile.json"
+SERIES_MAX = 30                     # so viele Faelle je Wert fuer die Serie im Player
 FIELDS = aim_trace.FIELDS + ["approximate_spotted_by", "team_num"]
 
 SNIPERS = {"awp", "ssg08", "g3sg1", "scar20"}
@@ -320,7 +321,7 @@ def run(cfg: dict, config_path: Path, max_new: int = 500) -> dict:
     for g in GROUPS:
         rows = profile(duels, me, g)
         res["groups"][g] = {"rows": [asdict(r) for r in rows],
-                            "examples": {r.key: examples(duels, me, r.key, g) for r in rows}}
+                            "examples": {r.key: examples(duels, me, r.key, g, top=SERIES_MAX) for r in rows}}
     res["exports"] = _export_files(cfg, {d["demo"] for g in res["groups"].values()
                                          for ex in g["examples"].values() for d in ex})
     (Path(config_path).parent / RESULT_FILE).write_text(json.dumps(res), encoding="utf-8")

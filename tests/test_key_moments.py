@@ -61,3 +61,21 @@ def test_best_kills_matches_by_order_and_skips_mismatched_rounds():
     kills = {("m", 3): [d(10, 5.0), d(20, 12.0)], ("m", 4): [d(5, 50.0), d(6, 1.0)]}
     out = best_kills(data, kills)
     assert [(m["opponent"], m["gain"], m["side"], m["before"]) for m in out] == [("B", 12.0, "CT", 40.0), ("A", 5.0, "CT", 40.0)]
+
+
+def test_scan_3d_clock_on_odd_start_tick():
+    """Uhr/Spielstand im 8-Tick-Raster ab dem ersten Clip-Tick - auch wenn der ungerade ist."""
+    import pandas as pd
+    from cs2_coach import key_moments as km
+
+    class P:
+        def parse_ticks(self, fields, ticks=None):
+            return pd.DataFrame([{"tick": t, "steamid": "1", **{f: 0 for f in fields},
+                                  "X": 1.0, "Y": 2.0, "Z": 3.0, "team_num": 3, "game_time": 100.0,
+                                  "round_start_time": 40.0, "team_rounds_total": 4, "inventory": ["AK-47"]}
+                                 for t in ticks])
+    hud = {}
+    out = km.scan_3d("", [{"steamid": "1"}], list(range(101, 140, 2)), parser=P(), hud=hud)
+    assert hud["clock"] and hud["clock"][0][:4] == [101, 55.0, 4, None]
+    rows = [out[t][0] for t in sorted(out)]
+    assert rows[0][16] == ["ak47"] and rows[1][16] is None     # Inventar nur bei Aenderung
