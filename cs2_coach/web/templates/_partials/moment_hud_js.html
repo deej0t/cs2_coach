@@ -92,7 +92,14 @@
         if (!vp || !d || !d.view3d) return;
         loadIcons();
         var u = h / 1080;                       // HUD skaliert mit der Bildhoehe (Referenz 1080p)
-        if (vp.flashed) { c.fillStyle = 'rgba(255,255,255,0.78)'; c.fillRect(0, 0, w, h); }
+        // Blendung aus player_blind: voll weiss, im letzten Drittel (max. 1,5 s) ausblenden
+        var fl = 0;
+        ((d.hud && d.hud.blinds) || []).forEach(function (b) {
+            if (b[0] !== vp.idx || t < b[1] || t > b[2]) return;
+            var left = (b[2] - t) / 64, fade = Math.min(1.5, (b[2] - b[1]) / 64 / 3);
+            fl = Math.max(fl, Math.min(1, left / Math.max(fade, 0.01)));
+        });
+        if (fl > 0) { c.fillStyle = 'rgba(255,255,255,' + (0.96 * fl).toFixed(3) + ')'; c.fillRect(0, 0, w, h); }
         if (vp.scoped) {
             var r = Math.min(w, h) * 0.46;
             c.save(); c.fillStyle = '#000'; c.beginPath(); c.rect(0, 0, w, h); c.arc(w / 2, h / 2, r, 0, 7, true); c.fill('evenodd');

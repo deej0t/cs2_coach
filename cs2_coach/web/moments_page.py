@@ -45,7 +45,7 @@ def _me(cfg: dict, data: dict) -> str:
 
 
 # ── Szenen bauen, cachen, vorberechnen ─────────────────────────────────────
-CLIP_VERSION = 6            # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
+CLIP_VERSION = 7            # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
 CACHE_DIR = ".moments_cache"
 _warming: set[str] = set()
 _warm_lock = threading.Lock()
@@ -109,6 +109,18 @@ def build_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: i
             hud["bomb_tick"] = next((int(x) for x in sorted(bp["tick"]) if rs <= int(x) <= t1), None) if len(bp) else None
         except Exception:  # noqa: BLE001 - ohne Bombentimer
             hud["bomb_tick"] = None
+        # Geblendet: aus player_blind (Dauer je Spieler). Das Tick-Feld flash_duration bleibt nach
+        # dem Abklingen stehen - das Bild war damit noch Sekunden spaeter weiss.
+        try:
+            bl = p.parse_event("player_blind")
+            idx = {pl["steamid"]: i for i, pl in enumerate(replay["players"])}
+            hud["blinds"] = [[idx[str(r["user_steamid"])], int(r["tick"]),
+                              int(r["tick"]) + int(float(r["blind_duration"] or 0) * key_moments.TICKRATE)]
+                             for r in bl.to_dict("records")
+                             if str(r["user_steamid"]) in idx and int(r["tick"]) <= t1
+                             and int(r["tick"]) + float(r["blind_duration"] or 0) * key_moments.TICKRATE >= t0]                 if len(bl) else []
+        except Exception:  # noqa: BLE001 - ohne Blendung
+            hud["blinds"] = []
         replay["hud"] = hud
         # Killfeed: Kopfschuss/Durchschuss/geblendet je Kill (das Replay kennt nur Taeter, Opfer, Waffe)
         try:

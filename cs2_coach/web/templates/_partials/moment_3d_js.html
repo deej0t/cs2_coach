@@ -230,6 +230,24 @@ async function buildModels() {
     await Promise.all(jobs);
 }
 
+// Nachladen: die Munition derselben Waffe steigt in den naechsten 2,5 s (CS2-Nachladen 2-3 s).
+// Rueckgabe 0..1 = wie weit die Waffe gerade abgesenkt ist.
+function reloading(idx, p, t) {
+    if (!p || !p.wkey) return 0;
+    let up = null;
+    for (const tk of ticks3d) {
+        if (tk <= t) continue;
+        if (tk > t + 160) break;
+        const r = data.byTick[tk] && data.byTick[tk][idx];
+        if (!r || r[9] !== p.wkey) break;          // Wechsel: kein Nachladen
+        if (r[11] > p.ammo) { up = tk; break; }
+    }
+    if (up === null) return 0;
+    const left = (up - t) / 64;                    // Sekunden bis die Munition wieder da ist
+    // 0,3 s absenken, halten, die letzten 0,3 s wieder hoch
+    return Math.max(0, Math.min(1, left / 0.3, (2.5 - left) / 0.3));
+}
+
 function lastShotKick(t) {
     // Rueckstoss der Ego-Waffe: kurz nach jedem eigenen Schuss (aim_trace)
     const shots = (data.aim && data.aim.shots) || [];
@@ -365,8 +383,9 @@ function draw() {
         camera.position.copy(view.eye);
         camera.lookAt(view.eye.clone().add(dirFrom(view.yaw, view.pitch)));
         if (viewModel) {
-            viewModel.set(view.p.wkey, view.p.side);
-            viewModel.update(!view.p.scoped, mode === 'me' ? lastShotKick(tNow) : 0);
+            viewModel.set(view.p.wkey, view.p.side, tNow);
+            viewModel.update(!view.p.scoped, mode === 'me' ? lastShotKick(tNow) : 0,
+                             reloading(view.p.idx, view.p, tNow), tNow);
         }
         // Zielfernrohr: Sichtfeld wie im Spiel enger (erste Zoomstufe ~ 40° horizontal)
         const fov = view.p.scoped ? 25 : VFOV;

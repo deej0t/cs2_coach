@@ -246,19 +246,31 @@ class ViewModel {
         })().catch(() => null);
         return this.cache[id];
     }
-    set(key, side) {
+    set(key, side, t) {
         if (key === this.key) return;
+        // Wechsel: neue Waffe von unten hochziehen (nicht beim ersten Bild oder nach einem Sprung im Zeitstrahl)
+        this.drawAt = this.key !== undefined && t !== undefined ? t : null;
         this.key = key;
         this.group.clear();
         if (!wfile(key, side)) { if (!manifest) this.key = undefined; return; }   // Liste noch nicht da: naechstes Bild nochmal
         this.build(side, key).then(obj => { if (obj && this.key === key) { this.group.clear(); this.group.add(obj); } });
     }
-    update(visible, kick) {
+    update(visible, kick, reload, t) {
         this.visible = visible && !!this.key && this.group.children.length > 0;
         // Rueckstoss: kurz zurueck und hoch
         const k = Math.max(0, kick || 0);
-        const m = new THREE.Matrix4().makeTranslation(VM_SHIFT[0] - 2.5 * k, VM_SHIFT[1], VM_SHIFT[2] + 0.6 * k)
-            .multiply(new THREE.Matrix4().makeRotationY(-0.06 * k));
+        // Nachladen: Waffe nach unten und zur Seite gekippt; Ziehen: kommt in 0,4 s von unten
+        const rl = Math.max(0, reload || 0);
+        let draw = 0;
+        if (this.drawAt != null && t !== undefined) {
+            const age = (t - this.drawAt) / 64;
+            draw = age >= 0 && age < 0.4 ? 1 - age / 0.4 : 0;
+            if (age < 0 || age > 1) this.drawAt = null;
+        }
+        const m = new THREE.Matrix4().makeTranslation(VM_SHIFT[0] - 2.5 * k, VM_SHIFT[1] + 2 * rl,
+                                                      VM_SHIFT[2] + 0.6 * k - 9 * rl - 14 * draw)
+            .multiply(new THREE.Matrix4().makeRotationY(-0.06 * k + 0.5 * rl + 0.6 * draw))
+            .multiply(new THREE.Matrix4().makeRotationX(-0.6 * rl));
         this.camera.updateMatrixWorld();
         this.group.matrix.copy(this.camera.matrixWorld).multiply(G2C).multiply(m);
     }
