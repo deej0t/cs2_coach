@@ -45,7 +45,7 @@ def _me(cfg: dict, data: dict) -> str:
 
 
 # ── Szenen bauen, cachen, vorberechnen ─────────────────────────────────────
-CLIP_VERSION = 7            # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
+CLIP_VERSION = 8            # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
 CACHE_DIR = ".moments_cache"
 _warming: set[str] = set()
 _warm_lock = threading.Lock()
@@ -145,6 +145,11 @@ def build_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: i
                                            facts.get("my_sight"), parser=p)
         except Exception as e:  # noqa: BLE001 - 3D bleibt ohne Aim-Spur
             replay["aim_error"] = str(e)
+        try:    # dieselbe Spur aus Sicht des Gegners (Gegner-Sicht)
+            replay["aim_enemy"] = aim_trace.scan(str(demo), mo["killer"], me, start, mo["death_tick"],
+                                                 facts.get("his_sight"), parser=p)
+        except Exception:  # noqa: BLE001
+            pass
     replay["has_geo"] = map3d.geo_path(cfg, cfg_path, map_key) is not None
     replay["has_render"] = map3d_render.render_parts(cfg, cfg_path, map_key)
     try:

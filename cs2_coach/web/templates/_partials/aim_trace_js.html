@@ -6,7 +6,8 @@
     var COL = { tot: '#fbbf24', h: '#60a5fa', v: '#c084fc', hit: '#4ade80', miss: '#f87171', move: 'rgba(248,113,113,0.15)' };
     var aim = null, chartMax = 30;
 
-    function data() { return window.km && window.km.data && window.km.data.aim; }
+    var curMode = 'me';
+    function data() { var d = window.km && window.km.data; return d && (curMode === 'enemy' ? d.aim_enemy : d.aim); }
 
     function rowAt(t) {
         var s = aim.series, lo = 0, hi = s.length - 1;
@@ -97,7 +98,7 @@
         var c = cv.getContext('2d');
         c.clearRect(0, 0, w, h);
         if ((mode === 'me' || mode === 'enemy') && window.kmHud) window.kmHud.draw(c, w, h, vp, t);
-        if (!aim || mode !== 'me') return;
+        if (!aim || (mode !== 'me' && mode !== 'enemy')) return;
         var cx = w / 2, cy = h / 2, r = rowAt(t);
         if (pre) preAim(c, w, h, cx, cy, pre);
         // Fadenkreuz
@@ -158,7 +159,7 @@
 
     window.kmAim = {
         reset: setup,
-        frame: function (t, mode, head, pxPerDeg, vp, pre) { if (aim !== data()) setup(); chart(t); hud(t, mode, head, pxPerDeg, vp, pre); },
+        frame: function (t, mode, head, pxPerDeg, vp, pre) { if (mode === 'me' || mode === 'enemy') curMode = mode; if (aim !== data()) setup(); chart(t); hud(t, mode, head, pxPerDeg, vp, pre); },
     };
 })();
 </script>

@@ -421,8 +421,9 @@ function aimOverlay(A, B, f, m, viewerPose) {
     const mo = data.moment, cv = canvasEl();
     const w = cv.clientWidth, h = cv.clientHeight;
     let head = null;
-    const k = mo.killer_idx != null ? pose(A[mo.killer_idx], B[mo.killer_idx], f) : null;
-    if (k && m === 'me') {
+    const ti = m === 'enemy' ? mo.me_idx : mo.killer_idx;   // Ziel: in der Gegner-Sicht bist du es
+    const k = ti != null ? pose(A[ti], B[ti], f) : null;
+    if (k && (m === 'me' || m === 'enemy')) {
         _head.set(k.x, k.y, k.z + (k.duck ? EYE_DUCK : EYE)).project(camera);
         if (_head.z < 1) head = { x: (_head.x + 1) / 2 * w, y: (1 - _head.y) / 2 * h };
     }
