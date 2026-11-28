@@ -82,3 +82,8 @@ aim_cache/
 .aim_profile.json
 users/
 .users.json
+
+# lokale Messdateien und Design-Entwürfe
+*.CSV
+CS2 Coach Designsystem-project/
+CS2 Coach Designsystem-project.zip

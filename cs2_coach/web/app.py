@@ -71,11 +71,11 @@ def _fetch_steam_avatar(steam_id: str) -> str:
         m = re.search(r"<avatarFull><!\[CDATA\[(.*?)\]\]></avatarFull>", xml)
         if not m:
             m = re.search(r"<avatarFull>(.*?)</avatarFull>", xml)
-        avatar_url = m.group(1) if m else ""
-        _avatar_cache[steam_id] = (avatar_url, time.time())
+        avatar_url = m.group(1) if m else _avatar_cache.get(steam_id, ("", 0))[0]  # Steam busy: keep last good one
+        _avatar_cache[steam_id] = (avatar_url, time.time() if m else time.time() - _AVATAR_CACHE_TTL + 60)  # retry in 60 s
         return avatar_url
-    except Exception:
-        return _avatar_cache.get(steam_id, ("", 0))[0]
+    except Exception:  # no network: retry in 60 s instead of a 5 s timeout on every page
+        return _avatar_cache.setdefault(steam_id, ("", time.time() - _AVATAR_CACHE_TTL + 60))[0]
 
 
 _inventory_cache: dict = {}  # steam_id -> (data, timestamp)

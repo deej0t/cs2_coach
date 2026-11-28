@@ -74,4 +74,4 @@ docker/                 compose, portainer stack, unraid template
 - Seiten-Styles: alte Bedeutungs-Hexwerte (#4ade80/#f87171/#fbbf24/#60a5fa/… , 580 Stellen) → **Token-Hexwerte** (#3FD08F/#F2676C/#F5B941/#5DA9F2/#A98CFB), nicht `var()`, weil Seiten Alpha anhängen (`{{ c }}33`, `+ '15'`) und Chart.js Hex braucht. CT/T überall #9BB2D1/#D2B48A (sides.html war Info-Blau/Orange). Test `test_old_palette_hexes_only_as_uicolor_fallback`.
 - Mittelstufen in Textfarben (3-stufige Bedingungen, `.sc-yellow`, Unentschieden) grau; T-/CT-Seitenkarten in Seitenfarben; Aim-Profil „trennt“ = Info-Badge. Storyline-Kompaktzeile `ui.story_lines` (Dashboard, aus dem Szenen-Index).
 - Offen: Training/Lineups (E5) erledigt: Lineups nur Violett, Typ als Landeform (● Smoke ✦ Flash ◆ HE ▲ Molotov); Live-Alarm Amber mit 2 langsamen Pulsen statt Gelb/Orange-Blinken (reduced-motion statisch); Training mit ui.stat/badge/focus_card.
-
+- Profilseite `/profil` (users_page-Blueprint, folgt `?als=`, Template `profile.html`): Kopf, Durchschnitte nur zur Einordnung, Maps, letzte Matches, Sprünge. Avatar + Name in Topbar/Sidebar verlinken dorthin.
