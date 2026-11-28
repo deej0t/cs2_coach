@@ -10,7 +10,27 @@ const VFOV = 73.7;           // vertikal zu 106° horizontal bei 16:9 (CS2-Stand
 const EYE = 64, EYE_DUCK = 46;
 const geoCache = {};
 
-let nades = null, ghost = null;
+let nades = null, ghost = null, bomb = null;
+
+// Gelegte Bombe: C4-Modell an der Legestelle, rotes Blinken bis Entschaerfen/Explosion
+function bombUpdate(t) {
+    const h = data && data.hud;
+    if (!h || !h.bomb_pos || h.bomb_tick == null) { if (bomb) bomb.visible = false; return; }
+    if (!bomb) {
+        bomb = new THREE.Group();
+        const glow = new THREE.Mesh(new THREE.SphereGeometry(3, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff2020 }));
+        glow.position.z = 6; bomb.add(glow); bomb.userData.glow = glow;
+        const box = new THREE.Mesh(new THREE.BoxGeometry(10, 7, 4), new THREE.MeshStandardMaterial({ color: 0x5b5a3a }));
+        box.position.z = 2; bomb.add(box);
+        if (window.kmModels && window.kmModels.prop) window.kmModels.prop('c4').then(m => { if (m) { bomb.add(m); box.visible = false; } }).catch(() => {});
+        scene.add(bomb);
+    }
+    bomb.position.set(h.bomb_pos[0], h.bomb_pos[1], h.bomb_pos[2]);
+    bomb.visible = t >= h.bomb_tick && (h.bomb_end == null || t <= h.bomb_end);
+    // blinkt wie im Spiel schneller, je naeher die Explosion (40 s)
+    const left = 40 - (t - h.bomb_tick) / 64, rate = left > 10 ? 1 : (left > 5 ? 2 : 4);
+    bomb.userData.glow.visible = Math.floor((t / 64) * rate * 2) % 2 === 0;
+}
 
 // "So waer's richtig": Stelle, an der der Gegner auftaucht (aim_trace sight_head) - schon vorher sichtbar
 function ghostSprite() {
@@ -344,6 +364,7 @@ function draw() {
     const mo = data.moment;
     const tNow = currentTick();
     if (nades) nades.update(tNow);
+    bombUpdate(tNow);
     const gh = data.aim && data.aim.sight_head;
     if (ghost) {
         ghost.visible = !!gh && mode !== 'enemy' && tNow < data.aim.sight + 48;

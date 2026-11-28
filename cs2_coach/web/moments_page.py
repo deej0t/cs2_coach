@@ -45,7 +45,7 @@ def _me(cfg: dict, data: dict) -> str:
 
 
 # ── Szenen bauen, cachen, vorberechnen ─────────────────────────────────────
-CLIP_VERSION = 8            # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
+CLIP_VERSION = 9            # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
 CACHE_DIR = ".moments_cache"
 _warming: set[str] = set()
 _warm_lock = threading.Lock()
@@ -107,6 +107,18 @@ def build_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: i
             bp = p.parse_event("bomb_planted")
             rs = replay.get("start_tick", t0)
             hud["bomb_tick"] = next((int(x) for x in sorted(bp["tick"]) if rs <= int(x) <= t1), None) if len(bp) else None
+            if hud["bomb_tick"] is not None:
+                # Wo liegt sie? Position des Legers im Legetick; Ende bei Entschaerfen/Explosion
+                row = bp[bp["tick"] == hud["bomb_tick"]].iloc[0]
+                pos = p.parse_ticks(["X", "Y", "Z"], ticks=[hud["bomb_tick"]])
+                pos = pos[pos["steamid"].astype(str) == str(row["user_steamid"])]
+                if len(pos):
+                    hud["bomb_pos"] = [round(float(pos.iloc[0][k]), 1) for k in ("X", "Y", "Z")]
+                ends = []
+                for ev in ("bomb_defused", "bomb_exploded"):
+                    e = p.parse_event(ev)
+                    ends += [int(x) for x in e["tick"] if int(x) > hud["bomb_tick"]] if len(e) else []
+                hud["bomb_end"] = min(ends) if ends else None
         except Exception:  # noqa: BLE001 - ohne Bombentimer
             hud["bomb_tick"] = None
         # Geblendet: aus player_blind (Dauer je Spieler). Das Tick-Feld flash_duration bleibt nach
