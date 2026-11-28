@@ -78,3 +78,9 @@ def test_map_change_resets_sv_cheats():
     from cs2_coach.training_server import map_change_commands
     cmds = map_change_commands("", "de_mirage", {})
     assert cmds.index("sv_cheats 0") < cmds.index("map de_mirage")
+
+
+def test_owner_needs_no_majority(tmp_path):
+    s = Server("   3    09:25   19    0     active 786432 1.2.3.4:5 'Dancho'\n")
+    assert mv.handle({"steam_id": "1"}, tmp_path / "c.yaml", s, "1", "dj", "map", "nuke", now=100) == []
+    assert "map de_nuke" in s.sent

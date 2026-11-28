@@ -17,8 +17,12 @@ Bewegung, Spray und Lineups, ohne dass eine Runde endet oder jemand stirbt.
   und per RCON (ohne Spieler) passiert auf dem dedizierten Server nichts.
   ``!zurueck`` setzt dich an die Stelle und Blickrichtung deines letzten
   gelandeten Wurfs (``coach_nade_last``, bei Sprungwuerfen der Absprungpunkt).
-- Ein Mapwechsel setzt die Cvars zurueck; das Plugin schaltet sich dabei selbst
-  ab (OnMapStart), der Coach vergisst den Zustand (``on_lines``).
+- Ein Mapwechsel setzt die Cvars NICHT zurueck (28.11.: auf aim_multigame lief
+  sv_showimpacts weiter). ``on_lines`` stellt deshalb beim Mapwechsel die
+  gesicherten Werte wieder her; das Plugin schaltet sich selbst ab (OnMapStart).
+- Wiederherstellen immer mit ``sv_cheats`` zuletzt: Cheat-Cvars
+  (sv_showimpacts, sv_infinite_ammo, ...) lassen sich nach sv_cheats 0 nicht
+  mehr aendern - genau das liess "!uebung aus" halb scheitern.
 """
 
 from __future__ import annotations
@@ -75,6 +79,18 @@ def read_cvars(send, names) -> dict[str, str]:
             v = m.group(2).strip('"')
             out[name] = {"true": "1", "false": "0"}.get(v.lower(), v)
     return out
+
+
+def restore_cmds(saved: dict) -> list[str]:
+    """RCON-Befehle zum Zuruecksetzen; sv_cheats als letztes (sonst greifen Cheat-Cvars nicht)."""
+    saved = {k: v for k, v in (saved or {}).items() if k in SETUP}
+    for k, v in SETUP.items():  # Wert nicht lesbar gewesen -> trotzdem abschalten
+        if k not in saved and k in ("sv_showimpacts", "sv_infinite_ammo",
+                                                  "sv_grenade_trajectory_prac_pipreview",
+                                                  "mp_ignore_round_win_conditions", "mp_buy_anywhere"):
+            saved[k] = "0"
+    cheats = saved.pop("sv_cheats", "0")
+    return [f"{k} {v}" for k, v in saved.items()] + [f"sv_cheats {cheats}"]
 
 
 def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, arg: str,
@@ -135,8 +151,7 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
     if word in ("aus", "off", "stop", "ende"):
         if not st.get("on"):
             return ["Der Uebungsmodus ist nicht an."]
-        saved = st.get("saved") or {}
-        send(*[f"{k} {v}" for k, v in saved.items()], "coach_practice 0", "mp_restartgame 1")
+        send(*restore_cmds(st.get("saved")), "coach_practice 0", "mp_restartgame 1")
         st.update(on=False, saved={}, keys=[])
         save(config_path, st)
         return [f"Uebungsmodus aus ({name}) - vorherige Einstellungen wiederhergestellt, Neustart der Runde."]
@@ -166,11 +181,25 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
             "Beenden: !uebung aus · an/aus: !tasten · !impacts"]
 
 
-def on_lines(config_path: Path, lines: list[str]) -> None:
-    """Mapwechsel: der Server hat die Cvars selbst zurueckgesetzt, das Plugin ist aus."""
+def on_lines(config_path: Path, lines: list[str], send=None, owners=()) -> None:
+    """Mapwechsel: Cvars bleiben stehen -> gesicherte Werte zuruecksetzen, Zustand vergessen.
+
+    Sofort beim "Loading map" senden: das Map-/Modus-Skript (und map_settings
+    2 s spaeter) setzt danach seine eigenen Werte darueber.
+    """
     if not any("Loading map" in ln for ln in lines):
         return
+    if send is not None and owners:
+        try:  # Plugin-Zustand ueberlebt keinen Server-Neustart -> bei jeder Map neu setzen
+            send("coach_vote_owner " + " ".join(sorted(owners)))
+        except Exception as e:  # noqa: BLE001
+            print(f"[practice] vote owner: {e}", flush=True)
     st = load(config_path)
     if st.get("on"):
+        if send is not None:
+            try:
+                send(*restore_cmds(st.get("saved")))
+            except Exception as e:  # noqa: BLE001
+                print(f"[practice] restore: {e}", flush=True)
         st.update(on=False, saved={}, keys=[])
         save(config_path, st)

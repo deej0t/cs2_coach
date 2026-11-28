@@ -126,3 +126,25 @@ def test_uebung_sagt_wenn_plugin_fehlt(tmp_path):
     cp = tmp_path / "config.yaml"
     out = pm.handle({}, cp, Server(), "76561", "dj", "uebung", "", uid=0)
     assert "nicht geladen" in out[0] and "Ping oder !clear" not in out[0]
+
+
+def test_restore_sv_cheats_zuletzt():
+    cmds = pm.restore_cmds({"sv_cheats": "0", "sv_showimpacts": "0", "mp_roundtime": "1.92"})
+    assert cmds[-1] == "sv_cheats 0"
+    assert "sv_showimpacts 0" in cmds and "sv_infinite_ammo 0" in cmds
+
+
+def test_mapwechsel_setzt_cvars_zurueck(tmp_path):
+    cp = tmp_path / "config.yaml"
+    pm.handle({}, cp, Server(), "a", "dj", "uebung", "", uid=0)
+    sent = []
+    pm.on_lines(cp, ['Loading map "aim_multigame"'], lambda *c: sent.extend(c) or [""] * len(c))
+    assert "sv_showimpacts 0" in sent and sent[-1].startswith("sv_cheats")
+    assert not pm.load(cp)["on"]
+
+
+def test_mapwechsel_meldet_vote_besitzer(tmp_path):
+    sent = []
+    pm.on_lines(tmp_path / "c.yaml", ['Loading map "de_mirage"'],
+                lambda *c: sent.extend(c) or [""] * len(c), {"765"})
+    assert sent == ["coach_vote_owner 765"]

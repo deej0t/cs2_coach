@@ -70,7 +70,7 @@ namespace CoachTeleport;
 public class CoachTeleport : BasePlugin
 {
     public override string ModuleName => "CS2 Coach Teleport";
-    public override string ModuleVersion => "1.31.0";
+    public override string ModuleVersion => "1.32.0";
     public override string ModuleAuthor => "cs2-coach";
 
     private sealed class Replay
@@ -145,6 +145,8 @@ public class CoachTeleport : BasePlugin
             OnPingFrom(ev.Userid, "event");
             return HookResult.Continue;
         });
+        // Besitzer-Vote (Wunsch 28.11.): callvote vom Besitzer wird sofort ausgefuehrt.
+        AddCommandListener("callvote", OnCallVote);
         AddCommandListener("player_ping", (caller, _) =>
         {
             OnPingFrom(caller, "cmd");
@@ -1581,6 +1583,41 @@ public class CoachTeleport : BasePlugin
             foreach (var e in Utilities.FindAllEntitiesByDesignerName<CBaseEntity>(name))
                 if (e.IsValid) { e.Remove(); n++; }
         return n;
+    }
+
+    // --- Besitzer-Vote: wer in _voteOwners steht (setzt der Coach per coach_vote_owner),
+    // braucht beim callvote keine Mehrheit - der Vote wird direkt durchgesetzt.
+    private readonly HashSet<ulong> _voteOwners = new();
+
+    [ConsoleCommand("coach_vote_owner", "SteamID64s, deren callvote sofort durchgeht: <id> [id ...]")]
+    [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
+    public void OnVoteOwner(CCSPlayerController? caller, CommandInfo info)
+    {
+        _voteOwners.Clear();
+        for (var i = 1; i < info.ArgCount; i++)
+            if (ulong.TryParse(info.GetArg(i), out var id)) _voteOwners.Add(id);
+        info.ReplyToCommand($"coach_vote_owner ok {_voteOwners.Count}");
+    }
+
+    private HookResult OnCallVote(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (caller is not { IsValid: true, IsBot: false } || !_voteOwners.Contains(caller.SteamID))
+            return HookResult.Continue;
+        var detail = info.ArgCount > 2 ? info.GetArg(2) : "";
+        string? cmd = info.GetArg(1).ToLowerInvariant() switch
+        {
+            "changelevel" when detail != "" => $"changelevel {detail}",
+            "kick" when int.TryParse(detail, out var uid) => $"kickid {uid}",
+            "restartgame" => "mp_restartgame 1",
+            "scrambleteams" => "mp_scrambleteams 1",
+            "swapteams" => "mp_swapteams 1",
+            _ => null,  // alles andere (Timeout, Surrender, ...) normal abstimmen
+        };
+        if (cmd is null) return HookResult.Continue;
+        Server.PrintToChatAll($" [Coach] {caller.PlayerName} (Besitzer): {info.GetArg(1)} {detail}".TrimEnd());
+        Console.WriteLine($"[CoachTeleport] owner vote: {cmd}");
+        Server.NextFrame(() => Server.ExecuteCommand(cmd));
+        return HookResult.Stop;
     }
 
     [ConsoleCommand("coach_clear", "Uebungsmodus: alle Smokes, Feuer und Granaten entfernen")]

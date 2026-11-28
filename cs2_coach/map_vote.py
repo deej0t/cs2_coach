@@ -5,6 +5,8 @@ aim_multigame - der Wechsel weg von ihr liess den Server zweimal haengen,
 waehrend ein Spieler verbunden war (30.10. und 2.11., WatchDog). Damit man
 trotzdem einfach die Map wechseln kann, stimmen die Spieler ab: die Mehrheit
 der verbundenen Menschen entscheidet, allein reicht der eigene Wunsch.
+Der Besitzer (steam_id/training_admins) braucht keine Mehrheit (Wunsch 28.11.);
+sein natives callvote setzt das Plugin direkt durch (coach_vote_owner).
 
 Maps aus dem Trainings-Pool plus die Workshop-Maps (aim_multigame). Weg von
 einer Workshop-Map werden vorher alle getrennt (map_change_commands). Nie
@@ -37,7 +39,7 @@ def _save(config_path: Path, vote: dict) -> None:
 def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, arg: str,
            now: float | None = None) -> list[str]:
     """Antwortzeilen (werden als say geschickt); der Mapwechsel selbst geht direkt per RCON."""
-    from .training_server import DEFAULT_MAPS, _current_map_from, _humans, is_active, map_change_commands, workshop_maps
+    from .training_server import DEFAULT_MAPS, _admins, _current_map_from, _humans, is_active, map_change_commands, workshop_maps
     now = now or time.time()
     pool = list(cfg.get("training_maps") or DEFAULT_MAPS) + list(workshop_maps(cfg, config_path))
     short = ", ".join(m.removeprefix("de_") for m in pool)
@@ -63,6 +65,11 @@ def handle(cfg: dict, config_path: Path, send, sid: str, name: str, cmd: str, ar
         if current == target:
             return [f"Wir sind schon auf {target}."]
         vote = {"map": target, "votes": [sid], "until": now + VOTE_SECONDS, "by": name}
+        if sid in _admins(cfg):
+            _save(config_path, {})
+            send(f"say [Coach] {name} (Besitzer): Wechsel auf {target}.",
+                 *map_change_commands(status, target, cfg, config_path))
+            return []
     elif cmd in ("ja", "yes"):
         if not vote:
             return ["Gerade laeuft keine Abstimmung. Start: !map <name>."]

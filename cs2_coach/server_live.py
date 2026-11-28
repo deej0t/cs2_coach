@@ -463,7 +463,8 @@ def on_batch(cfg: dict, config_path: Path, body: bytes) -> None:
         except Exception as e:  # noqa: BLE001
             print(f"[aim_fun] {e}", flush=True)
     from . import practice_mode
-    practice_mode.on_lines(config_path, lines)  # Mapwechsel beendet den Uebungsmodus
+    from .training_server import _admins
+    practice_mode.on_lines(config_path, lines, rcon_sender(cfg), _admins(cfg))  # Mapwechsel beendet den Uebungsmodus
     if (cmds := map_settings(cfg, lines)) and (send_map := rcon_sender(cfg)):
         # kurz warten: das Map-Skript setzt seine Werte beim Spielstart selbst
         threading.Timer(2, lambda: send_map(*cmds)).start()
