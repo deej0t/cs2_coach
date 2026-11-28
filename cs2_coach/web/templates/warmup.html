@@ -28,7 +28,7 @@
     .wu-focus-badge {
         display: inline-block; margin-top: 8px;
         font-size: 11px; font-weight: 600; padding: 3px 12px; border-radius: 12px;
-        background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25);
+        background: rgba(248,113,113,0.12); color: #F2676C; border: 1px solid rgba(248,113,113,0.25);
     }
 
     .wu-controls {
@@ -100,7 +100,7 @@
     }
     .wu-progress-fill {
         height: 100%; border-radius: 3px;
-        background: linear-gradient(90deg, var(--color-accent), #4ade80);
+        background: linear-gradient(90deg, var(--color-accent), #3FD08F);
         transition: width 0.3s;
     }
 
@@ -146,7 +146,7 @@
 
 {% if wu.map_tip %}
 <div class="wu-map-tip">
-    <i data-lucide="map" style="width:16px;height:16px;color:#60a5fa;flex-shrink:0;"></i>
+    <i data-lucide="map" style="width:16px;height:16px;color:#5DA9F2;flex-shrink:0;"></i>
     <span><strong>{{ wu.likely_map }}:</strong> {{ wu.map_tip }}</span>
 </div>
 {% endif %}
@@ -234,7 +234,7 @@ function updateProgress() {
     document.getElementById('wu-done-count').textContent = count + '/' + totalExercises + ' erledigt';
 
     if (count === totalExercises) {
-        document.getElementById('wu-done-count').innerHTML = '<span style="color:#4ade80;font-weight:600;">Warm-up abgeschlossen!</span>';
+        document.getElementById('wu-done-count').innerHTML = '<span style="color:#3FD08F;font-weight:600;">Warm-up abgeschlossen!</span>';
         stopTimer();
     }
 }

@@ -55,8 +55,8 @@
         display: flex; align-items: center; gap: 10px; padding: 10px 14px;
         border-radius: var(--radius-md); margin-bottom: var(--space-2); font-size: 13px;
     }
-    .ta-tip-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.20); color: #4ade80; }
-    .ta-tip-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.20); color: #fbbf24; }
+    .ta-tip-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.20); color: #3FD08F; }
+    .ta-tip-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.20); color: #F5B941; }
     .ta-tip-info { background: rgba(93,169,242,0.08); border: 1px solid rgba(93,169,242,0.20); color: var(--color-accent); }
 
     .ta-chart-wrap { position: relative; height: 240px; }
@@ -164,7 +164,7 @@
     <div class="ta-stack-stats">
         <span>{{ st.matches }} Matches</span>
         <span>
-            <span class="ta-wr-badge" style="background: {% if st.win_rate >= 55 %}rgba(74,222,128,0.15);color:#4ade80{% elif st.win_rate >= 45 %}rgba(251,191,36,0.15);color:#fbbf24{% else %}rgba(248,113,113,0.15);color:#f87171{% endif %};">
+            <span class="ta-wr-badge" style="background: {% if st.win_rate >= 55 %}rgba(74,222,128,0.15);color:#3FD08F{% elif st.win_rate >= 45 %}rgba(251,191,36,0.15);color:#F5B941{% else %}rgba(248,113,113,0.15);color:#F2676C{% endif %};">
                 {{ st.win_rate }}% WR
             </span>
         </span>
@@ -192,7 +192,7 @@
                     <tr>
                         <td style="font-weight: 600;">{{ d.player_a }} + {{ d.player_b }}</td>
                         <td>
-                            <span class="ta-wr-badge" style="background: rgba(74,222,128,0.15); color: #4ade80;">{{ d.win_rate }}%</span>
+                            <span class="ta-wr-badge" style="background: rgba(74,222,128,0.15); color: #3FD08F;">{{ d.win_rate }}%</span>
                         </td>
                         <td>{{ d.matches }}</td>
                         <td>{{ d.my_avg_rating }}</td>
@@ -217,7 +217,7 @@
                     <tr>
                         <td style="font-weight: 600;">{{ d.player_a }} + {{ d.player_b }}</td>
                         <td>
-                            <span class="ta-wr-badge" style="background: {% if d.win_rate < 40 %}rgba(248,113,113,0.15);color:#f87171{% else %}rgba(251,191,36,0.15);color:#fbbf24{% endif %};">{{ d.win_rate }}%</span>
+                            <span class="ta-wr-badge" style="background: {% if d.win_rate < 40 %}rgba(248,113,113,0.15);color:#F2676C{% else %}rgba(251,191,36,0.15);color:#F5B941{% endif %};">{{ d.win_rate }}%</span>
                         </td>
                         <td>{{ d.matches }}</td>
                         <td>{{ d.my_avg_rating }}</td>
@@ -253,7 +253,7 @@
                 <td style="font-weight: 600;">{{ d.player_a }}</td>
                 <td style="font-weight: 600;">{{ d.player_b }}</td>
                 <td>
-                    <span class="ta-wr-badge" style="background: {% if d.win_rate >= 55 %}rgba(74,222,128,0.15);color:#4ade80{% elif d.win_rate >= 45 %}rgba(251,191,36,0.15);color:#fbbf24{% else %}rgba(248,113,113,0.15);color:#f87171{% endif %};">
+                    <span class="ta-wr-badge" style="background: {% if d.win_rate >= 55 %}rgba(74,222,128,0.15);color:#3FD08F{% elif d.win_rate >= 45 %}rgba(251,191,36,0.15);color:#F5B941{% else %}rgba(248,113,113,0.15);color:#F2676C{% endif %};">
                         {{ d.win_rate }}%
                     </span>
                 </td>

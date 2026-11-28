@@ -35,11 +35,11 @@
         position: relative; transition: transform 0.1s;
     }
     .rv-dot:hover { transform: scale(1.2); z-index: 2; }
-    .rv-dot-win { background: rgba(74,222,128,0.2); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
-    .rv-dot-loss { background: rgba(248,113,113,0.15); color: #f87171; border: 1px solid rgba(248,113,113,0.2); }
+    .rv-dot-win { background: rgba(74,222,128,0.2); color: #3FD08F; border: 1px solid rgba(74,222,128,0.3); }
+    .rv-dot-loss { background: rgba(248,113,113,0.15); color: #F2676C; border: 1px solid rgba(248,113,113,0.2); }
     .rv-dot-half { width: 4px; background: var(--color-neutral-700); border-radius: 2px; align-self: stretch; margin: 0 4px; }
     .rv-dot-kill { position: absolute; top: -3px; right: -3px; width: 12px; height: 12px; border-radius: 50%; background: var(--color-accent); color: white; font-size: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
-    .rv-dot-skull { position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); font-size: 8px; color: #f87171; }
+    .rv-dot-skull { position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); font-size: 8px; color: #F2676C; }
 
     /* Score graph */
     .rv-graph-wrap {
@@ -99,15 +99,15 @@
 
 <!-- Hero stats -->
 <div class="rv-hero">
-    <div class="rv-card" style="border-top: 3px solid #60a5fa;">
-        <div class="rv-val" style="color:#60a5fa;">{{ rd.ct_wr }}%</div>
+    <div class="rv-card" style="border-top: 3px solid #5DA9F2;">
+        <div class="rv-val" style="color:#5DA9F2;">{{ rd.ct_wr }}%</div>
         <div class="rv-lbl">CT Win-Rate</div>
     </div>
-    <div class="rv-card" style="border-top: 3px solid #fbbf24;">
-        <div class="rv-val" style="color:#fbbf24;">{{ rd.t_wr }}%</div>
+    <div class="rv-card" style="border-top: 3px solid #F5B941;">
+        <div class="rv-val" style="color:#F5B941;">{{ rd.t_wr }}%</div>
         <div class="rv-lbl">T Win-Rate</div>
     </div>
-    <div class="rv-card" style="border-top: 3px solid #4ade80;">
+    <div class="rv-card" style="border-top: 3px solid #3FD08F;">
         <div class="rv-val {% if rd.pistol_wr >= 50 %}win{% else %}loss{% endif %}">{{ rd.pistol_wr }}%</div>
         <div class="rv-lbl">Pistol-Runden</div>
         <div style="font-size:10px;color:var(--color-neutral-500);margin-top:2px;">{{ rd.pistol_stats.won }}/{{ rd.pistol_stats.total }}</div>
@@ -124,19 +124,19 @@
 
 <!-- Side comparison -->
 <div class="rv-sides">
-    <div class="rv-side-card" style="border-top: 3px solid #60a5fa;">
-        <div class="rv-side-label" style="color:#60a5fa;">CT-Side</div>
+    <div class="rv-side-card" style="border-top: 3px solid #5DA9F2;">
+        <div class="rv-side-label" style="color:#5DA9F2;">CT-Side</div>
         <div class="rv-val {% if rd.ct_wr >= 55 %}win{% elif rd.ct_wr < 45 %}loss{% endif %}" style="font-size:20px;">{{ rd.ct_wr }}%</div>
         <div style="font-size:11px;color:var(--color-neutral-500);margin-top:4px;">{{ rd.ct_rounds.ct_won }}/{{ rd.ct_rounds.ct_total }} Runden</div>
     </div>
-    <div class="rv-side-card" style="border-top: 3px solid #fbbf24;">
-        <div class="rv-side-label" style="color:#fbbf24;">T-Side</div>
+    <div class="rv-side-card" style="border-top: 3px solid #F5B941;">
+        <div class="rv-side-label" style="color:#F5B941;">T-Side</div>
         <div class="rv-val {% if rd.t_wr >= 55 %}win{% elif rd.t_wr < 45 %}loss{% endif %}" style="font-size:20px;">{{ rd.t_wr }}%</div>
         <div style="font-size:11px;color:var(--color-neutral-500);margin-top:4px;">{{ rd.ct_rounds.t_won }}/{{ rd.ct_rounds.t_total }} Runden</div>
     </div>
     {% if rd.comebacks > 0 or rd.chokes > 0 %}
     <div class="rv-side-card">
-        <div class="rv-side-label" style="color:#4ade80;">Comebacks</div>
+        <div class="rv-side-label" style="color:#3FD08F;">Comebacks</div>
         <div class="rv-val win" style="font-size:20px;">{{ rd.comebacks }}</div>
         <div style="font-size:11px;color:var(--color-neutral-500);margin-top:8px;">Chokes</div>
         <div class="rv-val loss" style="font-size:18px;">{{ rd.chokes }}</div>
@@ -154,7 +154,7 @@
     </div>
     <div class="rv-perf-grid">
         {% for rs in rd.round_stats %}
-        <div class="rv-perf-cell" style="{% if rs.win_rate >= 60 %}border-bottom:2px solid #4ade80;{% elif rs.win_rate < 40 %}border-bottom:2px solid #f87171;{% else %}border-bottom:2px solid var(--color-neutral-700);{% endif %}">
+        <div class="rv-perf-cell" style="{% if rs.win_rate >= 60 %}border-bottom:2px solid #3FD08F;{% elif rs.win_rate < 40 %}border-bottom:2px solid #F2676C;{% else %}border-bottom:2px solid var(--color-neutral-700);{% endif %}">
             <div class="rv-perf-rn">R{{ rs.round }}</div>
             <div class="rv-perf-wr {% if rs.win_rate >= 60 %}win{% elif rs.win_rate < 40 %}loss{% endif %}">{{ rs.win_rate|round(0)|int }}%</div>
             <div class="rv-perf-kpr">{{ rs.avg_kills }}k</div>
@@ -215,8 +215,8 @@
                     {% set diff = r.score_own - r.score_enemy %}
                     {% set x = 10 + loop.index * 30 %}
                     {% set y = 80 - diff * 8 %}
-                    <line x1="{{ prev_x.v }}" y1="{{ prev_y.v }}" x2="{{ x }}" y2="{{ y }}" stroke="{% if diff > 0 %}#4ade80{% elif diff < 0 %}#f87171{% else %}var(--color-neutral-500){% endif %}" stroke-width="2"/>
-                    <circle cx="{{ x }}" cy="{{ y }}" r="4" fill="{% if r.won %}#4ade80{% else %}#f87171{% endif %}" stroke="var(--color-bg)" stroke-width="1"/>
+                    <line x1="{{ prev_x.v }}" y1="{{ prev_y.v }}" x2="{{ x }}" y2="{{ y }}" stroke="{% if diff > 0 %}#3FD08F{% elif diff < 0 %}#F2676C{% else %}var(--color-neutral-500){% endif %}" stroke-width="2"/>
+                    <circle cx="{{ x }}" cy="{{ y }}" r="4" fill="{% if r.won %}#3FD08F{% else %}#F2676C{% endif %}" stroke="var(--color-bg)" stroke-width="1"/>
                     {% if r.kills > 0 %}<text x="{{ x }}" y="{{ y - 8 }}" text-anchor="middle" fill="var(--color-accent)" font-size="9" font-weight="600">{{ r.kills }}K</text>{% endif %}
                     {% set prev_x.v = x %}
                     {% set prev_y.v = y %}
@@ -233,20 +233,20 @@
             <div style="max-height:400px;overflow-y:auto;">
                 {% for r in m.rounds %}
                 <div class="rv-round-detail">
-                    <div style="font-weight:600;{% if r.won %}color:#4ade80;{% else %}color:#f87171;{% endif %}">R{{ r.round }}</div>
+                    <div style="font-weight:600;{% if r.won %}color:#3FD08F;{% else %}color:#F2676C;{% endif %}">R{{ r.round }}</div>
                     <div>
-                        <span style="font-size:10px;font-weight:600;{% if r.side == 'CT' %}color:#60a5fa;{% else %}color:#fbbf24;{% endif %}">{{ r.side }}</span>
+                        <span style="font-size:10px;font-weight:600;{% if r.side == 'CT' %}color:#5DA9F2;{% else %}color:#F5B941;{% endif %}">{{ r.side }}</span>
                     </div>
                     <div style="text-align:center;">
                         <span style="font-weight:600;">{{ r.score_own }}:{{ r.score_enemy }}</span>
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;">
-                        {% if r.kills > 0 %}<span style="color:#4ade80;font-weight:600;">{{ r.kills }}K</span>{% endif %}
-                        {% if r.died %}<span style="color:#f87171;font-size:11px;">&#x2620; Tod{% if r.died_early %} (frueh){% endif %}</span>{% endif %}
-                        {% if r.bomb_plant %}<span style="color:#fbbf24;font-size:10px;">&#x1f4a3;</span>{% endif %}
-                        {% if r.bomb_defuse %}<span style="color:#60a5fa;font-size:10px;">&#x1f6e1;</span>{% endif %}
-                        {% if r.player_planted %}<span style="color:#fbbf24;font-size:10px;font-weight:600;">(planted)</span>{% endif %}
-                        {% if r.player_defused %}<span style="color:#60a5fa;font-size:10px;font-weight:600;">(defused)</span>{% endif %}
+                        {% if r.kills > 0 %}<span style="color:#3FD08F;font-weight:600;">{{ r.kills }}K</span>{% endif %}
+                        {% if r.died %}<span style="color:#F2676C;font-size:11px;">&#x2620; Tod{% if r.died_early %} (frueh){% endif %}</span>{% endif %}
+                        {% if r.bomb_plant %}<span style="color:#F5B941;font-size:10px;">&#x1f4a3;</span>{% endif %}
+                        {% if r.bomb_defuse %}<span style="color:#5DA9F2;font-size:10px;">&#x1f6e1;</span>{% endif %}
+                        {% if r.player_planted %}<span style="color:#F5B941;font-size:10px;font-weight:600;">(planted)</span>{% endif %}
+                        {% if r.player_defused %}<span style="color:#5DA9F2;font-size:10px;font-weight:600;">(defused)</span>{% endif %}
                         {% if r.weapons %}<span style="font-size:10px;color:var(--color-neutral-500);">{{ r.weapons|join(', ') }}</span>{% endif %}
                     </div>
                 </div>

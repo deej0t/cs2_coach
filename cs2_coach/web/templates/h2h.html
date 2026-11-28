@@ -40,7 +40,7 @@
     .h2h-bar-me { height: 100%; background: var(--color-accent); }
     .h2h-bar-them { height: 100%; background: var(--color-neutral-600); }
 
-    .h2h-winner { color: #4ade80; }
+    .h2h-winner { color: #3FD08F; }
     .h2h-loser { color: var(--color-neutral-500); }
 
     .h2h-matches { margin-bottom: var(--space-5); }
@@ -88,7 +88,7 @@
         <div class="h2h-player-name" style="color:var(--color-accent);">{{ config.get('player_name', 'Du') }}</div>
         <div style="font-size:12px;color:var(--color-neutral-500);">{{ h2h.shared_matches }} {{ _('gemeinsame Matches') }}</div>
         <div style="margin-top:12px;">
-            <div style="font-family:var(--font-heading);font-size:32px;font-weight:700;{% if me.kd > them.kd %}color:#4ade80;{% endif %}">{{ me.kd }}</div>
+            <div style="font-family:var(--font-heading);font-size:32px;font-weight:700;{% if me.kd > them.kd %}color:#3FD08F;{% endif %}">{{ me.kd }}</div>
             <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;">K/D</div>
         </div>
         <div style="margin-top:8px;font-size:13px;">{{ me.kills }}K / {{ me.deaths }}D / {{ me.assists }}A</div>
@@ -99,7 +99,7 @@
         <div class="h2h-player-name">{{ h2h.selected.name }}</div>
         <div style="font-size:12px;color:var(--color-neutral-500);">{{ h2h.selected.matches }} {{ _('Matches gesehen') }}</div>
         <div style="margin-top:12px;">
-            <div style="font-family:var(--font-heading);font-size:32px;font-weight:700;{% if them.kd > me.kd %}color:#4ade80;{% endif %}">{{ them.kd }}</div>
+            <div style="font-family:var(--font-heading);font-size:32px;font-weight:700;{% if them.kd > me.kd %}color:#3FD08F;{% endif %}">{{ them.kd }}</div>
             <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;">K/D</div>
         </div>
         <div style="margin-top:8px;font-size:13px;">{{ them.kills }}K / {{ them.deaths }}D / {{ them.assists }}A</div>
@@ -183,7 +183,7 @@
         <div style="text-align:center;font-weight:600;">{{ m.them_kills }}</div>
         <div style="text-align:center;color:var(--color-neutral-400);">{{ m.them_adr }}</div>
         <div style="font-size:11px;">
-            {% if m.same_team %}<span style="color:#4ade80;">Teammate</span>{% else %}<span style="color:#f87171;">{{ _('Gegner') }}</span>{% endif %}
+            {% if m.same_team %}<span style="color:#3FD08F;">Teammate</span>{% else %}<span style="color:#F2676C;">{{ _('Gegner') }}</span>{% endif %}
         </div>
     </div>
     {% endfor %}

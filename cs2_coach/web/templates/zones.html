@@ -74,8 +74,8 @@
         display: flex; align-items: center; gap: 10px; padding: 10px 14px;
         border-radius: var(--radius-md); margin-bottom: var(--space-2); font-size: 13px;
     }
-    .zn-tip-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.20); color: #4ade80; }
-    .zn-tip-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.20); color: #fbbf24; }
+    .zn-tip-success { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.20); color: #3FD08F; }
+    .zn-tip-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.20); color: #F5B941; }
     .zn-tip-info { background: rgba(93,169,242,0.08); border: 1px solid rgba(93,169,242,0.20); color: var(--color-accent); }
 
     .zn-chart-wrap { position: relative; height: 260px; margin-top: var(--space-3); }
@@ -184,12 +184,12 @@
                             <div class="zn-kd-val {% if z.kd >= 1.2 %}win{% elif z.kd >= 0.9 %}draw{% else %}loss{% endif %}">{{ z.kd }}</div>
                             {% set kd_width = [z.kd / 3.0 * 100, 100]|min %}
                             <div class="zn-kd-track">
-                                <div class="zn-kd-fill" style="width: {{ kd_width|round }}%; background: {% if z.kd >= 1.2 %}#4ade80{% elif z.kd >= 0.9 %}#fbbf24{% else %}#f87171{% endif %};"></div>
+                                <div class="zn-kd-fill" style="width: {{ kd_width|round }}%; background: {% if z.kd >= 1.2 %}#3FD08F{% elif z.kd >= 0.9 %}#F5B941{% else %}#F2676C{% endif %};"></div>
                             </div>
                         </div>
                     </td>
-                    <td style="color: #4ade80;">{{ z.kills }}</td>
-                    <td style="color: #f87171;">{{ z.deaths }}</td>
+                    <td style="color: #3FD08F;">{{ z.kills }}</td>
+                    <td style="color: #F2676C;">{{ z.deaths }}</td>
                     <td>{{ z.hs_pct }}%</td>
                     <td style="font-size: 11px; color: var(--color-neutral-400);">{{ z.top_kill_weapon }}</td>
                     <td style="font-size: 11px; color: var(--color-neutral-400);">{{ z.top_death_weapon }}</td>

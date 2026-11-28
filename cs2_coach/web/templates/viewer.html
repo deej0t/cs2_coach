@@ -90,9 +90,9 @@
             <div id="vw-tooltip"></div>
         </div>
         <div class="vw-legend">
-            <span class="vw-legend-item"><span class="vw-dot" style="background:#4ade80;"></span> Kill</span>
-            <span class="vw-legend-item"><span class="vw-dot" style="background:#fbbf24;"></span> HS Kill</span>
-            <span class="vw-legend-item"><span class="vw-dot" style="background:#f87171;"></span> Death</span>
+            <span class="vw-legend-item"><span class="vw-dot" style="background:#3FD08F;"></span> Kill</span>
+            <span class="vw-legend-item"><span class="vw-dot" style="background:#F5B941;"></span> HS Kill</span>
+            <span class="vw-legend-item"><span class="vw-dot" style="background:#F2676C;"></span> Death</span>
             <span class="vw-legend-item"><span style="display:inline-block;width:20px;height:2px;background:rgba(255,255,255,0.15);vertical-align:middle;"></span> Sichtlinie</span>
         </div>
     </div>
@@ -118,9 +118,9 @@
                 <button class="vw-mode" data-mode="heatmap">Heatmap</button>
             </div>
             <div class="vw-layers">
-                <label class="vw-layer"><input type="checkbox" id="vw-show-kills" checked><span class="vw-dot" style="background:#4ade80;"></span> Kills</label>
-                <label class="vw-layer"><input type="checkbox" id="vw-show-deaths" checked><span class="vw-dot" style="background:#f87171;"></span> Deaths</label>
-                <label class="vw-layer"><input type="checkbox" id="vw-hs-only"><span class="vw-dot" style="background:#fbbf24;"></span> Nur Headshots</label>
+                <label class="vw-layer"><input type="checkbox" id="vw-show-kills" checked><span class="vw-dot" style="background:#3FD08F;"></span> Kills</label>
+                <label class="vw-layer"><input type="checkbox" id="vw-show-deaths" checked><span class="vw-dot" style="background:#F2676C;"></span> Deaths</label>
+                <label class="vw-layer"><input type="checkbox" id="vw-hs-only"><span class="vw-dot" style="background:#F5B941;"></span> Nur Headshots</label>
             </div>
         </div>
 
@@ -331,7 +331,7 @@
         function drawDot(d) {
             var x = d.x, y = d.y;
             if (x < 0 || x > W || y < 0 || y > H) return;
-            var color = d.type === 'kill' ? (d.headshot ? '#fbbf24' : '#4ade80') : '#f87171';
+            var color = d.type === 'kill' ? (d.headshot ? '#F5B941' : '#3FD08F') : '#F2676C';
             var radius = d.headshot ? 5 : 4;
             // Glow
             var grad = ctx.createRadialGradient(x, y, 0, x, y, radius + 6);
@@ -359,7 +359,7 @@
             if (d.ex == null || d.ey == null) continue;
             var x1 = d.x, y1 = d.y, x2 = d.ex, y2 = d.ey;
             if (x1 < 0 || x1 > W || y1 < 0 || y1 > H) continue;
-            var color = d.type === 'kill' ? (d.headshot ? '#fbbf24' : '#4ade80') : '#f87171';
+            var color = d.type === 'kill' ? (d.headshot ? '#F5B941' : '#3FD08F') : '#F2676C';
             ctx.strokeStyle = hex2rgba(color, 0.15);
             ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();

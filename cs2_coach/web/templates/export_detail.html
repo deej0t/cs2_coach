@@ -4,9 +4,9 @@
 
 {% block content %}
 <style>
-    .sc-green { color: #4ade80; }
-    .sc-yellow { color: #fbbf24; }
-    .sc-red { color: #f87171; }
+    .sc-green { color: #3FD08F; }
+    .sc-yellow { color: #F5B941; }
+    .sc-red { color: #F2676C; }
     .ed-stat { font-size: 28px; font-weight: 600; font-family: var(--font-heading); letter-spacing: -0.02em; }
 
     /* Duel table */
@@ -26,14 +26,14 @@
     .ed-tl-early { background: color-mix(in srgb, var(--c-neg) 6%, var(--color-surface)); }
     .ed-tl-round { font-weight: 600; font-size: 11px; color: var(--color-neutral-400); }
     .ed-tl-side { font-size: 10px; font-weight: 600; letter-spacing: 0.05em; }
-    .ed-tl-ct { color: #7eaadb; }
-    .ed-tl-t { color: #deb23e; }
+    .ed-tl-ct { color: #9BB2D1; }
+    .ed-tl-t { color: #D2B48A; }
     .ed-tl-ev { display: inline-flex; padding: 1px 5px; border-radius: 3px; font-size: 10px; font-weight: 500; white-space: nowrap; margin-right: 2px; }
-    .ed-tl-kill { background: rgba(74,222,128,0.12); color: #4ade80; }
-    .ed-tl-death { background: rgba(248,113,113,0.12); color: #f87171; }
-    .ed-tl-bomb { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .ed-tl-kill { background: rgba(74,222,128,0.12); color: #3FD08F; }
+    .ed-tl-death { background: rgba(248,113,113,0.12); color: #F2676C; }
+    .ed-tl-bomb { background: rgba(251,191,36,0.12); color: #F5B941; }
     .ed-tl-info { font-size: 11px; text-align: right; color: var(--color-neutral-500); }
-    .ed-tl-mk { color: #4ade80; font-weight: 600; }
+    .ed-tl-mk { color: #3FD08F; font-weight: 600; }
     .ed-tl-ht { text-align: center; font-size: 10px; color: var(--color-neutral-600); letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 0; }
 
     /* Economy */
@@ -59,10 +59,10 @@
     .ed-rp-hdr.open .ed-rp-chev { transform: rotate(90deg); }
     .ed-rp-title { font-size: 13px; font-weight: 600; flex: 1; }
     .ed-rp-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 3px; letter-spacing: 0.04em; text-transform: uppercase; }
-    .ed-b-strong { background: rgba(74,222,128,0.12); color: #4ade80; }
+    .ed-b-strong { background: rgba(74,222,128,0.12); color: #3FD08F; }
     .ed-b-ok { background: rgba(93,169,242,0.12); color: #5DA9F2; }
-    .ed-b-weak { background: rgba(248,113,113,0.12); color: #f87171; }
-    .ed-b-info { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .ed-b-weak { background: rgba(248,113,113,0.12); color: #F2676C; }
+    .ed-b-info { background: rgba(251,191,36,0.12); color: #F5B941; }
     .ed-rp-body {
         display: none; padding: 12px 14px; font-size: 13px; line-height: 1.7;
         color: var(--color-neutral-300); background: var(--color-surface);
@@ -87,10 +87,10 @@
     .ed-rp-verdict p { margin: 0 0 6px; font-size: 13px; line-height: 1.7; color: var(--color-neutral-300); }
     .ed-rp-train {
         padding: 16px; margin-top: var(--space-3); border-radius: var(--radius-md);
-        border: 1px solid color-mix(in srgb, #4ade80 15%, transparent);
-        background: color-mix(in srgb, #4ade80 3%, var(--color-surface));
+        border: 1px solid color-mix(in srgb, #3FD08F 15%, transparent);
+        background: color-mix(in srgb, #3FD08F 3%, var(--color-surface));
     }
-    .ed-rp-train h3 { font-size: 15px; margin: 0 0 10px; color: #4ade80; }
+    .ed-rp-train h3 { font-size: 15px; margin: 0 0 10px; color: #3FD08F; }
     .ed-rp-train ol { margin: 0; padding-left: 20px; }
     .ed-rp-train li { font-size: 13px; line-height: 1.7; color: var(--color-neutral-300); margin-bottom: 8px; }
     .ed-rp-train li strong { color: var(--color-text); }
@@ -111,10 +111,10 @@
     /* Round Highlights */
     .rh-bar { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: var(--space-3); }
     .rh-pill { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px; letter-spacing: 0.03em; }
-    .rh-hero { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .rh-hero { background: rgba(74,222,128,0.15); color: #3FD08F; }
     .rh-impact { background: rgba(93,169,242,0.15); color: #5DA9F2; }
-    .rh-clutch { background: rgba(251,191,36,0.15); color: #fbbf24; }
-    .rh-throw { background: rgba(248,113,113,0.15); color: #f87171; }
+    .rh-clutch { background: rgba(251,191,36,0.15); color: #F5B941; }
+    .rh-throw { background: rgba(248,113,113,0.15); color: #F2676C; }
     .rh-invisible { background: rgba(248,113,113,0.10); color: #f8717199; }
     .rh-silent { background: rgba(255,255,255,0.05); color: var(--color-neutral-500); }
 
@@ -220,7 +220,7 @@
             <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--color-neutral-500);margin-top:2px;">Rating</div>
             {% if player_avg and player_avg.rating %}
             {% set rd = p.rating - player_avg.rating %}
-            <div style="font-size:10px;margin-top:2px;{% if rd > 0 %}color:#4ade80;{% elif rd < 0 %}color:#f87171;{% else %}color:var(--color-neutral-600);{% endif %}">
+            <div style="font-size:10px;margin-top:2px;{% if rd > 0 %}color:#3FD08F;{% elif rd < 0 %}color:#F2676C;{% else %}color:var(--color-neutral-600);{% endif %}">
                 {% if rd > 0 %}&#9650; +{{ rd|round(2) }}{% elif rd < 0 %}&#9660; {{ rd|round(2) }}{% else %}&#9644; {{ _('Schnitt') }}{% endif %}
             </div>
             {% endif %}
@@ -247,7 +247,7 @@
 {% macro trend_arrow(current, avg_key) %}
 {% if player_avg and player_avg.get(avg_key) %}
 {% set diff = current - player_avg[avg_key] %}
-<span style="font-size:10px;display:block;margin-top:2px;{% if diff > 0 %}color:#4ade80;{% elif diff < 0 %}color:#f87171;{% else %}color:var(--color-neutral-600);{% endif %}">
+<span style="font-size:10px;display:block;margin-top:2px;{% if diff > 0 %}color:#3FD08F;{% elif diff < 0 %}color:#F2676C;{% else %}color:var(--color-neutral-600);{% endif %}">
     {% if diff > 0 %}&#9650; +{{ diff|round(1) }}{% elif diff < 0 %}&#9660; {{ diff|round(1) }}{% else %}&#9644;{% endif %}
     <span style="color:var(--color-neutral-600);font-size:9px;">{{ _('vs') }} &#8709; {{ player_avg[avg_key] }}</span>
 </span>
@@ -363,13 +363,13 @@
         {% for d in data.duel_matrix %}
         <tr>
             <td style="font-weight:500;">{{ d.name }}</td>
-            <td style="text-align:center;color:#4ade80;">{{ d.kills }}</td>
-            <td style="text-align:center;color:#f87171;">{{ d.deaths }}</td>
+            <td style="text-align:center;color:#3FD08F;">{{ d.kills }}</td>
+            <td style="text-align:center;color:#F2676C;">{{ d.deaths }}</td>
             <td style="text-align:center;">
                 {% set tot = d.kills + d.deaths %}{% if tot > 0 %}
                 <div class="ed-duel-bar" style="margin:0 auto;">
-                    <div style="width:{{ (d.kills / tot * 100)|round }}%;background:#4ade80;height:100%;"></div>
-                    <div style="width:{{ (d.deaths / tot * 100)|round }}%;background:#f87171;height:100%;"></div>
+                    <div style="width:{{ (d.kills / tot * 100)|round }}%;background:#3FD08F;height:100%;"></div>
+                    <div style="width:{{ (d.deaths / tot * 100)|round }}%;background:#F2676C;height:100%;"></div>
                 </div>{% endif %}
             </td>
             <td><span class="{% if d.kd >= 1.5 %}sc-green{% elif d.kd >= 1.0 %}sc-yellow{% else %}sc-red{% endif %}" style="font-weight:600;">{{ d.kd }}</span></td>
@@ -396,7 +396,7 @@
 {% if analysis and analysis.death_summary and analysis.death_summary.total > 0 %}
 {% set ds = analysis.death_summary %}
 {% set cats = ds.categories %}
-{% set cat_colors = {"Positioning": "#f87171", "Timing": "#fbbf24", "Aim": "#5DA9F2", "Utility": "#4ade80", "Numbers": "#7eaadb"} %}
+{% set cat_colors = {"Positioning": "#F2676C", "Timing": "#F5B941", "Aim": "#5DA9F2", "Utility": "#A98CFB", "Numbers": "#9BB2D1"} %}
 <div class="grid-2" style="margin-bottom:var(--space-5);">
     <div class="card elev-sm" style="padding:var(--space-4);">
         <div class="card-kicker" style="margin-bottom:12px;">
@@ -456,7 +456,7 @@
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:var(--space-3);">
             <div style="text-align:center;padding:12px;background:rgba(74,222,128,0.06);border-radius:var(--radius-sm);">
-                <div style="font-family:var(--font-heading);font-size:24px;font-weight:700;color:#4ade80;">{{ hs.hero }}</div>
+                <div style="font-family:var(--font-heading);font-size:24px;font-weight:700;color:#3FD08F;">{{ hs.hero }}</div>
                 <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;letter-spacing:0.08em;">Hero (3K+)</div>
             </div>
             <div style="text-align:center;padding:12px;background:rgba(93,169,242,0.06);border-radius:var(--radius-sm);">
@@ -464,7 +464,7 @@
                 <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;letter-spacing:0.08em;">Impact</div>
             </div>
             <div style="text-align:center;padding:12px;background:rgba(248,113,113,0.06);border-radius:var(--radius-sm);">
-                <div style="font-family:var(--font-heading);font-size:24px;font-weight:700;color:#f87171;">{{ hs.throw }}</div>
+                <div style="font-family:var(--font-heading);font-size:24px;font-weight:700;color:#F2676C;">{{ hs.throw }}</div>
                 <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;letter-spacing:0.08em;">Throw</div>
             </div>
             <div style="text-align:center;padding:12px;background:rgba(248,113,113,0.04);border-radius:var(--radius-sm);">
@@ -505,7 +505,7 @@
                 </td>
                 <td style="color:var(--color-neutral-300);">{{ d.reason }}</td>
                 <td style="color:var(--color-neutral-500);">{{ d.killer }} ({{ d.weapon }})</td>
-                <td style="text-align:right;">{% if d.won %}<span style="color:#4ade80;">W</span>{% else %}<span style="color:#f87171;">L</span>{% endif %}</td>
+                <td style="text-align:right;">{% if d.won %}<span style="color:#3FD08F;">W</span>{% else %}<span style="color:#F2676C;">L</span>{% endif %}</td>
             </tr>
             {% endfor %}
             </tbody>
@@ -578,9 +578,9 @@
         <p style="font-size:11px;color:var(--color-neutral-600);margin-top:var(--space-2);">
             <span id="rp-legend"></span>
             {{ _('Rekonstruktion aus Positionsdaten, kein Spielvideo.') }}
-            <span style="color:#4ade80;">●</span> {{ _('du') }}
-            <span style="color:#60a5fa;">●</span> {{ _('Team') }}
-            <span style="color:#f87171;">●</span> {{ _('Gegner') }}
+            <span style="color:#3FD08F;">●</span> {{ _('du') }}
+            <span style="color:#5DA9F2;">●</span> {{ _('Team') }}
+            <span style="color:#F2676C;">●</span> {{ _('Gegner') }}
             — {{ _('blass = tot') }}.
             {{ _('Granaten') }}: ☁ Smoke · 🔥 {{ _('Feuer') }} · ⚡ Flash · 💥 HE —
             {{ _('sie erscheinen zum Zuendzeitpunkt und verschwinden, wenn sie auslaufen. Der Punkt unter dem Symbol zeigt in Teamfarbe, wer geworfen hat. Flaechen bei Smoke und Feuer sind Naeherungen.') }}
@@ -607,7 +607,7 @@
 <div style="margin-bottom:var(--space-5);">
     <div class="card-kicker" style="margin-bottom:8px;">{{ _('Wirtschafts-Performance') }}</div>
     <div class="ed-econ">
-        {% set econ_order = [('pistol', _('Pistole'), '#a78bfa'), ('eco', 'Eco', '#f87171'), ('force', 'Force', '#fbbf24'), ('fullbuy', 'Fullbuy', '#4ade80')] %}
+        {% set econ_order = [('pistol', _('Pistole'), '#a78bfa'), ('eco', 'Eco', '#F2676C'), ('force', 'Force', '#F5B941'), ('fullbuy', 'Fullbuy', '#3FD08F')] %}
         {% for key, label, color in econ_order %}
         {% set e = data.economy.get(key, {}) %}
         {% if e %}
@@ -666,11 +666,11 @@
                     {{ s.name }}
                     {% if s.is_target %}<span class="tag tag-accent" style="margin-left:4px;font-size:9px;">{{ _('Du') }}</span>{% endif %}
                 </td>
-                <td style="text-align:center;color:#4ade80;">{{ s.kills }}</td>
-                <td style="text-align:center;color:#f87171;">{{ s.deaths }}</td>
+                <td style="text-align:center;color:#3FD08F;">{{ s.kills }}</td>
+                <td style="text-align:center;color:#F2676C;">{{ s.deaths }}</td>
                 <td style="text-align:center;">{{ s.assists }}</td>
                 <td style="text-align:center;">{{ s.adr }}</td>
-                <td style="text-align:center;font-weight:600;{% if s.kd >= 1.2 %}color:#4ade80;{% elif s.kd < 0.8 %}color:#f87171;{% endif %}">{{ s.kd }}</td>
+                <td style="text-align:center;font-weight:600;{% if s.kd >= 1.2 %}color:#3FD08F;{% elif s.kd < 0.8 %}color:#F2676C;{% endif %}">{{ s.kd }}</td>
                 <td style="text-align:center;">{{ s.kast_pct }}%</td>
                 {% if demo_path %}
                 <td style="text-align:right;">
@@ -800,7 +800,7 @@ function streamAI(url, payload, bodyEl, onDone) {
         // Redirect geschuetzt, /api/* antwortet dagegen mit 401 - ohne
         // Hinweis bliebe nur ein nichtssagendes "HTTP 401" stehen.
         if (resp.status === 401) {
-            bodyEl.innerHTML = '<p style="color:#f87171;">{{ _("Sitzung abgelaufen.") }} ' +
+            bodyEl.innerHTML = '<p style="color:#F2676C;">{{ _("Sitzung abgelaufen.") }} ' +
                 '<a href="{{ url_for("login") }}?next={{ request.path }}" style="color:var(--color-accent);">' +
                 '{{ _("Neu anmelden") }}</a></p>';
             if (onDone) onDone(null);
@@ -832,13 +832,13 @@ function streamAI(url, payload, bodyEl, onDone) {
                 }
                 read();
             }).catch(function(err) {
-                bodyEl.innerHTML = '<p style="color:#f87171;">{{ _("Fehler") }}: ' + err.message + '</p>';
+                bodyEl.innerHTML = '<p style="color:#F2676C;">{{ _("Fehler") }}: ' + err.message + '</p>';
                 if (onDone) onDone(null);
             });
         }
         read();
     }).catch(function(err) {
-        bodyEl.innerHTML = '<p style="color:#f87171;">{{ _("Verbindungsfehler") }}: ' + err.message + '</p>';
+        bodyEl.innerHTML = '<p style="color:#F2676C;">{{ _("Verbindungsfehler") }}: ' + err.message + '</p>';
         if (onDone) onDone(null);
     });
 }

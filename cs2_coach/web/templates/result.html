@@ -19,15 +19,15 @@
     }
     .banner-team { text-align: center; min-width: 80px; }
     .banner-team-label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
-    .banner-ct .banner-team-label { color: #7eaadb; }
-    .banner-t .banner-team-label { color: #deb23e; }
+    .banner-ct .banner-team-label { color: #9BB2D1; }
+    .banner-t .banner-team-label { color: #D2B48A; }
     .banner-score-block { display: flex; align-items: center; gap: 16px; }
     .banner-score {
         font-family: var(--font-heading); font-size: 52px; font-weight: 700;
         line-height: 1; letter-spacing: -0.03em;
     }
-    .banner-ct .banner-score { color: #7eaadb; }
-    .banner-t .banner-score { color: #deb23e; }
+    .banner-ct .banner-score { color: #9BB2D1; }
+    .banner-t .banner-score { color: #D2B48A; }
     .banner-vs { font-size: 18px; color: var(--color-neutral-600); font-weight: 500; }
     .banner-meta { text-align: center; }
     .banner-map { font-size: 20px; font-weight: 600; color: var(--color-text); margin-bottom: 2px; }
@@ -37,8 +37,8 @@
         display: flex; height: 4px; border-radius: 2px; overflow: hidden;
         width: 160px; margin: 8px auto 0; background: var(--color-neutral-800);
     }
-    .rounds-ct { background: #7eaadb; }
-    .rounds-t { background: #deb23e; }
+    .rounds-ct { background: #9BB2D1; }
+    .rounds-t { background: #D2B48A; }
 
     /* ── Stat Hexagons / Big Numbers ── */
     .stat-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
@@ -68,13 +68,13 @@
     @keyframes barGrow { to { width: var(--bar-w); } }
 
     /* color coding */
-    .sc-green { color: #4ade80; }
-    .sc-yellow { color: #fbbf24; }
-    .sc-red { color: #f87171; }
+    .sc-green { color: #3FD08F; }
+    .sc-yellow { color: #F5B941; }
+    .sc-red { color: #F2676C; }
     .sc-accent { color: var(--color-accent); }
-    .sb-green { background: #4ade80; }
-    .sb-yellow { background: #fbbf24; }
-    .sb-red { background: #f87171; }
+    .sb-green { background: #3FD08F; }
+    .sb-yellow { background: #F5B941; }
+    .sb-red { background: #F2676C; }
     .sb-accent { background: var(--color-accent); }
 
     /* ── Score Bar (horizontal split bar) ── */
@@ -156,10 +156,10 @@
         font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 3px;
         letter-spacing: 0.04em; text-transform: uppercase; flex-shrink: 0;
     }
-    .badge-strong { background: rgba(74,222,128,0.12); color: #4ade80; }
+    .badge-strong { background: rgba(74,222,128,0.12); color: #3FD08F; }
     .badge-ok { background: rgba(93,169,242,0.12); color: #5DA9F2; }
-    .badge-weak { background: rgba(248,113,113,0.12); color: #f87171; }
-    .badge-info { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .badge-weak { background: rgba(248,113,113,0.12); color: #F2676C; }
+    .badge-info { background: rgba(251,191,36,0.12); color: #F5B941; }
     .report-section-body {
         display: none; padding: 12px 14px; font-size: 13px; line-height: 1.7;
         color: var(--color-neutral-300); background: var(--color-surface);
@@ -190,10 +190,10 @@
     .report-verdict p:last-child { margin-bottom: 0; }
     .report-training-plan {
         padding: 16px; margin-top: var(--space-3); border-radius: var(--radius-md);
-        border: 1px solid color-mix(in srgb, #4ade80 15%, transparent);
-        background: color-mix(in srgb, #4ade80 3%, var(--color-surface));
+        border: 1px solid color-mix(in srgb, #3FD08F 15%, transparent);
+        background: color-mix(in srgb, #3FD08F 3%, var(--color-surface));
     }
-    .report-training-plan h3 { font-size: 15px; margin: 0 0 10px; color: #4ade80; }
+    .report-training-plan h3 { font-size: 15px; margin: 0 0 10px; color: #3FD08F; }
     .report-training-plan ol { margin: 0; padding-left: 20px; }
     .report-training-plan li { font-size: 13px; line-height: 1.7; color: var(--color-neutral-300); margin-bottom: 8px; }
     .report-training-plan li strong { color: var(--color-text); }
@@ -211,8 +211,8 @@
     .duel-table tr:hover td { background: color-mix(in srgb, var(--color-text) 3%, transparent); }
     .duel-weapon { font-size: 11px; color: var(--color-neutral-500); }
     .duel-bar { display: flex; height: 4px; border-radius: 2px; overflow: hidden; width: 60px; background: var(--color-neutral-800); }
-    .duel-bar-k { background: #4ade80; }
-    .duel-bar-d { background: #f87171; }
+    .duel-bar-k { background: #3FD08F; }
+    .duel-bar-d { background: #F2676C; }
 
     /* ── Round Timeline ── */
     .tl-grid { display: flex; flex-direction: column; gap: 2px; }
@@ -224,21 +224,21 @@
     .tl-row:hover { border-color: color-mix(in srgb, var(--color-text) 8%, transparent); }
     .tl-row-won { box-shadow: inset 0 -2px 0 var(--c-pos); }
     .tl-row-lost { box-shadow: inset 0 -2px 0 var(--c-neg); }
-    .tl-row-early { background: color-mix(in srgb, #f87171 6%, var(--color-surface)); }
+    .tl-row-early { background: color-mix(in srgb, #F2676C 6%, var(--color-surface)); }
     .tl-round { font-weight: 600; font-size: 11px; color: var(--color-neutral-400); }
     .tl-side { font-size: 10px; font-weight: 600; letter-spacing: 0.05em; }
-    .tl-side-ct { color: #7eaadb; }
-    .tl-side-t { color: #deb23e; }
+    .tl-side-ct { color: #9BB2D1; }
+    .tl-side-t { color: #D2B48A; }
     .tl-events { display: flex; align-items: center; gap: 3px; min-height: 20px; position: relative; }
     .tl-event {
         display: inline-flex; align-items: center; gap: 2px; padding: 1px 5px;
         border-radius: 3px; font-size: 10px; font-weight: 500; white-space: nowrap;
     }
-    .tl-kill { background: rgba(74,222,128,0.12); color: #4ade80; }
-    .tl-death { background: rgba(248,113,113,0.12); color: #f87171; }
-    .tl-bomb { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .tl-kill { background: rgba(74,222,128,0.12); color: #3FD08F; }
+    .tl-death { background: rgba(248,113,113,0.12); color: #F2676C; }
+    .tl-bomb { background: rgba(251,191,36,0.12); color: #F5B941; }
     .tl-info { font-size: 11px; text-align: right; color: var(--color-neutral-500); }
-    .tl-multikill { color: #4ade80; font-weight: 600; }
+    .tl-multikill { color: #3FD08F; font-weight: 600; }
     .tl-summary { display: flex; gap: var(--space-4); font-size: 13px; color: var(--color-neutral-400); margin-bottom: var(--space-3); }
     .tl-summary strong { color: var(--color-text); }
     .tl-halftime { text-align: center; font-size: 10px; color: var(--color-neutral-600); letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 0; }
@@ -250,9 +250,9 @@
         border-top: 3px solid var(--color-neutral-700);
     }
     .econ-card-pistol { border-top-color: #a78bfa; }
-    .econ-card-eco { border-top-color: #f87171; }
-    .econ-card-force { border-top-color: #fbbf24; }
-    .econ-card-fullbuy { border-top-color: #4ade80; }
+    .econ-card-eco { border-top-color: #F2676C; }
+    .econ-card-force { border-top-color: #F5B941; }
+    .econ-card-fullbuy { border-top-color: #3FD08F; }
     .econ-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500); margin-bottom: 8px; }
     .econ-big { font-family: var(--font-heading); font-size: 22px; font-weight: 600; line-height: 1.1; }
     .econ-sub { font-size: 12px; color: var(--color-neutral-400); margin-top: 4px; }
@@ -361,7 +361,7 @@
             <div class="score-bar-track">
                 {% set od_total = stats.opening_kills + stats.opening_deaths %}
                 {% if od_total > 0 %}
-                <div class="score-bar-fill" style="width: {{ stats.opening_kills / od_total * 100 }}%; background: linear-gradient(90deg, #4ade80, #22c55e);"></div>
+                <div class="score-bar-fill" style="width: {{ stats.opening_kills / od_total * 100 }}%; background: linear-gradient(90deg, #3FD08F, #3FD08F);"></div>
                 {% endif %}
             </div>
             <span class="score-bar-value">{{ stats.opening_kills }}W / {{ stats.opening_deaths }}L</span>
@@ -369,7 +369,7 @@
         <div class="score-bar">
             <span class="score-bar-label"><abbr title="{{ _('Anteil der Schuesse im Stillstand — gutes Counter-Strafing bedeutet vor dem Schuss stehen bleiben') }}">Counter-Strafe</abbr></span>
             <div class="score-bar-track">
-                <div class="score-bar-fill" style="width: {{ stats.counter_strafe_score }}%; background: {% if stats.counter_strafe_score >= 90 %}#4ade80{% elif stats.counter_strafe_score >= 80 %}#fbbf24{% else %}#f87171{% endif %};"></div>
+                <div class="score-bar-fill" style="width: {{ stats.counter_strafe_score }}%; background: {% if stats.counter_strafe_score >= 90 %}#3FD08F{% elif stats.counter_strafe_score >= 80 %}#F5B941{% else %}#F2676C{% endif %};"></div>
             </div>
             <span class="score-bar-value">{{ "%.0f"|format(stats.counter_strafe_score) }}%</span>
         </div>
@@ -378,7 +378,7 @@
             <span class="score-bar-label"><abbr title="{{ _('Crosshair Placement — Grad-Abweichung des Fadenkreuzes zur Gegnerposition 0.5s vor dem Kill. Niedriger = besser') }}">CP</abbr></span>
             <div class="score-bar-track">
                 {% set cp_pct = [100 - (stats.crosshair_placement_median / 40 * 100), 0]|max %}
-                <div class="score-bar-fill" style="width: {{ cp_pct }}%; background: {% if stats.crosshair_placement_median < 5 %}#4ade80{% elif stats.crosshair_placement_median < 15 %}#fbbf24{% else %}#f87171{% endif %};"></div>
+                <div class="score-bar-fill" style="width: {{ cp_pct }}%; background: {% if stats.crosshair_placement_median < 5 %}#3FD08F{% elif stats.crosshair_placement_median < 15 %}#F5B941{% else %}#F2676C{% endif %};"></div>
             </div>
             <span class="score-bar-value">{{ "%.1f"|format(stats.crosshair_placement_median) }}°</span>
         </div>
@@ -411,7 +411,7 @@
             <div class="score-bar-track">
                 {% set flash_total = stats.flash_enemies_blinded + stats.flash_teammates_blinded %}
                 {% if flash_total > 0 %}
-                <div class="score-bar-fill" style="width: {{ stats.flash_enemies_blinded / flash_total * 100 }}%; background: #4ade80;"></div>
+                <div class="score-bar-fill" style="width: {{ stats.flash_enemies_blinded / flash_total * 100 }}%; background: #3FD08F;"></div>
                 {% endif %}
             </div>
             <span class="score-bar-value">{{ stats.flash_enemies_blinded }}e / {{ stats.flash_teammates_blinded }}t</span>
@@ -474,7 +474,7 @@
             <div class="sb-cell">
                 {{ "%.2f"|format(p.kd_ratio) }}
                 {% set kd_w = [p.kd_ratio / 2.0 * 30, 30]|min %}
-                <span class="sb-kd-bar" style="width: {{ kd_w }}px; background: {% if p.kd_ratio >= 1.2 %}#4ade80{% elif p.kd_ratio >= 0.9 %}#fbbf24{% else %}#f87171{% endif %};"></span>
+                <span class="sb-kd-bar" style="width: {{ kd_w }}px; background: {% if p.kd_ratio >= 1.2 %}#3FD08F{% elif p.kd_ratio >= 0.9 %}#F5B941{% else %}#F2676C{% endif %};"></span>
             </div>
         </div>
         {% endfor %}
@@ -500,7 +500,7 @@
             <div class="sb-cell">
                 {{ "%.2f"|format(p.kd_ratio) }}
                 {% set kd_w = [p.kd_ratio / 2.0 * 30, 30]|min %}
-                <span class="sb-kd-bar" style="width: {{ kd_w }}px; background: {% if p.kd_ratio >= 1.2 %}#4ade80{% elif p.kd_ratio >= 0.9 %}#fbbf24{% else %}#f87171{% endif %};"></span>
+                <span class="sb-kd-bar" style="width: {{ kd_w }}px; background: {% if p.kd_ratio >= 1.2 %}#3FD08F{% elif p.kd_ratio >= 0.9 %}#F5B941{% else %}#F2676C{% endif %};"></span>
             </div>
         </div>
         {% endfor %}
@@ -527,8 +527,8 @@
             {% for d in duel_matrix %}
             <tr>
                 <td style="font-weight:500;">{{ d.name }}</td>
-                <td style="text-align:center; color:#4ade80;">{{ d.kills }}</td>
-                <td style="text-align:center; color:#f87171;">{{ d.deaths }}</td>
+                <td style="text-align:center; color:#3FD08F;">{{ d.kills }}</td>
+                <td style="text-align:center; color:#F2676C;">{{ d.deaths }}</td>
                 <td style="text-align:center;">
                     {% set total = d.kills + d.deaths %}
                     {% if total > 0 %}

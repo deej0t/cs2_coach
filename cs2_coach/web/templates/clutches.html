@@ -96,11 +96,11 @@
         <div class="cl-stat-val" style="color:var(--color-accent);">{{ cl.total_attempts }}</div>
         <div class="cl-stat-lbl">{{ _('Clutch-Situationen') }}</div>
     </div>
-    <div class="cl-stat-card" style="border-top: 3px solid #4ade80;">
+    <div class="cl-stat-card" style="border-top: 3px solid #3FD08F;">
         <div class="cl-stat-val win">{{ cl.total_wins }}</div>
         <div class="cl-stat-lbl">{{ _('Gewonnen') }}</div>
     </div>
-    <div class="cl-stat-card" style="border-top: 3px solid #fbbf24;">
+    <div class="cl-stat-card" style="border-top: 3px solid #F5B941;">
         <div class="cl-stat-val {% if cl.win_rate >= 20 %}win{% elif cl.win_rate < 10 %}loss{% endif %}">{{ cl.win_rate }}%</div>
         <div class="cl-stat-lbl">{{ _('Clutch-Rate') }}</div>
     </div>
@@ -123,16 +123,16 @@
 
 <!-- Side split -->
 <div class="cl-sides">
-    <div class="cl-side-card" style="border-top: 3px solid #60a5fa;">
-        <div class="cl-side-label" style="color:#60a5fa;">{{ _('CT-Seite Clutches') }}</div>
+    <div class="cl-side-card" style="border-top: 3px solid #5DA9F2;">
+        <div class="cl-side-label" style="color:#5DA9F2;">{{ _('CT-Seite Clutches') }}</div>
         {% set ct = cl.by_side.CT %}
         <div class="cl-stat-val {% if ct.attempts > 0 and (ct.wins / ct.attempts * 100) >= 15 %}win{% endif %}" style="font-size:20px;">
             {{ ct.wins }}/{{ ct.attempts }}
         </div>
         <div class="cl-stat-lbl">{% if ct.attempts > 0 %}{{ (ct.wins / ct.attempts * 100)|round(1) }}%{% else %}—{% endif %}</div>
     </div>
-    <div class="cl-side-card" style="border-top: 3px solid #fbbf24;">
-        <div class="cl-side-label" style="color:#fbbf24;">{{ _('T-Seite Clutches') }}</div>
+    <div class="cl-side-card" style="border-top: 3px solid #F5B941;">
+        <div class="cl-side-label" style="color:#F5B941;">{{ _('T-Seite Clutches') }}</div>
         {% set t = cl.by_side.T %}
         <div class="cl-stat-val {% if t.attempts > 0 and (t.wins / t.attempts * 100) >= 15 %}win{% endif %}" style="font-size:20px;">
             {{ t.wins }}/{{ t.attempts }}
@@ -164,8 +164,8 @@
 {% if cl.highlight_rounds %}
 <div class="cl-section">
     <div class="cl-section-title">
-        <i data-lucide="sparkles" style="width:16px;height:16px;color:#fbbf24;"></i>
-        <span style="color:#fbbf24;">{{ _('Clutch-Highlights') }}</span>
+        <i data-lucide="sparkles" style="width:16px;height:16px;color:#F5B941;"></i>
+        <span style="color:#F5B941;">{{ _('Clutch-Highlights') }}</span>
         <span style="font-size:11px;color:var(--color-neutral-500);font-weight:400;">{{ _('— Runden mit 2+ Kills und gewonnen') }}</span>
     </div>
     {% for r in cl.highlight_rounds %}
@@ -177,7 +177,7 @@
             <span style="color:var(--color-neutral-500);margin-left:4px;font-size:11px;">{{ r.date }}</span>
         </div>
         <div>
-            <span style="font-weight:600;color:#4ade80;">{{ r.kills }}K</span>
+            <span style="font-weight:600;color:#3FD08F;">{{ r.kills }}K</span>
             <span style="color:var(--color-neutral-500);margin-left:6px;font-size:11px;">{{ r.weapons|join(', ') }}</span>
         </div>
     </div>
@@ -189,8 +189,8 @@
 {% if cl.best_matches %}
 <div class="cl-section">
     <div class="cl-section-title">
-        <i data-lucide="trophy" style="width:16px;height:16px;color:#4ade80;"></i>
-        <span style="color:#4ade80;">{{ _('Beste Clutch-Matches') }}</span>
+        <i data-lucide="trophy" style="width:16px;height:16px;color:#3FD08F;"></i>
+        <span style="color:#3FD08F;">{{ _('Beste Clutch-Matches') }}</span>
     </div>
     {% for m in cl.best_matches %}
     <div class="cl-highlight" style="border: 1px solid color-mix(in srgb, var(--c-pos) 35%, transparent);">
@@ -199,7 +199,7 @@
             <span style="color:var(--color-neutral-500);margin-left:6px;font-size:11px;">{{ m.date }}</span>
         </div>
         <div>
-            <span style="font-weight:600;color:#4ade80;">{{ m.wins }}/{{ m.attempts }}</span>
+            <span style="font-weight:600;color:#3FD08F;">{{ m.wins }}/{{ m.attempts }}</span>
             <span style="color:var(--color-neutral-500);margin-left:4px;font-size:11px;">Clutches</span>
         </div>
     </div>
@@ -225,7 +225,7 @@
                 <span class="tag tag-{% if m.result == 'Sieg' %}win{% elif m.result == 'Niederlage' %}loss{% else %}draw{% endif %}" style="font-size:10px;">{{ m.score }}</span>
             </div>
             <div style="text-align:center;font-weight:600;">{{ m.attempts }}</div>
-            <div style="text-align:center;font-weight:600;color:{% if m.wins > 0 %}#4ade80{% else %}var(--color-neutral-500){% endif %};">{{ m.wins }}</div>
+            <div style="text-align:center;font-weight:600;color:{% if m.wins > 0 %}#3FD08F{% else %}var(--color-neutral-500){% endif %};">{{ m.wins }}</div>
             <div style="text-align:center;" class="{% if m.rating >= 1.0 %}win{% elif m.rating < 0.85 %}loss{% endif %}">{{ m.rating }}</div>
         </div>
         {% endfor %}

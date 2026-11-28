@@ -26,8 +26,8 @@
         font-size: 13px; font-weight: 600; padding: 2px 10px;
         border-radius: 12px;
     }
-    .ht-trend.up { color: #4ade80; background: rgba(74,222,128,0.1); }
-    .ht-trend.down { color: #f87171; background: rgba(248,113,113,0.1); }
+    .ht-trend.up { color: #3FD08F; background: rgba(74,222,128,0.1); }
+    .ht-trend.down { color: #F2676C; background: rgba(248,113,113,0.1); }
     .ht-trend.flat { color: var(--color-neutral-500); background: var(--color-neutral-800); }
 
     .ht-values { display: flex; gap: var(--space-4); margin-bottom: 12px; }
@@ -149,7 +149,7 @@
         {% set target_pct = 50 %}
     {% endif %}
     <div class="ht-target-bar">
-        <div class="ht-target-fill" style="width: {{ [pct, 100]|min }}%; background: {% if h.at_target %}linear-gradient(90deg, var(--color-accent), #4ade80){% elif h.worsening %}linear-gradient(90deg, #f87171, #fb923c){% else %}linear-gradient(90deg, var(--color-accent), var(--color-accent-2)){% endif %};"></div>
+        <div class="ht-target-fill" style="width: {{ [pct, 100]|min }}%; background: {% if h.at_target %}linear-gradient(90deg, var(--color-accent), #3FD08F){% elif h.worsening %}linear-gradient(90deg, #F2676C, #fb923c){% else %}linear-gradient(90deg, var(--color-accent), var(--color-accent-2)){% endif %};"></div>
         {% if h.good_direction == 'up' %}
         <div class="ht-target-marker" style="left: {{ target_pct }}%;" title="{{ _('Ziel:') }} {{ h.target }}{{ h.unit }}"></div>
         {% endif %}

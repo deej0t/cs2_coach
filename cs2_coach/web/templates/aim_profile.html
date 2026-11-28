@@ -97,7 +97,7 @@
                 {% set col = 'var(--color-neutral-400)' %}
                 {% else %}
                 {% set lab = _('günstiger') if v == 'solid_positive' else (_('ungünstiger') if v == 'solid_negative' else (_('gleich') if v == 'solid_negligible' else (_('eher günstiger') if sc.ci_low > 0 else (_('eher ungünstiger') if sc.ci_high < 0 else _('unentschieden'))))) %}
-                {% set col = '#4ade80' if sc.ci_low > 0 else ('#f87171' if sc.ci_high < 0 else 'var(--color-neutral-500)') %}
+                {% set col = '#3FD08F' if sc.ci_low > 0 else ('#F2676C' if sc.ci_high < 0 else 'var(--color-neutral-500)') %}
                 {% endif %}
                 <span class="tag" style="border-color:{{ col }};color:{{ col }};">{{ lab }}</span>
                 <span style="color:var(--color-neutral-500);">d={{ sc.effect }} [{{ sc.ci_low }} … {{ sc.ci_high }}]</span>
@@ -108,7 +108,7 @@
             <td style="white-space:nowrap;font-size:12px;">
                 {% if wc %}
                 {% set v = wc.verdict %}
-                {% set col = '#4ade80' if wc.ci_low > 0 else ('#f87171' if wc.ci_high < 0 else 'var(--color-neutral-500)') %}
+                {% set col = '#3FD08F' if wc.ci_low > 0 else ('#F2676C' if wc.ci_high < 0 else 'var(--color-neutral-500)') %}
                 <span class="tag" style="border-color:{{ col }};color:{{ col }};">{{ _('besser') if v == 'solid_positive' else (_('schlechter') if v == 'solid_negative' else (_('gleich') if v == 'solid_negligible' else (_('eher besser') if wc.ci_low > 0 else (_('eher schlechter') if wc.ci_high < 0 else _('unentschieden'))))) }}</span>
                 <span style="color:var(--color-neutral-500);">d={{ wc.effect }} [{{ wc.ci_low }} … {{ wc.ci_high }}]</span>
                 {% else %}<span style="color:var(--color-neutral-600);">{{ _('zu wenige') }}</span>{% endif %}
@@ -142,7 +142,7 @@
             <td style="white-space:nowrap;font-size:12px;">
                 {% if r.vs_lobby %}
                 {% set v = r.vs_lobby.verdict %}
-                <span class="tag" style="border-color:{{ '#4ade80' if v == 'solid_positive' else ('#f87171' if v == 'solid_negative' else 'var(--color-neutral-600)') }};color:{{ '#4ade80' if v == 'solid_positive' else ('#f87171' if v == 'solid_negative' else 'var(--color-neutral-500)') }};">
+                <span class="tag" style="border-color:{{ '#3FD08F' if v == 'solid_positive' else ('#F2676C' if v == 'solid_negative' else 'var(--color-neutral-600)') }};color:{{ '#3FD08F' if v == 'solid_positive' else ('#F2676C' if v == 'solid_negative' else 'var(--color-neutral-500)') }};">
                     {{ _('besser') if v == 'solid_positive' else (_('schlechter') if v == 'solid_negative' else (_('gleich') if v == 'solid_negligible' else (_('eher besser') if r.vs_lobby.ci_low > 0 else (_('eher schlechter') if r.vs_lobby.ci_high < 0 else _('unentschieden'))))) }}</span>
                 <span style="color:var(--color-neutral-500);">d={{ r.vs_lobby.effect }} [{{ r.vs_lobby.ci_low }} … {{ r.vs_lobby.ci_high }}]</span>
                 {% else %}<span style="color:var(--color-neutral-600);">{{ _('zu wenige') }}</span>{% endif %}
@@ -152,7 +152,7 @@
             <td style="white-space:nowrap;font-size:12px;">
                 {% if r.vs_lost %}
                 {% set v = r.vs_lost.verdict %}
-                <span class="tag" style="border-color:{{ '#fbbf24' if v in SOLID else 'var(--color-neutral-600)' }};color:{{ '#fbbf24' if v in SOLID else 'var(--color-neutral-500)' }};">
+                <span class="tag" style="border-color:{{ '#F5B941' if v in SOLID else 'var(--color-neutral-600)' }};color:{{ '#F5B941' if v in SOLID else 'var(--color-neutral-500)' }};">
                     {{ _('trennt') if v in SOLID else (_('gleich') if v == 'solid_negligible' else (_('Tendenz') if r.vs_lost.ci_low > 0 or r.vs_lost.ci_high < 0 else _('unentschieden'))) }}</span>
                 <span style="color:var(--color-neutral-500);">d={{ r.vs_lost.effect }} [{{ r.vs_lost.ci_low }} … {{ r.vs_lost.ci_high }}]</span>
                 {% else %}<span style="color:var(--color-neutral-600);">{{ _('zu wenige') }}</span>{% endif %}

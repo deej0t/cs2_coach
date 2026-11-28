@@ -33,8 +33,8 @@
     .pr-rec-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .pr-rec-title { font-size: 13px; font-weight: 600; }
     .pr-rec-badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; padding: 1px 6px; border-radius: 8px; }
-    .pr-rec-badge.high { background: rgba(248,113,113,0.12); color: #f87171; }
-    .pr-rec-badge.medium { background: rgba(251,191,36,0.12); color: #fbbf24; }
+    .pr-rec-badge.high { background: rgba(248,113,113,0.12); color: #F2676C; }
+    .pr-rec-badge.medium { background: rgba(251,191,36,0.12); color: #F5B941; }
     .pr-rec-badge.low { background: rgba(255,255,255,0.06); color: var(--color-neutral-500); }
     .pr-rec-desc { font-size: 11px; color: var(--color-neutral-400); line-height: 1.5; margin-bottom: 6px; }
     .pr-rec-cmd { font-family: var(--font-mono, monospace); font-size: 10px; color: var(--color-accent); background: rgba(93,169,242,0.06); padding: 2px 6px; border-radius: 3px; cursor: pointer; }
@@ -67,13 +67,13 @@
     .pr-spot-table { width: 100%; border-collapse: collapse; margin-bottom: var(--space-3); font-size: 12px; }
     .pr-spot-table th { text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); padding: 6px 8px; border-bottom: 1px solid var(--color-divider); font-weight: 600; }
     .pr-spot-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.03); }
-    .pr-spot-num { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: rgba(248,113,113,0.1); color: #f87171; font-size: 10px; font-weight: 700; }
+    .pr-spot-num { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: rgba(248,113,113,0.1); color: #F2676C; font-size: 10px; font-weight: 700; }
     .pr-spot-bar { height: 4px; border-radius: 2px; background: rgba(248,113,113,0.15); margin-top: 2px; }
-    .pr-spot-bar-inner { height: 100%; border-radius: 2px; background: #f87171; }
+    .pr-spot-bar-inner { height: 100%; border-radius: 2px; background: #F2676C; }
 
     .pr-pill-list { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: var(--space-2); }
     .pr-wpn-pill { padding: 2px 8px; border-radius: 10px; font-size: 10px; background: rgba(93,169,242,0.1); color: var(--color-accent); border: 1px solid rgba(93,169,242,0.2); }
-    .pr-enemy-pill { padding: 2px 8px; border-radius: 10px; font-size: 10px; background: rgba(248,113,113,0.08); color: #f87171; border: 1px solid rgba(248,113,113,0.2); }
+    .pr-enemy-pill { padding: 2px 8px; border-radius: 10px; font-size: 10px; background: rgba(248,113,113,0.08); color: #F2676C; border: 1px solid rgba(248,113,113,0.2); }
 
     .pr-cfg-preview { background: var(--color-bg); border: 1px solid var(--color-divider); border-radius: var(--radius-sm); padding: 12px; font-family: var(--font-mono, 'JetBrains Mono', monospace); font-size: 11px; line-height: 1.6; max-height: 350px; overflow-y: auto; white-space: pre; color: var(--color-neutral-400); }
 
@@ -81,8 +81,8 @@
     .pr-connect-cmd { font-family: var(--font-mono, monospace); font-size: 14px; padding: 8px 14px; background: var(--color-bg); border-radius: var(--radius-sm); color: var(--color-accent); cursor: pointer; display: inline-block; }
     .pr-connect-cmd:hover { background: rgba(93,169,242,0.1); }
 
-    .win { color: #4ade80; }
-    .loss { color: #f87171; }
+    .win { color: #3FD08F; }
+    .loss { color: #F2676C; }
 
     /* ── Responsive ── */
     @media (max-width: 768px) {
@@ -297,7 +297,7 @@
                 {% for s in m.spots %}
                 <tr>
                     <td><span class="pr-spot-num">{{ loop.index }}</span></td>
-                    <td style="font-weight:600;color:#f87171;">{{ s.count }}x</td>
+                    <td style="font-weight:600;color:#F2676C;">{{ s.count }}x</td>
                     <td>{{ s.enemy }}</td>
                     <td><span class="pr-wpn-pill">{{ s.weapon }}</span></td>
                     <td>{% if s.hs_pct > 0 %}<span class="{% if s.hs_pct >= 50 %}loss{% endif %}">{{ s.hs_pct }}%</span>{% else %}&mdash;{% endif %}</td>

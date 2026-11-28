@@ -27,8 +27,8 @@
     <td>{{ d.together.pct }} % <span style="color:var(--color-neutral-500);">({{ d.together.wins }}/{{ d.together.n }})</span></td>
     <td>{% if d.alone.n %}{{ d.alone.pct }} % <span style="color:var(--color-neutral-500);">({{ d.alone.wins }}/{{ d.alone.n }})</span>{% else %}–{% endif %}</td>
     <td>{% if not d.cmp %}<span style="color:var(--color-neutral-500);">{{ _('zu wenige Matches') }}</span>
-        {% elif d.cmp.a_better %}<span style="color:#4ade80;">{{ _('zusammen belastbar stärker') }}</span>
-        {% elif d.cmp.b_better %}<span style="color:#f87171;">{{ _('zusammen belastbar schwächer') }}</span>
+        {% elif d.cmp.a_better %}<span style="color:#3FD08F;">{{ _('zusammen belastbar stärker') }}</span>
+        {% elif d.cmp.b_better %}<span style="color:#F2676C;">{{ _('zusammen belastbar schwächer') }}</span>
         {% elif d.cmp.no_difference %}{{ _('kein nennenswerter Unterschied') }}
         {% else %}<span style="color:var(--color-neutral-500);" title="{{ d.note }}">{{ _('noch offen') }}{% if d.cmp.n_needed %} ({{ _('ab ca.') }} {{ d.cmp.n_needed }} {{ _('Matches') }}){% endif %}</span>{% endif %}</td>
     <td style="font-size:12px;">{% for m in d.maps[:4] %}{{ m.map|replace('de_', '') }} {{ m.pct }} % ({{ m.n }}){% if not loop.last %} · {% endif %}{% endfor %}</td></tr>

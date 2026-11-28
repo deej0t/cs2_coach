@@ -93,16 +93,16 @@
         <div class="mk-val" style="color:var(--color-accent);">{{ mech.avg_accuracy }}%</div>
         <div class="mk-lbl">Accuracy</div>
     </div>
-    <div class="mk-card" style="border-top: 3px solid #4ade80;">
+    <div class="mk-card" style="border-top: 3px solid #3FD08F;">
         <div class="mk-val {% if mech.avg_hs and mech.avg_hs >= 50 %}win{% endif %}">{{ mech.avg_hs }}%</div>
         <div class="mk-lbl">Headshot-Rate</div>
     </div>
-    <div class="mk-card" style="border-top: 3px solid #60a5fa;">
-        <div class="mk-val" style="color:#60a5fa;">{{ mech.avg_crosshair }}&deg;</div>
+    <div class="mk-card" style="border-top: 3px solid #5DA9F2;">
+        <div class="mk-val" style="color:#5DA9F2;">{{ mech.avg_crosshair }}&deg;</div>
         <div class="mk-lbl">Crosshair Placement</div>
         <div class="mk-sub">{{ mech.ch_rating }}</div>
     </div>
-    <div class="mk-card" style="border-top: 3px solid #fbbf24;">
+    <div class="mk-card" style="border-top: 3px solid #F5B941;">
         <div class="mk-val {% if mech.avg_cs and mech.avg_cs >= 85 %}win{% elif mech.avg_cs and mech.avg_cs < 70 %}loss{% endif %}">{{ mech.avg_cs }}%</div>
         <div class="mk-lbl">Counter-Strafe</div>
         <div class="mk-sub">{{ mech.cs_rating }}</div>
@@ -123,7 +123,7 @@
     <!-- Spray Control -->
     <div class="mk-detail-card">
         <div class="mk-detail-title">
-            <i data-lucide="zap" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#fbbf24;"></i>
+            <i data-lucide="zap" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#F5B941;"></i>
             Spray Control
         </div>
         <div style="text-align:center;margin-bottom:12px;">
@@ -131,15 +131,15 @@
             <div style="font-size:11px;color:var(--color-neutral-500);">Burst-Kill-Rate</div>
         </div>
         <div class="mk-bar-wrap">
-            <div class="mk-bar-label"><span>Burst Kills</span><span style="color:#4ade80;">{{ mech.spray_burst }}</span></div>
+            <div class="mk-bar-label"><span>Burst Kills</span><span style="color:#3FD08F;">{{ mech.spray_burst }}</span></div>
             <div class="mk-bar">
-                <div class="mk-bar-fill" style="width:{{ mech.burst_pct }}%;background:#4ade80;"></div>
+                <div class="mk-bar-fill" style="width:{{ mech.burst_pct }}%;background:#3FD08F;"></div>
             </div>
         </div>
         <div class="mk-bar-wrap">
-            <div class="mk-bar-label"><span>Spray Kills</span><span style="color:#f87171;">{{ mech.spray_spray }}</span></div>
+            <div class="mk-bar-label"><span>Spray Kills</span><span style="color:#F2676C;">{{ mech.spray_spray }}</span></div>
             <div class="mk-bar">
-                <div class="mk-bar-fill" style="width:{{ 100 - mech.burst_pct }}%;background:#f87171;"></div>
+                <div class="mk-bar-fill" style="width:{{ 100 - mech.burst_pct }}%;background:#F2676C;"></div>
             </div>
         </div>
         {% if mech.avg_recoil %}
@@ -152,7 +152,7 @@
     <!-- Engagement Distance -->
     <div class="mk-detail-card">
         <div class="mk-detail-title">
-            <i data-lucide="ruler" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#60a5fa;"></i>
+            <i data-lucide="ruler" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#5DA9F2;"></i>
             {{ _('Kampfdistanz') }}
         </div>
         {% if mech.engage.avg_distance %}
@@ -164,19 +164,19 @@
         <div class="mk-bar-wrap">
             <div class="mk-bar-label"><span>{{ _('Nah') }}</span><span>{{ mech.engage.close }} ({{ mech.engage.close_pct }}%)</span></div>
             <div class="mk-bar">
-                <div class="mk-bar-fill" style="width:{{ mech.engage.close_pct }}%;background:#f87171;"></div>
+                <div class="mk-bar-fill" style="width:{{ mech.engage.close_pct }}%;background:#F2676C;"></div>
             </div>
         </div>
         <div class="mk-bar-wrap">
             <div class="mk-bar-label"><span>{{ _('Mittel') }}</span><span>{{ mech.engage.mid }} ({{ mech.engage.mid_pct }}%)</span></div>
             <div class="mk-bar">
-                <div class="mk-bar-fill" style="width:{{ mech.engage.mid_pct }}%;background:#fbbf24;"></div>
+                <div class="mk-bar-fill" style="width:{{ mech.engage.mid_pct }}%;background:#F5B941;"></div>
             </div>
         </div>
         <div class="mk-bar-wrap">
             <div class="mk-bar-label"><span>{{ _('Weit') }}</span><span>{{ mech.engage.long }} ({{ mech.engage.long_pct }}%)</span></div>
             <div class="mk-bar">
-                <div class="mk-bar-fill" style="width:{{ mech.engage.long_pct }}%;background:#60a5fa;"></div>
+                <div class="mk-bar-fill" style="width:{{ mech.engage.long_pct }}%;background:#5DA9F2;"></div>
             </div>
         </div>
         <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--color-neutral-500);">
@@ -187,29 +187,29 @@
     <!-- Death Timing -->
     <div class="mk-detail-card">
         <div class="mk-detail-title">
-            <i data-lucide="skull" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#f87171;"></i>
+            <i data-lucide="skull" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#F2676C;"></i>
             {{ _('Tod-Timing') }}
         </div>
         <div style="text-align:center;margin-bottom:12px;">
-            <div style="font-family:var(--font-heading);font-size:28px;font-weight:700;color:#f87171;">{{ mech.deaths.total }}</div>
+            <div style="font-family:var(--font-heading);font-size:28px;font-weight:700;color:#F2676C;">{{ mech.deaths.total }}</div>
             <div style="font-size:11px;color:var(--color-neutral-500);">{{ _('Tode analysiert') }}</div>
         </div>
         <div class="mk-bar-wrap">
-            <div class="mk-bar-label"><span>Frueh (0-30s)</span><span {% if mech.deaths.early_pct > 35 %}style="color:#f87171;"{% endif %}>{{ mech.deaths.early }} ({{ mech.deaths.early_pct }}%)</span></div>
+            <div class="mk-bar-label"><span>Frueh (0-30s)</span><span {% if mech.deaths.early_pct > 35 %}style="color:#F2676C;"{% endif %}>{{ mech.deaths.early }} ({{ mech.deaths.early_pct }}%)</span></div>
             <div class="mk-bar">
-                <div class="mk-bar-fill" style="width:{{ mech.deaths.early_pct }}%;background:#f87171;"></div>
+                <div class="mk-bar-fill" style="width:{{ mech.deaths.early_pct }}%;background:#F2676C;"></div>
             </div>
         </div>
         <div class="mk-bar-wrap">
             <div class="mk-bar-label"><span>Mitte (30-60s)</span><span>{{ mech.deaths.mid }} ({{ mech.deaths.mid_pct }}%)</span></div>
             <div class="mk-bar">
-                <div class="mk-bar-fill" style="width:{{ mech.deaths.mid_pct }}%;background:#fbbf24;"></div>
+                <div class="mk-bar-fill" style="width:{{ mech.deaths.mid_pct }}%;background:#F5B941;"></div>
             </div>
         </div>
         <div class="mk-bar-wrap">
             <div class="mk-bar-label"><span>Spaet (60s+)</span><span>{{ mech.deaths.late }} ({{ mech.deaths.late_pct }}%)</span></div>
             <div class="mk-bar">
-                <div class="mk-bar-fill" style="width:{{ mech.deaths.late_pct }}%;background:#4ade80;"></div>
+                <div class="mk-bar-fill" style="width:{{ mech.deaths.late_pct }}%;background:#3FD08F;"></div>
             </div>
         </div>
     </div>
@@ -229,11 +229,11 @@
                 <div style="font-size:10px;color:var(--color-neutral-500);">RIFLE</div>
             </div>
             <div style="text-align:center;">
-                <div style="font-family:var(--font-heading);font-size:22px;font-weight:700;color:#fbbf24;">{{ mech.weapons.awp }}</div>
+                <div style="font-family:var(--font-heading);font-size:22px;font-weight:700;color:#F5B941;">{{ mech.weapons.awp }}</div>
                 <div style="font-size:10px;color:var(--color-neutral-500);">AWP</div>
             </div>
             <div style="text-align:center;">
-                <div style="font-family:var(--font-heading);font-size:22px;font-weight:700;color:#60a5fa;">{{ mech.weapons.pistol }}</div>
+                <div style="font-family:var(--font-heading);font-size:22px;font-weight:700;color:#5DA9F2;">{{ mech.weapons.pistol }}</div>
                 <div style="font-size:10px;color:var(--color-neutral-500);">PISTOL</div>
             </div>
             {% if mech.weapons.other > 0 %}
@@ -245,8 +245,8 @@
         </div>
         <div class="mk-bar" style="height:12px;display:flex;overflow:hidden;">
             <div style="width:{{ mech.weapons.rifle_pct }}%;background:var(--color-accent);height:100%;"></div>
-            <div style="width:{{ mech.weapons.awp_pct }}%;background:#fbbf24;height:100%;"></div>
-            <div style="width:{{ mech.weapons.pistol_pct }}%;background:#60a5fa;height:100%;"></div>
+            <div style="width:{{ mech.weapons.awp_pct }}%;background:#F5B941;height:100%;"></div>
+            <div style="width:{{ mech.weapons.pistol_pct }}%;background:#5DA9F2;height:100%;"></div>
         </div>
         <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--color-neutral-500);">
             <span>Rifle {{ mech.weapons.rifle_pct }}%</span>
@@ -258,7 +258,7 @@
     <!-- Accuracy Trend -->
     <div class="mk-detail-card">
         <div class="mk-detail-title">
-            <i data-lucide="trending-up" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#4ade80;"></i>
+            <i data-lucide="trending-up" style="width:14px;height:14px;display:inline;vertical-align:middle;color:#3FD08F;"></i>
             Accuracy-Trend (letzte {{ mech.trend|length }} Matches)
         </div>
         {% if mech.trend %}
@@ -266,7 +266,7 @@
             {% set max_acc = namespace(v=1) %}
             {% for t in mech.trend %}{% if t.accuracy and t.accuracy > max_acc.v %}{% set max_acc.v = t.accuracy %}{% endif %}{% endfor %}
             {% for t in mech.trend %}
-            <div class="mk-spark-bar" style="height:{{ ((t.accuracy or 0) / max_acc.v * 100)|round }}%;{% if t.accuracy and t.accuracy >= mech.avg_accuracy %}background:#4ade80;{% else %}background:var(--color-accent);{% endif %}" title="{{ t.date }}: {{ t.accuracy }}%"></div>
+            <div class="mk-spark-bar" style="height:{{ ((t.accuracy or 0) / max_acc.v * 100)|round }}%;{% if t.accuracy and t.accuracy >= mech.avg_accuracy %}background:#3FD08F;{% else %}background:var(--color-accent);{% endif %}" title="{{ t.date }}: {{ t.accuracy }}%"></div>
             {% endfor %}
         </div>
         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--color-neutral-600);margin-top:4px;">
@@ -279,7 +279,7 @@
                 {% set max_hs = namespace(v=1) %}
                 {% for t in mech.trend %}{% if t.hs_pct and t.hs_pct > max_hs.v %}{% set max_hs.v = t.hs_pct %}{% endif %}{% endfor %}
                 {% for t in mech.trend %}
-                <div class="mk-spark-bar" style="height:{{ ((t.hs_pct or 0) / max_hs.v * 100)|round }}%;{% if t.hs_pct and t.hs_pct >= mech.avg_hs %}background:#4ade80;{% else %}background:#fbbf24;{% endif %}" title="{{ t.date }}: {{ t.hs_pct }}%"></div>
+                <div class="mk-spark-bar" style="height:{{ ((t.hs_pct or 0) / max_hs.v * 100)|round }}%;{% if t.hs_pct and t.hs_pct >= mech.avg_hs %}background:#3FD08F;{% else %}background:#F5B941;{% endif %}" title="{{ t.date }}: {{ t.hs_pct }}%"></div>
                 {% endfor %}
             </div>
         </div>
@@ -301,10 +301,10 @@
         <div class="mk-match-row">
             <div style="color:var(--color-neutral-500);">{{ m.date }}</div>
             <div>{{ m.map }}</div>
-            <div style="text-align:center;font-weight:600;{% if m.accuracy and m.accuracy >= 30 %}color:#4ade80;{% elif m.accuracy and m.accuracy < 20 %}color:#f87171;{% endif %}">{{ m.accuracy if m.accuracy is not none else '—' }}%</div>
-            <div style="text-align:center;{% if m.hs_pct and m.hs_pct >= 50 %}color:#4ade80;font-weight:600;{% endif %}">{{ m.hs_pct if m.hs_pct is not none else '—' }}%</div>
-            <div style="text-align:center;{% if m.crosshair and m.crosshair <= 6 %}color:#4ade80;{% elif m.crosshair and m.crosshair > 12 %}color:#f87171;{% endif %}">{{ m.crosshair if m.crosshair is not none else '—' }}&deg;</div>
-            <div style="text-align:center;{% if m.cs_score and m.cs_score >= 85 %}color:#4ade80;{% elif m.cs_score and m.cs_score < 70 %}color:#f87171;{% endif %}">{{ m.cs_score if m.cs_score is not none else '—' }}%</div>
+            <div style="text-align:center;font-weight:600;{% if m.accuracy and m.accuracy >= 30 %}color:#3FD08F;{% elif m.accuracy and m.accuracy < 20 %}color:#F2676C;{% endif %}">{{ m.accuracy if m.accuracy is not none else '—' }}%</div>
+            <div style="text-align:center;{% if m.hs_pct and m.hs_pct >= 50 %}color:#3FD08F;font-weight:600;{% endif %}">{{ m.hs_pct if m.hs_pct is not none else '—' }}%</div>
+            <div style="text-align:center;{% if m.crosshair and m.crosshair <= 6 %}color:#3FD08F;{% elif m.crosshair and m.crosshair > 12 %}color:#F2676C;{% endif %}">{{ m.crosshair if m.crosshair is not none else '—' }}&deg;</div>
+            <div style="text-align:center;{% if m.cs_score and m.cs_score >= 85 %}color:#3FD08F;{% elif m.cs_score and m.cs_score < 70 %}color:#F2676C;{% endif %}">{{ m.cs_score if m.cs_score is not none else '—' }}%</div>
             <div style="text-align:center;color:var(--color-neutral-400);">{{ m.recoil if m.recoil is not none else '—' }}</div>
         </div>
         {% endfor %}

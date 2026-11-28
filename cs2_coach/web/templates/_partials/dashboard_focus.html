@@ -16,8 +16,8 @@
     .pd-meta { font-size: 13px; color: var(--color-neutral-400); line-height: 1.7; }
     .pd-meta b { color: var(--color-text); }
     .pd-chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
-    .pd-chip.up { background: #22c55e22; color: #4ade80; }
-    .pd-chip.down { background: #ef444422; color: #f87171; }
+    .pd-chip.up { background: #22c55e22; color: #3FD08F; }
+    .pd-chip.down { background: #ef444422; color: #F2676C; }
 
     /* Rating-Abzeichen wie im Spiel: schraeg, Farbstreifen links */
     .pd-hero { display: grid; grid-template-columns: 300px 1fr; gap: var(--space-5); align-items: center;
@@ -53,9 +53,9 @@
     .pd-tile-map { font-size: 12px; color: var(--color-neutral-400); }
     .pd-tile-score { font-size: 18px; font-weight: 700; margin-top: 2px; }
     .pd-tile-ch { font-size: 15px; font-weight: 700; margin-top: 10px; }
-    .pd-tile-ch.up { color: #4ade80; } .pd-tile-ch.down { color: #f87171; }
+    .pd-tile-ch.up { color: #3FD08F; } .pd-tile-ch.down { color: #F2676C; }
     .pd-res { font-size: 10px; padding: 1px 5px; border-radius: 4px; vertical-align: middle; background: var(--color-neutral-800); }
-    .pd-res.S { color: #4ade80; } .pd-res.N { color: #f87171; }
+    .pd-res.S { color: #3FD08F; } .pd-res.N { color: #F2676C; }
     .pd-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; margin: var(--space-4) 0; }
     .pd-train { display: grid; grid-template-columns: 1fr auto; gap: var(--space-5); align-items: center;
                 border-radius: 14px; padding: var(--space-4) var(--space-5); border: 1px solid var(--color-divider);
@@ -68,7 +68,7 @@
     .pd-live { font-size: 12px; color: var(--color-neutral-500); margin-left: auto; }
     .pd-live i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px;
                  background: var(--color-neutral-600); vertical-align: middle; }
-    .pd-live.on i { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
+    .pd-live.on i { background: #3FD08F; box-shadow: 0 0 8px #3FD08F; }
 
     /* Dezente Animationen - aus bei "Bewegung reduzieren" */
     @media (prefers-reduced-motion: no-preference) {
@@ -131,7 +131,7 @@
     <div>
         <div class="pd-chart-head" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
             <span class="pd-kicker">{{ _('Verlauf') }} · {{ _('letzte') }} {{ p.n }} Premier-Matches</span>
-            <span class="pd-legend"><i style="background:#4ade80;"></i>{{ _('Sieg') }}<i style="background:#f87171;"></i>{{ _('Niederlage') }}</span>
+            <span class="pd-legend"><i style="background:#3FD08F;"></i>{{ _('Sieg') }}<i style="background:#F2676C;"></i>{{ _('Niederlage') }}</span>
         </div>
         <svg class="pd-chart" viewBox="0 0 {{ p.w }} {{ p.h }}"
              role="img" aria-label="{{ _('Premier-Rating der letzten') }} {{ p.n }} Matches, {{ p.first_date }} bis {{ p.last_date }}">
@@ -150,7 +150,7 @@
                {% if dot.last %}
                <circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="6" fill="{{ p.color }}" stroke="var(--color-surface)" stroke-width="2" pointer-events="none"/>
                {% else %}
-               <circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="3.5" fill="{{ '#4ade80' if dot.res == 'w' else '#f87171' if dot.res == 'l' else 'var(--color-neutral-500)' }}"
+               <circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="3.5" fill="{{ '#3FD08F' if dot.res == 'w' else '#F2676C' if dot.res == 'l' else 'var(--color-neutral-500)' }}"
                        stroke="var(--color-surface)" stroke-width="1.5" pointer-events="none"/>
                {% endif %}</g>
             {% endfor %}

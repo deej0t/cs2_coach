@@ -22,9 +22,9 @@
         width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
         animation: fw-blink 2s infinite;
     }
-    .fw-pulse-green { background: #4ade80; box-shadow: 0 0 8px rgba(74,222,128,0.5); }
-    .fw-pulse-yellow { background: #fbbf24; box-shadow: 0 0 8px rgba(251,191,36,0.5); }
-    .fw-pulse-red { background: #f87171; }
+    .fw-pulse-green { background: #3FD08F; box-shadow: 0 0 8px rgba(74,222,128,0.5); }
+    .fw-pulse-yellow { background: #F5B941; box-shadow: 0 0 8px rgba(251,191,36,0.5); }
+    .fw-pulse-red { background: #F2676C; }
     @keyframes fw-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
     .fw-info { flex: 1; }
@@ -40,17 +40,17 @@
     .fw-table th { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-neutral-500); padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--color-neutral-800); }
     .fw-table td { padding: 10px; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent); }
     .fw-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
-    .fw-badge-done { background: rgba(74,222,128,0.15); color: #4ade80; }
-    .fw-badge-new { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .fw-badge-done { background: rgba(74,222,128,0.15); color: #3FD08F; }
+    .fw-badge-new { background: rgba(251,191,36,0.15); color: #F5B941; }
 
     .fw-progress { margin-bottom: var(--space-5); }
     .fw-prog-bar { height: 10px; border-radius: 5px; background: var(--color-neutral-800); overflow: hidden; margin-bottom: 6px; }
-    .fw-prog-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--color-accent), #4ade80); transition: width 0.3s; }
+    .fw-prog-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--color-accent), #3FD08F); transition: width 0.3s; }
 
     .fw-log { max-height: 300px; overflow-y: auto; font-size: 12px; font-family: monospace; background: var(--color-bg); border: 1px solid var(--color-neutral-800); border-radius: var(--radius-sm); padding: 10px; margin-top: var(--space-3); }
     .fw-log-entry { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
-    .fw-log-ok { color: #4ade80; }
-    .fw-log-err { color: #f87171; }
+    .fw-log-ok { color: #3FD08F; }
+    .fw-log-err { color: #F2676C; }
     .fw-log-info { color: var(--color-neutral-400); }
 </style>
 
@@ -70,7 +70,7 @@
     <div class="fw-pulse fw-pulse-red"></div>
     <div class="fw-info">
         <h3>Ordner nicht gefunden</h3>
-        <p style="color:#f87171;">{{ watch.path }}</p>
+        <p style="color:#F2676C;">{{ watch.path }}</p>
         <p>Pruefe den Pfad in den <a href="{{ url_for('settings') }}" style="color:var(--color-accent);">Einstellungen</a>.</p>
     </div>
 </div>
@@ -95,7 +95,7 @@
             <div class="fw-counter-label">Analysiert</div>
         </div>
         <div class="fw-counter">
-            <div class="fw-counter-val" id="fw-new" style="{% if watch.new > 0 %}color:#fbbf24{% else %}color:var(--color-neutral-500){% endif %}">{{ watch.new }}</div>
+            <div class="fw-counter-val" id="fw-new" style="{% if watch.new > 0 %}color:#F5B941{% else %}color:var(--color-neutral-500){% endif %}">{{ watch.new }}</div>
             <div class="fw-counter-label">Neu</div>
         </div>
     </div>
@@ -176,7 +176,7 @@ function checkForNew() {
             document.getElementById('fw-total').textContent = data.total;
             document.getElementById('fw-analyzed').textContent = data.analyzed;
             document.getElementById('fw-new').textContent = data.new;
-            document.getElementById('fw-new').style.color = data.new > 0 ? '#fbbf24' : 'var(--color-neutral-500)';
+            document.getElementById('fw-new').style.color = data.new > 0 ? '#F5B941' : 'var(--color-neutral-500)';
 
             var statusText = document.getElementById('fw-status-text');
             var pulse = document.getElementById('fw-pulse');

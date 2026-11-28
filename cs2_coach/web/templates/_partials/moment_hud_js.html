@@ -115,10 +115,10 @@
         if (bomb) {
             var left = Math.max(0, 40 - (t - d.hud.bomb_tick) / 64);
             icon(c, 'c4', cx - 52 * u, top + 8 * u, 30 * u);
-            text(c, left.toFixed(left < 10 ? 1 : 0), cx + 22 * u, top + 24 * u, 30 * u, '#f87171', 'center');
+            text(c, left.toFixed(left < 10 ? 1 : 0), cx + 22 * u, top + 24 * u, 30 * u, '#F2676C', 'center');
         } else if (cl && cl[1] !== null) {
             var s = Math.ceil(cl[1]);
-            text(c, Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'), cx, top + 24 * u, 32 * u, s <= 10 ? '#f87171' : '#fff', 'center');
+            text(c, Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'), cx, top + 24 * u, 32 * u, s <= 10 ? '#F2676C' : '#fff', 'center');
         }
         if (cl) {
             text(c, String(cl[2] ?? ''), cx - 26 * u, top + 60 * u, 30 * u, CT, 'center');
@@ -145,7 +145,7 @@
                 if (dead) text(c, '✕', x + sw / 2, top + sw / 2, 40 * u, 'rgba(248,113,113,0.8)', 'center');
                 else {
                     box(c, x, top + sw + 3 * u, sw, 5 * u, 'rgba(0,0,0,0.6)');
-                    box(c, x, top + sw + 3 * u, sw * Math.max(0, m.r[6]) / 100, 5 * u, m.r[6] <= 25 ? '#f87171' : '#e5e7eb');
+                    box(c, x, top + sw + 3 * u, sw * Math.max(0, m.r[6]) / 100, 5 * u, m.r[6] <= 25 ? '#F2676C' : '#e5e7eb');
                 }
             });
         });
@@ -158,7 +158,7 @@
         if (money !== undefined) x0 += text(c, '$' + money, x0, by, 40 * u, '#87c288') + 50 * u;
         icon(c, 'hud_health_cross', x0, by - 18 * u, 36 * u);
         x0 += 46 * u;
-        x0 += text(c, String(vp.hp), x0, by, 50 * u, vp.hp <= 25 ? '#f87171' : '#fff') + 40 * u;
+        x0 += text(c, String(vp.hp), x0, by, 50 * u, vp.hp <= 25 ? '#F2676C' : '#fff') + 40 * u;
         icon(c, helmet ? 'hud_armor_helmet' : 'hud_armor', x0, by - 20 * u, 40 * u);
         x0 += 50 * u;
         text(c, String(vp.armor || 0), x0, by, 50 * u, '#fff');
@@ -172,7 +172,7 @@
                 icon(c, 'hud_ammo_reserve_magazine', rx - mw - 6 * u, by - 14 * u, 30 * u, 0.9, true);
                 rx -= mw + 46 * u;
             }
-            text(c, String(vp.ammo ?? ''), rx, by, 56 * u, vp.ammo === 0 ? '#f87171' : '#fff', 'right');
+            text(c, String(vp.ammo ?? ''), rx, by, 56 * u, vp.ammo === 0 ? '#F2676C' : '#fff', 'right');
         }
 
         // ── rechts: Waffenleiste (Slots 1-5), aktive Waffe hell ──

@@ -48,8 +48,8 @@
 
     /* Side split */
     .da-side-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin: 8px 0; }
-    .da-side-ct { background: #7eaadb; }
-    .da-side-t { background: #deb23e; }
+    .da-side-ct { background: #9BB2D1; }
+    .da-side-t { background: #D2B48A; }
     .da-side-labels { display: flex; justify-content: space-between; font-size: 12px; }
 
     /* Killer/weapon rows */
@@ -178,19 +178,19 @@
 <!-- ── Death Categories ── -->
 {% if da.categories %}
 {% set cats = [
-    {"key": "timing", "label": _('Timing'), "icon": "timer", "color": "#f87171",
+    {"key": "timing", "label": _('Timing'), "icon": "timer", "color": "#F2676C",
      "desc": _('Zu frueh gepeekt, beim Rotieren erwischt')},
     {"key": "aim", "label": _('Aim-Duell'), "icon": "target", "color": "#fb923c",
      "desc": _('Direktes Duell verloren (Gegner HS)')},
-    {"key": "positioning", "label": _('Positioning'), "icon": "map-pin", "color": "#fbbf24",
+    {"key": "positioning", "label": _('Positioning'), "icon": "map-pin", "color": "#F5B941",
      "desc": _('Schlechte Position, zu exposed, kein Cover')},
     {"key": "utility", "label": _('Ohne Utility'), "icon": "flame", "color": "#a78bfa",
      "desc": _('Gepeekt ohne Flash oder Smoke')},
     {"key": "eco", "label": _('Eco-Tod'), "icon": "coins", "color": "#9397ab",
      "desc": _('Eco/Force-Runde — akzeptabler Tod')},
-    {"key": "impact", "label": _('Impact-Tod'), "icon": "check-circle", "color": "#4ade80",
+    {"key": "impact", "label": _('Impact-Tod'), "icon": "check-circle", "color": "#3FD08F",
      "desc": _('Hattest Kill(s) vor dem Tod — produktiv')},
-    {"key": "traded", "label": _('Getradet'), "icon": "users", "color": "#60a5fa",
+    {"key": "traded", "label": _('Getradet'), "icon": "users", "color": "#5DA9F2",
      "desc": _('Gestorben aber Runde trotzdem gewonnen')},
 ] %}
 <div class="da-section">
@@ -255,17 +255,17 @@
             <canvas id="timing-donut" width="140" height="140"></canvas>
             <div class="da-donut-legend">
                 <div class="da-legend-item">
-                    <span class="da-legend-dot" style="background:#f87171;"></span>
+                    <span class="da-legend-dot" style="background:#F2676C;"></span>
                     <span>{{ _('Frueh') }}</span>
                     <span class="da-legend-pct">{{ da.timing_pcts.early }}%</span>
                 </div>
                 <div class="da-legend-item">
-                    <span class="da-legend-dot" style="background:#fbbf24;"></span>
+                    <span class="da-legend-dot" style="background:#F5B941;"></span>
                     <span>{{ _('Mitte') }}</span>
                     <span class="da-legend-pct">{{ da.timing_pcts.mid }}%</span>
                 </div>
                 <div class="da-legend-item">
-                    <span class="da-legend-dot" style="background:#4ade80;"></span>
+                    <span class="da-legend-dot" style="background:#3FD08F;"></span>
                     <span>{{ _('Spaet') }}</span>
                     <span class="da-legend-pct">{{ da.timing_pcts.late }}%</span>
                 </div>
@@ -285,23 +285,23 @@
                 <div class="da-side-t" style="width:{{ da.side.t_pct }}%;"></div>
             </div>
             <div class="da-side-labels">
-                <span style="color:#7eaadb;font-weight:600;">CT {{ da.side.ct_pct }}%</span>
-                <span style="color:#deb23e;font-weight:600;">T {{ da.side.t_pct }}%</span>
+                <span style="color:#9BB2D1;font-weight:600;">CT {{ da.side.ct_pct }}%</span>
+                <span style="color:#D2B48A;font-weight:600;">T {{ da.side.t_pct }}%</span>
             </div>
             <div style="margin-top:var(--space-4);">
                 <div class="da-bar-row">
-                    <span class="da-bar-label" style="color:#7eaadb;">{{ _('CT Death Rate') }}</span>
+                    <span class="da-bar-label" style="color:#9BB2D1;">{{ _('CT Death Rate') }}</span>
                     <div class="da-bar-track">
-                        <div class="da-bar-fill" style="width:{{ da.side.ct_death_rate }}%;background:#7eaadb;"></div>
+                        <div class="da-bar-fill" style="width:{{ da.side.ct_death_rate }}%;background:#9BB2D1;"></div>
                     </div>
-                    <span class="da-bar-val" style="color:#7eaadb;">{{ da.side.ct_death_rate }}%</span>
+                    <span class="da-bar-val" style="color:#9BB2D1;">{{ da.side.ct_death_rate }}%</span>
                 </div>
                 <div class="da-bar-row">
-                    <span class="da-bar-label" style="color:#deb23e;">{{ _('T Death Rate') }}</span>
+                    <span class="da-bar-label" style="color:#D2B48A;">{{ _('T Death Rate') }}</span>
                     <div class="da-bar-track">
-                        <div class="da-bar-fill" style="width:{{ da.side.t_death_rate }}%;background:#deb23e;"></div>
+                        <div class="da-bar-fill" style="width:{{ da.side.t_death_rate }}%;background:#D2B48A;"></div>
                     </div>
-                    <span class="da-bar-val" style="color:#deb23e;">{{ da.side.t_death_rate }}%</span>
+                    <span class="da-bar-val" style="color:#D2B48A;">{{ da.side.t_death_rate }}%</span>
                 </div>
             </div>
             <div style="font-size:12px;color:var(--color-neutral-500);text-align:center;margin-top:8px;">
@@ -433,13 +433,13 @@
     if (catDonutEl) {
         var cats = {{ da.categories | tojson }};
         var catMeta = [
-            {key: 'timing', label: '{{ _("Timing") }}', color: '#f87171'},
+            {key: 'timing', label: '{{ _("Timing") }}', color: '#F2676C'},
             {key: 'aim', label: '{{ _("Aim-Duell") }}', color: '#fb923c'},
-            {key: 'positioning', label: '{{ _("Positioning") }}', color: '#fbbf24'},
+            {key: 'positioning', label: '{{ _("Positioning") }}', color: '#F5B941'},
             {key: 'utility', label: '{{ _("Ohne Utility") }}', color: '#a78bfa'},
             {key: 'eco', label: '{{ _("Eco-Tod") }}', color: '#9397ab'},
-            {key: 'impact', label: '{{ _("Impact") }}', color: '#4ade80'},
-            {key: 'traded', label: '{{ _("Getradet") }}', color: '#60a5fa'},
+            {key: 'impact', label: '{{ _("Impact") }}', color: '#3FD08F'},
+            {key: 'traded', label: '{{ _("Getradet") }}', color: '#5DA9F2'},
         ];
         var catLabels = [];
         var catData = [];
@@ -491,7 +491,7 @@
                 labels: ['{{ _("Frueh") }}', '{{ _("Mitte") }}', '{{ _("Spaet") }}'],
                 datasets: [{
                     data: [{{ da.timing.early }}, {{ da.timing.mid }}, {{ da.timing.late }}],
-                    backgroundColor: ['#f87171', '#fbbf24', '#4ade80'],
+                    backgroundColor: ['#F2676C', '#F5B941', '#3FD08F'],
                     borderWidth: 0,
                     spacing: 2,
                 }]
@@ -526,14 +526,14 @@
                 datasets: [{
                     label: '{{ _("Tode") }}',
                     data: trend.map(function(t) { return t.deaths; }),
-                    borderColor: '#f87171',
+                    borderColor: '#F2676C',
                     backgroundColor: 'rgba(248,113,113,0.1)',
                     borderWidth: 2,
                     fill: true,
                     tension: 0.3,
                     pointRadius: 3,
                     pointBackgroundColor: trend.map(function(t) {
-                        return t.result === 'Sieg' ? '#4ade80' : t.result === 'Niederlage' ? '#f87171' : '#fbbf24';
+                        return t.result === 'Sieg' ? '#3FD08F' : t.result === 'Niederlage' ? '#F2676C' : '#F5B941';
                     }),
                     pointHoverRadius: 6,
                 }, {

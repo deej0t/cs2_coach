@@ -174,9 +174,9 @@
     </div>
 
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:var(--space-3);">
-        <label class="um-layer"><input type="checkbox" data-type="flash" checked><span class="um-dot" style="background:#fbbf24;"></span> Flash</label>
+        <label class="um-layer"><input type="checkbox" data-type="flash" checked><span class="um-dot" style="background:#F5B941;"></span> Flash</label>
         <label class="um-layer"><input type="checkbox" data-type="smoke" checked><span class="um-dot" style="background:#94a3b8;"></span> Smoke</label>
-        <label class="um-layer"><input type="checkbox" data-type="he" checked><span class="um-dot" style="background:#f87171;"></span> HE</label>
+        <label class="um-layer"><input type="checkbox" data-type="he" checked><span class="um-dot" style="background:#F2676C;"></span> HE</label>
         <label class="um-layer"><input type="checkbox" data-type="molotov" checked><span class="um-dot" style="background:#fb923c;"></span> Molotov</label>
     </div>
 
@@ -242,7 +242,7 @@
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:var(--space-3);margin-top:var(--space-4);text-align:center;">
             <div>
-                <div style="font-size:14px;font-weight:600;color:#fbbf24;">{{ util.avg_flashes_pr }}</div>
+                <div style="font-size:14px;font-weight:600;color:#F5B941;">{{ util.avg_flashes_pr }}</div>
                 <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--color-neutral-500);">Flash/Rd</div>
             </div>
             <div>
@@ -250,7 +250,7 @@
                 <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--color-neutral-500);">Smoke/Rd</div>
             </div>
             <div>
-                <div style="font-size:14px;font-weight:600;color:#f87171;">{{ util.avg_he_pr }}</div>
+                <div style="font-size:14px;font-weight:600;color:#F2676C;">{{ util.avg_he_pr }}</div>
                 <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--color-neutral-500);">HE/Rd</div>
             </div>
             <div>
@@ -265,7 +265,7 @@
         <span class="card-kicker">Flash-Effektivitaet</span>
         <div class="ut-flash-grid" style="margin-top:var(--space-3);">
             <div class="ut-flash-stat">
-                <div class="ut-flash-val" style="color:#fbbf24;">{{ util.total_flashes }}</div>
+                <div class="ut-flash-val" style="color:#F5B941;">{{ util.total_flashes }}</div>
                 <div class="ut-flash-label">Flashes gesamt</div>
             </div>
             <div class="ut-flash-stat">
@@ -319,7 +319,7 @@
         {% set range_pr = max_pr - min_pr if max_pr != min_pr else 0.1 %}
         {% for m in util.trend %}
         <div class="ut-trend-bar"
-             style="height:{{ ((m.per_round - min_pr) / range_pr * 38 + 10)|round }}px;background:{% if m.result == 'Sieg' %}#4ade80{% elif m.result == 'Niederlage' %}#f87171{% else %}#fbbf24{% endif %};"
+             style="height:{{ ((m.per_round - min_pr) / range_pr * 38 + 10)|round }}px;background:{% if m.result == 'Sieg' %}#3FD08F{% elif m.result == 'Niederlage' %}#F2676C{% else %}#F5B941{% endif %};"
              title="{{ m.date }} {{ m.map }} — {{ m.per_round }}/Rd ({{ m.result }})"></div>
         {% endfor %}
     </div>
@@ -402,9 +402,9 @@
                     <th>Map</th>
                     <th>Matches</th>
                     <th>Util/Rd</th>
-                    <th style="color:#fbbf24;">Flash</th>
+                    <th style="color:#F5B941;">Flash</th>
                     <th style="color:#94a3b8;">Smoke</th>
-                    <th style="color:#f87171;">HE</th>
+                    <th style="color:#F2676C;">HE</th>
                     <th style="color:#fb923c;">Molo</th>
                     <th>Flash-Hit</th>
                     <th>Team-Flash</th>
@@ -484,7 +484,7 @@
     if (!canvas) return;
     var ctx = canvas.getContext('2d');
     var W = canvas.width, RADAR = 1024, scale = W / RADAR;
-    var COLORS = { flash: '#fbbf24', smoke: '#94a3b8', he: '#f87171', molotov: '#fb923c' };
+    var COLORS = { flash: '#F5B941', smoke: '#94a3b8', he: '#F2676C', molotov: '#fb923c' };
     var LABELS = { flash: 'Flash', smoke: 'Smoke', he: 'HE', molotov: 'Molotov' };
 
     var mapSel = document.getElementById('um-map');

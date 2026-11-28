@@ -53,8 +53,8 @@
     }
     .sc-log-entry { display: flex; align-items: center; gap: 8px; }
     .sc-log-status { color: var(--color-accent); }
-    .sc-log-error { color: #f87171; }
-    .sc-log-success { color: #4ade80; }
+    .sc-log-error { color: #F2676C; }
+    .sc-log-success { color: #3FD08F; }
     .sc-log-info { color: var(--color-neutral-400); }
 
     .sc-result {
@@ -140,12 +140,12 @@
 {% set has_sync_config = config.get('steam_api_key') and config.get('cs2_auth_token') and config.get('steam_id') %}
 <div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5); border: 1px solid color-mix(in srgb, {% if has_sync_config %}var(--c-pos){% else %}var(--c-line2){% endif %} 35%, transparent);">
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-        <i data-lucide="refresh-cw" style="width:18px;height:18px;color:{% if has_sync_config %}#4ade80{% else %}var(--color-neutral-500){% endif %};"></i>
+        <i data-lucide="refresh-cw" style="width:18px;height:18px;color:{% if has_sync_config %}#3FD08F{% else %}var(--color-neutral-500){% endif %};"></i>
         <div style="font-size: 15px; font-weight: 600;">Auto-Sync</div>
         {% if has_sync_config %}
-        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(74,222,128,0.15);color:#4ade80;">Bereit</span>
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(74,222,128,0.15);color:#3FD08F;">Bereit</span>
         {% else %}
-        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(248,113,113,0.15);color:#f87171;">Nicht konfiguriert</span>
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(248,113,113,0.15);color:#F2676C;">Nicht konfiguriert</span>
         {% endif %}
     </div>
     <p style="font-size: 12px; color: var(--color-neutral-400); margin: 0 0 12px;">
@@ -173,9 +173,9 @@
     {% else %}
     <div style="font-size: 12px; color: var(--color-neutral-500);">
         Fehlend:
-        {% if not config.get('steam_api_key') %}<span style="color:#f87171;">Steam API Key</span> {% endif %}
-        {% if not config.get('cs2_auth_token') %}<span style="color:#f87171;">CS2 Auth Token</span> {% endif %}
-        {% if not config.get('steam_id') %}<span style="color:#f87171;">Steam ID</span>{% endif %}
+        {% if not config.get('steam_api_key') %}<span style="color:#F2676C;">Steam API Key</span> {% endif %}
+        {% if not config.get('cs2_auth_token') %}<span style="color:#F2676C;">CS2 Auth Token</span> {% endif %}
+        {% if not config.get('steam_id') %}<span style="color:#F2676C;">Steam ID</span>{% endif %}
     </div>
     {% endif %}
 </div>
@@ -185,7 +185,7 @@
     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
         <i data-lucide="download" style="width:16px;height:16px;color:var(--color-accent);flex-shrink:0;"></i>
         <span style="font-size: 13px; font-weight: 600;">Demo-Download</span>
-        <span id="steam-login-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(248,113,113,0.15);color:#f87171;">Nicht eingeloggt</span>
+        <span id="steam-login-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(248,113,113,0.15);color:#F2676C;">Nicht eingeloggt</span>
         <span id="steam-login-info" style="font-size:11px;color:var(--color-neutral-500);"></span>
         <div style="margin-left:auto;display:flex;gap:8px;">
             <button id="steam-login-open-btn" class="sc-btn" style="padding:5px 14px;font-size:12px;" onclick="openSteamModal()">
@@ -331,7 +331,7 @@ function startAnalysis() {
             result.innerHTML = '<div style="display:flex;align-items:center;gap:var(--space-3);margin-bottom:12px;">'
                 + '<div style="font-size:18px;font-weight:700;">' + d.map + ' ' + d.score + '</div>'
                 + '<span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:10px;'
-                + (d.result_str === 'Sieg' ? 'background:rgba(74,222,128,0.15);color:#4ade80' : d.result_str === 'Niederlage' ? 'background:rgba(248,113,113,0.15);color:#f87171' : 'background:rgba(251,191,36,0.15);color:#fbbf24')
+                + (d.result_str === 'Sieg' ? 'background:rgba(74,222,128,0.15);color:#3FD08F' : d.result_str === 'Niederlage' ? 'background:rgba(248,113,113,0.15);color:#F2676C' : 'background:rgba(251,191,36,0.15);color:#F5B941')
                 + ';">' + d.result_str + '</span>'
                 + '<span style="font-size:12px;color:var(--color-neutral-400);">Spieler: ' + d.player + '</span>'
                 + '</div>'
@@ -486,14 +486,14 @@ function startSteamQr() {
     fetch('{{ url_for("api_steam_qr_begin") }}', { method: 'POST' })
         .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
         .then(function(res) {
-            if (!res.ok) { sqSay(res.j.error || 'Fehler', '#f87171'); 
+            if (!res.ok) { sqSay(res.j.error || 'Fehler', '#F2676C'); 
                 document.getElementById('sq-code').innerHTML = ''; return; }
             sqClientId = res.j.client_id;
             sqRequestId = res.j.request_id;
             showSqCode(res.j.svg);
             sqTimer = setTimeout(pollSteamQr, (res.j.interval || 5) * 1000);
         })
-        .catch(function(e) { sqSay('Fehler: ' + e.message, '#f87171'); });
+        .catch(function(e) { sqSay('Fehler: ' + e.message, '#F2676C'); });
 }
 
 function showSqCode(svg) {
@@ -515,9 +515,9 @@ function pollSteamQr() {
         body: JSON.stringify({ client_id: sqClientId, request_id: sqRequestId })
     }).then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
       .then(function(res) {
-        if (!res.ok) { sqSay(res.j.error || 'Fehler', '#f87171'); return; }
+        if (!res.ok) { sqSay(res.j.error || 'Fehler', '#F2676C'); return; }
         if (res.j.status === 'ok') {
-            sqSay('Angemeldet als ' + (res.j.account_name || 'Steam-Konto'), '#4ade80');
+            sqSay('Angemeldet als ' + (res.j.account_name || 'Steam-Konto'), '#3FD08F');
             stopSteamQr();
             setTimeout(function() { closeSteamModal(); location.reload(); }, 1200);
             return;
@@ -525,10 +525,10 @@ function pollSteamQr() {
         if (res.j.svg) { showSqCode(res.j.svg); sqClientId = res.j.client_id; }
         sqSay(res.j.scanned ? 'Gescannt — bitte in der App bestaetigen.'
                             : 'Mit der Steam-App scannen und bestaetigen.',
-              res.j.scanned ? '#fbbf24' : null);
+              res.j.scanned ? '#F5B941' : null);
         sqTimer = setTimeout(pollSteamQr, 5000);
       })
-      .catch(function(e) { sqSay('Fehler: ' + e.message, '#f87171'); });
+      .catch(function(e) { sqSay('Fehler: ' + e.message, '#F2676C'); });
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -557,7 +557,7 @@ function checkSteamStatus() {
         if (d.logged_in) {
             badge.textContent = 'Eingeloggt' + (d.username ? ' (' + d.username + ')' : '');
             badge.style.background = 'rgba(74,222,128,0.15)';
-            badge.style.color = '#4ade80';
+            badge.style.color = '#3FD08F';
             openBtn.style.display = 'none';
             logoutBtn.style.display = '';
             // Der Zugriffstoken gilt nur 24h und wird automatisch erneuert.
@@ -565,11 +565,11 @@ function checkSteamStatus() {
             // bis wann die Anmeldung ohne Zutun traegt.
             info.textContent = 'Demos werden automatisch heruntergeladen'
                 + (d.days_left ? ' — Anmeldung gilt noch ' + d.days_left + ' Tage' : '');
-            section.style.borderLeftColor = '#4ade80';
+            section.style.borderLeftColor = '#3FD08F';
         } else {
             badge.textContent = 'Nicht eingeloggt';
             badge.style.background = 'rgba(248,113,113,0.15)';
-            badge.style.color = '#f87171';
+            badge.style.color = '#F2676C';
             openBtn.style.display = '';
             logoutBtn.style.display = 'none';
             info.textContent = 'Nur lokale Demos';
@@ -588,7 +588,7 @@ function steamLogin() {
 
     if (!username || !password) {
         msg.textContent = 'Benutzername und Passwort erforderlich.';
-        msg.style.color = '#f87171';
+        msg.style.color = '#F2676C';
         return;
     }
 
@@ -608,13 +608,13 @@ function steamLogin() {
     .then(function(r) {
         btn.disabled = false;
         if (r.data.ok) {
-            msg.innerHTML = '<span style="color:#4ade80;">' + r.data.message + '</span>';
+            msg.innerHTML = '<span style="color:#3FD08F;">' + r.data.message + '</span>';
             document.getElementById('steam-password').value = '';
             document.getElementById('steam-2fa').value = '';
             checkSteamStatus();
             setTimeout(closeSteamModal, 1200);
         } else {
-            msg.innerHTML = '<span style="color:#f87171;">' + r.data.error + '</span>';
+            msg.innerHTML = '<span style="color:#F2676C;">' + r.data.error + '</span>';
             if (r.data.need_2fa) {
                 document.getElementById('steam-2fa').focus();
                 document.getElementById('steam-2fa').placeholder = '2FA-Code eingeben!';
@@ -624,7 +624,7 @@ function steamLogin() {
     })
     .catch(function(e) {
         btn.disabled = false;
-        msg.innerHTML = '<span style="color:#f87171;">Fehler: ' + e + '</span>';
+        msg.innerHTML = '<span style="color:#F2676C;">Fehler: ' + e + '</span>';
     });
 }
 

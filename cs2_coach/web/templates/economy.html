@@ -51,8 +51,8 @@
         display: flex; align-items: center; gap: 10px; padding: 10px 14px;
         border-radius: var(--radius-md); margin-bottom: var(--space-2); font-size: 13px;
     }
-    .eiq-tip-positive { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.20); color: #4ade80; }
-    .eiq-tip-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.20); color: #fbbf24; }
+    .eiq-tip-positive { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.20); color: #3FD08F; }
+    .eiq-tip-warning { background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.20); color: #F5B941; }
     .eiq-tip-info { background: rgba(93,169,242,0.08); border: 1px solid rgba(93,169,242,0.20); color: var(--color-accent); }
 
     .eiq-chart-wrap { position: relative; height: 220px; }
@@ -83,7 +83,7 @@
         <svg viewBox="0 0 36 36" style="width:100%;height:100%;transform:rotate(-90deg);">
             <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--color-neutral-800)" stroke-width="3"/>
             <circle cx="18" cy="18" r="15.9" fill="none"
-                    stroke="{% if eco.eco_iq >= 55 %}#4ade80{% elif eco.eco_iq >= 45 %}#fbbf24{% else %}#f87171{% endif %}"
+                    stroke="{% if eco.eco_iq >= 55 %}#3FD08F{% elif eco.eco_iq >= 45 %}#F5B941{% else %}#F2676C{% endif %}"
                     stroke-width="3" stroke-dasharray="{{ eco.eco_iq }} {{ 100 - eco.eco_iq }}"
                     stroke-linecap="round"/>
         </svg>
@@ -211,7 +211,7 @@
 
     // Compute per-match win-rate for each category using rolling window
     var cats = ['fullbuy', 'force', 'eco', 'pistol'];
-    var colors = {'fullbuy': '#4ade80', 'force': '#fb923c', 'eco': '#f87171', 'pistol': '#fbbf24'};
+    var colors = {'fullbuy': '#3FD08F', 'force': '#fb923c', 'eco': '#F2676C', 'pistol': '#F5B941'};
     var catLabels = {'fullbuy': 'Full-Buy', 'force': 'Force-Buy', 'eco': 'Eco', 'pistol': 'Pistol'};
 
     var datasets = [];

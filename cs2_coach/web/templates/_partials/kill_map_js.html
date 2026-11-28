@@ -45,7 +45,7 @@
             pill.dataset.round = r;
             // Color by half: CT blue first half, T gold second
             pill.style.background = r <= 12 ? 'rgba(126,170,219,0.2)' : 'rgba(222,178,62,0.2)';
-            pill.style.color = r <= 12 ? '#7eaadb' : '#deb23e';
+            pill.style.color = r <= 12 ? '#9BB2D1' : '#D2B48A';
             (function(rn) { pill.onclick = function() { selectedRound = rn; slider.value = rn; updateRoundUI(); redraw(); }; })(r);
             pillsContainer.appendChild(pill);
         }
@@ -80,7 +80,7 @@
         return 'rgba('+r+','+g+','+b+','+a+')';
     }
 
-    var utilColors = { flash: '#60a5fa', smoke: '#a3a3a3', he: '#fb923c', molotov: '#ef4444' };
+    var utilColors = { flash: '#5DA9F2', smoke: '#a3a3a3', he: '#fb923c', molotov: '#F2676C' };
     var utilSymbols = { flash: '⚡', smoke: '●', he: '💥', molotov: '🔥' };
 
     function getFilteredDots() {
@@ -133,7 +133,7 @@
         function drawKillDot(d) {
             var x = d.x * scale, y = d.y * scale;
             if (x < 0 || x > W || y < 0 || y > H) return;
-            var color = d.type === 'kill' ? (d.headshot ? '#fbbf24' : '#4ade80') : '#f87171';
+            var color = d.type === 'kill' ? (d.headshot ? '#F5B941' : '#3FD08F') : '#F2676C';
             var radius = d.headshot ? 6 : 5;
             var grad = ctx.createRadialGradient(x, y, 0, x, y, radius + 8);
             grad.addColorStop(0, hex2rgba(color, 0.35)); grad.addColorStop(1, 'rgba(0,0,0,0)');

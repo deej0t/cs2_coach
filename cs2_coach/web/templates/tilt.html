@@ -42,8 +42,8 @@
         background: var(--color-surface); box-shadow: var(--shadow-sm);
         text-align: center;
     }
-    .tl-cmp-card.win-side { border-top: 3px solid #4ade80; }
-    .tl-cmp-card.loss-side { border-top: 3px solid #f87171; }
+    .tl-cmp-card.win-side { border-top: 3px solid #3FD08F; }
+    .tl-cmp-card.loss-side { border-top: 3px solid #F2676C; }
     .tl-cmp-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 12px; }
     .tl-cmp-val { font-family: var(--font-heading); font-size: 28px; font-weight: 700; }
     .tl-cmp-sub { font-size: 12px; color: var(--color-neutral-500); margin-top: 4px; }
@@ -70,7 +70,7 @@
         background: rgba(248,113,113,0.06); border: 1px solid rgba(248,113,113,0.15);
         display: flex; align-items: center; gap: 14px;
     }
-    .tl-ep-len { font-family: var(--font-heading); font-size: 22px; font-weight: 700; color: #f87171; min-width: 40px; text-align: center; }
+    .tl-ep-len { font-family: var(--font-heading); font-size: 22px; font-weight: 700; color: #F2676C; min-width: 40px; text-align: center; }
     .tl-ep-info { flex: 1; font-size: 13px; }
     .tl-ep-maps { font-size: 11px; color: var(--color-neutral-500); margin-top: 2px; }
 
@@ -79,8 +79,8 @@
         padding: 10px 14px; margin-bottom: 6px; border-radius: var(--radius-sm);
         font-size: 13px; line-height: 1.5; display: flex; align-items: flex-start; gap: 10px;
     }
-    .tl-tip-positive { background: rgba(74,222,128,0.08); color: #4ade80; border: 1px solid rgba(74,222,128,0.15); }
-    .tl-tip-warning { background: rgba(248,113,113,0.08); color: #f87171; border: 1px solid rgba(248,113,113,0.15); }
+    .tl-tip-positive { background: rgba(74,222,128,0.08); color: #3FD08F; border: 1px solid rgba(74,222,128,0.15); }
+    .tl-tip-warning { background: rgba(248,113,113,0.08); color: #F2676C; border: 1px solid rgba(248,113,113,0.15); }
     .tl-tip-info { background: rgba(93,169,242,0.08); color: #5DA9F2; border: 1px solid rgba(93,169,242,0.15); }
 
     .tl-mental-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-5); }
@@ -97,7 +97,7 @@
         padding: var(--space-4); margin-bottom: var(--space-5);
         border-radius: var(--radius-md); text-align: center;
         background: rgba(248,113,113,0.1); border: 2px solid rgba(248,113,113,0.3);
-        color: #f87171;
+        color: #F2676C;
     }
     .tl-tilted-banner h3 { margin: 0 0 4px; font-size: 18px; }
     .tl-tilted-banner p { margin: 0; font-size: 13px; opacity: 0.8; }
@@ -147,8 +147,8 @@
 <h3>{{ _('Performance nach Sieg vs. Niederlage') }}</h3>
 <div class="tl-compare">
     <div class="tl-cmp-card win-side">
-        <div class="tl-cmp-label" style="color:#4ade80;">{{ _('Nach Sieg') }}</div>
-        <div class="tl-cmp-val" style="color:#4ade80;">{{ t.post_win.rating }}</div>
+        <div class="tl-cmp-label" style="color:#3FD08F;">{{ _('Nach Sieg') }}</div>
+        <div class="tl-cmp-val" style="color:#3FD08F;">{{ t.post_win.rating }}</div>
         <div class="tl-cmp-sub">Rating</div>
         <div style="margin-top:8px; font-size:14px; font-weight:600;">{{ t.post_win.adr }} ADR</div>
         <div style="font-size:12px; color:var(--color-neutral-500);">{{ t.post_win.utility }} Utility/R</div>
@@ -161,14 +161,14 @@
             {% if t.rating_tilt_delta > 0 %}+{% endif %}{{ t.rating_tilt_delta }}
         </div>
         <span style="font-size:10px;">Rating</span>
-        <div style="margin-top:6px; font-size:14px; font-weight:600; {% if t.adr_verdict == 'solid_negative' %}color:#f87171;{% endif %}">
+        <div style="margin-top:6px; font-size:14px; font-weight:600; {% if t.adr_verdict == 'solid_negative' %}color:#F2676C;{% endif %}">
             {% if t.adr_tilt_delta > 0 %}+{% endif %}{{ t.adr_tilt_delta }}
         </div>
         <span style="font-size:10px;">ADR</span>
     </div>
     <div class="tl-cmp-card loss-side">
-        <div class="tl-cmp-label" style="color:#f87171;">{{ _('Nach Niederlage') }}</div>
-        <div class="tl-cmp-val" style="color:#f87171;">{{ t.post_loss.rating }}</div>
+        <div class="tl-cmp-label" style="color:#F2676C;">{{ _('Nach Niederlage') }}</div>
+        <div class="tl-cmp-val" style="color:#F2676C;">{{ t.post_loss.rating }}</div>
         <div class="tl-cmp-sub">Rating</div>
         <div style="margin-top:8px; font-size:14px; font-weight:600;">{{ t.post_loss.adr }} ADR</div>
         <div style="font-size:12px; color:var(--color-neutral-500);">{{ t.post_loss.utility }} Utility/R</div>
@@ -182,7 +182,7 @@
     <div class="tl-streak-card" style="border: 1px solid color-mix(in srgb, var(--c-pos) 35%, transparent);">
         <div class="tl-streak-icon">&#x1F525;</div>
         <div>
-            <div class="tl-streak-len" style="color:#4ade80;">{{ t.longest_win.length }} {{ _('Siege') }}</div>
+            <div class="tl-streak-len" style="color:#3FD08F;">{{ t.longest_win.length }} {{ _('Siege') }}</div>
             <div class="tl-streak-detail">{{ t.longest_win.start }} — {{ t.longest_win.end }}</div>
         </div>
     </div>
@@ -191,7 +191,7 @@
     <div class="tl-streak-card" style="border: 1px solid color-mix(in srgb, var(--c-neg) 35%, transparent);">
         <div class="tl-streak-icon">&#x1F4A9;</div>
         <div>
-            <div class="tl-streak-len" style="color:#f87171;">{{ t.longest_loss.length }} {{ _('Niederlagen') }}</div>
+            <div class="tl-streak-len" style="color:#F2676C;">{{ t.longest_loss.length }} {{ _('Niederlagen') }}</div>
             <div class="tl-streak-detail">{{ t.longest_loss.start }} — {{ t.longest_loss.end }}</div>
         </div>
     </div>
@@ -208,7 +208,7 @@
         <div class="tl-ep-len">{{ ep.length }}L</div>
         <div class="tl-ep-info">
             <div>{{ ep.start_date }} — {{ ep.end_date }} | Rating Ø {{ ep.avg_rating }}
-                {% if ep.rating_trend < 0 %}<span style="color:#f87171;">{{ ep.rating_trend }}</span>{% endif %}
+                {% if ep.rating_trend < 0 %}<span style="color:#F2676C;">{{ ep.rating_trend }}</span>{% endif %}
             </div>
             <div class="tl-ep-maps">{{ ep.maps | join(', ') }}</div>
         </div>
@@ -276,10 +276,10 @@
                 pointHoverRadius: 7,
                 borderWidth: 2,
                 pointBackgroundColor: data.map(function(d) {
-                    return d.result === 'W' ? '#4ade80' : '#f87171';
+                    return d.result === 'W' ? '#3FD08F' : '#F2676C';
                 }),
                 pointBorderColor: data.map(function(d) {
-                    return d.result === 'W' ? '#4ade80' : '#f87171';
+                    return d.result === 'W' ? '#3FD08F' : '#F2676C';
                 }),
                 yAxisID: 'y',
             }, {

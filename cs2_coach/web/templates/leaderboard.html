@@ -47,7 +47,7 @@
         border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
     }
     .lb-rank { font-weight: 600; color: var(--color-neutral-500); text-align: center; }
-    .lb-rank-1 { color: #fbbf24; font-size: 15px; }
+    .lb-rank-1 { color: #F5B941; font-size: 15px; }
     .lb-rank-2 { color: #c0c0c0; font-size: 14px; }
     .lb-rank-3 { color: #cd7f32; font-size: 14px; }
     .lb-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -87,8 +87,8 @@
         <div class="lb-stat-val" style="color:var(--color-accent);">#{{ lb.self_rank_kd }}</div>
         <div class="lb-stat-lbl">{{ _('Dein K/D Rang') }}</div>
     </div>
-    <div class="lb-stat-card" style="border-top: 3px solid #fbbf24;">
-        <div class="lb-stat-val" style="color:#fbbf24;">#{{ lb.self_rank_kills }}</div>
+    <div class="lb-stat-card" style="border-top: 3px solid #F5B941;">
+        <div class="lb-stat-val" style="color:#F5B941;">#{{ lb.self_rank_kills }}</div>
         <div class="lb-stat-lbl">{{ _('Dein Kills Rang') }}</div>
     </div>
     <div class="lb-stat-card">
@@ -139,8 +139,8 @@
         <div class="lb-row {% if p.is_self %}lb-self{% endif %}" data-name="{{ p.name|lower }}">
             <div class="lb-rank {% if loop.index == 1 %}lb-rank-1{% elif loop.index == 2 %}lb-rank-2{% elif loop.index == 3 %}lb-rank-3{% endif %}">{{ loop.index }}</div>
             <div class="lb-name">{{ p.name }}{% if p.is_self %}<span class="lb-self-tag">Du</span>{% endif %}</div>
-            <div class="lb-center" style="font-weight:600;color:#4ade80;">{{ p.kills }}</div>
-            <div class="lb-center" style="color:#f87171;">{{ p.deaths }}</div>
+            <div class="lb-center" style="font-weight:600;color:#3FD08F;">{{ p.kills }}</div>
+            <div class="lb-center" style="color:#F2676C;">{{ p.deaths }}</div>
             <div class="lb-center" style="color:var(--color-neutral-500);">{{ p.matches }}</div>
             <div class="lb-center {% if p.kd >= 1.2 %}win{% elif p.kd < 0.9 %}loss{% endif %}">{{ p.kd }}</div>
             <div class="lb-center">{{ p.kpr }}</div>

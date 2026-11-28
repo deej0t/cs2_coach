@@ -9,9 +9,9 @@
 </p>
 
 <style>
-    .sc-green { color: #4ade80; }
-    .sc-yellow { color: #fbbf24; }
-    .sc-red { color: #f87171; }
+    .sc-green { color: #3FD08F; }
+    .sc-yellow { color: #F5B941; }
+    .sc-red { color: #F2676C; }
 
     /* Goals */
     .goal-card { padding: var(--space-4) !important; margin-bottom: var(--space-3); }
@@ -26,7 +26,7 @@
     /* Records */
     .rec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-5); }
     .rec-card { padding: 14px !important; text-align: center; border-top: 3px solid var(--color-neutral-700); }
-    .rec-val { font-family: var(--font-heading); font-size: 24px; font-weight: 700; color: #fbbf24; }
+    .rec-val { font-family: var(--font-heading); font-size: 24px; font-weight: 700; color: #F5B941; }
     .rec-label { font-size: 10px; color: var(--color-neutral-500); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
     .rec-where { font-size: 11px; color: var(--color-neutral-400); margin-top: 4px; }
 
@@ -57,12 +57,12 @@
 {% if records %}
 <div class="card-kicker" style="margin-bottom: 8px;">{{ _('Persoenliche Rekorde') }}</div>
 <div class="rec-grid">
-    <div class="card elev-sm rec-card" style="border-top-color: #fbbf24;">
+    <div class="card elev-sm rec-card" style="border-top-color: #F5B941;">
         <div class="rec-val">{{ records.rating.value }}</div>
         <div class="rec-label">{{ _('Bestes Rating') }}</div>
         <div class="rec-where">{{ records.rating.map }} · {{ records.rating.date }}</div>
     </div>
-    <div class="card elev-sm rec-card" style="border-top-color: #4ade80;">
+    <div class="card elev-sm rec-card" style="border-top-color: #3FD08F;">
         <div class="rec-val">{{ records.kills.value }}</div>
         <div class="rec-label">{{ _('Meiste Kills') }}</div>
         <div class="rec-where">{{ records.kills.map }} · {{ records.kills.date }}</div>
@@ -72,22 +72,22 @@
         <div class="rec-label">{{ _('Hoechster ADR') }}</div>
         <div class="rec-where">{{ records.adr.map }} · {{ records.adr.date }}</div>
     </div>
-    <div class="card elev-sm rec-card" style="border-top-color: #7eaadb;">
+    <div class="card elev-sm rec-card" style="border-top-color: #9BB2D1;">
         <div class="rec-val">{{ records.kd.value }}</div>
         <div class="rec-label">{{ _('Bestes K/D') }}</div>
         <div class="rec-where">{{ records.kd.map }} · {{ records.kd.date }}</div>
     </div>
-    <div class="card elev-sm rec-card" style="border-top-color: #f87171;">
+    <div class="card elev-sm rec-card" style="border-top-color: #F2676C;">
         <div class="rec-val">{{ records.hs_pct.value }}%</div>
         <div class="rec-label">{{ _('Hoechste HS%') }}</div>
         <div class="rec-where">{{ records.hs_pct.map }} · {{ records.hs_pct.date }}</div>
     </div>
-    <div class="card elev-sm rec-card" style="border-top-color: #4ade80;">
+    <div class="card elev-sm rec-card" style="border-top-color: #3FD08F;">
         <div class="rec-val">{{ records.total_kills }}</div>
         <div class="rec-label">{{ _('Gesamt-Kills') }}</div>
         <div class="rec-where">{{ records.total_matches }} {{ _('Matches') }}</div>
     </div>
-    <div class="card elev-sm rec-card" style="border-top-color: #fbbf24;">
+    <div class="card elev-sm rec-card" style="border-top-color: #F5B941;">
         <div class="rec-val">{{ records.win_streak }}</div>
         <div class="rec-label">{{ _('Laengste Siegesserie') }}</div>
         <div class="rec-where">{{ _('in Folge') }}</div>
@@ -109,7 +109,7 @@
         <span class="goal-label">{{ g.label or g.meta.label + " " + g.meta.desc }}</span>
         <div style="display:flex;gap:8px;align-items:center;">
             {% if g.achieved %}
-            <span class="goal-achieved" style="background:rgba(74,222,128,0.15);color:#4ade80;">{{ _('Erreicht!') }}</span>
+            <span class="goal-achieved" style="background:rgba(74,222,128,0.15);color:#3FD08F;">{{ _('Erreicht!') }}</span>
             {% endif %}
             <form method="post" action="{{ url_for('goals_delete') }}" style="margin:0;">
                 <input type="hidden" name="index" value="{{ loop.index0 }}">
@@ -118,7 +118,7 @@
         </div>
     </div>
     <div class="goal-bar">
-        <div class="goal-bar-fill" style="width: {{ g.pct }}%; background: {% if g.achieved %}#4ade80{% elif g.pct >= 80 %}#fbbf24{% else %}#5DA9F2{% endif %};"></div>
+        <div class="goal-bar-fill" style="width: {{ g.pct }}%; background: {% if g.achieved %}#3FD08F{% elif g.pct >= 80 %}#F5B941{% else %}#5DA9F2{% endif %};"></div>
     </div>
     <div class="goal-meta">
         <span>{{ _('Aktuell:') }} <span class="goal-current {% if g.achieved %}sc-green{% elif g.pct >= 80 %}sc-yellow{% else %}{% endif %}">{{ g.current }}</span></span>

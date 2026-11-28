@@ -61,9 +61,9 @@
 
     /* Distance bar */
     .dl-dist-bar { display: flex; height: 28px; border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 8px; }
-    .dl-dist-close { background: #f87171; }
-    .dl-dist-mid { background: #fbbf24; }
-    .dl-dist-long { background: #60a5fa; }
+    .dl-dist-close { background: #F2676C; }
+    .dl-dist-mid { background: #F5B941; }
+    .dl-dist-long { background: #5DA9F2; }
     .dl-dist-legend { display: flex; gap: 16px; font-size: 12px; }
     .dl-dist-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
 
@@ -167,9 +167,9 @@
         {% if da.distance.pcts.long > 0 %}<div class="dl-dist-long" style="width:{{ da.distance.pcts.long }}%;" title="Long: {{ da.distance.pcts.long }}%"></div>{% endif %}
     </div>
     <div class="dl-dist-legend">
-        <span><span class="dl-dist-dot" style="background:#f87171;"></span>{{ _('Nah') }} {{ da.distance.pcts.close }}% ({{ da.distance.close }})</span>
-        <span><span class="dl-dist-dot" style="background:#fbbf24;"></span>{{ _('Mittel') }} {{ da.distance.pcts.mid }}% ({{ da.distance.mid }})</span>
-        <span><span class="dl-dist-dot" style="background:#60a5fa;"></span>{{ _('Fern') }} {{ da.distance.pcts.long }}% ({{ da.distance.long }})</span>
+        <span><span class="dl-dist-dot" style="background:#F2676C;"></span>{{ _('Nah') }} {{ da.distance.pcts.close }}% ({{ da.distance.close }})</span>
+        <span><span class="dl-dist-dot" style="background:#F5B941;"></span>{{ _('Mittel') }} {{ da.distance.pcts.mid }}% ({{ da.distance.mid }})</span>
+        <span><span class="dl-dist-dot" style="background:#5DA9F2;"></span>{{ _('Fern') }} {{ da.distance.pcts.long }}% ({{ da.distance.long }})</span>
     </div>
 </div>
 
@@ -181,7 +181,7 @@
     </div>
     <div class="dl-timing">
         <div class="dl-timing-col">
-            <div class="dl-timing-title" style="color:#4ade80;">{{ _('Kills') }}</div>
+            <div class="dl-timing-title" style="color:#3FD08F;">{{ _('Kills') }}</div>
             {% for phase in ['early', 'mid', 'late'] %}
             <div class="dl-timing-row">
                 <div class="dl-timing-label">{% if phase == 'early' %}{{ _('Frueh') }}{% elif phase == 'mid' %}{{ _('Mitte') }}{% else %}{{ _('Spaet') }}{% endif %}</div>
@@ -191,7 +191,7 @@
             {% endfor %}
         </div>
         <div class="dl-timing-col">
-            <div class="dl-timing-title" style="color:#f87171;">{{ _('Deaths') }}</div>
+            <div class="dl-timing-title" style="color:#F2676C;">{{ _('Deaths') }}</div>
             {% for phase in ['early', 'mid', 'late'] %}
             <div class="dl-timing-row">
                 <div class="dl-timing-label">{% if phase == 'early' %}{{ _('Frueh') }}{% elif phase == 'mid' %}{{ _('Mitte') }}{% else %}{{ _('Spaet') }}{% endif %}</div>
@@ -221,8 +221,8 @@
     {% for w in da.weapon_stats %}
     <div class="dl-wpn-row">
         <div class="dl-wpn-name">{{ w.weapon }}</div>
-        <div class="dl-center" style="color:#4ade80;">{{ w.kills }}</div>
-        <div class="dl-center" style="color:#f87171;">{{ w.deaths }}</div>
+        <div class="dl-center" style="color:#3FD08F;">{{ w.kills }}</div>
+        <div class="dl-center" style="color:#F2676C;">{{ w.deaths }}</div>
         <div class="dl-center {% if w.kd >= 1.2 %}win{% elif w.kd < 0.8 %}loss{% endif %}" style="font-weight:600;">{{ w.kd }}</div>
         <div class="dl-center {% if w.win_rate >= 55 %}win{% elif w.win_rate < 40 %}loss{% endif %}">{{ w.win_rate }}%</div>
         <div class="dl-center">{{ w.hs_pct }}%</div>
@@ -238,8 +238,8 @@
         {% if da.nemeses %}
         <div>
             <div class="dl-section-title">
-                <i data-lucide="skull" style="width:16px;height:16px;color:#f87171;"></i>
-                <span style="color:#f87171;">{{ _('Nemesis') }}</span>
+                <i data-lucide="skull" style="width:16px;height:16px;color:#F2676C;"></i>
+                <span style="color:#F2676C;">{{ _('Nemesis') }}</span>
                 <span style="font-size:11px; color:var(--color-neutral-500); font-weight:400;">{{ _('Gegner die dich dominieren') }}</span>
             </div>
             {% for o in da.nemeses %}
@@ -259,8 +259,8 @@
         {% if da.victims %}
         <div>
             <div class="dl-section-title">
-                <i data-lucide="target" style="width:16px;height:16px;color:#4ade80;"></i>
-                <span style="color:#4ade80;">{{ _('Victims') }}</span>
+                <i data-lucide="target" style="width:16px;height:16px;color:#3FD08F;"></i>
+                <span style="color:#3FD08F;">{{ _('Victims') }}</span>
                 <span style="font-size:11px; color:var(--color-neutral-500); font-weight:400;">{{ _('Gegner die du dominierst') }}</span>
             </div>
             {% for o in da.victims %}
@@ -298,8 +298,8 @@
     {% for o in da.opponent_list %}
     <div class="dl-opp-row">
         <div class="dl-opp-name">{{ o.name }} {% if o.matches > 1 %}<span style="font-size:10px;color:var(--color-neutral-600);">({{ o.matches }}x)</span>{% endif %}</div>
-        <div class="dl-center" style="color:#4ade80;">{{ o.kills }}</div>
-        <div class="dl-center" style="color:#f87171;">{{ o.deaths }}</div>
+        <div class="dl-center" style="color:#3FD08F;">{{ o.kills }}</div>
+        <div class="dl-center" style="color:#F2676C;">{{ o.deaths }}</div>
         <div class="dl-center {% if o.kd >= 1.2 %}win{% elif o.kd < 0.8 %}loss{% endif %}" style="font-weight:600;">{{ o.kd }}</div>
         <div class="dl-center {% if o.win_rate >= 55 %}win{% elif o.win_rate < 40 %}loss{% endif %}">{{ o.win_rate }}%</div>
         <div class="dl-center" style="text-transform:capitalize; font-size:11px;">{{ o.fav_weapon }}</div>

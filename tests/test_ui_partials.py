@@ -82,3 +82,15 @@ def test_round_strip_stat_and_mission_card(ui):
     html = ui("{% include '_partials/mission_card.html' %}", g=g)
     assert "Deine Mission" in html and "var(--c-focus)" in html and "Mirage 4/6" in html
     assert "Deine Mission" in ui("{% include '_partials/mission_card.html' %}", g=None)
+
+
+def test_old_palette_hexes_only_as_uicolor_fallback():
+    """Alte Bedeutungs-Hexwerte nur noch als Ersatz in uiColor(); CT/T nie im Info-Blau/Fokus-Amber-Orange."""
+    old = re.compile(r"#(4ade80|22c55e|f87171|ef4444|fbbf24|facc15|60a5fa|93c5fd|c084fc|7eaadb|deb23e|e0a33a)\b", re.I)
+    bad = []
+    for p in TPL.rglob("*.html"):
+        src = re.sub(r"uiColor\('[a-z0-9]+', '#[0-9a-fA-F]{6}'\)", "", p.read_text(encoding="utf-8"))
+        bad += [f"{p.name}: {m.group(0)}" for m in old.finditer(src)]
+    assert not bad, bad[:10]
+    sides = (TPL / "sides.html").read_text(encoding="utf-8")
+    assert "#f59e0b" not in sides.lower() and "#5da9f2" not in sides.lower()

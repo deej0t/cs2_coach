@@ -10,7 +10,7 @@
     :root {
         --bg: #12131a; --surface: #1a1b26; --border: #2a2b3a;
         --text: #e0e0ea; --muted: #6b6e82; --accent: #5DA9F2;
-        --green: #4ade80; --red: #f87171; --yellow: #fbbf24;
+        --green: #3FD08F; --red: #F2676C; --yellow: #F5B941;
     }
     body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; }
 
@@ -22,7 +22,7 @@
     .share-card::before {
         content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
         background: linear-gradient(90deg,
-            {% if data.match.result == 'Sieg' %}var(--green), #22c55e{% elif data.match.result == 'Niederlage' %}var(--red), #ef4444{% else %}var(--yellow), #eab308{% endif %});
+            {% if data.match.result == 'Sieg' %}var(--green), #3FD08F{% elif data.match.result == 'Niederlage' %}var(--red), #F2676C{% else %}var(--yellow), #F5B941{% endif %});
     }
 
     /* Header */

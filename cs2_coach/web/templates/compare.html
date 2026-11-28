@@ -9,9 +9,9 @@
 </p>
 
 <style>
-    .sc-green { color: #4ade80; }
-    .sc-yellow { color: #fbbf24; }
-    .sc-red { color: #f87171; }
+    .sc-green { color: #3FD08F; }
+    .sc-yellow { color: #F5B941; }
+    .sc-red { color: #F2676C; }
 
     /* Period comparison */
     .pc-table { width: 100%; border-collapse: collapse; margin-bottom: var(--space-5); }
@@ -20,8 +20,8 @@
     .pc-table td { padding: 10px; text-align: center; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 4%, transparent); font-size: 13px; }
     .pc-table td:first-child { text-align: left; font-weight: 600; font-size: 14px; }
     .pc-delta { font-size: 10px; font-weight: 600; margin-left: 4px; }
-    .pc-up { color: #4ade80; }
-    .pc-down { color: #f87171; }
+    .pc-up { color: #3FD08F; }
+    .pc-down { color: #F2676C; }
     .pc-best { background: rgba(74,222,128,0.06); }
 
     /* Achievements */
@@ -30,17 +30,17 @@
     .ach-card:hover { transform: translateY(-2px); }
     .ach-locked { opacity: 0.35; filter: grayscale(1); }
     .ach-icon { width: 36px; height: 36px; margin: 0 auto 8px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
-    .ach-unlocked .ach-icon { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .ach-unlocked .ach-icon { background: rgba(251,191,36,0.15); color: #F5B941; }
     .ach-locked .ach-icon { background: var(--color-neutral-800); color: var(--color-neutral-600); }
     .ach-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
     .ach-desc { font-size: 11px; color: var(--color-neutral-500); }
-    .ach-check { position: absolute; top: 8px; right: 8px; font-size: 14px; color: #4ade80; }
+    .ach-check { position: absolute; top: 8px; right: 8px; font-size: 14px; color: #3FD08F; }
     .ach-cat-header { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-500); padding: 8px 0; margin-top: var(--space-3); }
 
     /* Progress bar */
     .ach-progress { margin-bottom: var(--space-5); }
     .ach-prog-bar { height: 10px; border-radius: 5px; background: var(--color-neutral-800); overflow: hidden; margin-bottom: 6px; }
-    .ach-prog-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #fbbf24, #4ade80); }
+    .ach-prog-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #F5B941, #3FD08F); }
     .ach-prog-text { display: flex; justify-content: space-between; font-size: 12px; color: var(--color-neutral-500); }
 
     /* Formkurve */
@@ -55,7 +55,7 @@
 <div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <span style="font-size:15px;font-weight:600;">Achievements</span>
-        <span style="font-size:13px;color:var(--color-neutral-400);"><span style="color:#fbbf24;font-weight:700;">{{ unlocked }}</span> / {{ total_ach }} {{ _('freigeschaltet') }}</span>
+        <span style="font-size:13px;color:var(--color-neutral-400);"><span style="color:#F5B941;font-weight:700;">{{ unlocked }}</span> / {{ total_ach }} {{ _('freigeschaltet') }}</span>
     </div>
     <div class="ach-prog-bar"><div class="ach-prog-fill" style="width:{{ pct }}%;"></div></div>
     <div class="ach-prog-text"><span>{{ pct }}% {{ _('abgeschlossen') }}</span><span>{{ total_ach - unlocked }} {{ _('verbleibend') }}</span></div>
@@ -109,7 +109,7 @@
         <tr class="{% if p.month == best_rating_month.month %}pc-best{% endif %}">
             <td>
                 {{ month_names.get(p.month[-2:], p.month[-2:]) }} {{ p.month[:4] }}
-                {% if p.month == best_rating_month.month %}<span style="color:#fbbf24;font-size:11px;"> ★ {{ _('Bester Monat') }}</span>{% endif %}
+                {% if p.month == best_rating_month.month %}<span style="color:#F5B941;font-size:11px;"> ★ {{ _('Bester Monat') }}</span>{% endif %}
             </td>
             <td>{{ p.matches }} <span style="font-size:11px;color:var(--color-neutral-500);">({{ p.wins }}W/{{ p.losses }}L)</span></td>
             <td>

@@ -28,13 +28,13 @@
     .wp-bar { height: 4px; border-radius: 2px; background: var(--color-neutral-800); overflow: hidden; margin-bottom: 6px; }
     .wp-bar-fill { height: 100%; border-radius: 2px; }
     .wp-rec { font-size: 11px; padding: 4px 8px; border-radius: var(--radius-sm); }
-    .wp-rec-good { background: rgba(74,222,128,0.08); color: #4ade80; }
-    .wp-rec-warn { background: rgba(248,113,113,0.08); color: #f87171; }
+    .wp-rec-good { background: rgba(74,222,128,0.08); color: #3FD08F; }
+    .wp-rec-warn { background: rgba(248,113,113,0.08); color: #F2676C; }
     .wp-rec-info { background: rgba(93,169,242,0.08); color: #5DA9F2; }
 
-    .sc-green { color: #4ade80; }
-    .sc-yellow { color: #fbbf24; }
-    .sc-red { color: #f87171; }
+    .sc-green { color: #3FD08F; }
+    .sc-yellow { color: #F5B941; }
+    .sc-red { color: #F2676C; }
 
     @media (max-width: 600px) {
         .wp-grid { grid-template-columns: 1fr; }
@@ -78,7 +78,7 @@
             </div>
         </div>
         <div class="wp-bar">
-            <div class="wp-bar-fill" style="width: {{ (w.kills / max_kills * 100)|round(1) }}%; background: {% if w.kd >= 1.5 %}#4ade80{% elif w.kd >= 1.0 %}#fbbf24{% else %}#f87171{% endif %};"></div>
+            <div class="wp-bar-fill" style="width: {{ (w.kills / max_kills * 100)|round(1) }}%; background: {% if w.kd >= 1.5 %}#3FD08F{% elif w.kd >= 1.0 %}#F5B941{% else %}#F2676C{% endif %};"></div>
         </div>
         {% if w.rec %}
         <div class="wp-rec {% if 'Stark' in w.rec or 'Gut' in w.rec or 'dominant' in w.rec %}wp-rec-good{% elif 'niedrig' in w.rec or 'unter' in w.rec or 'ueberleg' in w.rec %}wp-rec-warn{% else %}wp-rec-info{% endif %}">{{ w.rec }}</div>

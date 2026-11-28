@@ -25,8 +25,8 @@
         background: var(--color-surface); box-shadow: var(--shadow-sm);
         border-top: 3px solid var(--color-neutral-700);
     }
-    .pl-side-ct { border-top-color: #60a5fa; }
-    .pl-side-t { border-top-color: #fbbf24; }
+    .pl-side-ct { border-top-color: #5DA9F2; }
+    .pl-side-t { border-top-color: #F5B941; }
     .pl-side-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
     .pl-side-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .pl-side-stat { text-align: center; padding: 8px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.03); }
@@ -71,8 +71,8 @@
         padding: 10px 14px; margin-bottom: 6px; border-radius: var(--radius-sm);
         font-size: 13px; line-height: 1.5; display: flex; align-items: flex-start; gap: 10px;
     }
-    .pl-tip-positive { background: rgba(74,222,128,0.08); color: #4ade80; border: 1px solid rgba(74,222,128,0.15); }
-    .pl-tip-warning { background: rgba(248,113,113,0.08); color: #f87171; border: 1px solid rgba(248,113,113,0.15); }
+    .pl-tip-positive { background: rgba(74,222,128,0.08); color: #3FD08F; border: 1px solid rgba(74,222,128,0.15); }
+    .pl-tip-warning { background: rgba(248,113,113,0.08); color: #F2676C; border: 1px solid rgba(248,113,113,0.15); }
     .pl-tip-info { background: rgba(93,169,242,0.08); color: #5DA9F2; border: 1px solid rgba(93,169,242,0.15); }
 
     .pl-trend-wrap { margin-bottom: var(--space-5); }
@@ -119,8 +119,8 @@
 <div class="pl-sides">
     <div class="pl-side-card pl-side-ct">
         <div class="pl-side-title">
-            <i data-lucide="shield" style="width:18px;height:18px;color:#60a5fa;"></i>
-            <span style="color:#60a5fa;">CT-Seite</span>
+            <i data-lucide="shield" style="width:18px;height:18px;color:#5DA9F2;"></i>
+            <span style="color:#5DA9F2;">CT-Seite</span>
             <span style="font-size:11px; color:var(--color-neutral-500); font-weight:400;">{{ p.ct.rounds }} Runden</span>
         </div>
         <div class="pl-side-stats">
@@ -136,8 +136,8 @@
     </div>
     <div class="pl-side-card pl-side-t">
         <div class="pl-side-title">
-            <i data-lucide="sword" style="width:18px;height:18px;color:#fbbf24;"></i>
-            <span style="color:#fbbf24;">T-Seite</span>
+            <i data-lucide="sword" style="width:18px;height:18px;color:#F5B941;"></i>
+            <span style="color:#F5B941;">T-Seite</span>
             <span style="font-size:11px; color:var(--color-neutral-500); font-weight:400;">{{ p.t.rounds }} Runden</span>
         </div>
         <div class="pl-side-stats">
@@ -159,14 +159,14 @@
     {{ _('Wie stark beeinflusst der Pistolrunden-Ausgang deine Halftime-Winrate?') }}
 </p>
 <div class="pl-conv">
-    <div class="pl-conv-card" style="border-top: 3px solid #4ade80;">
-        <div class="pl-conv-title" style="color: #4ade80;">{{ _('Nach Pistol-Sieg') }}</div>
-        <div class="pl-conv-val" style="color: #4ade80;">{{ p.conv_win }}%</div>
+    <div class="pl-conv-card" style="border-top: 3px solid #3FD08F;">
+        <div class="pl-conv-title" style="color: #3FD08F;">{{ _('Nach Pistol-Sieg') }}</div>
+        <div class="pl-conv-val" style="color: #3FD08F;">{{ p.conv_win }}%</div>
         <div class="pl-conv-sub">{{ _('Half-WR') }} ({{ p.pistol_wins_count }} {{ _('Haelften') }})</div>
     </div>
-    <div class="pl-conv-card" style="border-top: 3px solid #f87171;">
-        <div class="pl-conv-title" style="color: #f87171;">{{ _('Nach Pistol-Niederlage') }}</div>
-        <div class="pl-conv-val" style="color: #f87171;">{{ p.conv_loss }}%</div>
+    <div class="pl-conv-card" style="border-top: 3px solid #F2676C;">
+        <div class="pl-conv-title" style="color: #F2676C;">{{ _('Nach Pistol-Niederlage') }}</div>
+        <div class="pl-conv-val" style="color: #F2676C;">{{ p.conv_loss }}%</div>
         <div class="pl-conv-sub">{{ _('Half-WR') }} ({{ p.pistol_losses_count }} {{ _('Haelften') }})</div>
     </div>
 </div>
@@ -213,10 +213,10 @@
         {% if m.ct_rounds > 0 or m.t_rounds > 0 %}
         <div style="display:flex; gap:8px; margin-top:8px; font-size:11px;">
             {% if m.ct_rounds > 0 %}
-            <span style="color:#60a5fa;">CT: {{ m.ct_wr }}%</span>
+            <span style="color:#5DA9F2;">CT: {{ m.ct_wr }}%</span>
             {% endif %}
             {% if m.t_rounds > 0 %}
-            <span style="color:#fbbf24;">T: {{ m.t_wr }}%</span>
+            <span style="color:#F5B941;">T: {{ m.t_wr }}%</span>
             {% endif %}
         </div>
         {% endif %}

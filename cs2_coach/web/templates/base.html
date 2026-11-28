@@ -153,7 +153,7 @@
         {% endif %}
     </nav>
     <div class="{% block container_class %}container{% endblock %}">
-        {% if request.args.get('als') %}<div style="background:rgba(251,191,36,.12);border:1px solid #fbbf24;border-radius:8px;padding:6px 12px;margin-bottom:12px;font-size:13px;">{{ _('Profil von') }} <b>{{ config.get('player_name') or request.args.get('als') }}</b> – {{ _('nur ansehen') }} · <a href="{{ request.path }}">{{ _('zurück zu deiner Sicht') }}</a></div>{% endif %}
+        {% if request.args.get('als') %}<div style="background:rgba(251,191,36,.12);border:1px solid #F5B941;border-radius:8px;padding:6px 12px;margin-bottom:12px;font-size:13px;">{{ _('Profil von') }} <b>{{ config.get('player_name') or request.args.get('als') }}</b> – {{ _('nur ansehen') }} · <a href="{{ request.path }}">{{ _('zurück zu deiner Sicht') }}</a></div>{% endif %}
 {% block content %}{% endblock %}
     </div>
 

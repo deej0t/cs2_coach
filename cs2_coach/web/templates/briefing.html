@@ -123,13 +123,13 @@
 
 <!-- Side split -->
 <div class="br-sides">
-    <div class="br-side-card" style="border-top: 3px solid {% if brief.ct_kd >= brief.t_kd %}#60a5fa{% else %}var(--color-neutral-700){% endif %};">
-        <div class="br-side-label" style="color:#60a5fa;">CT-Side</div>
+    <div class="br-side-card" style="border-top: 3px solid {% if brief.ct_kd >= brief.t_kd %}#5DA9F2{% else %}var(--color-neutral-700){% endif %};">
+        <div class="br-side-label" style="color:#5DA9F2;">CT-Side</div>
         <div class="br-side-kd {% if brief.ct_kd >= 1.2 %}win{% elif brief.ct_kd < 0.9 %}loss{% endif %}">{{ brief.ct_kd }}</div>
         <div style="font-size:11px;color:var(--color-neutral-500);">K/D</div>
     </div>
-    <div class="br-side-card" style="border-top: 3px solid {% if brief.t_kd >= brief.ct_kd %}#fbbf24{% else %}var(--color-neutral-700){% endif %};">
-        <div class="br-side-label" style="color:#fbbf24;">T-Side</div>
+    <div class="br-side-card" style="border-top: 3px solid {% if brief.t_kd >= brief.ct_kd %}#F5B941{% else %}var(--color-neutral-700){% endif %};">
+        <div class="br-side-label" style="color:#F5B941;">T-Side</div>
         <div class="br-side-kd {% if brief.t_kd >= 1.2 %}win{% elif brief.t_kd < 0.9 %}loss{% endif %}">{{ brief.t_kd }}</div>
         <div style="font-size:11px;color:var(--color-neutral-500);">K/D</div>
     </div>
@@ -142,9 +142,9 @@
     {% for r in brief.reminders %}
     <div class="br-reminder br-reminder-{{ r.type }}">
         <div class="br-reminder-icon">
-            {% if r.type == 'warning' %}<i data-lucide="alert-triangle" style="width:18px;height:18px;color:#f87171;"></i>
-            {% elif r.type == 'tip' %}<i data-lucide="lightbulb" style="width:18px;height:18px;color:#fbbf24;"></i>
-            {% else %}<i data-lucide="check-circle" style="width:18px;height:18px;color:#4ade80;"></i>
+            {% if r.type == 'warning' %}<i data-lucide="alert-triangle" style="width:18px;height:18px;color:#F2676C;"></i>
+            {% elif r.type == 'tip' %}<i data-lucide="lightbulb" style="width:18px;height:18px;color:#F5B941;"></i>
+            {% else %}<i data-lucide="check-circle" style="width:18px;height:18px;color:#3FD08F;"></i>
             {% endif %}
         </div>
         <span>{{ r.text }}</span>

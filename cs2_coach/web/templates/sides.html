@@ -6,11 +6,11 @@
 <style>
     .side-hero { display: grid; grid-template-columns: 1fr auto 1fr; gap: var(--space-4); margin-bottom: var(--space-5); align-items: stretch; }
     .side-card { padding: var(--space-4) !important; }
-    .side-card-ct { border-top: 3px solid #60a5fa; }
-    .side-card-t { border-top: 3px solid #f59e0b; }
+    .side-card-ct { border-top: 3px solid #9BB2D1; }
+    .side-card-t { border-top: 3px solid #D2B48A; }
     .side-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; margin-bottom: 8px; }
-    .side-label-ct { color: #60a5fa; }
-    .side-label-t { color: #f59e0b; }
+    .side-label-ct { color: #9BB2D1; }
+    .side-label-t { color: #D2B48A; }
 
     .side-val { font-size: 28px; font-weight: 700; line-height: 1.1; }
     .side-sub { font-size: 11px; color: var(--color-neutral-500); margin-top: 2px; }
@@ -26,11 +26,11 @@
     .cmp-row { display: grid; grid-template-columns: 70px 1fr 70px; gap: 8px; align-items: center; padding: 5px 0; }
     .cmp-label { font-size: 12px; text-align: center; color: var(--color-neutral-400); }
     .cmp-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; }
-    .cmp-ct { background: #60a5fa; }
-    .cmp-t { background: #f59e0b; }
+    .cmp-ct { background: #9BB2D1; }
+    .cmp-t { background: #D2B48A; }
     .cmp-val { font-size: 12px; font-weight: 600; }
-    .cmp-val-ct { color: #60a5fa; text-align: right; }
-    .cmp-val-t { color: #f59e0b; text-align: left; }
+    .cmp-val-ct { color: #9BB2D1; text-align: right; }
+    .cmp-val-t { color: #D2B48A; text-align: left; }
 
     /* Map table */
     .map-side-row {
@@ -104,7 +104,7 @@
         <div class="side-label side-label-ct">CT-Side</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
-                <div class="side-val" style="color:#60a5fa;">{{ sa.ct.wr }}%</div>
+                <div class="side-val" style="color:#9BB2D1;">{{ sa.ct.wr }}%</div>
                 <div class="side-sub">Win-Rate ({{ sa.ct.rounds_won }}/{{ sa.ct.rounds }} Rd)</div>
             </div>
             <div>
@@ -136,7 +136,7 @@
         <div class="side-label side-label-t">T-Side</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
-                <div class="side-val" style="color:#f59e0b;">{{ sa.t.wr }}%</div>
+                <div class="side-val" style="color:#D2B48A;">{{ sa.t.wr }}%</div>
                 <div class="side-sub">Win-Rate ({{ sa.t.rounds_won }}/{{ sa.t.rounds }} Rd)</div>
             </div>
             <div>
@@ -189,7 +189,7 @@
 <!-- ── Top Weapons per Side ── -->
 <div class="grid-2" style="margin-bottom:var(--space-5);">
     <div class="card elev-sm" style="padding:var(--space-4);">
-        <span class="card-kicker" style="color:#60a5fa;">{{ _('CT Waffen') }}</span>
+        <span class="card-kicker" style="color:#9BB2D1;">{{ _('CT Waffen') }}</span>
         <div class="wpn-list">
             {% for w in sa.ct_top_weapons %}
             <span class="wpn-chip">{{ w.weapon }}<span class="wpn-count">{{ w.kills }}</span></span>
@@ -197,7 +197,7 @@
         </div>
     </div>
     <div class="card elev-sm" style="padding:var(--space-4);">
-        <span class="card-kicker" style="color:#f59e0b;">{{ _('T Waffen') }}</span>
+        <span class="card-kicker" style="color:#D2B48A;">{{ _('T Waffen') }}</span>
         <div class="wpn-list">
             {% for w in sa.t_top_weapons %}
             <span class="wpn-chip">{{ w.weapon }}<span class="wpn-count">{{ w.kills }}</span></span>
@@ -212,10 +212,10 @@
     <span class="card-kicker">{{ _('Map-spezifische Seiten-Performance') }}</span>
     <div class="map-side-header" style="margin-top:8px;">
         <span>Map</span>
-        <span style="text-align:center;color:#60a5fa;">CT WR</span>
-        <span style="text-align:center;color:#60a5fa;" class="map-hide">CT K/D</span>
-        <span style="text-align:center;color:#f59e0b;">T WR</span>
-        <span style="text-align:center;color:#f59e0b;" class="map-hide">T K/D</span>
+        <span style="text-align:center;color:#9BB2D1;">CT WR</span>
+        <span style="text-align:center;color:#9BB2D1;" class="map-hide">CT K/D</span>
+        <span style="text-align:center;color:#D2B48A;">T WR</span>
+        <span style="text-align:center;color:#D2B48A;" class="map-hide">T K/D</span>
         <span style="text-align:center;">{{ _('Runden') }}</span>
         <span style="text-align:center;">{{ _('Dominant') }}</span>
     </div>
@@ -227,7 +227,7 @@
         <span style="text-align:center;font-weight:500;{% if m.t_wr >= 55 %}color:var(--color-green);{% elif m.t_wr < 40 %}color:var(--color-red);{% endif %}">{{ m.t_wr }}%</span>
         <span style="text-align:center;" class="map-hide {% if m.t_kd >= 1.2 %}win{% elif m.t_kd < 0.8 %}loss{% endif %}">{{ m.t_kd }}</span>
         <span style="text-align:center;color:var(--color-neutral-400);">{{ m.ct_rounds + m.t_rounds }}</span>
-        <span style="text-align:center;font-weight:600;{% if m.dominant == 'CT' %}color:#60a5fa;{% elif m.dominant == 'T' %}color:#f59e0b;{% else %}color:var(--color-neutral-500);{% endif %}">{{ m.dominant }}</span>
+        <span style="text-align:center;font-weight:600;{% if m.dominant == 'CT' %}color:#9BB2D1;{% elif m.dominant == 'T' %}color:#D2B48A;{% else %}color:var(--color-neutral-500);{% endif %}">{{ m.dominant }}</span>
     </div>
     {% endfor %}
 </div>
@@ -238,14 +238,14 @@
 <div class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-5);">
     <span class="card-kicker">{{ _('Seiten-Trend') }} ({{ _('letzte') }} {{ sa.trend|length }} Matches)</span>
     <div style="display:flex;gap:8px;margin-top:6px;font-size:11px;">
-        <span style="color:#60a5fa;">&#9632; CT Win-Rate</span>
-        <span style="color:#f59e0b;">&#9632; T Win-Rate</span>
+        <span style="color:#9BB2D1;">&#9632; CT Win-Rate</span>
+        <span style="color:#D2B48A;">&#9632; T Win-Rate</span>
     </div>
     <div class="side-trend">
         {% for m in sa.trend %}
         <div class="side-trend-col">
-            <div class="side-trend-bar" style="height:{{ (m.ct_wr / 100 * 30 + 2)|round }}px;background:#60a5fa;" title="{{ m.date }} {{ m.map }} CT: {{ m.ct_wr }}% WR"></div>
-            <div class="side-trend-bar" style="height:{{ (m.t_wr / 100 * 30 + 2)|round }}px;background:#f59e0b;" title="{{ m.date }} {{ m.map }} T: {{ m.t_wr }}% WR"></div>
+            <div class="side-trend-bar" style="height:{{ (m.ct_wr / 100 * 30 + 2)|round }}px;background:#9BB2D1;" title="{{ m.date }} {{ m.map }} CT: {{ m.ct_wr }}% WR"></div>
+            <div class="side-trend-bar" style="height:{{ (m.t_wr / 100 * 30 + 2)|round }}px;background:#D2B48A;" title="{{ m.date }} {{ m.map }} T: {{ m.t_wr }}% WR"></div>
             <div class="side-trend-label">{{ m.map[:3] }}</div>
         </div>
         {% endfor %}

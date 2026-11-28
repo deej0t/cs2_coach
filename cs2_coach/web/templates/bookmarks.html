@@ -93,19 +93,19 @@
     </div>
     {% if bm.type_counts.get('clutch_win') %}
     <div class="card elev-sm bm-stat-card">
-        <div class="bm-stat-val" style="color: #4ade80;">{{ bm.type_counts.clutch_win }}</div>
+        <div class="bm-stat-val" style="color: #3FD08F;">{{ bm.type_counts.clutch_win }}</div>
         <div class="bm-stat-lbl">Clutch Wins</div>
     </div>
     {% endif %}
     {% if bm.type_counts.get('multi_kill') %}
     <div class="card elev-sm bm-stat-card">
-        <div class="bm-stat-val" style="color: #fbbf24;">{{ bm.type_counts.multi_kill }}</div>
+        <div class="bm-stat-val" style="color: #F5B941;">{{ bm.type_counts.multi_kill }}</div>
         <div class="bm-stat-lbl">Multi-Kills</div>
     </div>
     {% endif %}
     {% if bm.type_counts.get('early_death') %}
     <div class="card elev-sm bm-stat-card">
-        <div class="bm-stat-val" style="color: #f87171;">{{ bm.type_counts.early_death }}</div>
+        <div class="bm-stat-val" style="color: #F2676C;">{{ bm.type_counts.early_death }}</div>
         <div class="bm-stat-lbl">{{ _('Fruehe Tode') }}</div>
     </div>
     {% endif %}
@@ -113,9 +113,9 @@
 
 <!-- Type Legend -->
 <div class="bm-type-legend">
-    <span><span class="bm-legend-dot" style="background: #4ade80;"></span> {{ _('Clutch gewonnen') }}</span>
-    <span><span class="bm-legend-dot" style="background: #f87171;"></span> {{ _('Clutch verloren / Frueher Tod') }}</span>
-    <span><span class="bm-legend-dot" style="background: #fbbf24;"></span> Multi-Kill</span>
+    <span><span class="bm-legend-dot" style="background: #3FD08F;"></span> {{ _('Clutch gewonnen') }}</span>
+    <span><span class="bm-legend-dot" style="background: #F2676C;"></span> {{ _('Clutch verloren / Frueher Tod') }}</span>
+    <span><span class="bm-legend-dot" style="background: #F5B941;"></span> Multi-Kill</span>
     <span><span class="bm-legend-dot" style="background: #fb923c;"></span> {{ _('Vorteil verspielt') }}</span>
     <span><span class="bm-legend-dot" style="background: #75798c;"></span> Invisible Round</span>
 </div>
@@ -125,7 +125,7 @@
 <div class="card elev-sm bm-match" style="border-color: color-mix(in srgb, {% if m.result == 'Sieg' %}var(--c-pos){% elif m.result == 'Niederlage' %}var(--c-neg){% else %}var(--c-undecided){% endif %} 35%, transparent);">
     <div class="bm-match-head">
         <div class="bm-match-title">{{ m.match_label }}</div>
-        <span class="bm-match-result" style="background: {% if m.result == 'Sieg' %}rgba(74,222,128,0.15);color:#4ade80{% elif m.result == 'Niederlage' %}rgba(248,113,113,0.15);color:#f87171{% else %}rgba(251,191,36,0.15);color:#fbbf24{% endif %};">
+        <span class="bm-match-result" style="background: {% if m.result == 'Sieg' %}rgba(74,222,128,0.15);color:#3FD08F{% elif m.result == 'Niederlage' %}rgba(248,113,113,0.15);color:#F2676C{% else %}rgba(251,191,36,0.15);color:#F5B941{% endif %};">
             {{ m.result }}
         </span>
         <span class="bm-match-meta">{{ m.date }}</span>
@@ -144,7 +144,7 @@
                 <i data-lucide="{{ b.icon }}" style="width:14px;height:14px;"></i>
             </div>
             <div class="bm-round">R{{ b.round }}</div>
-            <span class="bm-side" style="background: {% if b.side == 'CT' %}rgba(96,165,250,0.15);color:#60a5fa{% else %}rgba(251,191,36,0.15);color:#fbbf24{% endif %};">
+            <span class="bm-side" style="background: {% if b.side == 'CT' %}rgba(96,165,250,0.15);color:#5DA9F2{% else %}rgba(251,191,36,0.15);color:#F5B941{% endif %};">
                 {{ b.side }}
             </span>
             <div style="flex: 1;">
@@ -153,9 +153,9 @@
             </div>
             <div class="bm-won">
                 {% if b.won %}
-                <span style="color: #4ade80;">W</span>
+                <span style="color: #3FD08F;">W</span>
                 {% else %}
-                <span style="color: #f87171;">L</span>
+                <span style="color: #F2676C;">L</span>
                 {% endif %}
             </div>
         </div>

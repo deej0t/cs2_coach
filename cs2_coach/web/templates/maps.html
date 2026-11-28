@@ -55,9 +55,9 @@
         font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 12px;
         text-transform: uppercase; letter-spacing: 0.05em;
     }
-    .mm-badge-top { background: rgba(74,222,128,0.15); color: #4ade80; }
-    .mm-badge-mid { background: rgba(251,191,36,0.15); color: #fbbf24; }
-    .mm-badge-low { background: rgba(248,113,113,0.15); color: #f87171; }
+    .mm-badge-top { background: rgba(74,222,128,0.15); color: #3FD08F; }
+    .mm-badge-mid { background: rgba(251,191,36,0.15); color: #F5B941; }
+    .mm-badge-low { background: rgba(248,113,113,0.15); color: #F2676C; }
 
     .mm-body { display: grid; grid-template-columns: 180px 1fr; gap: var(--space-4); }
     @media (max-width: 520px) { .mm-body { grid-template-columns: 1fr; } }
@@ -69,8 +69,8 @@
     .mm-stat-val { font-family: var(--font-heading); font-size: 15px; font-weight: 700; line-height: 1.2; }
     .mm-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-neutral-500); }
     .mm-stat-delta { font-size: 10px; font-weight: 600; margin-left: 4px; }
-    .mm-delta-pos { color: #4ade80; }
-    .mm-delta-neg { color: #f87171; }
+    .mm-delta-pos { color: #3FD08F; }
+    .mm-delta-neg { color: #F2676C; }
 
     .mm-training-tip {
         font-size: 12px; color: var(--color-neutral-400); margin-top: 12px;
@@ -106,8 +106,8 @@
 <!-- Quick veto recommendation -->
 <div class="mv-veto-bar">
     <div class="mv-veto-card mv-pick">
-        <div class="mv-veto-label" style="color: #4ade80;">Pick</div>
-        <div class="mv-veto-maps" style="color: #4ade80;">
+        <div class="mv-veto-label" style="color: #3FD08F;">Pick</div>
+        <div class="mv-veto-maps" style="color: #3FD08F;">
             {% if veto.picks %}
                 {% for p in veto.picks %}{{ p.map }}{% if not loop.last %}, {% endif %}{% endfor %}
             {% else %}
@@ -116,8 +116,8 @@
         </div>
     </div>
     <div class="mv-veto-card mv-ban">
-        <div class="mv-veto-label" style="color: #f87171;">Ban</div>
-        <div class="mv-veto-maps" style="color: #f87171;">
+        <div class="mv-veto-label" style="color: #F2676C;">Ban</div>
+        <div class="mv-veto-maps" style="color: #F2676C;">
             {% if veto.bans %}
                 {% for b in veto.bans %}{{ b.map }}{% if not loop.last %}, {% endif %}{% endfor %}
             {% else %}
@@ -133,7 +133,7 @@
 <div class="mm-ranking">
 {% for m in mastery.maps %}
     <div class="mm-rank-item">
-        <div class="mm-rank-bar" style="height: {{ [m.mastery * 1.2, 20] | max }}px; background: {% if m.mastery >= 65 %}linear-gradient(180deg, #4ade80, #22c55e){% elif m.mastery >= 40 %}linear-gradient(180deg, #fbbf24, #f59e0b){% else %}linear-gradient(180deg, #f87171, #ef4444){% endif %};"></div>
+        <div class="mm-rank-bar" style="height: {{ [m.mastery * 1.2, 20] | max }}px; background: {% if m.mastery >= 65 %}linear-gradient(180deg, #3FD08F, #3FD08F){% elif m.mastery >= 40 %}linear-gradient(180deg, #F5B941, #f59e0b){% else %}linear-gradient(180deg, #F2676C, #F2676C){% endif %};"></div>
         <div class="mm-rank-score {% if m.mastery >= 65 %}win{% elif m.mastery < 40 %}loss{% endif %}">{{ m.mastery }}</div>
         <div class="mm-rank-name">{{ m.map }}</div>
         <div class="mm-rank-games">{{ m.matches }} {{ _('Spiele') }}</div>
@@ -252,10 +252,10 @@
                             : 'rgba(248,113,113,0.7)',
                     borderWidth: 2,
                     pointBackgroundColor: m.mastery >= 65
-                        ? '#4ade80'
+                        ? '#3FD08F'
                         : m.mastery >= 40
-                            ? '#fbbf24'
-                            : '#f87171',
+                            ? '#F5B941'
+                            : '#F2676C',
                     pointRadius: 3,
                     pointHoverRadius: 5,
                 }]

@@ -32,9 +32,9 @@
         font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
         display: inline-flex; align-items: center; gap: 3px;
     }
-    .hl-badge-hero { background: rgba(251,191,36,0.15); color: #fbbf24; }
-    .hl-badge-impact { background: rgba(74,222,128,0.15); color: #4ade80; }
-    .hl-badge-invisible { background: rgba(248,113,113,0.15); color: #f87171; }
+    .hl-badge-hero { background: rgba(251,191,36,0.15); color: #F5B941; }
+    .hl-badge-impact { background: rgba(74,222,128,0.15); color: #3FD08F; }
+    .hl-badge-invisible { background: rgba(248,113,113,0.15); color: #F2676C; }
 
     .hl-timeline {
         display: flex; gap: 3px; flex-wrap: wrap; align-items: center;
@@ -54,11 +54,11 @@
     .hl-round:hover { transform: scale(1.3); z-index: 5; }
 
     /* Round colors based on classification */
-    .hl-r-hero { background: rgba(251,191,36,0.25); color: #fbbf24; border-color: rgba(251,191,36,0.4); }
-    .hl-r-impact { background: rgba(74,222,128,0.2); color: #4ade80; border-color: rgba(74,222,128,0.3); }
-    .hl-r-invisible { background: rgba(248,113,113,0.2); color: #f87171; border-color: rgba(248,113,113,0.3); }
+    .hl-r-hero { background: rgba(251,191,36,0.25); color: #F5B941; border-color: rgba(251,191,36,0.4); }
+    .hl-r-impact { background: rgba(74,222,128,0.2); color: #3FD08F; border-color: rgba(74,222,128,0.3); }
+    .hl-r-invisible { background: rgba(248,113,113,0.2); color: #F2676C; border-color: rgba(248,113,113,0.3); }
     .hl-r-survivor { background: rgba(93,169,242,0.2); color: #b98eff; border-color: rgba(93,169,242,0.3); }
-    .hl-r-entry { background: rgba(96,165,250,0.2); color: #60a5fa; border-color: rgba(96,165,250,0.3); }
+    .hl-r-entry { background: rgba(96,165,250,0.2); color: #5DA9F2; border-color: rgba(96,165,250,0.3); }
     .hl-r-won { background: rgba(74,222,128,0.08); color: var(--color-neutral-300); }
     .hl-r-lost { background: rgba(248,113,113,0.06); color: var(--color-neutral-500); }
     .hl-r-lost.hl-r-died { color: var(--color-neutral-600); }
@@ -115,15 +115,15 @@
 <!-- Aggregate totals -->
 <div class="hl-totals">
     <div class="hl-total-card">
-        <div class="hl-total-val" style="color:#fbbf24;">{{ hl.totals.hero }}</div>
+        <div class="hl-total-val" style="color:#F5B941;">{{ hl.totals.hero }}</div>
         <div class="hl-total-lbl">{{ _('Hero-Runden') }}</div>
     </div>
     <div class="hl-total-card">
-        <div class="hl-total-val" style="color:#4ade80;">{{ hl.totals.impact }}</div>
+        <div class="hl-total-val" style="color:#3FD08F;">{{ hl.totals.impact }}</div>
         <div class="hl-total-lbl">{{ _('Impact-Runden') }}</div>
     </div>
     <div class="hl-total-card">
-        <div class="hl-total-val" style="color:#60a5fa;">{{ hl.totals.entry }}</div>
+        <div class="hl-total-val" style="color:#5DA9F2;">{{ hl.totals.entry }}</div>
         <div class="hl-total-lbl">Entry Kills</div>
     </div>
     <div class="hl-total-card">
@@ -131,7 +131,7 @@
         <div class="hl-total-lbl">{{ _('Survivor-Runden') }}</div>
     </div>
     <div class="hl-total-card">
-        <div class="hl-total-val" style="color:#f87171;">{{ hl.totals.invisible }}</div>
+        <div class="hl-total-val" style="color:#F2676C;">{{ hl.totals.invisible }}</div>
         <div class="hl-total-lbl">{{ _('Invisible-Runden') }}</div>
     </div>
     <div class="hl-total-card">
