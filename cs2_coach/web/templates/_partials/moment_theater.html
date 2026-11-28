@@ -18,6 +18,9 @@
     .kt-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
     .kt-stage #km-canvas { background: var(--c-bg); object-fit: contain; }
     #km-aim-hud { pointer-events: none; }
+    /* Treffer/Tod in der Ego-Sicht: roter Rand, Staerke setzt moment_3d_js (hurtOverlay) */
+    #km-hurt { position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 2;
+               background: radial-gradient(ellipse at center, transparent 45%, var(--c-neg-a) 70%, rgba(242,103,108,.6) 100%); }
     .kt-views { position: absolute; top: 10px; left: 10px; display: flex; gap: 0; z-index: 3; padding: 3px; border-radius: 9px;
                 background: var(--c-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(220,230,245,.12); }
     .kt-views button { background: transparent !important; border-color: transparent !important; border-radius: 6px; }
@@ -72,6 +75,7 @@
                 <div id="km-3d-layer" style="position:absolute;inset:0;display:none;">
                     <canvas id="km-3d"></canvas>
                     <canvas id="km-aim-hud"></canvas>
+                    <div id="km-hurt"></div>
                 </div>
                 <canvas id="km-canvas" width="1024" height="1024"></canvas>
                 <div class="kt-views">

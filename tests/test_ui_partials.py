@@ -108,3 +108,11 @@ def test_tooltips_are_positioned_by_script():
     css = (TPL.parent / "static" / "coach.css").read_text(encoding="utf-8")
     assert "abbr[title]:hover::after" not in css and ".ui-tip" in css
     assert "ui-tip" in (TPL / "base.html").read_text(encoding="utf-8")
+
+
+def test_death_is_visible_in_3d():
+    """3D: Tote fallen (corpse) statt zu verschwinden, Ego-Sicht bekommt Todeskamera + Treffer-Rot."""
+    js = (TPL / "_partials" / "moment_3d_js.html").read_text(encoding="utf-8")
+    for name in ("function buildDeaths", "function corpse", "function deathCam", "function hurtOverlay", "buildDeaths();"):
+        assert name in js, name
+    assert 'id="km-hurt"' in (TPL / "_partials" / "moment_theater.html").read_text(encoding="utf-8")

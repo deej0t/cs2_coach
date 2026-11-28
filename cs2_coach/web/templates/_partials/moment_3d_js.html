@@ -228,6 +228,7 @@ function buildFigures() {
     // Je Tick: Spieler-Index -> Zeile, fuer schnelles Nachschlagen
     data.byTick = {};
     ticks3d.forEach(t => { const m = {}; data.view3d[t].forEach(r => { m[r[0]] = r; }); data.byTick[t] = m; });
+    buildDeaths();
     camFreeSet = false;
 }
 
@@ -359,6 +360,101 @@ function pose(a, b, f) {
              vel: [(b[1] - a[1]) * 32, (b[2] - a[2]) * 32] };
 }
 
+// ── Tod sichtbar machen: Figur faellt statt zu verschwinden, Todeskamera, Treffer-/Todesrot ──
+const DEATH_FALL = 22;           // Ticks bis die Figur liegt (~0,35 s)
+const CORPSE_TICKS = 64 * 6;     // so lange bleibt sie liegen
+const DEATHCAM_TICKS = 70;       // Uebergang Ego-Sicht -> Todeskamera (~1,1 s)
+const TRACER_TICKS = 96;         // roter Strahl Moerder -> Opfer
+let deaths = {};                 // Spieler-Index -> {tick, by, last, kp, dir}
+let tracers = [];
+const _q = new THREE.Quaternion(), _qy = new THREE.Quaternion(), _ax = new THREE.Vector3(), _up = new THREE.Vector3(0, 0, 1);
+
+function buildDeaths() {
+    deaths = {};
+    tracers.forEach(l => overlay.remove(l)); tracers = [];
+    const idx = {}; data.players.forEach((pl, i) => { idx[pl.steamid] = i; });
+    const lastRow = (i, tick, alive) => {
+        let r = null;
+        for (const t of ticks3d) { if (t > tick) break; const x = data.byTick[t][i]; if (x && (!alive || x[6] > 0)) r = x; }
+        return r;
+    };
+    (data.kills || []).forEach(k => {
+        const v = idx[k.victim], by = idx[k.attacker];
+        if (v === undefined || deaths[v]) return;
+        const last = lastRow(v, k.tick, true);
+        if (!last) return;
+        const kp = by !== undefined && by !== v ? lastRow(by, k.tick, false) : null;
+        // Fallrichtung: vom Moerder weg (ohne Moerder: nach hinten)
+        let dx = kp ? last[1] - kp[1] : -Math.cos(last[4] * Math.PI / 180), dy = kp ? last[2] - kp[2] : -Math.sin(last[4] * Math.PI / 180);
+        const n = Math.hypot(dx, dy) || 1;
+        deaths[v] = { tick: k.tick, by: by === v ? undefined : by, last, kp, dir: [dx / n, dy / n] };
+        // Strahl nur im Duell (du / dein Gegner): wer hat wen getroffen
+        const mo = data.moment;
+        if (kp && (v === mo.me_idx || v === mo.killer_idx)) {
+            const a = pose(kp, kp, 0), b = pose(last, last, 0);
+            const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(a.x, a.y, a.z + (a.duck ? EYE_DUCK : EYE)),
+                new THREE.Vector3(b.x, b.y, b.z + (b.duck ? EYE_DUCK : EYE) - 4)]),
+                new THREE.LineBasicMaterial({ color: uiColor('neg', '#F2676C'), transparent: true, opacity: 0, depthTest: false }));
+            ln.frustumCulled = false; ln.renderOrder = 5; ln.userData.tick = k.tick; ln.visible = false;
+            overlay.add(ln); tracers.push(ln);
+        }
+    });
+}
+
+function corpse(fig, d, t) {
+    // Leiche: Haltung im Todesmoment, kippt vom Moerder weg und bleibt liegen
+    const age = t - d.tick;
+    if (age < 0 || age > CORPSE_TICKS) return false;
+    const q = pose(d.last, d.last, 0);
+    const fall = Math.min(1, age / DEATH_FALL), ease = 1 - Math.pow(1 - fall, 3);
+    _ax.set(d.dir[0], d.dir[1], 0); _ax.crossVectors(_up, _ax).normalize();
+    _q.setFromAxisAngle(_ax, ease * Math.PI * 0.47);
+    _qy.setFromAxisAngle(_up, q.yaw * Math.PI / 180);
+    if (fig.model && fig.model.ok) {
+        fig.g.visible = false;
+        fig.model.root.visible = true;
+        fig.model.update(q, [0, 0], d.tick);            // fester Tick = eingefrorene Haltung
+        fig.model.root.quaternion.copy(_q).multiply(_qy);
+        fig.model.root.updateMatrixWorld(true);
+    } else {
+        fig.g.visible = true;
+        fig.g.position.set(q.x, q.y, q.z);
+        fig.g.quaternion.copy(_q).multiply(_qy);
+    }
+    if (fig.ray) fig.ray.visible = false;
+    return true;
+}
+
+function deathCam(d, t, A, B, f) {
+    // wie die Todeskamera im Spiel: aus dem Kopf nach hinten oben, Blick auf den Moerder
+    const age = t - d.tick, q = pose(d.last, d.last, 0);
+    const eye = new THREE.Vector3(q.x, q.y, q.z + (q.duck ? EYE_DUCK : EYE));
+    let kp = d.by !== undefined ? pose(A[d.by], B[d.by], f) : null;
+    if (!kp || kp.hp <= 0) kp = d.kp ? pose(d.kp, d.kp, 0) : null;
+    const fwd = eye.clone().add(dirFrom(q.yaw, q.pitch).multiplyScalar(300));
+    const look = kp ? new THREE.Vector3(kp.x, kp.y, kp.z + (kp.duck ? EYE_DUCK : EYE)) : fwd.clone();
+    const target = new THREE.Vector3(q.x + d.dir[0] * 170, q.y + d.dir[1] * 170, q.z + 125);
+    const s = Math.min(1, age / DEATHCAM_TICKS), e = s * s * (3 - 2 * s);
+    camera.position.copy(eye).lerp(target, e);
+    camera.lookAt(fwd.lerp(look, e));
+}
+
+function hurtOverlay(t, viewer) {
+    // Ego-Sicht: roter Rand bei jedem erlittenen Treffer, beim Tod stark, danach entsaettigt
+    const el = document.getElementById('km-hurt'), cv = canvasEl();
+    if (!el) return;
+    const mo = data.moment;
+    const shots = viewer === mo.me_idx ? (data.aim_enemy || {}).shots : viewer === mo.killer_idx ? (data.aim || {}).shots : null;
+    let a = 0;
+    (shots || []).forEach(s => { if (s.hit && t >= s.tick && t - s.tick < 20) a = Math.max(a, 0.55 * (1 - (t - s.tick) / 20)); });
+    const d = viewer != null ? deaths[viewer] : null, dead = d && t >= d.tick;
+    if (dead) a = Math.max(a, 0.4 + 0.5 * Math.max(0, 1 - (t - d.tick) / 48));
+    el.style.opacity = a.toFixed(3);
+    const filt = dead ? 'saturate(0.3) brightness(0.8)' : '';
+    if (cv.style.filter !== filt) cv.style.filter = filt;
+}
+
 function draw() {
     if (!renderer || !data || !data.byTick || !window.km.data || !ticks3d.length) return;
     const mo = data.moment;
@@ -378,8 +474,14 @@ function draw() {
     let view = null;
     for (const key in figures) {
         const i = Number(key), p = pose(A[i], B[i], f), fig = figures[i];
-        if (!p || p.hp <= 0) { fig.g.visible = false; if (fig.ray) fig.ray.visible = false;
-                                if (fig.model) fig.model.root.visible = false; continue; }
+        if (!p || p.hp <= 0) {
+            if (!(deaths[i] && corpse(fig, deaths[i], tNow))) {
+                fig.g.visible = false; if (fig.ray) fig.ray.visible = false;
+                if (fig.model) fig.model.root.visible = false;
+            }
+            continue;
+        }
+        fig.g.quaternion.identity();
         fig.g.visible = i !== viewer;   // eigene Figur ausblenden, die Kamera steht darin
         fig.g.position.set(p.x, p.y, p.z);
         const real = fig.model && fig.model.ok;
@@ -415,7 +517,16 @@ function draw() {
         if (viewModel) viewModel.update(false, 0);
         if (camera.fov !== VFOV) { camera.fov = VFOV; camera.updateProjectionMatrix(); }
     }
-    if (!view && !camFreeSet) {
+    const vd = viewer != null && !view ? deaths[viewer] : null;
+    const deadView = !!(vd && tNow >= vd.tick);
+    if (deadView) deathCam(vd, tNow, A, B, f);
+    tracers.forEach(l => {
+        const age = tNow - l.userData.tick;
+        l.visible = age >= 0 && age < TRACER_TICKS;
+        if (l.visible) l.material.opacity = 0.95 * (1 - age / TRACER_TICKS);
+    });
+    hurtOverlay(tNow, viewer);
+    if (!view && !camFreeSet && !deadView) {
         // Frei / Zuschauer: die beiden Duellanten von schraeg oben, mit der Maus drehbar
         const a = pose(A[mo.me_idx], B[mo.me_idx], f);
         const b = pose(A[mo.killer_idx], B[mo.killer_idx], f) || a;
