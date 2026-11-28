@@ -117,6 +117,11 @@ def test_map3d_downloads_answer_404_without_export(client):
         assert client.get(path).status_code == 404
 
 
+def test_moment_context_route_never_5xx(client):
+    """/api/momente/kontext: unbekannter Export = 404, nie ein 5xx."""
+    assert client.get("/api/momente/kontext/gibtsnicht_coach.json/3/1000?kind=death").status_code == 404
+
+
 def test_moment_clip_cache_roundtrip(tmp_path, monkeypatch):
     """Gecachte Szene wird unveraendert gelesen; nur Erfolge landen im Cache."""
     from cs2_coach.web import moments_page as mp

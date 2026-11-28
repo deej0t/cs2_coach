@@ -1,0 +1,195 @@
+{# Ursachen-Storyline unter der 3D-Szene: Ausloeser -> Ablauf -> Auswirkung (moment_story.py).
+   Erwartet den Player aus moment_theater.html (km, kmSeek, kmStop, kmRange). Demo-Inhalt kommt
+   aus der Szene (story), Siegchance + Lobby frisch ueber /api/momente/kontext (nie gecacht). #}
+<style>
+    :root { --kt-bad: var(--c-neg); --kt-good: var(--c-pos); --kt-info: var(--c-info); --kt-util: var(--c-util); --kt-me: var(--c-focus); }
+    .ks { background: linear-gradient(180deg, var(--c-s2), var(--c-s1)); border-top: 1px solid rgba(255,255,255,0.06); color: var(--c-tx); }
+    .ks[hidden] { display: none; }
+    .ks-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; user-select: none; }
+    .ks-v { font-family: var(--font-heading); font-size: 15px; font-weight: 700; padding-left: 10px;
+            border-left: 3px solid var(--c-tx3); line-height: 1.2; }
+    .ks-v.bad { border-left-color: var(--kt-bad); } .ks-v.good { border-left-color: var(--kt-good); }
+    .ks-wp { font: 600 12px ui-monospace, monospace; padding: 2px 9px; border-radius: 999px; background: rgba(255,255,255,0.07); }
+    .ks-wp[hidden] { display: none; }
+    .ks-tog { margin-left: auto; color: var(--c-tx3); font-size: 11px; }
+    .ks-body { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 1px; background: rgba(255,255,255,0.05); }
+    .ks.closed .ks-body { display: none; }
+    @media (max-width: 900px) { .ks-body { grid-template-columns: 1fr; } }
+    .ks-col { background: var(--c-s1); padding: 8px 12px 10px; font-size: 12.5px; line-height: 1.45; min-width: 0; }
+    .ks-col h5 { margin: 0 0 6px; font-size: 10px; letter-spacing: 0.1em; color: var(--c-tx3); font-weight: 700; }
+    .ks-step { display: flex; gap: 7px; padding: 3px 6px; margin: 0 -6px; border-radius: 6px; cursor: pointer; }
+    .ks-step:hover { background: rgba(255,255,255,0.06); }
+    .ks-step.now { background: rgba(251,191,36,0.12); }
+    .ks-step i { flex: 0 0 7px; height: 7px; margin-top: 6px; border-radius: 50%; background: var(--c-tx3); }
+    .ks-step.bad i { background: var(--kt-bad); } .ks-step.good i { background: var(--kt-good); }
+    .ks-step.util i { background: var(--kt-util); } .ks-step.info i { background: var(--kt-info); }
+    .ks-step .t { font: 11px ui-monospace, monospace; color: var(--c-tx3); flex: 0 0 auto; margin-top: 1px; }
+    .ks-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+    .ks-chip { font-size: 11px; padding: 2px 9px; border-radius: 999px; cursor: pointer; color: var(--c-tx);
+               border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03); }
+    .ks-chip:hover { background: rgba(255,255,255,0.09); }
+    .ks-chip.bad { border-color: rgba(248,113,113,0.55); } .ks-chip.good { border-color: rgba(74,222,128,0.5); }
+    .ks-lobby { margin-top: 6px; padding: 5px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); font-size: 11.5px; }
+    .ks-lobby small { color: var(--c-tx3); display: block; }
+    .ks-muted { color: var(--c-tx3); }
+</style>
+<div class="ks" id="ks" hidden>
+    <div class="ks-head" id="ks-head" title="{{ _('Storyline ein-/ausklappen') }}">
+        <span class="ks-v" id="ks-v"></span>
+        <span class="ks-wp" id="ks-wp" hidden></span>
+        <span class="ks-tog" id="ks-tog">▾</span>
+    </div>
+    <div class="ks-body">
+        <div class="ks-col"><h5>{{ _('AUSLÖSER') }}</h5><div id="ks-trigger"></div><div class="ks-chips" id="ks-chips"></div></div>
+        <div class="ks-col"><h5>{{ _('ABLAUF') }}</h5><div id="ks-flow"></div></div>
+        <div class="ks-col"><h5>{{ _('AUSWIRKUNG') }}</h5><div id="ks-impact"></div><div id="ks-lobby"></div></div>
+    </div>
+</div>
+<script>
+// ── Storyline (moment_story.py) ─────────────────────────────────────────
+var KS_TONE = { bad: uiColor('neg', '#f87171'), good: uiColor('pos', '#4ade80'), info: uiColor('info', '#93c5fd'), util: uiColor('util', '#c084fc') };
+var ksCtl = null;          // AbortController des laufenden Kontext-Abrufs
+var ksSteps = [];          // klickbare Schritte (fuer die "jetzt"-Markierung)
+
+function ksStep(box, s, focus) {
+    var d = document.createElement('div');
+    d.className = 'ks-step ' + (s.tone || 'info');
+    var sec = s.tick != null ? (s.tick - focus) / 64 : null;
+    d.innerHTML = '<i></i>' + (sec !== null ? '<span class="t"></span>' : '') + '<span></span>';
+    if (sec !== null) d.children[1].textContent = (sec >= 0 ? '+' : '−') + Math.abs(sec).toFixed(1) + 's';
+    d.lastChild.textContent = s.text;
+    if (s.tick != null) { d.onclick = function () { kmStop(); kmSeek(s.tick); }; ksSteps.push({ el: d, tick: s.tick }); }
+    box.appendChild(d);
+}
+
+// Szene geladen: Storyline aus dem Payload (alte Szenen ohne "story": aus "cause" bzw. leer)
+function ktStory() {
+    var d = km.data, st = d.story, r = kmRange(), box = document.getElementById('ks');
+    ksSteps = [];
+    if (!st) {
+        var c = d.cause || {};
+        st = { verdict: c.verdict || '', tone: c.tone || 'info', causes: c.causes || [], flow: [], impact: { text: '' },
+               trigger: (c.causes || [])[0] || null, duel: null,
+               hot: (c.turns || []).map(function (t) { return { tick: t.tick, type: t.kind, rank: 2, label: t.label, tone: t.tone }; }) };
+    }
+    km.story = st;
+    km.duel = st.duel || null;
+    km.turns = (st.hot || []).filter(function (t) { return t.tick >= r.start && t.tick <= r.end; })
+        .map(function (t) { return Object.assign({}, t); });
+    if (!km.turns.length) km.turns = km.events.filter(function (e) { return e.kind === 'kill' || e.kind === 'death'; })
+        .map(function (e) { return { tick: e.tick, type: e.kind, rank: 3, label: e.text, tone: e.kind === 'kill' ? 'good' : 'bad' }; });
+    if (!st.verdict && !km.turns.length) { box.hidden = true; return; }
+    var v = document.getElementById('ks-v');
+    v.textContent = st.verdict || '';
+    v.className = 'ks-v ' + (st.tone || 'info');
+    var tr = document.getElementById('ks-trigger'); tr.innerHTML = '';
+    if (st.trigger) ksStep(tr, st.trigger, r.focus); else tr.innerHTML = '<span class="ks-muted">–</span>';
+    var chips = document.getElementById('ks-chips'); chips.innerHTML = '';
+    (st.causes || []).forEach(function (x) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'ks-chip ' + x.tone; b.title = x.text; b.textContent = x.label;
+        b.onclick = function () { if (x.tick != null) { kmStop(); kmSeek(x.tick); } };
+        chips.appendChild(b);
+    });
+    var fl = document.getElementById('ks-flow'); fl.innerHTML = '';
+    (st.flow || []).forEach(function (s) { ksStep(fl, s, r.focus); });
+    if (!(st.flow || []).length) fl.innerHTML = '<span class="ks-muted">Keine weiteren Auffälligkeiten.</span>';
+    ksImpact(null);
+    document.getElementById('ks-lobby').innerHTML = '';
+    document.getElementById('ks-wp').hidden = true;
+    var at = {}; km.turns.forEach(function (t) { at[t.tick] = 1; });
+    km.events.forEach(function (e) { if (e.li && at[e.tick]) e.li.classList.add('turn'); });
+    box.hidden = false;
+    ksContext();
+}
+
+function ksImpact(ctx) {
+    var st = km.story || {}, box = document.getElementById('ks-impact'), r = kmRange();
+    ksSteps = ksSteps.filter(function (s) { return !box.contains(s.el); });
+    box.innerHTML = '';
+    var end = (st.impact || {}).tick;
+    if (ctx && ctx.impact) ksStep(box, { text: ctx.impact.text, tick: end, tone: ctx.impact.delta > 0 ? 'good' : 'bad' }, r.focus);
+    if ((st.impact || {}).text) ksStep(box, { text: st.impact.text, tick: null, tone: 'info' }, r.focus);
+    if (!box.children.length) box.innerHTML = '<span class="ks-muted">' + (ctx ? 'Siegchance für diesen Moment nicht verfügbar.' : 'Siegchance wird berechnet…') + '</span>';
+}
+
+// Frischer Kontext (Siegchance, Lobby). Schneller Momentwechsel: alter Abruf wird abgebrochen,
+// und eine trotzdem verspaetete Antwort wird am Moment-Schluessel erkannt und verworfen.
+function ksContext() {
+    if (ksCtl) ksCtl.abort();
+    var ctl = window.AbortController ? new AbortController() : null;
+    ksCtl = ctl;
+    var chip = km.chip, file = chip.dataset.file || KT_FILE, key = km.url;
+    var url = KT_CTX_TMPL.replace('XFILEX', file).replace(/\/1\/0$/, '/' + chip.dataset.round + '/' + chip.dataset.tick)
+        + '?kind=' + chip.dataset.kind + (KT_ALSQ && !chip.dataset.file ? '&' + KT_ALSQ : '');
+    fetch(url, ctl ? { signal: ctl.signal } : {}).then(function (r) { return r.json(); }).then(function (j) {
+        if (key !== km.url || !km.data) return;          // inzwischen anderer Moment
+        ksImpact(j);
+        if (j.impact) {
+            var wp = document.getElementById('ks-wp'), dl = j.impact.delta;
+            wp.textContent = (dl > 0 ? '+' : '−') + Math.abs(dl) + ' % Siegchance';
+            wp.style.color = dl > 0 ? KS_TONE.good : KS_TONE.bad;
+            wp.title = j.impact.text;
+            wp.hidden = false;
+            km.turns.forEach(function (t) {
+                if ((t.type === 'death' || t.type === 'kill') && t.label.indexOf('Siegchance') < 0)
+                    t.label += ' · ' + wp.textContent;
+            });
+            km.knick = { tick: (km.story.impact || {}).tick, delta: dl };
+        }
+        var lb = document.getElementById('ks-lobby');
+        lb.innerHTML = '';
+        if (j.lobby && j.lobby.text) {   // nur mit belastbarem evidence-Verdict (Server prueft)
+            var el = document.createElement('div');
+            el.className = 'ks-lobby';
+            el.style.borderLeft = '3px solid ' + (KS_TONE[j.lobby.tone] || uiColor('tx3', '#9ca3af'));
+            el.innerHTML = '<span></span><small></small>';
+            el.firstChild.textContent = j.lobby.text;
+            el.lastChild.textContent = 'Effekt ' + j.lobby.effect + ' [' + j.lobby.ci[0] + ' … ' + j.lobby.ci[1] + '], gegen die Lobby am selben Callout';
+            lb.appendChild(el);
+        }
+        km.dirty = true;
+    }).catch(function (e) {
+        if (e && e.name === 'AbortError') return;
+        if (key === km.url) ksImpact({});
+    });
+}
+
+function ksNow() {
+    var cur = null;
+    ksSteps.forEach(function (s) { s.el.classList.remove('now'); if (s.tick <= km.tick + 1 && km.tick - s.tick <= 80) cur = s; });
+    if (cur) cur.el.classList.add('now');
+}
+
+// 3D: Puls am Ort des aktuellen Hot-Ticks (vom 3D-Modul mit Projektion aufgerufen)
+window.ktStoryOverlay = function (tick, project, playerPos) {
+    if (!km.data || !km.captions) return;
+    var t = ktTurnAt(tick), cv = document.getElementById('km-aim-hud');
+    if (!t || !cv) return;
+    var mo = km.data.moment, p = t.pos;
+    if (!p) {
+        var idx = /contact|shot|hit|blind/.test(t.type) && t.tone === 'bad' ? mo.killer_idx : mo.me_idx;
+        if (t.type === 'death') idx = mo.me_idx;
+        if (t.type === 'kill') idx = mo.killer_idx;
+        p = playerPos(idx);
+        if (p) p = [p[0], p[1], p[2] + 36];
+    }
+    var s = p && project(p[0], p[1], p[2]);
+    if (!s) return;
+    var c = cv.getContext('2d'), age = Math.max(0, tick - t.tick) / 80;
+    var col = KS_TONE[t.tone] || uiColor('tx', '#e5e7eb');
+    c.save();
+    c.globalAlpha = 1 - age;
+    c.strokeStyle = col; c.lineWidth = 2.5;
+    c.beginPath(); c.arc(s.x, s.y, 16 + age * 26, 0, Math.PI * 2); c.stroke();
+    c.globalAlpha = 0.35 * (1 - age);
+    c.beginPath(); c.arc(s.x, s.y, 8 + age * 12, 0, Math.PI * 2); c.stroke();
+    c.restore();
+};
+
+document.getElementById('ks-head').onclick = function () {
+    var b = document.getElementById('ks');
+    b.classList.toggle('closed');
+    document.getElementById('ks-tog').textContent = b.classList.contains('closed') ? '▸' : '▾';
+};
+</script>

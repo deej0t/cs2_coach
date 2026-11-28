@@ -16,7 +16,7 @@ from pathlib import Path
 
 from flask import Blueprint, Response, jsonify, render_template, request, send_file
 
-from .. import aim_trace, costly_moments, demo_cache, key_moments, map3d, map3d_render, models3d, nades3d
+from .. import aim_trace, costly_moments, demo_cache, key_moments, map3d, map3d_render, models3d, moment_cause, moment_story, nades3d
 from ..maps import MAP_RADAR_DATA
 from ..obsidian import export_sort_key
 
@@ -45,7 +45,7 @@ def _me(cfg: dict, data: dict) -> str:
 
 
 # ── Szenen bauen, cachen, vorberechnen ─────────────────────────────────────
-CLIP_VERSION = 9            # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
+CLIP_VERSION = 11           # erhoehen, wenn sich der Inhalt einer Szene aendert (alter Cache wird ignoriert)
 CACHE_DIR = ".moments_cache"
 _warming: set[str] = set()
 _warm_lock = threading.Lock()
@@ -95,8 +95,10 @@ def build_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: i
             mo["notes"] = mo["notes"][:1] + notes + mo["notes"][1:]
         except Exception as e:  # noqa: BLE001 - Clip bleibt nutzbar ohne Duell-Detail
             mo["notes"].append({"tone": "info", "text": f"Duell-Detail nicht lesbar: {e}"})
+    mo["facts"] = facts
     replay["moment"] = mo
     if not with3d:
+        _story(replay, kind)
         return replay, 200
     # 32 Hz statt der 8 Hz der 2D-Frames - der Browser interpoliert dazwischen
     try:
@@ -168,7 +170,15 @@ def build_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: i
         replay["nades"] = nades3d.scan(str(demo), t0, t1, parser=p)
     except Exception as e:  # noqa: BLE001 - ohne Granaten weiter
         replay["nades_error"] = str(e)
+    _story(replay, kind)
     return replay, 200
+
+
+def _story(replay: dict, kind: str) -> None:
+    """Ursachen + Storyline (nur Demo-Inhalt; Siegchance/Lobby kommen frisch ueber /kontext)."""
+    replay["cause"] = moment_cause.summarize(replay, kind)
+    replay["story"] = moment_story.build(replay, kind, replay["cause"])
+    replay["story_version"] = moment_story.STORY_VERSION
 
 
 def _cache_file(cfg_path: Path, filename: str, round_num: int, tick: int, kind: str) -> Path:
@@ -294,6 +304,21 @@ def create_blueprint(load_config, config_path) -> Blueprint:
         replay["has_geo"] = map3d.geo_path(cfg, Path(config_path()), map_key) is not None
         replay["has_render"] = map3d_render.render_parts(cfg, Path(config_path()), map_key)
         return jsonify(replay)
+
+    @bp.route("/api/momente/kontext/<path:filename>/<int:round_num>/<int:tick>")
+    def moment_context(filename, round_num, tick):
+        """Siegchance-Knick und Lobby-Vergleich eines Moments - frisch, nie im Szenen-Cache."""
+        cfg = load_config()
+        edir = _export_dir(cfg)
+        data = _load(edir, filename) if edir else None
+        if data is None:
+            return jsonify({"error": "Export nicht gefunden"}), 404
+        kind = "kill" if request.args.get("kind") == "kill" else "death"
+        try:
+            out = moment_story.context(cfg, Path(config_path()), data, _me(cfg, data), round_num, tick, kind)
+        except Exception as e:  # noqa: BLE001 - Storyline bleibt ohne Siegchance nutzbar
+            out = {"impact": None, "lobby": None, "error": str(e)}
+        return jsonify(out)
 
     @bp.route("/api/momente/geo/<map_key>")
     def geo(map_key):

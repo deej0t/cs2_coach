@@ -65,6 +65,7 @@ def annotate(replay: dict, death_tick: int, scale: float) -> dict:
     clip = [max(focus - LEAD_SECONDS * fps, 0), min(focus + TAIL_SECONDS * fps, len(frames) - 1)]
 
     marks, notes = [], []
+    ctx: dict = {}              # structured facts for moment_cause (same thresholds as the notes)
     mine = pos.get(me)
     if mine is None:
         return {"focus": focus, "clip": clip, "marks": marks, "notes": notes}
@@ -83,11 +84,13 @@ def annotate(replay: dict, death_tick: int, scale: float) -> dict:
         marks.append({"type": "circle", "x": killer[1], "y": killer[2], "r": 14, "tone": "enemy",
                       "label": name[:12]})
         weapon = (kill.get("weapon") or "").replace("weapon_", "")
+        ctx["killer_m"] = _meters(dist(killer, mine))
         notes.append({"tone": "info", "text": f"Erwischt von {name}"
                       + (f" ({weapon})" if weapon else "") + f" aus {_meters(dist(killer, mine))} m."})
 
     enemies_alive = [e for i, e in pos.items() if e[3] > 0 and players[i].get("team") == "enemy"]
     near = [e for e in enemies_alive if dist(e, mine) <= FAR_MATE_UNITS]
+    ctx["near_enemies"] = len(near)
     if len(near) >= 2:
         notes.append({"tone": "bad", "text": f"{len(near)} Gegner waren im Umkreis von "
                       f"{_meters(FAR_MATE_UNITS)} m - mehr als einer konnte dich treffen."})
@@ -97,6 +100,7 @@ def annotate(replay: dict, death_tick: int, scale: float) -> dict:
     if mates:
         d, i, e = min(mates)
         tone = "bad" if d > FAR_MATE_UNITS else "good"
+        ctx["mate_m"], ctx["mate_far"], ctx["mate_name"] = _meters(d), tone == "bad", players[i]["name"]
         marks.append({"type": "circle", "x": e[1], "y": e[2], "r": 14, "tone": tone,
                       "label": f"{_meters(d)} m"})
         marks.append({"type": "dash", "x1": e[1], "y1": e[2], "x2": mine[1], "y2": mine[2], "tone": tone})
@@ -107,6 +111,7 @@ def annotate(replay: dict, death_tick: int, scale: float) -> dict:
             notes.append({"tone": "good", "text": f"{players[i]['name']} stand {_meters(d)} m neben dir "
                           "und konnte nachziehen."})
     else:
+        ctx["no_mates"] = True
         notes.append({"tone": "info", "text": "Kein Mitspieler lebte mehr."})
 
     if kill and killer_idx is not None:
@@ -116,12 +121,14 @@ def annotate(replay: dict, death_tick: int, scale: float) -> dict:
                       and 0 <= k["tick"] - kill["tick"] <= TRADE_SECONDS * TICKRATE), None)
         if trade:
             secs = (trade["tick"] - kill["tick"]) / TICKRATE
+            ctx["trade_tick"], ctx["trade_s"] = trade["tick"], round(secs, 1)
             notes.append({"tone": "good", "text": f"Getradet nach {secs:.1f} s."})
         elif mates:
+            ctx["untraded"] = True
             notes.append({"tone": "bad", "text": f"Kein Trade durch dein Team innerhalb von {TRADE_SECONDS} s."})
     return {"focus": focus, "clip": clip, "marks": marks, "notes": notes,
             "killer": kill["attacker"] if kill else "", "killer_idx": killer_idx, "me_idx": me,
-            "death_tick": death_tick}
+            "death_tick": death_tick, "ctx": ctx}
 
 
 def headline(m: dict) -> str:
@@ -182,7 +189,8 @@ def duel_facts(rows: list[dict], shots: list[dict], me: str, killer: str, death_
     he_sees = {t: killer in {str(s) for s in (by[t].get(me, {}).get("spotted_by") or [])} for t in ticks}
     my_sight = _first_contact(ticks, i_see, death_tick)
     his_sight = _first_contact(ticks, he_sees, death_tick)
-    out = {"my_sight": my_sight, "his_sight": his_sight, "offset": None, "my_shot": None, "his_shot": None}
+    out = {"my_sight": my_sight, "his_sight": his_sight, "offset": None, "my_shot": None, "his_shot": None,
+           "seen_by": _seen_by(by, ticks, me, death_tick)}
     if my_sight is not None:
         a, b = by[my_sight].get(me), by[my_sight].get(killer)
         if a and b and all(math.isfinite(float(v)) for v in (a["X"], a["Y"], a["yaw"], b["X"], b["Y"])):
@@ -191,6 +199,20 @@ def duel_facts(rows: list[dict], shots: list[dict], me: str, killer: str, death_
     if his_sight is not None:
         out["his_shot"] = next((s["tick"] for s in shots if s["steamid"] == killer and his_sight <= s["tick"] <= death_tick), None)
     return out
+
+
+def _seen_by(by: dict, ticks: list[int], me: str, death_tick: int) -> int | None:
+    """Gegner, die dich im letzten Tick vor dem Tod sahen. ``spotted_by`` kann fehlen/None sein."""
+    last = [t for t in ticks if t < death_tick and me in by[t]]
+    if not last:
+        return None
+    raw = by[last[-1]][me].get("spotted_by")
+    if raw is None:
+        return None
+    try:
+        return len({str(s) for s in raw if s is not None and str(s) not in ("", "0")})
+    except TypeError:       # kein iterierbarer Wert (z. B. NaN aus pandas)
+        return None
 
 
 def duel_notes(f: dict, killer_name: str, kill: bool = False) -> tuple[list[dict], list[dict]]:
@@ -305,6 +327,11 @@ def priced(cfg: dict, config_path, me: str, prefer: list[str] | None = None, sca
     return deaths, kills
 
 
+def priced_list() -> list[dict]:
+    """Alle bepreisten Tode der letzten ``priced``-Berechnung (fuer duel_value.by_zone); leer ohne."""
+    return next(iter(_PRICED.values()), [])
+
+
 def best_kills(data: dict, kills: dict, top: int = 5) -> list[dict]:
     """Deine Kills dieses Matches, die am meisten Siegchance gebracht haben.
 
@@ -358,7 +385,7 @@ def annotate_kill(replay: dict, kill_tick: int, scale: float) -> dict:
     fps = replay.get("fps") or 8
     clip = [max(focus - LEAD_SECONDS * fps, 0), min(focus + TAIL_SECONDS * fps, len(frames) - 1)]
     victim_idx = next((i for i, p in enumerate(players) if kill and p["steamid"] == kill["victim"]), None)
-    marks, notes = [], []
+    marks, notes, ctx = [], [], {}
     mine, victim = pos.get(me), pos.get(victim_idx)
     if mine is not None:
         marks.append({"type": "circle", "x": mine[1], "y": mine[2], "r": 22, "tone": "good", "label": "du"})
@@ -368,11 +395,12 @@ def annotate_kill(replay: dict, kill_tick: int, scale: float) -> dict:
         marks.append({"type": "circle", "x": victim[1], "y": victim[2], "r": 14, "tone": "enemy",
                       "label": players[victim_idx]["name"][:12]})
         weapon = (kill.get("weapon") or "").replace("weapon_", "")
+        ctx["killer_m"] = _meters(d)
         notes.append({"tone": "good", "text": f"Kill gegen {players[victim_idx]['name']}"
                       + (f" ({weapon})" if weapon else "") + f" aus {_meters(d)} m."})
     return {"focus": focus, "clip": clip, "marks": marks, "notes": notes,
             "killer": kill["victim"] if kill else "", "killer_idx": victim_idx, "me_idx": me,
-            "death_tick": kill_tick, "kind": "kill"}
+            "death_tick": kill_tick, "kind": "kill", "ctx": ctx}
 
 
 # ── 3D: Positionen mit Hoehe und Neigung fuer den Clip ────────────────────

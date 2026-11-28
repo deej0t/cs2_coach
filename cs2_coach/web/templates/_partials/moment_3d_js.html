@@ -36,7 +36,7 @@ function bombUpdate(t) {
 function ghostSprite() {
     const c = document.createElement('canvas'); c.width = c.height = 64;
     const x = c.getContext('2d');
-    x.strokeStyle = '#fbbf24'; x.lineWidth = 5;
+    x.strokeStyle = uiColor('focus', '#fbbf24'); x.lineWidth = 5;
     x.beginPath(); x.arc(32, 32, 22, 0, 7); x.stroke();
     x.beginPath(); x.moveTo(32, 2); x.lineTo(32, 18); x.moveTo(32, 46); x.lineTo(32, 62);
     x.moveTo(2, 32); x.lineTo(18, 32); x.moveTo(46, 32); x.lineTo(62, 32); x.stroke();
@@ -461,6 +461,14 @@ function aimOverlay(A, B, f, m, viewerPose) {
                 secs: (data.aim.sight - t) / 64 };
     }
     window.kmAim.frame(t, m, head, pxPerDeg, viewerPose, pre);
+    // Storyline-Puls am aktuellen Hot-Tick (moment_story.html); Weltkoordinaten kommen aus der Szene
+    if (window.ktStoryOverlay) {
+        const v = new THREE.Vector3();
+        window.ktStoryOverlay(t, (x, y, z) => {
+            v.set(x, y, z).project(camera);
+            return v.z < 1 ? { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h } : null;
+        }, i => { const q = i != null ? pose(A[i], B[i], f) : null; return q ? [q.x, q.y, q.z] : null; });
+    }
 }
 
 function loop() {
