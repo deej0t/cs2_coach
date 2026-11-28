@@ -243,5 +243,35 @@
     })();
     </script>
     {% block scripts %}{% endblock %}
+<script>
+// Tooltips for abbr[title]: kept inside the viewport and wrapped; native title suppressed while shown
+(function () {
+    var tip = null, cur = null;
+    function show(el) {
+        var text = el.getAttribute('title');
+        if (!text) return;
+        el.dataset.tip = text; el.removeAttribute('title');
+        if (!tip) { tip = document.createElement('div'); tip.className = 'ui-tip'; tip.setAttribute('role', 'tooltip'); document.body.appendChild(tip); }
+        tip.textContent = text; tip.classList.add('on');
+        var r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight, m = 8;
+        var x = Math.max(m, Math.min(window.innerWidth - w - m, r.left + r.width / 2 - w / 2));
+        var y = r.top - h - 6 < m ? r.bottom + 6 : r.top - h - 6;
+        tip.style.left = x + 'px'; tip.style.top = y + 'px';
+        cur = el;
+    }
+    function hide() {
+        if (cur && cur.dataset.tip) { cur.setAttribute('title', cur.dataset.tip); delete cur.dataset.tip; }
+        if (tip) tip.classList.remove('on');
+        cur = null;
+    }
+    document.addEventListener('mouseover', function (e) {
+        var el = e.target.closest && e.target.closest('abbr[title], abbr[data-tip]');
+        if (el === cur) return;
+        hide();
+        if (el) show(el);
+    });
+    window.addEventListener('scroll', hide, true);
+})();
+</script>
 </body>
 </html>

@@ -101,3 +101,10 @@ def test_story_lines_link_into_theater(ui):
              s=[{"round": 7, "tick": 900, "kind": "death", "verdict": "Hauptgrund: Allein", "tone": "bad", "trigger": "t"}])
     assert "story-line--bad" in out and "#momente?r=7&t=900&k=death" in out
     assert ui("{{ ui.story_lines([], 'x') }}").strip() == ""
+
+
+def test_tooltips_are_positioned_by_script():
+    """abbr-Tooltips: kein CSS-::after mehr (wurde am Kartenrand abgeschnitten), sondern .ui-tip aus base.html."""
+    css = (TPL.parent / "static" / "coach.css").read_text(encoding="utf-8")
+    assert "abbr[title]:hover::after" not in css and ".ui-tip" in css
+    assert "ui-tip" in (TPL / "base.html").read_text(encoding="utf-8")

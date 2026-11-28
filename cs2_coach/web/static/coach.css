@@ -59,21 +59,14 @@ a { color: var(--c-info); text-underline-offset: 3px; }
 ::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
 
 /* Abbreviation tooltips */
-abbr[title] {
+abbr[title], abbr[data-tip] {
     text-decoration: none; border-bottom: 1px dotted var(--color-neutral-600);
     cursor: help; position: relative;
 }
-abbr[title]:hover { border-bottom-color: var(--color-accent); color: var(--color-accent-2); }
+abbr[title]:hover, abbr[data-tip] { border-bottom-color: var(--color-accent); color: var(--color-accent-2); }
 @media (hover: hover) {
     abbr[title] { border-bottom-style: dotted; }
-    abbr[title]:hover::after {
-        content: attr(title); position: absolute; bottom: 100%; left: 50%;
-        transform: translateX(-50%); padding: 4px 10px; border-radius: var(--radius-sm);
-        background: var(--color-neutral-900); color: var(--color-neutral-200);
-        font-size: 11px; font-weight: 500; white-space: nowrap; z-index: 200;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.5); pointer-events: none;
-        border: 1px solid var(--color-neutral-700); margin-bottom: 4px;
-    }
+    /* Tooltip: base.html positions .ui-tip inside the viewport (a CSS ::after was clipped at card edges) */
 }
 
 /* NProgress override */
@@ -426,4 +419,9 @@ details summary:hover { color: var(--color-accent); }
 .story-line .sl-r { color: var(--c-tx3); font-size: 11px; }
 .story-line .sl-t { color: var(--c-tx2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .story-line .sl-go { color: var(--c-tx3); font-size: 10px; }
+.ui-tip { position: fixed; z-index: 10000; max-width: 340px; padding: 6px 10px; border-radius: var(--radius-md);
+          background: var(--c-s3); color: var(--c-tx); border: 1px solid var(--c-line2); font-size: 12px; line-height: 1.45;
+          font-weight: 500; white-space: normal; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.45);
+          opacity: 0; transition: opacity .12s; }
+.ui-tip.on { opacity: 1; }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
