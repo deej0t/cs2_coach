@@ -145,7 +145,7 @@
 <h3 style="margin-top: var(--space-5);">{{ _('Map-Profile') }}</h3>
 <div class="mm-grid">
 {% for m in mastery.maps %}
-<div class="mm-card {% if m.mastery >= 65 %}top{% elif m.mastery >= 40 %}mid{% else %}low{% endif %}">
+{% set ms_ = mapshot(m.map) %}<div class="mm-card {% if m.mastery >= 65 %}top{% elif m.mastery >= 40 %}mid{% else %}low{% endif %}{% if ms_ %} map-bg{% endif %}"{% if ms_ %} style="--shot:url('{{ ms_ }}')"{% endif %}>
     <div class="mm-head">
         <div>
             <div class="mm-map-name">{{ m.map }}</div>

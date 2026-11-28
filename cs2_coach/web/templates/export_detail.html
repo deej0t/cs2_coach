@@ -179,7 +179,7 @@
     <div style="position:absolute;inset:0;pointer-events:none;background:
         linear-gradient(90deg, rgba(11,14,19,.94) 0%, rgba(11,14,19,.78) 45%, rgba(11,14,19,.35) 100%),
         linear-gradient(0deg, rgba(11,14,19,.9) 0%, transparent 55%),
-        url('{{ url_for('static', filename='mapshots/' ~ mk ~ '.jpg') }}') center / cover no-repeat,
+        url('{{ mapshot(data.match.map, filename) }}') center / cover no-repeat,
         {{ ed_map_gradients.get(data.match.map, 'linear-gradient(135deg, #555, #333)') }};"></div>
     <!-- Top row: nav + actions -->
     <div style="position:relative;z-index:1;display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4);flex-wrap:wrap;">

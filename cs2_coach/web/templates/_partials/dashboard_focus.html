@@ -164,7 +164,7 @@
 <div class="pd-row">
     {# ── Letztes Match ── #}
     {% set m = d.last %}
-    <div class="pd-last" {% if m.radar %}style="background-image:linear-gradient(90deg, var(--color-surface) 45%, color-mix(in srgb, var(--color-surface) 40%, transparent)), url('{{ url_for('static', filename='mapshots/' ~ m.radar ~ '.jpg') }}'), url('{{ url_for('static', filename='radars/' ~ m.radar ~ '.png') }}');"{% endif %}>
+    <div class="pd-last" {% if m.radar %}style="background-image:linear-gradient(90deg, var(--color-surface) 45%, color-mix(in srgb, var(--color-surface) 40%, transparent)), url('{{ mapshot(m.radar, m.file or '') }}'), url('{{ url_for('static', filename='radars/' ~ m.radar ~ '.png') }}');"{% endif %}>
         <div class="pd-kicker">{{ _('Letztes Match') }} · {{ m.date }}</div>
         <div class="pd-last-title">{{ m.map }} {{ m.score }}
             {% if m.change is not none %}<span class="pd-chip {{ 'up' if m.change > 0 else 'down' if m.change < 0 }}" style="vertical-align:middle;font-size:14px;">{{ m.change_txt }}</span>
@@ -226,7 +226,7 @@
     {% for t in d.tiles %}
     {% set res = 'S' if t.result == 'Sieg' else ('N' if t.result == 'Niederlage' else 'U') %}
     <a class="pd-tile" href="{{ url_for('view_export', filename=t.file) }}" title="{{ t.date }}"
-       {% if t.radar %}style="background-image:linear-gradient(180deg, rgba(18,18,28,.7), rgba(18,18,28,.96)), url('{{ url_for('static', filename='mapshots/' ~ t.radar ~ '.jpg') }}'), url('{{ url_for('static', filename='radars/' ~ t.radar ~ '.png') }}');"{% endif %}>
+       {% if t.radar %}style="background-image:linear-gradient(180deg, rgba(18,18,28,.7), rgba(18,18,28,.96)), url('{{ mapshot(t.radar, t.file or '') }}'), url('{{ url_for('static', filename='radars/' ~ t.radar ~ '.png') }}');"{% endif %}>
         <div class="pd-tile-map">{{ t.map }}</div>
         <div class="pd-tile-score">{{ t.score }} <span class="pd-res {{ res }}">{{ res }}</span></div>
         <div class="pd-tile-ch {{ 'up' if t.change and t.change > 0 else 'down' if t.change and t.change < 0 }}">{{ t.change_txt or '' }}</div>

@@ -427,4 +427,11 @@ details summary:hover { color: var(--color-accent); }
           font-weight: 500; white-space: normal; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.45);
           opacity: 0; transition: opacity .12s; }
 .ui-tip.on { opacity: 1; }
+/* Map images (template global mapshot): thumbnail and a dark card background - text stays readable */
+.map-thumb { display: inline-block; width: 46px; height: 26px; border-radius: 4px; vertical-align: middle; margin-right: 8px;
+             background: var(--c-s3) center / cover no-repeat; box-shadow: 0 0 0 1px var(--c-line2); }
+.map-bg { position: relative; overflow: hidden; isolation: isolate; }
+.map-bg::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--shot) center / cover no-repeat; opacity: .32; }
+.map-bg::after { content: ""; position: absolute; inset: 0; z-index: -1;
+                 background: linear-gradient(180deg, rgba(11,14,19,.35), rgba(11,14,19,.92) 70%); }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }

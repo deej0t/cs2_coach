@@ -80,7 +80,7 @@
             <td style="color: var(--color-neutral-500); white-space: nowrap;">{{ e.datetime or e.date }}{% if e.version.is_outdated %}
                 <abbr title="{% if e.version.needs_reanalysis %}{{ _('Veraltete Rechnung') }}: {{ e.version.unreliable|join('; ') }}{% else %}{{ _('Fehlt') }}: {{ e.version.missing|join(', ') }}{% endif %}" style="color: var(--color-{{ 'red' if e.version.needs_reanalysis else 'yellow' }}); cursor: help; margin-left: 4px;">•</abbr>
             {% endif %}</td>
-            <td>{{ e.map }}</td>
+            <td style="white-space:nowrap;">{% set ms_ = mapshot(e.map, e.filename) %}{% if ms_ %}<span class="map-thumb" style="background-image:url('{{ ms_ }}')"></span>{% endif %}{{ e.map }}</td>
             <td>{{ e.score }}</td>
             <td>
                 {% if e.result == 'Sieg' %}<span class="tag tag-win">{{ _('Sieg') }}</span>

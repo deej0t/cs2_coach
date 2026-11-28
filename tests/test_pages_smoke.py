@@ -123,7 +123,7 @@ def test_profile_page_and_topbar_link(client):
     assert r.status_code in (200, 302)
     if r.status_code == 200:
         html = r.get_data(as_text=True)
-        assert 'class="pf-head"' in html and 'class="nav-player" href="/profil' in html
+        assert 'class="pf-head' in html and 'class="nav-player" href="/profil' in html
 
 
 def test_moment_context_route_never_5xx(client):

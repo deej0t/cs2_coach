@@ -116,3 +116,13 @@ def test_death_is_visible_in_3d():
     for name in ("function buildDeaths", "function corpse", "function deathCam", "function hurtOverlay", "buildDeaths();"):
         assert name in js, name
     assert 'id="km-hurt"' in (TPL / "_partials" / "moment_theater.html").read_text(encoding="utf-8")
+
+
+def test_mapshot_picks_stable_variant(client):
+    """mapshot(): je Map ein Spielbild, stabil je Schluessel; unbekannte Map = ''."""
+    from flask import render_template_string
+    with client.application.test_request_context():
+        a = render_template_string("{{ mapshot('Mirage', 'x_coach.json') }}")
+        assert a.startswith("/static/mapshots/mirage") and a.endswith(".jpg")
+        assert a == render_template_string("{{ mapshot('de_mirage', 'x_coach.json') }}")
+        assert render_template_string("{{ mapshot('gibtsnicht') }}") == ""

@@ -41,6 +41,9 @@ def notify_admin(admin_cfg: dict, text: str) -> None:
         pass
 
 
+_MAPSHOTS: dict[str, list[str]] = {}   # map -> image files (read once)
+
+
 def create_blueprint(base_config) -> Blueprint:
     """``base_config``: Callable -> Pfad der Admin-Config."""
     bp = Blueprint("users_page", __name__)
@@ -176,6 +179,22 @@ def create_blueprint(base_config) -> Blueprint:
                  "rating": avg("rating"), "kd": avg("kd"), "adr": avg("adr"), "hs": avg("hs_pct")}
         return render_template("profile.html", stats=stats, maps=top, recent=ex[:10], steam_id=sid,
                                own=not request.args.get("als"), config=cfg)
+
+    @bp.app_template_global("mapshot")
+    def mapshot(map_name: str, key: str = "") -> str:
+        """URL eines Map-Bilds (static/mapshots, aus dem Spiel). ``key`` (z. B. Export-Name) waehlt
+        stabil eines der Motive; ohne Bild für die Map: ''."""
+        import zlib
+        m = (map_name or "").lower().replace("de_", "").strip()
+        shots = _MAPSHOTS.get(m)
+        if shots is None:
+            folder = Path(__file__).parent / "static" / "mapshots"
+            shots = _MAPSHOTS[m] = sorted(f.name for f in folder.glob(f"{m}*.jpg")
+                                          if f.stem == m or f.stem[len(m):].lstrip("_").isdigit()) if m else []
+        if not shots:
+            return ""
+        from flask import url_for
+        return url_for("static", filename="mapshots/" + shots[zlib.crc32(key.encode()) % len(shots)])
 
     @bp.app_template_global("match_views")
     def match_views(data: dict) -> list[dict]:

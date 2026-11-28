@@ -21,7 +21,8 @@
     .pf-bar i { display: block; height: 100%; border-radius: 2px; background: var(--c-info); }
 </style>
 
-<div class="pf-head">
+{% set ms_ = mapshot(recent[0].map, recent[0].filename) if recent else '' %}
+<div class="pf-head{% if ms_ %} map-bg{% endif %}"{% if ms_ %} style="--shot:url('{{ ms_ }}');padding:var(--space-6);border-radius:var(--radius-lg);border:1px solid var(--c-line2);"{% endif %}>
     <div class="pf-avatar">{% if steam_avatar_url %}<img src="{{ steam_avatar_url }}" alt="Avatar">{% else %}{{ (config.player_name or '?')[:2]|upper }}{% endif %}</div>
     <div>
         <h2 class="pf-name">{{ config.player_name or _('Spieler') }}</h2>
@@ -58,7 +59,7 @@
         <span class="card-kicker">{{ _('Meistgespielte Maps') }}</span>
         {% for m in maps %}
         <div class="pf-row" style="display:block;">
-            <div style="display:flex;justify-content:space-between;"><span>{{ m.map|replace('de_', '')|capitalize }}</span>
+            <div style="display:flex;justify-content:space-between;"><span>{% set t_ = mapshot(m.map) %}{% if t_ %}<span class="map-thumb" style="background-image:url('{{ t_ }}')"></span>{% endif %}{{ m.map|replace('de_', '')|capitalize }}</span>
                 <span class="mono" style="color:var(--c-tx2);">{{ m.n }} · {{ m.pct }} %</span></div>
             <div class="pf-bar"><i style="width:{{ m.pct }}%;"></i></div>
         </div>
