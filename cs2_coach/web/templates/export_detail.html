@@ -173,8 +173,14 @@
 
 {% set ms = match_summary(data, filename) %}
 <!-- ══════ Header ══════ -->
-<div class="ed-header" style="position:relative;overflow:hidden;padding:var(--space-5) var(--space-6);margin-bottom:var(--space-5);border-radius:var(--radius-lg);border:1px solid rgba(255,255,255,0.06);">
-    <div style="position:absolute;inset:0;opacity:0.08;background:{{ ed_map_gradients.get(data.match.map, 'linear-gradient(135deg, #555, #333)') }};pointer-events:none;"></div>
+<div class="ed-header" style="position:relative;overflow:hidden;min-height:260px;padding:var(--space-6) var(--space-6) var(--space-5);margin-bottom:var(--space-5);border-radius:var(--radius-lg);border:1px solid rgba(255,255,255,0.06);">
+    {% set mk = (data.match.map or '')|lower|replace('de_', '') %}
+    {# Ladebild der Map aus dem Spiel (static/mapshots, aus pak01 exportiert); ohne Bild: alter Verlauf #}
+    <div style="position:absolute;inset:0;pointer-events:none;background:
+        linear-gradient(90deg, rgba(11,14,19,.94) 0%, rgba(11,14,19,.78) 45%, rgba(11,14,19,.35) 100%),
+        linear-gradient(0deg, rgba(11,14,19,.9) 0%, transparent 55%),
+        url('{{ url_for('static', filename='mapshots/' ~ mk ~ '.jpg') }}') center / cover no-repeat,
+        {{ ed_map_gradients.get(data.match.map, 'linear-gradient(135deg, #555, #333)') }};"></div>
     <!-- Top row: nav + actions -->
     <div style="position:relative;z-index:1;display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4);flex-wrap:wrap;">
         <a href="{{ url_for('exports') }}" class="btn btn-ghost">&#8592; {{ _('Zurueck') }}</a>
