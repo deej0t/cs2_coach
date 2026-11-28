@@ -148,6 +148,35 @@ def create_blueprint(base_config) -> Blueprint:
         trades = duo.trade_table(_read_base_config(), base, users_web.current_user())
         return render_template("players.html", rows=rows, duos=duos, trades=trades, config=users_web_cfg())
 
+    @bp.route("/profil")
+    def profile():
+        """Profilseite des (angezeigten) Spielers: Kopf, Kennzahlen, Maps, letzte Matches, Sprünge.
+
+        Folgt ?als= wie Dashboard/Aim-Profil. Reine Beschreibung - keine Hebel (die kommen aus evidence)."""
+        from .app import _get_exports
+        cfg = users_web_cfg()
+        ex = _get_exports(cfg)
+        n = len(ex)
+        won = sum(1 for e in ex if e.get("result") == "Sieg")
+        lost = sum(1 for e in ex if e.get("result") == "Niederlage")
+
+        def avg(k):
+            v = [e[k] for e in ex if isinstance(e.get(k), (int, float))]
+            return round(sum(v) / len(v), 2) if v else None
+        maps: dict[str, dict] = {}
+        for e in ex:
+            m = maps.setdefault(e.get("map") or "?", {"map": e.get("map") or "?", "n": 0, "w": 0})
+            m["n"] += 1
+            m["w"] += e.get("result") == "Sieg"
+        top = sorted(maps.values(), key=lambda m: -m["n"])[:6]
+        for m in top:
+            m["pct"] = round(100 * m["w"] / m["n"]) if m["n"] else 0
+        sid = str(cfg.get("steam_id") or "")
+        stats = {"n": n, "won": won, "lost": lost, "wr": round(100 * won / n) if n else None,
+                 "rating": avg("rating"), "kd": avg("kd"), "adr": avg("adr"), "hs": avg("hs_pct")}
+        return render_template("profile.html", stats=stats, maps=top, recent=ex[:10], steam_id=sid,
+                               own=not request.args.get("als"), config=cfg)
+
     @bp.app_template_global("match_views")
     def match_views(data: dict) -> list[dict]:
         """Wer hat dieses Match auch ausgewertet? Fuer die Match-Seite: Links auf die anderen Sichten.

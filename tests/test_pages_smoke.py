@@ -117,6 +117,15 @@ def test_map3d_downloads_answer_404_without_export(client):
         assert client.get(path).status_code == 404
 
 
+def test_profile_page_and_topbar_link(client):
+    """Profilseite rendert; der Avatar oben rechts verlinkt dorthin."""
+    r = client.get("/profil")
+    assert r.status_code in (200, 302)
+    if r.status_code == 200:
+        html = r.get_data(as_text=True)
+        assert 'class="pf-head"' in html and 'class="nav-player" href="/profil' in html
+
+
 def test_moment_context_route_never_5xx(client):
     """/api/momente/kontext: unbekannter Export = 404, nie ein 5xx."""
     assert client.get("/api/momente/kontext/gibtsnicht_coach.json/3/1000?kind=death").status_code == 404

@@ -10,6 +10,7 @@
     <div class="card-title">{{ r.display }}</div>
     <div style="font-size:12px;color:var(--color-neutral-500);">{{ r.matches }} {{ _('Matches') }}</div>
     <div style="display:flex;gap:6px;margin-top:8px;">
+        <a class="btn btn-ghost" href="{{ url_for('users_page.profile') }}{{ '' if r.me else '?als=' ~ r.als }}">{{ _('Profil') }}</a>
         <a class="btn btn-ghost" href="{{ url_for('index') }}{{ '' if r.me else '?als=' ~ r.als }}">{{ _('Dashboard') }}</a>
         <a class="btn btn-ghost" href="{{ url_for('aim_profile_page.page') }}{{ '' if r.me else '?als=' ~ r.als }}">{{ _('Aim-Profil') }}</a>
     </div>

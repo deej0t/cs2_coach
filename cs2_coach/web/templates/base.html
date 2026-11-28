@@ -31,12 +31,12 @@
         </a>
         <div class="topbar-right">
             {% if config and config.get('player_name') %}
-            <div class="nav-player">
+            <a class="nav-player" href="{{ url_for('users_page.profile') }}{{ ('?als=' ~ request.args.get('als')) if request.args.get('als') else '' }}" title="{{ _('Profil') }}">
                 <div class="nav-avatar">
                     {% if steam_avatar_url %}<img src="{{ steam_avatar_url }}" alt="Avatar">{% else %}{{ config.player_name[:2]|upper }}{% endif %}
                 </div>
                 <span>{{ config.player_name }}</span>
-            </div>
+            </a>
             {% endif %}
         </div>
     </header>
@@ -143,12 +143,12 @@
         </div>
         {% if config and config.get('player_name') %}
         <div class="sidebar-footer">
-            <div class="nav-player">
+            <a class="nav-player" href="{{ url_for('users_page.profile') }}{{ ('?als=' ~ request.args.get('als')) if request.args.get('als') else '' }}" title="{{ _('Profil') }}">
                 <div class="nav-avatar">
                     {% if steam_avatar_url %}<img src="{{ steam_avatar_url }}" alt="Avatar">{% else %}{{ config.player_name[:2]|upper }}{% endif %}
                 </div>
                 <span>{{ config.player_name }}</span>
-            </div>
+            </a>
         </div>
         {% endif %}
     </nav>

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% import '_partials/ui.html' as ui with context %}
+{% block title %}CS2 Coach — {{ config.player_name or _('Profil') }}{% endblock %}
+{% block content %}
+{% set als = request.args.get('als') %}
+{% set q = ('?als=' ~ als) if als else '' %}
+<style>
+    .pf-head { display: flex; align-items: center; gap: var(--space-5); margin-bottom: var(--space-5); }
+    .pf-avatar { width: 84px; height: 84px; border-radius: 50%; overflow: hidden; flex: 0 0 84px;
+                 background: var(--c-s3); display: flex; align-items: center; justify-content: center;
+                 font-size: 28px; font-weight: 700; border: 2px solid color-mix(in srgb, var(--c-focus) 45%, transparent); }
+    .pf-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .pf-name { font-size: 26px; font-weight: 700; margin: 0; }
+    .pf-meta { color: var(--c-tx2); font-size: 13px; margin-top: 4px; }
+    .pf-links { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+    .pf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-5); }
+    @media (max-width: 900px) { .pf-grid { grid-template-columns: 1fr; } .pf-head { flex-direction: column; text-align: center; } .pf-links { justify-content: center; } }
+    .pf-row { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--c-line); font-size: 13px; }
+    .pf-row a { color: var(--c-tx); text-decoration: none; }
+    .pf-bar { height: 4px; border-radius: 2px; background: var(--c-s3); margin-top: 4px; }
+    .pf-bar i { display: block; height: 100%; border-radius: 2px; background: var(--c-info); }
+</style>
+
+<div class="pf-head">
+    <div class="pf-avatar">{% if steam_avatar_url %}<img src="{{ steam_avatar_url }}" alt="Avatar">{% else %}{{ (config.player_name or '?')[:2]|upper }}{% endif %}</div>
+    <div>
+        <h2 class="pf-name">{{ config.player_name or _('Spieler') }}</h2>
+        <div class="pf-meta">
+            {{ stats.n }} {{ _('ausgewertete Matches') }}
+            {% if steam_id %} · <a href="https://steamcommunity.com/profiles/{{ steam_id }}" target="_blank" rel="noopener">{{ _('Steam-Profil') }}</a>{% endif %}
+        </div>
+        <div class="pf-links">
+            <a class="btn btn-ghost" href="{{ url_for('index') }}{{ q }}">{{ _('Dashboard') }}</a>
+            <a class="btn btn-ghost" href="{{ url_for('aim_profile_page.page') }}{{ q }}">{{ _('Aim-Profil') }}</a>
+            <a class="btn btn-ghost" href="{{ url_for('levers_page.page') }}{{ q }}">{{ _('Hebel') }}</a>
+            {% if own %}<a class="btn btn-ghost" href="{{ url_for('training_page.page') }}">{{ _('Training') }}</a>
+            {% if current_user %}<a class="btn btn-ghost" href="{{ url_for('users_page.account') }}">{{ _('Konto') }}</a>{% endif %}{% endif %}
+            <a class="btn btn-ghost" href="{{ url_for('users_page.players') }}">{{ _('Alle Spieler') }}</a>
+        </div>
+    </div>
+</div>
+
+{% if not stats.n %}
+{{ ui.state('empty', _('Noch keine ausgewerteten Matches.')) }}
+{% else %}
+<div class="stats">
+    {{ ui.stat(_('Bilanz'), stats.won ~ '–' ~ stats.lost) }}
+    {{ ui.stat(_('Siegquote'), stats.wr, ' %') }}
+    {% if stats.rating is not none %}{{ ui.stat('Rating', stats.rating) }}{% endif %}
+    {% if stats.kd is not none %}{{ ui.stat('K/D', stats.kd) }}{% endif %}
+    {% if stats.adr is not none %}{{ ui.stat('ADR', stats.adr) }}{% endif %}
+    {% if stats.hs is not none %}{{ ui.stat(_('Kopfschuss'), stats.hs, ' %') }}{% endif %}
+</div>
+<p style="font-size:11px;color:var(--c-tx3);margin:6px 0 0;">{{ _('Durchschnitte zur Einordnung, keine Hebel - was du ändern solltest, steht unter Hebel.') }}</p>
+
+<div class="pf-grid">
+    <div class="card elev-sm">
+        <span class="card-kicker">{{ _('Meistgespielte Maps') }}</span>
+        {% for m in maps %}
+        <div class="pf-row" style="display:block;">
+            <div style="display:flex;justify-content:space-between;"><span>{{ m.map|replace('de_', '')|capitalize }}</span>
+                <span class="mono" style="color:var(--c-tx2);">{{ m.n }} · {{ m.pct }} %</span></div>
+            <div class="pf-bar"><i style="width:{{ m.pct }}%;"></i></div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="card elev-sm">
+        <span class="card-kicker">{{ _('Letzte Matches') }}</span>
+        {% for e in recent %}
+        <div class="pf-row">
+            <a href="{{ url_for('view_export', filename=e.filename) }}{{ q }}">{{ (e.map or '')|replace('de_', '')|capitalize }} <span class="mono" style="color:var(--c-tx2);">{{ e.score }}</span></a>
+            <span>{% if e.result == 'Sieg' %}{{ ui.badge(_('Sieg'), 'pos') }}{% elif e.result == 'Niederlage' %}{{ ui.badge(_('Niederlage'), 'neg') }}{% else %}{{ ui.badge(e.result or '–') }}{% endif %}
+                <span style="color:var(--c-tx3);font-size:12px;margin-left:6px;">{{ e.date }}</span></span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
