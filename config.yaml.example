@@ -35,6 +35,8 @@ heartbeat_url: ''
 # Taegliches Trainings-Briefing (Container: ab CS2COACH_BRIEFING_HOUR, Standard 17 Uhr).
 # Eigener Webhook dafuer, leer = discord_webhook. Text von der KI (ai_provider).
 briefing_webhook: ''
+# Team-Discord fuer den gemeinsamen Wochenrueckblick aller Spieler (Mates). Leer = aus.
+team_webhook: ''
 # Briefing zusaetzlich per Telegram: Bot bei @BotFather anlegen, Token hier,
 # dem Bot einmal /start schicken. Die Chat-ID findet die App selbst.
 telegram_bot_token: ''

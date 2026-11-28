@@ -136,6 +136,12 @@ def sync(ctx):
     except Exception as e:  # noqa: BLE001
         console.print(f"  Wochenrueckblick fehlgeschlagen: {e}")
     _sync_mates(ctx, folder)
+    # Team-Wochenrueckblick (team_weekly.py): nach den Mates, damit alle Exporte da sind
+    from .team_weekly import run as team_weekly_run
+    try:
+        team_weekly_run(cfg, ctx.obj["config_path"], log=lambda m: console.print(f"  {m}"))
+    except Exception as e:  # noqa: BLE001
+        console.print(f"  Team-Wochenrueckblick fehlgeschlagen: {e}")
 
 
 def _sync_mates(ctx, folder: str) -> None:

@@ -156,3 +156,23 @@ def test_trade_table_counts_avenged_deaths(base):
     rows = duo.trade_table(admin, base, None)
     assert rows[0]["he_for_you"] == {"n": 2, "k": 1, "pct": 50}
     assert rows[0]["you_for_him"] == {"n": 1, "k": 1, "pct": 100}
+
+
+def test_team_weekly_sends_once(base, monkeypatch):
+    from datetime import date
+    from cs2_coach import team_weekly, weekly
+    admin = yaml.safe_load(base.read_text(encoding="utf-8"))
+    admin["team_webhook"] = "https://discord.invalid/hook"
+    assert not team_weekly.run(admin, base, today=date(2026, 11, 30), post=lambda *a, **k: None)  # ohne Mates aus
+    users.add_user(base, "mate", "geheim1234", "76561190000000002", "Mate")
+    fake = {"matches": 4, "wins": 3, "trainings": 1, "focus": ("Counter-Strafe", "")}
+    monkeypatch.setattr(weekly, "summary", lambda cfg, path, today: dict(fake))
+    sent = []
+
+    class R:
+        status_code = 204
+    post = lambda url, json, timeout: sent.append(json["content"]) or R()  # noqa: E731
+    assert team_weekly.run(admin, base, today=date(2026, 11, 30), post=post)
+    assert "Team-Woche 23.11.–29.11." in sent[0] and "**Mate**: 4 Matches · 3 Siege (75 %)" in sent[0]
+    assert "Fokus: Counter-Strafe" in sent[0]
+    assert not team_weekly.run(admin, base, today=date(2026, 11, 30), post=post) and len(sent) == 1
