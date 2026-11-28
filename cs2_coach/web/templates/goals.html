@@ -67,7 +67,7 @@
         <div class="rec-label">{{ _('Meiste Kills') }}</div>
         <div class="rec-where">{{ records.kills.map }} · {{ records.kills.date }}</div>
     </div>
-    <div class="card elev-sm rec-card" style="border-top-color: #9184d9;">
+    <div class="card elev-sm rec-card" style="border-top-color: #5DA9F2;">
         <div class="rec-val">{{ records.adr.value }}</div>
         <div class="rec-label">{{ _('Hoechster ADR') }}</div>
         <div class="rec-where">{{ records.adr.map }} · {{ records.adr.date }}</div>
@@ -118,7 +118,7 @@
         </div>
     </div>
     <div class="goal-bar">
-        <div class="goal-bar-fill" style="width: {{ g.pct }}%; background: {% if g.achieved %}#4ade80{% elif g.pct >= 80 %}#fbbf24{% else %}#9184d9{% endif %};"></div>
+        <div class="goal-bar-fill" style="width: {{ g.pct }}%; background: {% if g.achieved %}#4ade80{% elif g.pct >= 80 %}#fbbf24{% else %}#5DA9F2{% endif %};"></div>
     </div>
     <div class="goal-meta">
         <span>{{ _('Aktuell:') }} <span class="goal-current {% if g.achieved %}sc-green{% elif g.pct >= 80 %}sc-yellow{% else %}{% endif %}">{{ g.current }}</span></span>

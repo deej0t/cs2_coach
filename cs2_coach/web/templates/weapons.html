@@ -17,7 +17,7 @@
 <style>
     .wp-cat-header { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-neutral-500); padding: 12px 0 6px; border-bottom: 1px solid var(--color-neutral-800); margin-top: var(--space-4); }
     .wp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-3); }
-    .wp-card { padding: 16px !important; border-left: 3px solid var(--color-neutral-700); }
+    .wp-card { padding: 16px !important; border: 1px solid var(--c-line2); }
     .wp-card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
     .wp-name { font-size: 16px; font-weight: 600; }
     .wp-matches { font-size: 11px; color: var(--color-neutral-500); }
@@ -30,7 +30,7 @@
     .wp-rec { font-size: 11px; padding: 4px 8px; border-radius: var(--radius-sm); }
     .wp-rec-good { background: rgba(74,222,128,0.08); color: #4ade80; }
     .wp-rec-warn { background: rgba(248,113,113,0.08); color: #f87171; }
-    .wp-rec-info { background: rgba(145,132,217,0.08); color: #9184d9; }
+    .wp-rec-info { background: rgba(93,169,242,0.08); color: #5DA9F2; }
 
     .sc-green { color: #4ade80; }
     .sc-yellow { color: #fbbf24; }
@@ -54,7 +54,7 @@
 <div class="wp-cat-header">{{ cat }}{% if cat == "Rifle" %} — {{ _('Hauptwaffen') }}{% elif cat == "Sniper" %} — {{ _('Scharfschuetzen') }}{% elif cat == "Pistol" %} — {{ _('Pistolen') }}{% elif cat == "SMG" %} — {{ _('Maschinenpistolen') }}{% elif cat == "Utility" %} — {{ _('Granaten') }}{% endif %}</div>
 <div class="wp-grid">
     {% for w in cat_weapons %}
-    <div class="card elev-sm wp-card" style="border-left-color: {% if w.kd >= 1.5 %}#4ade80{% elif w.kd >= 1.0 %}#fbbf24{% else %}#f87171{% endif %};">
+    <div class="card elev-sm wp-card" style="border-color: color-mix(in srgb, {% if w.kd >= 1.5 %}var(--c-pos){% elif w.kd >= 1.0 %}var(--c-undecided){% else %}var(--c-neg){% endif %} 35%, transparent);">
         <div class="wp-card-head">
             <span class="wp-name">{{ w.name }}</span>
             <span class="wp-matches">{{ w.matches }} Matches</span>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import '_partials/ui.html' as ui with context %}
 {% block title %}CS2 Coach — {{ _('Hebel-Suche') }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
 {% block content %}
@@ -9,8 +10,8 @@
     {{ _('Wird ein Kandidat neu belastbar, kommt eine Nachricht per Discord/Telegram.') }}
 </p>
 
-<div class="card elev-sm" style="margin-bottom:var(--space-5);border-left:3px solid {{ 'var(--color-green)' if found else 'var(--color-neutral-600)' }};">
-    <span class="card-kicker">{{ _('Belastbare Hebel') }}</span>
+<div class="focus-card{% if found %} is-focus{% endif %}" style="margin-bottom:var(--space-5);">
+    <span class="fc-kicker"{% if not found %} style="color:var(--c-tx3);"{% endif %}>{{ _('Belastbare Hebel') }}</span>
     {% if found %}
     {% for x in found %}
     <div style="margin-top:8px;">
@@ -45,10 +46,7 @@
     {% if data.zones.closest %}
     <table class="table"><tbody>
         {% for z in data.zones.closest %}
-        <tr><td>{{ z.label }}</td>
-            <td style="white-space:nowrap;color:var(--color-neutral-500);">{{ z.note }}: {{ z.mean_win }} % {{ _('gegen') }} {{ z.mean_loss }} %</td>
-            <td style="white-space:nowrap;font-size:12px;color:var(--color-neutral-500);">{{ z.effect }} [{{ z.ci_low }} … {{ z.ci_high }}]</td>
-            <td style="text-align:right;">{% if z.verdict in ('solid_positive', 'solid_negative') %}<span class="tag" style="border-color:var(--color-green);color:var(--color-green);">{{ _('belastbar') }}</span>{% else %}<span class="tag" style="border-color:var(--color-yellow);color:var(--color-yellow);">{{ _('unentschieden') }}</span>{% endif %}</td></tr>
+        {{ ui.effect_row(z.label, z.note ~ ': ' ~ z.mean_win ~ ' % ' ~ _('gegen') ~ ' ' ~ z.mean_loss ~ ' %', z.effect, z.ci_low, z.ci_high, z.verdict) }}
         {% endfor %}
     </tbody></table>
     <div style="font-size:11px;color:var(--color-neutral-600);margin-top:6px;">{{ _('Die fünf Felder mit dem größten Unterschied - Kandidaten, keine Befunde. Bonferroni-korrigiert, weil die auffälligste von vielen Zonen sonst immer "auffällig" wäre.') }}</div>
@@ -77,10 +75,7 @@
     {% if lobby.closest %}
     <table class="table"><tbody>
         {% for z in lobby.closest %}
-        <tr><td>{{ z.label }}</td>
-            <td style="white-space:nowrap;color:var(--color-neutral-500);">{{ z.note }}: {{ z.mean_win }} {{ _('gegen') }} {{ z.mean_loss }} {{ _('Pkt./Duell') }}</td>
-            <td style="white-space:nowrap;font-size:12px;color:var(--color-neutral-500);">{{ z.effect }} [{{ z.ci_low }} … {{ z.ci_high }}]</td>
-            <td style="text-align:right;">{% if z.verdict in ('solid_positive', 'solid_negative') %}<span class="tag" style="border-color:var(--color-green);color:var(--color-green);">{{ _('belastbar') }}</span>{% else %}<span class="tag" style="border-color:var(--color-yellow);color:var(--color-yellow);">{{ _('unentschieden') }}</span>{% endif %}</td></tr>
+        {{ ui.effect_row(z.label, z.note ~ ': ' ~ z.mean_win ~ ' ' ~ _('gegen') ~ ' ' ~ z.mean_loss ~ ' ' ~ _('Pkt./Duell'), z.effect, z.ci_low, z.ci_high, z.verdict) }}
         {% endfor %}
     </tbody></table>
     <div style="font-size:11px;color:var(--color-neutral-600);margin-top:6px;">{{ _('Deine fünf schwächsten Felder gegen die Lobby - Kandidaten, keine Befunde, Bonferroni-korrigiert.') }}</div>

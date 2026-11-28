@@ -43,11 +43,11 @@
     .mm-card {
         padding: var(--space-5); border-radius: var(--radius-md);
         background: var(--color-surface); box-shadow: var(--shadow-sm);
-        border-left: 4px solid var(--color-neutral-700);
+        border: 1px solid var(--c-line2);
     }
-    .mm-card.top { border-left-color: #4ade80; }
-    .mm-card.mid { border-left-color: #fbbf24; }
-    .mm-card.low { border-left-color: #f87171; }
+    .mm-card.top { border-color: color-mix(in srgb, var(--c-pos) 35%, transparent); }
+    .mm-card.mid { border-color: color-mix(in srgb, var(--c-undecided) 35%, transparent); }
+    .mm-card.low { border-color: color-mix(in srgb, var(--c-neg) 35%, transparent); }
 
     .mm-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
     .mm-map-name { font-size: 20px; font-weight: 700; font-family: var(--font-heading); }

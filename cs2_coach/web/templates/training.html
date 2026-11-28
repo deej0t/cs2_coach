@@ -37,7 +37,7 @@
 {% endif %}
 
 {% if running %}
-<div class="card elev-sm" style="margin-bottom: var(--space-5); border-left: 3px solid var(--color-green);">
+<div class="card elev-sm" style="margin-bottom: var(--space-5); border: 1px solid color-mix(in srgb, var(--color-green) 35%, transparent);">
     <span class="card-kicker">Läuft gerade</span>
     <p style="margin: var(--space-2) 0 0; font-size: 14px;">
         {{ running.map }} · Duell {{ running.pos + 1 }} von {{ running.total }} ·
@@ -176,7 +176,7 @@
     {% endfor %}</p>
     {% endif %}
     {% if s.fazit %}
-    <p style="margin: var(--space-3) 0 0; font-size: 13px; border-left: 3px solid var(--color-accent); padding-left: var(--space-3);">
+    <p style="margin: var(--space-3) 0 0; font-size: 13px; border: 1px solid color-mix(in srgb, var(--c-line2) 35%, transparent); padding-left: var(--space-3); color: var(--c-tx2);">
         <strong>Fazit des Coaches:</strong> {{ s.fazit }}</p>
     {% endif %}
     <table class="table" style="width: 100%; margin-top: var(--space-3);">

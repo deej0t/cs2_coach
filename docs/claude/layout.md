@@ -63,3 +63,12 @@ docker/                 compose, portainer stack, unraid template
 ```
 - `web/app.py` is still ~10,000 lines. **New functionality goes into its own module** and is imported by the app; do not grow app.py further.
 - Shared template markup belongs in `templates/_partials/` (e.g. the 2D kill map used by both `result.html` and `export_detail.html`), never duplicated.
+
+## Designsystem v1 „Lagekarte“ (seit 2026-11-28, Entwürfe in `CS2 Coach Designsystem-project/`)
+- Tokens + Komponenten in `web/static/coach.css` (base.html bindet nur die Datei). Fünf Bedeutungsfarben: `--c-neg` Nachteil, `--c-pos` Vorteil, `--c-focus` du/Abspielkopf/Mission (nie ein Urteil), `--c-info` Messung, `--c-util` nur Granaten/Taktik. Seiten `--c-ct`/`--c-t` entsättigt + Form (□/△, `ui.side`). Alte `--color-*` sind Aliase; `--color-accent` ist jetzt neutral hell (war violett), Links Info-Blau.
+- JS/Canvas: Farben über `uiColor('neg', '#fallback')` (base.html, liest `--c-*`), nie Hex. Ausnahme: das nachgebaute CS2-HUD (`moment_hud_js`) und physische Granaten-Füllungen im 2D-Replay.
+- Makros `_partials/ui.html` (`{% import '_partials/ui.html' as ui with context %}`): `verdict` = einzige Abbildung evidence-Verdict → Badge (unentschieden grau gestrichelt), `ci_bar`, `effect_row`, `badge`, `state` (loading/empty/weak/error), `side`, `focus_card`, `event_chip`. Theater-Zeitstrahl: `_partials/moment_timeline.html`.
+- Linke Farbbalken → `.callout--neg/pos/info/focus/util` (1px getönter Rahmen) bzw. `.focus-card` (eine pro Seite). Erledigt: Match-Seite (KI-Nachbesprechung = Fokus), /hebel, /coaching, Dashboard. Altes Violett #9184d9 überall → Info-Blau (Test verhindert Rückkehr).
+- Alle linken Farbbalken (25 Seiten) → 1px getönter Rahmen `color-mix(Ton 35 %)`; Mittelstufen (früher Gelb) = `--c-undecided` grau, Gelb/Amber nie als Urteil. Test `test_no_thick_left_colour_bars`.
+- Offen (E4 Rest/E5): Inline-`<style>` der Seiten, storyline/stat/round_strip/mission_card-Partials, Training/Lineups/Live.
+

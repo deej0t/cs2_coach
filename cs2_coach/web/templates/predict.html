@@ -24,7 +24,7 @@
 
 <div class="grid-2" style="gap:var(--space-4);">
 {% for o in p.predictions %}
-    <div class="card elev-sm" style="border-left:2px solid {% if o.threat == 'high' %}var(--color-red){% elif o.threat == 'low' %}var(--color-green){% else %}var(--color-neutral-700){% endif %};">
+    <div class="card elev-sm" style="border: 1px solid color-mix(in srgb, {% if o.threat == 'high' %}var(--color-red){% elif o.threat == 'low' %}var(--color-green){% else %}var(--c-line2){% endif %} 35%, transparent);">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-3);">
             <h3 class="card-title" style="margin:0;font-size:14px;">{{ o.name }}</h3>
             <span class="tag tag-neutral">{{ o.matches }}× {{ _('begegnet') }}</span>

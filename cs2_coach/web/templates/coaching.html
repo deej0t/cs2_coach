@@ -12,7 +12,7 @@
     'chronic': 'var(--color-red)',
     'new': 'var(--color-yellow)',
     'stable': 'var(--color-neutral-500)',
-    'improving': 'var(--color-accent)',
+    'improving': 'var(--c-info)',
     'resolved': 'var(--color-green)'
 } %}
 
@@ -71,7 +71,7 @@
 
     <div class="grid-2" style="gap:var(--space-4);">
     {% for t in by_status[status] %}
-        <div class="card elev-sm" style="border-left:2px solid {{ status_color[status] }};">
+        <div class="card elev-sm" style="border:1px solid color-mix(in srgb, {{ status_color[status] }} 30%, transparent);">
             <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-3);">
                 <h3 class="card-title" style="margin:0;font-size:14px;">{{ t.label }}</h3>
                 <span style="font-size:12px;color:var(--color-neutral-500);white-space:nowrap;">

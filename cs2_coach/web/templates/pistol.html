@@ -46,18 +46,18 @@
     .pl-weapons { margin-bottom: var(--space-5); }
     .pl-weapon-bar { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
     .pl-weapon-name { width: 100px; font-size: 13px; font-weight: 500; text-align: right; }
-    .pl-weapon-fill { height: 22px; border-radius: 4px; min-width: 4px; transition: width 0.5s; background: linear-gradient(90deg, rgba(145,132,217,0.6), rgba(145,132,217,0.3)); }
+    .pl-weapon-fill { height: 22px; border-radius: 4px; min-width: 4px; transition: width 0.5s; background: linear-gradient(90deg, rgba(93,169,242,0.6), rgba(93,169,242,0.3)); }
     .pl-weapon-count { font-size: 12px; color: var(--color-neutral-500); }
 
     .pl-map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
     .pl-map-card {
         padding: var(--space-4); border-radius: var(--radius-md);
         background: var(--color-surface); box-shadow: var(--shadow-sm);
-        border-left: 4px solid var(--color-neutral-700);
+        border: 1px solid var(--c-line2);
     }
-    .pl-map-card.good { border-left-color: #4ade80; }
-    .pl-map-card.mid { border-left-color: #fbbf24; }
-    .pl-map-card.bad { border-left-color: #f87171; }
+    .pl-map-card.good { border-color: color-mix(in srgb, var(--c-pos) 35%, transparent); }
+    .pl-map-card.mid { border-color: color-mix(in srgb, var(--c-undecided) 35%, transparent); }
+    .pl-map-card.bad { border-color: color-mix(in srgb, var(--c-neg) 35%, transparent); }
     .pl-map-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .pl-map-name { font-size: 16px; font-weight: 700; font-family: var(--font-heading); }
     .pl-map-wr { font-size: 13px; font-weight: 700; }
@@ -73,7 +73,7 @@
     }
     .pl-tip-positive { background: rgba(74,222,128,0.08); color: #4ade80; border: 1px solid rgba(74,222,128,0.15); }
     .pl-tip-warning { background: rgba(248,113,113,0.08); color: #f87171; border: 1px solid rgba(248,113,113,0.15); }
-    .pl-tip-info { background: rgba(145,132,217,0.08); color: #9184d9; border: 1px solid rgba(145,132,217,0.15); }
+    .pl-tip-info { background: rgba(93,169,242,0.08); color: #5DA9F2; border: 1px solid rgba(93,169,242,0.15); }
 
     .pl-trend-wrap { margin-bottom: var(--space-5); }
 </style>
@@ -265,8 +265,8 @@
             datasets: [{
                 label: 'Pistol-WR (5er Schnitt)',
                 data: trend.map(function(t) { return t.wr; }),
-                borderColor: 'rgba(145,132,217,0.8)',
-                backgroundColor: 'rgba(145,132,217,0.1)',
+                borderColor: 'rgba(93,169,242,0.8)',
+                backgroundColor: 'rgba(93,169,242,0.1)',
                 fill: true,
                 tension: 0.3,
                 pointRadius: 3,

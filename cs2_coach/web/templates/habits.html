@@ -13,11 +13,11 @@
     .ht-card {
         padding: var(--space-4); border-radius: var(--radius-md);
         background: var(--color-surface); box-shadow: var(--shadow-sm);
-        border-left: 3px solid var(--color-neutral-700);
+        border: 1px solid var(--c-line2);
     }
-    .ht-card.improving { border-left-color: #4ade80; }
-    .ht-card.worsening { border-left-color: #f87171; }
-    .ht-card.at-target { border-left-color: var(--color-accent); }
+    .ht-card.improving { border-color: color-mix(in srgb, var(--c-pos) 35%, transparent); }
+    .ht-card.worsening { border-color: color-mix(in srgb, var(--c-neg) 35%, transparent); }
+    .ht-card.at-target { border-color: color-mix(in srgb, var(--color-accent) 35%, transparent); }
 
     .ht-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
     .ht-name { font-size: 15px; font-weight: 600; }
@@ -58,7 +58,7 @@
     .ht-tip {
         font-size: 12px; color: var(--color-neutral-400);
         padding: 8px 10px; border-radius: var(--radius-sm);
-        background: rgba(145,132,217,0.06); border: 1px solid rgba(145,132,217,0.12);
+        background: rgba(93,169,242,0.06); border: 1px solid rgba(93,169,242,0.12);
         margin-top: 8px;
     }
     .ht-tip strong { color: var(--color-accent); }
@@ -186,8 +186,8 @@
 
     // Compute gradient color based on direction
     var grad = ctx.createLinearGradient(0, 0, 0, 80);
-    grad.addColorStop(0, 'rgba(145,132,217,0.25)');
-    grad.addColorStop(1, 'rgba(145,132,217,0.0)');
+    grad.addColorStop(0, 'rgba(93,169,242,0.25)');
+    grad.addColorStop(1, 'rgba(93,169,242,0.0)');
 
     new Chart(ctx, {
         type: 'line',
@@ -196,14 +196,14 @@
             datasets: [
                 {
                     data: data,
-                    borderColor: '#9184d9',
+                    borderColor: '#5DA9F2',
                     borderWidth: 2,
                     backgroundColor: grad,
                     fill: true,
                     tension: 0.35,
                     pointRadius: 2,
                     pointHoverRadius: 5,
-                    pointBackgroundColor: '#9184d9',
+                    pointBackgroundColor: '#5DA9F2',
                 },
                 {
                     data: Array(data.length).fill(target),
@@ -224,7 +224,7 @@
                     backgroundColor: 'rgba(41,43,49,0.95)',
                     titleColor: '#e9e9ed',
                     bodyColor: '#e9e9ed',
-                    borderColor: 'rgba(145,132,217,0.3)',
+                    borderColor: 'rgba(93,169,242,0.3)',
                     borderWidth: 1,
                     titleFont: { size: 11 },
                     bodyFont: { size: 12, weight: 'bold' },

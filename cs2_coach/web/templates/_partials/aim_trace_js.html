@@ -3,7 +3,7 @@
 // Kopf des Gegners plus Einblendung in der 3D-Ego-Sicht (Kopf-Marker, wohin
 // jeder Schuss relativ zum Kopf ging, aktueller Fehler, Auffaelligkeiten).
 (function () {
-    var COL = { tot: '#fbbf24', h: '#60a5fa', v: '#c084fc', hit: '#4ade80', miss: '#f87171', move: 'rgba(248,113,113,0.15)' };
+    var COL = { tot: uiColor('focus', '#fbbf24'), h: uiColor('info', '#60a5fa'), v: uiColor('util', '#c084fc'), hit: uiColor('pos', '#4ade80'), miss: uiColor('neg', '#f87171'), move: 'rgba(248,113,113,0.15)' };
     var aim = null, chartMax = 30;
 
     var curMode = 'me';
@@ -102,7 +102,7 @@
         var cx = w / 2, cy = h / 2, r = rowAt(t);
         if (pre) preAim(c, w, h, cx, cy, pre);
         // Fadenkreuz
-        c.strokeStyle = '#4ade80'; c.lineWidth = 2; c.beginPath();
+        c.strokeStyle = uiColor('pos', '#4ade80'); c.lineWidth = 2; c.beginPath();
         c.moveTo(cx - 10, cy); c.lineTo(cx - 3, cy); c.moveTo(cx + 3, cy); c.lineTo(cx + 10, cy);
         c.moveTo(cx, cy - 10); c.lineTo(cx, cy - 3); c.moveTo(cx, cy + 3); c.lineTo(cx, cy + 10); c.stroke();
         // Kopf: aus der 3D-Projektion, sonst aus dem Fehlerwinkel
@@ -110,7 +110,7 @@
         if (head) { hx = head.x; hy = head.y; }
         else if (r) { hx = cx - r[1] * pxPerDeg; hy = cy + r[2] * pxPerDeg; }
         if (hx != null && r && Math.abs(r[0] - t) < 8) {
-            c.strokeStyle = '#f87171'; c.lineWidth = 2; c.beginPath(); c.arc(hx, hy, 9, 0, 7); c.stroke();
+            c.strokeStyle = uiColor('neg', '#f87171'); c.lineWidth = 2; c.beginPath(); c.arc(hx, hy, 9, 0, 7); c.stroke();
             c.setLineDash([4, 4]); c.strokeStyle = 'rgba(251,191,36,0.9)'; c.beginPath(); c.moveTo(cx, cy); c.lineTo(hx, hy); c.stroke(); c.setLineDash([]);
             // Schuesse der letzten Sekunde relativ zum Kopf: so lag das Fadenkreuz beim Abdruecken
             (aim.shots || []).forEach(function (sh) {
@@ -130,11 +130,11 @@
         };
         if (r && Math.abs(r[0] - t) < 8) {
             box(h - 170, 'Fehler zum Kopf: ' + r[3].toFixed(1) + '°  (' + (r[1] >= 0 ? '→ ' : '← ') + Math.abs(r[1]).toFixed(1) + '°, '
-                + (r[2] >= 0 ? '↑ ' : '↓ ') + Math.abs(r[2]).toFixed(1) + '°)', r[3] <= 3 ? '#4ade80' : (r[3] <= 10 ? '#fbbf24' : '#f87171'));
-            box(h - 146, 'Tempo: ' + r[4] + ' u/s' + (r[4] > 80 ? ' – in Bewegung' : ''), r[4] > 80 ? '#f87171' : '#e5e7eb');
+                + (r[2] >= 0 ? '↑ ' : '↓ ') + Math.abs(r[2]).toFixed(1) + '°)', r[3] <= 3 ? uiColor('pos', '#4ade80') : (r[3] <= 10 ? uiColor('focus', '#fbbf24') : uiColor('neg', '#f87171')));
+            box(h - 146, 'Tempo: ' + r[4] + ' u/s' + (r[4] > 80 ? ' – in Bewegung' : ''), r[4] > 80 ? uiColor('neg', '#f87171') : uiColor('tx', '#e5e7eb'));
         }
         var cur = (aim.mistakes || []).filter(function (m) { return m.tick <= t && t - m.tick < 48; }).pop();
-        if (cur) box(h * 0.16, cur.text, cur.tone === 'bad' ? '#f87171' : (cur.tone === 'good' ? '#4ade80' : '#e5e7eb'));
+        if (cur) box(h * 0.16, cur.text, cur.tone === 'bad' ? uiColor('neg', '#f87171') : (cur.tone === 'good' ? uiColor('pos', '#4ade80') : uiColor('tx', '#e5e7eb')));
     }
 
     // Vor dem Sichtkontakt: gestrichelte Linie vom Fadenkreuz zur Stelle, an der der Gegner auftaucht
@@ -144,7 +144,7 @@
         var dx = tx - cx, dy = ty - cy, len = Math.hypot(dx, dy) || 1;
         var m = Math.min(w, h) * 0.45;
         if (pre.behind || len > m) { tx = cx + dx / len * m; ty = cy + dy / len * m; }   // am Rand festhalten
-        var col = pre.deg <= 5 ? '#4ade80' : (pre.deg <= 15 ? '#fbbf24' : '#f87171');
+        var col = pre.deg <= 5 ? uiColor('pos', '#4ade80') : (pre.deg <= 15 ? uiColor('focus', '#fbbf24') : uiColor('neg', '#f87171'));
         c.save();
         c.setLineDash([7, 6]); c.strokeStyle = col; c.lineWidth = 2;
         c.beginPath(); c.moveTo(cx, cy); c.lineTo(tx, ty); c.stroke();

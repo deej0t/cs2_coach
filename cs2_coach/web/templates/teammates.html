@@ -25,7 +25,7 @@
         font-family: var(--font-body); transition: all 0.15s;
     }
     .tm-tab:hover { border-color: var(--color-neutral-600); color: var(--color-text); }
-    .tm-tab.active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(145,132,217,0.1); font-weight: 600; }
+    .tm-tab.active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(93,169,242,0.1); font-weight: 600; }
 
     .tm-section { margin-bottom: var(--space-5); }
     .tm-section-title {
@@ -56,7 +56,7 @@
         padding: 2px 8px; border-radius: 10px;
     }
     .tm-chem-high { background: rgba(74,222,128,0.12); color: #4ade80; }
-    .tm-chem-mid { background: rgba(145,132,217,0.12); color: #9184d9; }
+    .tm-chem-mid { background: rgba(93,169,242,0.12); color: #5DA9F2; }
     .tm-chem-low { background: rgba(248,113,113,0.12); color: #f87171; }
 
     .tm-wr-bar { width: 60px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--color-neutral-800); display: inline-block; vertical-align: middle; margin-left: 4px; }
@@ -219,7 +219,7 @@
     {% if tm.by_impact %}
     <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: var(--space-4);">
         {% for t in tm.by_impact %}
-        <div style="padding: var(--space-4); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm); border-left: 4px solid {% if t.rating_delta > 0.03 %}#4ade80{% elif t.rating_delta < -0.03 %}#f87171{% else %}var(--color-neutral-700){% endif %};">
+        <div style="padding: var(--space-4); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-sm); border: 1px solid color-mix(in srgb, {% if t.rating_delta > 0.03 %}var(--c-pos){% elif t.rating_delta < -0.03 %}var(--c-neg){% else %}var(--c-line2){% endif %} 35%, transparent);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <div style="font-weight:600; font-size:15px;">{{ t.name }}</div>
                 <div style="font-size:11px; color:var(--color-neutral-500);">{{ t.matches }} Matches</div>

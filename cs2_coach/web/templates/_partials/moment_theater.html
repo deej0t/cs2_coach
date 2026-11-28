@@ -8,30 +8,31 @@
     .kt-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: var(--space-3); }
     .kt-chip { flex: 0 0 auto; width: 230px; padding: 8px 10px; border-radius: var(--radius-md); cursor: pointer;
                background: var(--color-surface); box-shadow: var(--shadow-sm); border: 1px solid transparent; font-size: 12px; }
-    .kt-chip.active { border-color: var(--color-accent); }
+    .kt-chip.active { border-color: var(--c-focus); box-shadow: 0 0 0 1px var(--c-focus-a); }
     .kt-chip b { font-family: var(--font-heading); font-size: 16px; }
     .kt-chip span { color: var(--color-neutral-500); display: block; margin-top: 2px; line-height: 1.35; }
     .kt-main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--space-3); align-items: start; }
     @media (max-width: 1100px) { .kt-main { grid-template-columns: 1fr; } }
-    .kt-player { background: #0b0d12; border-radius: var(--radius-md); overflow: hidden; display: flex; flex-direction: column; }
+    .kt-player { background: var(--c-bg); border-radius: var(--radius-md); overflow: hidden; display: flex; flex-direction: column; }
     .kt-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #9fb4c7; }
     .kt-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-    .kt-stage #km-canvas { background: #0b0d12; object-fit: contain; }
+    .kt-stage #km-canvas { background: var(--c-bg); object-fit: contain; }
     #km-aim-hud { pointer-events: none; }
-    .kt-views { position: absolute; top: 8px; left: 8px; display: flex; gap: 4px; z-index: 3; }
-    .kt-views button, .kt-ctl { background: rgba(0,0,0,0.6); color: #e5e7eb; border: 1px solid rgba(255,255,255,0.12);
+    .kt-views { position: absolute; top: 10px; left: 10px; display: flex; gap: 0; z-index: 3; padding: 3px; border-radius: 9px;
+                background: var(--c-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(220,230,245,.12); }
+    .kt-views button { background: transparent !important; border-color: transparent !important; border-radius: 6px; }
+    .kt-views button, .kt-ctl { background: rgba(0,0,0,0.6); color: var(--c-tx); border: 1px solid rgba(255,255,255,0.12);
                border-radius: 6px; font-size: 12px; padding: 4px 9px; cursor: pointer; }
-    .kt-views button.btn-primary { background: var(--color-accent); color: #111; border-color: transparent; }
+    .kt-views button.btn-primary { background: var(--color-accent) !important; color: var(--c-bg); font-weight: 600; }
     .kt-topright { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 3; }
     #km-3d-msg { position: absolute; top: 44px; left: 10px; font-size: 13px; color: #111; font-weight: 600; z-index: 3; }
-    .kt-legend { position: absolute; right: 10px; bottom: 60px; z-index: 3; background: rgba(0,0,0,0.72); color: #e5e7eb;
+    .kt-legend { position: absolute; right: 10px; bottom: 60px; z-index: 3; background: rgba(0,0,0,0.72); color: var(--c-tx);
                  font-size: 12px; padding: 8px 12px; border-radius: 8px; line-height: 1.7; display: none; }
     .kt-legend kbd { display: inline-block; min-width: 18px; text-align: center; padding: 0 5px; margin-right: 2px;
-                     border-radius: 4px; background: #374151; border: 1px solid #4b5563; font-size: 11px; color: #fff; }
-    .kt-transport { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #12151c; color: #e5e7eb; font-size: 12px; }
-    .kt-transport select { background: #1f2430; color: #e5e7eb; border: 1px solid #374151; border-radius: 6px; font-size: 12px; padding: 2px 6px; }
-    #kt-tl { width: 100%; height: 64px; display: block; cursor: pointer; background: #12151c; }
-    .kt-lane { background: #0f1218; padding: 4px 10px 8px; color: #9ca3af; font-size: 11px; }
+                     border-radius: 4px; background: var(--c-s3); border: 1px solid var(--c-line2); font-size: 11px; color: #fff; }
+    .kt-transport { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--c-s1); color: var(--c-tx); font-size: 12px; }
+    .kt-transport select { background: var(--c-s3); color: var(--c-tx); border: 1px solid var(--c-s3); border-radius: 6px; font-size: 12px; padding: 2px 6px; }
+    .kt-lane { background: var(--c-bg); padding: 4px 10px 8px; color: var(--c-tx3); font-size: 11px; }
     #km-aim-chart { width: 100%; height: 110px; display: block; cursor: pointer; }
     .kt-events { background: var(--color-surface); border-radius: var(--radius-md); padding: 8px; max-height: 760px;
                  overflow-y: auto; font-size: 12px; box-sizing: border-box; }
@@ -42,12 +43,22 @@
     .kt-ev li:hover { background: rgba(127,127,127,0.12); }
     .kt-ev li.now { background: rgba(251,191,36,0.16); }
     .kt-ev .t { font-family: ui-monospace, monospace; color: var(--color-neutral-500); }
-    .kt-ev .b { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 5px; text-align: center; color: #111; }
     .km-notes { list-style: none; padding: 0; margin: var(--space-3) 0 0; font-size: 12px; }
     .km-notes li { padding: 6px 10px; border-radius: var(--radius-sm); margin-bottom: 6px;
-                   background: var(--color-bg); border-left: 3px solid #9ca3af; }
-    .km-notes li.good { border-left-color: #4ade80; }
-    .km-notes li.bad { border-left-color: #f87171; }
+                   background: var(--color-bg); border-left: 3px solid var(--c-tx3); }
+    .km-notes li.good { border-left-color: var(--c-pos); }
+    .km-notes li.bad { border-left-color: var(--c-neg); }
+    .kt-caption { position: absolute; left: 50%; bottom: 17%; transform: translate(-50%, 6px); z-index: 3; pointer-events: none;
+                  padding: 7px 16px; border-radius: 999px; font: 600 14px system-ui, sans-serif; color: #fff; opacity: 0;
+                  background: rgba(12,14,20,0.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+                  border: 1px solid rgba(255,255,255,0.14); transition: opacity .2s, transform .2s; white-space: nowrap; }
+    .kt-caption.on { opacity: 1; transform: translate(-50%, 0); }
+    .kt-caption.bad { border-color: rgba(248,113,113,0.7); } .kt-caption.good { border-color: rgba(74,222,128,0.7); }
+    .kt-views button, .kt-ctl { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: background .15s; }
+    .kt-views button:hover, .kt-ctl:hover { background: rgba(30,34,44,0.85); }
+    .kt-chip { transition: transform .12s, border-color .12s; }
+    .kt-chip:hover { transform: translateY(-1px); }
+    .kt-ev li.turn .chip-ev { box-shadow: 0 0 0 2px rgba(251,191,36,0.55); }
     #km-3d-wrap:fullscreen { border-radius: 0; }
     #km-3d-wrap:fullscreen .kt-stage { aspect-ratio: auto; flex: 1 1 auto; }
 </style>
@@ -74,16 +85,19 @@
                     <button class="kt-ctl" id="km-3d-full" title="{{ _('Vollbild') }} (F)">⛶</button>
                 </div>
                 <div id="km-3d-msg"></div>
+                <div class="kt-caption" id="kt-caption"></div>
                 <div class="kt-legend" id="kt-legend">
                     <div><kbd>Leertaste</kbd> {{ _('Abspielen / Pause') }}</div>
                     <div><kbd>←</kbd><kbd>→</kbd> {{ _('¼ s zurück / vor') }} · <kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> {{ _('1 Tick') }}</div>
+                    <div><kbd>N</kbd>/<kbd>P</kbd> {{ _('nächster / voriger Wendepunkt') }} · <kbd>I</kbd> {{ _('Einblendungen an/aus') }}</div>
                     <div><kbd>1</kbd> {{ _('deine Sicht') }} <kbd>2</kbd> {{ _('Gegner') }} <kbd>3</kbd> {{ _('frei') }} <kbd>4</kbd> 2D · <kbd>F</kbd> {{ _('Vollbild') }} · <kbd>H</kbd> {{ _('Hilfe') }}</div>
-                    <div style="margin-top:4px;color:#fbbf24;">{{ _('Freie Kamera') }}</div>
+                    <div style="margin-top:4px;color:var(--c-focus);">{{ _('Freie Kamera') }}</div>
                     <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> {{ _('fliegen') }} · <kbd>E</kbd>/<kbd>Q</kbd> {{ _('hoch / runter') }}</div>
                     <div><kbd>Shift</kbd> {{ _('schnell') }} · <kbd>Strg</kbd> {{ _('langsam') }} · {{ _('Maus ziehen: umsehen') }} · {{ _('Mausrad: Tempo') }}</div>
                     <div><kbd>C</kbd> {{ _('Kamera zurück zu den Duellanten') }}</div>
                 </div>
             </div>
+            {% include '_partials/moment_story.html' %}
             <div class="kt-transport">
                 <button class="kt-ctl" id="km-play" title="{{ _('Leertaste') }}">▶</button>
                 <button class="kt-ctl" id="kt-restart" title="{{ _('Von vorn') }}">⟲</button>
@@ -95,9 +109,9 @@
                 {% if km_series %}<label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="kt-auto" checked> {{ _('automatisch weiter') }}</label>{% endif %}
                 <span id="km-title" style="margin-left:auto;font-weight:600;"></span>
             </div>
-            <canvas id="kt-tl"></canvas>
+            {% include '_partials/moment_timeline.html' %}
             <div class="kt-lane" id="km-aim" style="display:none;">
-                <div style="margin-bottom:2px;">{{ _('Aim-Spur') }} – <span style="color:#fbbf24">■</span> {{ _('Fehler zum Kopf') }} · <span style="color:#60a5fa">■</span> {{ _('links/rechts') }} · <span style="color:#c084fc">■</span> {{ _('hoch/tief') }} · <span style="color:#4ade80">●</span> {{ _('Treffer') }} · <span style="color:#f87171">●</span> {{ _('Fehlschuss') }} · {{ _('rot hinterlegt = in Bewegung') }}</div>
+                <div style="margin-bottom:2px;">{{ _('Aim-Spur') }} – <span style="color:var(--c-focus)">■</span> {{ _('Fehler zum Kopf') }} · <span style="color:var(--c-info)">■</span> {{ _('links/rechts') }} · <span style="color:var(--c-util)">■</span> {{ _('hoch/tief') }} · <span style="color:var(--c-pos)">●</span> {{ _('Treffer') }} · <span style="color:var(--c-neg)">●</span> {{ _('Fehlschuss') }} · {{ _('rot hinterlegt = in Bewegung') }}</div>
                 <canvas id="km-aim-chart"></canvas>
                 <ul id="km-aim-list" style="display:none;"></ul>
             </div>
@@ -115,12 +129,13 @@
 {% include '_partials/replay_scene_js.html' %}
 
 // ── Zustand: Wiedergabe tickgenau (64 Hz), gezeichnet mit der Bildrate ──────
-var km = { data: null, tick: 0, playing: false, hold: 0, held: false, last: 0, dirty: true, img: null, kind: '', url: '', events: [] };
+var km = { data: null, tick: 0, playing: false, hold: 0, held: false, last: 0, dirty: true, img: null, kind: '', url: '', events: [], turns: [], captions: true, story: null, duel: null, knick: null };
 window.km = km;
-var KM_TONE = { bad: '#f87171', good: '#4ade80', enemy: '#f87171', info: '#e5e7eb' };
+var KM_TONE = { bad: uiColor('neg', '#f87171'), good: uiColor('pos', '#4ade80'), enemy: uiColor('neg', '#f87171'), info: uiColor('tx', '#e5e7eb') };
 var KT_FILE = document.getElementById('kt').dataset.file;
 // Szene-URL je Export (Serien mischen Momente aus mehreren Matches)
 var KT_CLIP_TMPL = '{{ url_for("moments_page.clip", filename="XFILEX", round_num=1, tick=0) }}';
+var KT_CTX_TMPL = '{{ url_for("moments_page.moment_context", filename="XFILEX", round_num=1, tick=0) }}';
 // Fremde Sicht auf ein gemeinsames Match (?als=) an alle Abrufe weiterreichen
 var KT_ALS = new URLSearchParams(location.search).get('als');
 var KT_ALSQ = KT_ALS ? 'als=' + encodeURIComponent(KT_ALS) : '';
@@ -196,6 +211,8 @@ function kmRender() {
     }
     ktTimeline();
     ktEventsNow();
+    ktCaption();
+    if (window.ksNow) ksNow();
 }
 
 // ── 2D-Karte (wie bisher, jetzt am Tick statt am Frame) ─────────────────
@@ -205,8 +222,8 @@ function kmDraw2D() {
     rpDrawScene(canvas, km.data, fi, km.img, { util: true, names: true });
     var mo = km.data.moment, frame = km.data.frames[fi];
     var ctx = canvas.getContext('2d'), sc = canvas.width / 1024;
-    kmCone(ctx, sc, frame, mo.me_idx, '#4ade80');
-    kmCone(ctx, sc, frame, mo.killer_idx, '#f87171');
+    kmCone(ctx, sc, frame, mo.me_idx, uiColor('focus', '#fbbf24'));
+    kmCone(ctx, sc, frame, mo.killer_idx, uiColor('neg', '#f87171'));
     kmBanners(ctx, frame);
     if (fi >= mo.focus) (mo.marks || []).forEach(function (m) { kmMark(ctx, sc, m); });
 }
@@ -235,12 +252,12 @@ function kmBanners(ctx, frame) {
         ctx.font = '700 22px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
         var w = ctx.measureText(ev.text).width + 20;
         ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(14, y - 4, w, 32);
-        ctx.fillStyle = KM_TONE[ev.tone] || '#e5e7eb'; ctx.fillText(ev.text, 24, y);
+        ctx.fillStyle = KM_TONE[ev.tone] || uiColor('tx', '#e5e7eb'); ctx.fillText(ev.text, 24, y);
         y += 38;
     });
 }
 function kmMark(ctx, s, m) {
-    var c = KM_TONE[m.tone] || '#e5e7eb';
+    var c = KM_TONE[m.tone] || uiColor('tx', '#e5e7eb');
     ctx.save();
     ctx.strokeStyle = c; ctx.lineWidth = 3;
     if (m.type === 'circle') {
@@ -260,9 +277,9 @@ function kmMark(ctx, s, m) {
 }
 
 // ── Ereignisse: aus Duell-Detail, Aim-Spur und den Kills der Runde ───────
-var KT_KIND = { sight: ['SICHT', '#60a5fa'], enemy: ['GEGNER', '#f87171'], shot: ['SCHUSS', '#fbbf24'],
-                hit: ['TREFFER', '#4ade80'], miss: ['DANEBEN', '#f87171'], bad: ['FEHLER', '#f87171'],
-                info: ['INFO', '#9ca3af'], kill: ['KILL', '#4ade80'], death: ['TOD', '#f87171'], frag: ['KILL', '#e5e7eb'] };
+var KT_KIND = { sight: ['SICHT', uiColor('info', '#60a5fa')], enemy: ['GEGNER', uiColor('neg', '#f87171')], shot: ['SCHUSS', uiColor('focus', '#fbbf24')],
+                hit: ['TREFFER', uiColor('pos', '#4ade80')], miss: ['DANEBEN', uiColor('neg', '#f87171')], bad: ['FEHLER', uiColor('neg', '#f87171')],
+                info: ['INFO', uiColor('tx3', '#9ca3af')], kill: ['KILL', uiColor('pos', '#4ade80')], death: ['TOD', uiColor('neg', '#f87171')], frag: ['KILL', uiColor('tx', '#e5e7eb')] };
 function ktBuildEvents() {
     var d = km.data, mo = d.moment, r = kmRange(), ev = [];
     var names = {}; (d.players || []).forEach(function (p) { names[p.steamid] = p.name; });
@@ -292,8 +309,7 @@ function ktBuildEvents() {
     ev.forEach(function (e, i) {
         var k = KT_KIND[e.kind] || KT_KIND.info, li = document.createElement('li');
         var s = (e.tick - r.focus) / 64;
-        li.innerHTML = '<span class="t">' + (s >= 0 ? '+' : '−') + Math.abs(s).toFixed(2) + '</span><span class="b" style="background:'
-            + k[1] + '">' + k[0] + '</span><span></span>';
+        li.innerHTML = '<span class="t">' + (s >= 0 ? '+' : '−') + Math.abs(s).toFixed(2) + '</span><span class="chip-ev chip-ev--' + e.kind + '">' + k[0] + '</span><span></span>';
         li.lastChild.textContent = e.text;
         li.onclick = function () { kmStop(); kmSeek(e.tick); };
         e.li = li;
@@ -312,46 +328,26 @@ function ktEventsNow() {
     }
 }
 
-// ── Zeitstrahl: Sekunden relativ zum Moment, Marker je Ereignis, Abspielkopf ──
-function ktTimeline() {
-    var cv = document.getElementById('kt-tl'), w = cv.clientWidth || 800, h = cv.clientHeight || 64;
-    if (cv.width !== w) cv.width = w;
-    if (cv.height !== h) cv.height = h;
-    var c = cv.getContext('2d'), r = kmRange(), L = 30, R = w - 10;
-    var X = function (t) { return L + (t - r.start) / Math.max(r.end - r.start, 1) * (R - L); };
-    c.clearRect(0, 0, w, h);
-    c.fillStyle = '#12151c'; c.fillRect(0, 0, w, h);
-    c.fillStyle = 'rgba(255,255,255,0.06)'; c.fillRect(L, 22, R - L, 30);
-    c.fillStyle = 'rgba(251,191,36,0.25)'; c.fillRect(L, 22, X(km.tick) - L, 30);
-    c.font = '10px ui-monospace, monospace'; c.fillStyle = '#6b7280'; c.textAlign = 'center'; c.textBaseline = 'top';
-    for (var s = Math.ceil((r.start - r.focus) / 64); s <= (r.end - r.focus) / 64; s++) {
-        var x = X(r.focus + s * 64);
-        c.fillRect(x, 16, 1, s === 0 ? 40 : 5);
-        c.fillText((s > 0 ? '+' : '') + s + 's', x, 3);
-    }
-    km.events.forEach(function (e) {
-        var k = KT_KIND[e.kind] || KT_KIND.info, x = X(e.tick);
-        var row = { kill: 0, death: 0, frag: 0, sight: 1, enemy: 1, shot: 2, hit: 2, miss: 2, bad: 3, info: 3 }[e.kind] || 3;
-        c.fillStyle = k[1];
-        if (e.kind === 'kill' || e.kind === 'death' || e.kind === 'frag') { c.fillRect(x - 1, 22, 3, 30); }
-        else { c.beginPath(); c.arc(x, 27 + row * 7, 3, 0, 7); c.fill(); }
-    });
-    var px = X(km.tick);
-    c.fillStyle = '#fbbf24'; c.fillRect(px - 1, 14, 2, h - 14);
-    c.beginPath(); c.moveTo(px - 5, 12); c.lineTo(px + 5, 12); c.lineTo(px, 18); c.fill();
+
+// ── Hot-Ticks: Navigation und Einblendung (Daten: moment_story.py) ──
+function ktTurnAt(tick) {
+    // juengster Wendepunkt bis jetzt, solange er hoechstens 1,25 s zurueckliegt
+    var cur = null;
+    km.turns.forEach(function (t) { if (t.tick <= tick + 1 && tick - t.tick <= 80) cur = t; });
+    return cur;
 }
-(function () {
-    var cv = document.getElementById('kt-tl'), drag = false;
-    function at(e) {
-        if (!km.data) return;
-        var b = cv.getBoundingClientRect(), r = kmRange();
-        var f = (e.clientX - b.left - 30) / (b.width - 40);
-        kmSeek(r.start + Math.max(0, Math.min(1, f)) * (r.end - r.start));
-    }
-    cv.addEventListener('mousedown', function (e) { drag = true; kmStop(); at(e); });
-    window.addEventListener('mousemove', function (e) { if (drag) at(e); });
-    window.addEventListener('mouseup', function () { drag = false; });
-})();
+function ktJump(dir) {
+    if (!km.turns.length) return;
+    var t = dir > 0 ? km.turns.find(function (x) { return x.tick > km.tick + 2; })
+                    : km.turns.slice().reverse().find(function (x) { return x.tick < km.tick - 2; });
+    if (t) { kmStop(); kmSeek(t.tick); }
+}
+function ktCaption() {
+    var el = document.getElementById('kt-caption'), t = km.captions ? ktTurnAt(km.tick) : null;
+    if (!t) { el.classList.remove('on'); return; }
+    if (el.textContent !== t.label) el.textContent = t.label;
+    el.className = 'kt-caption on ' + (t.tone || '');
+}
 
 // ── Momente laden ───────────────────────────────────────────────────────
 function kmLoad(el) {
@@ -361,6 +357,8 @@ function kmLoad(el) {
     var title = document.getElementById('km-title');
     title.textContent = 'Runde ' + el.dataset.round + ' — wird geladen...';
     document.getElementById('km-notes').innerHTML = '';
+    document.getElementById('ks').hidden = true;
+    km.turns = []; km.story = null; km.duel = null; km.knick = null;
     var file = el.dataset.file || KT_FILE;
     var url = KT_CLIP_TMPL.replace('XFILEX', file).replace(/\/1\/0$/, '/' + el.dataset.round + '/' + el.dataset.tick) + '?kind=' + el.dataset.kind
         + (KT_ALSQ && !el.dataset.file ? '&' + KT_ALSQ : '');
@@ -381,6 +379,7 @@ function kmLoad(el) {
                 li.className = n.tone; li.textContent = n.text; ul.appendChild(li);
             });
             ktBuildEvents();
+            ktStory();
             kmSeek(kmRange().start);
             if (window.km3d) window.km3d.reset();
             km.img = new Image();
@@ -406,7 +405,7 @@ function ktSeries() {
         var d = document.createElement('div');
         d.className = 'kt-chip';
         d.dataset.kind = m.kind; d.dataset.round = m.round; d.dataset.tick = m.tick; d.dataset.file = m.file;
-        d.innerHTML = '<b style="color:' + (m.kind === 'kill' ? '#4ade80' : '#f87171') + '">' + (i + 1) + '/' + KT_SERIES.length
+        d.innerHTML = '<b style="color:' + (m.kind === 'kill' ? uiColor('pos', '#4ade80') : uiColor('neg', '#f87171')) + '">' + (i + 1) + '/' + KT_SERIES.length
             + '</b> ' + (m.kind === 'kill' ? 'gewonnen' : 'verloren') + '<span></span>';
         d.lastChild.textContent = m.label;
         d.onclick = function () { kmLoad(d); };
@@ -436,12 +435,12 @@ function ktChips() {
             box.innerHTML = '<span style="font-size:12px;color:var(--color-neutral-500);">' + (j.error || 'Keine bewerteten Momente für dieses Match.') + '</span>';
             return;
         }
-        if (!j.demo_ok) box.insertAdjacentHTML('beforeend', '<span style="font-size:12px;color:#f87171;">Demo nicht gefunden – keine Szene abspielbar.</span>');
+        if (!j.demo_ok) box.insertAdjacentHTML('beforeend', '<span style="font-size:12px;color:var(--c-neg);">Demo nicht gefunden – keine Szene abspielbar.</span>');
         j.items.forEach(function (m) {
             var d = document.createElement('div');
             d.className = 'kt-chip';
-            d.dataset.kind = m.kind; d.dataset.round = m.round; d.dataset.tick = m.tick;
-            d.innerHTML = '<b style="color:' + (m.kind === 'kill' ? '#4ade80' : '#f87171') + '">' + (m.value > 0 ? '+' : '−')
+            d.dataset.kind = m.kind; d.dataset.round = m.round; d.dataset.tick = m.tick; d.dataset.value = m.value;
+            d.innerHTML = '<b style="color:' + (m.kind === 'kill' ? uiColor('pos', '#4ade80') : uiColor('neg', '#f87171')) + '">' + (m.value > 0 ? '+' : '−')
                 + Math.abs(m.value) + '</b> Siegchance<span></span>';
             d.lastChild.textContent = m.headline;
             if (j.demo_ok) d.onclick = function () { kmLoad(d); };
@@ -460,7 +459,7 @@ function ktChips() {
                 hit = document.createElement('div');
                 hit.className = 'kt-chip';
                 hit.dataset.kind = deep.k; hit.dataset.round = deep.r; hit.dataset.tick = deep.t;
-                hit.innerHTML = '<b style="color:#fbbf24">▶</b> Verlinkter Moment<span></span>';
+                hit.innerHTML = '<b style="color:var(--c-focus)">▶</b> Verlinkter Moment<span></span>';
                 hit.lastChild.textContent = 'Runde ' + deep.r + (deep.k === 'kill' ? ' · Kill' : ' · Tod');
                 hit.onclick = function () { kmLoad(hit); };
                 box.insertBefore(hit, box.firstChild);
@@ -493,6 +492,9 @@ document.addEventListener('keydown', function (e) {
         case 'Digit4': view('2d'); break;
         case 'KeyF': document.getElementById('km-3d-full').click(); break;
         case 'KeyH': document.getElementById('kt-keys').click(); break;
+        case 'KeyN': ktJump(1); break;
+        case 'KeyP': ktJump(-1); break;
+        case 'KeyI': km.captions = !km.captions; km.dirty = true; break;
         default: return;
     }
     e.preventDefault();

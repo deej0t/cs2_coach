@@ -23,7 +23,7 @@
     .si-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
     .si-insight {
         padding: var(--space-3); border-radius: var(--radius-sm); font-size: 13px;
-        border-left: 3px solid var(--color-accent); background: rgba(145,132,217,0.04);
+        border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent); background: rgba(93,169,242,0.04);
         color: var(--color-neutral-300); margin-bottom: var(--space-3);
     }
     .si-insight strong { color: var(--color-text); }
@@ -96,7 +96,7 @@
                 {% for h in insights.hourly %}
                 {% if h.matches > 0 %}
                 <div class="si-hour-bar"
-                     style="height:{{ (h.matches / max_matches * 50 + 4)|round }}px;background:{% if h.avg_rating >= 1.0 %}#4ade80{% elif h.avg_rating >= 0.85 %}#9184d9{% else %}#f87171{% endif %};"
+                     style="height:{{ (h.matches / max_matches * 50 + 4)|round }}px;background:{% if h.avg_rating >= 1.0 %}#4ade80{% elif h.avg_rating >= 0.85 %}#5DA9F2{% else %}#f87171{% endif %};"
                      data-tip="{{ h.hour }}:00 — {{ h.matches }} Games, Rating {{ h.avg_rating }}"></div>
                 {% else %}
                 <div class="si-hour-bar" style="height:2px;background:var(--color-neutral-800);"></div>
@@ -118,7 +118,7 @@
         </div>
         {% if insights.fatigue %}
         {% set fs = insights.fatigue.state %}
-        <div class="si-insight" style="border-left-color:{% if fs == 'fatigue' %}#f87171{% elif fs in ('stable', 'warmup') %}#4ade80{% else %}#fbbf24{% endif %};">
+        <div class="si-insight" style="border-color: color-mix(in srgb, {% if fs == 'fatigue' %}var(--c-neg){% elif fs in ('stable', 'warmup') %}var(--c-pos){% else %}var(--c-undecided){% endif %} 35%, transparent);">
             {{ insights.fatigue.text }}
         </div>
         {% endif %}
@@ -132,7 +132,7 @@
             <div class="si-fatigue-col">
                 <div class="si-fatigue-val {% if f.avg_rating >= 1.0 %}win{% elif f.avg_rating < 0.85 %}loss{% endif %}">{{ f.avg_rating }}</div>
                 <div class="si-fatigue-fill"
-                     style="height:{{ ((f.avg_rating - min_fat) / range_fat * 50 + 10)|round }}px;background:{% if f.avg_rating >= 1.0 %}#4ade80{% elif f.avg_rating >= 0.85 %}#9184d9{% else %}#f87171{% endif %};"></div>
+                     style="height:{{ ((f.avg_rating - min_fat) / range_fat * 50 + 10)|round }}px;background:{% if f.avg_rating >= 1.0 %}#4ade80{% elif f.avg_rating >= 0.85 %}#5DA9F2{% else %}#f87171{% endif %};"></div>
                 <div class="si-fatigue-label">{{ f.label }}<br><span style="font-size:9px;">({{ f.matches }}x)</span></div>
             </div>
             {% endfor %}
@@ -150,10 +150,10 @@
 {% endif %}
 
 <style>
-    .sess-card { padding: var(--space-4) !important; margin-bottom: var(--space-3); border-left: 3px solid var(--color-neutral-700); transition: border-color 0.2s; }
-    .sess-card-win { border-left-color: #4ade80; }
-    .sess-card-loss { border-left-color: #f87171; }
-    .sess-card-mixed { border-left-color: #fbbf24; }
+    .sess-card { padding: var(--space-4) !important; margin-bottom: var(--space-3); border: 1px solid var(--c-line2); transition: border-color 0.2s; }
+    .sess-card-win { border-color: color-mix(in srgb, var(--c-pos) 35%, transparent); }
+    .sess-card-loss { border-color: color-mix(in srgb, var(--c-neg) 35%, transparent); }
+    .sess-card-mixed { border-color: color-mix(in srgb, var(--c-undecided) 35%, transparent); }
 
     .sess-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3); }
     .sess-date { font-family: var(--font-heading); font-size: 18px; font-weight: 600; }
@@ -251,7 +251,7 @@
                 {% set min_r = s.ratings|min %}
                 {% set range_r = max_r - min_r if max_r != min_r else 0.1 %}
                 {% for r in s.ratings %}
-                <div class="sess-spark-bar" style="height:{{ ((r - min_r) / range_r * 24 + 6)|round }}px;background:{% if r >= 1.1 %}#4ade80{% elif r >= 0.9 %}#9184d9{% else %}#f87171{% endif %};"></div>
+                <div class="sess-spark-bar" style="height:{{ ((r - min_r) / range_r * 24 + 6)|round }}px;background:{% if r >= 1.1 %}#4ade80{% elif r >= 0.9 %}#5DA9F2{% else %}#f87171{% endif %};"></div>
                 {% endfor %}
             </div>
             <div class="sess-stat-label">{{ _('Verlauf') }}</div>
@@ -260,7 +260,7 @@
     </div>
 
     {% if s.tilt %}
-    <div style="padding:6px 12px;margin-bottom:var(--space-3);border-radius:var(--radius-sm);font-size:12px;color:var(--color-neutral-300);background:{% if s.tilt.type == 'tilt' %}rgba(248,113,113,0.06){% elif s.tilt.type == 'fatigue' %}rgba(251,191,36,0.06){% else %}rgba(74,222,128,0.06){% endif %};border-left:3px solid {% if s.tilt.type == 'tilt' %}#f87171{% elif s.tilt.type == 'fatigue' %}#fbbf24{% else %}#4ade80{% endif %};">
+    <div style="padding:6px 12px;margin-bottom:var(--space-3);border-radius:var(--radius-sm);font-size:12px;color:var(--color-neutral-300);background:{% if s.tilt.type == 'tilt' %}rgba(248,113,113,0.06){% elif s.tilt.type == 'fatigue' %}rgba(251,191,36,0.06){% else %}rgba(74,222,128,0.06){% endif %};border: 1px solid color-mix(in srgb, {% if s.tilt.type == 'tilt' %}var(--c-neg){% elif s.tilt.type == 'fatigue' %}var(--c-undecided){% else %}var(--c-pos){% endif %} 35%, transparent);">
         {{ s.tilt.desc }}{% if s.tilt.type == 'tilt' %} — {{ _('Nach 2-3 Niederlagen in Folge solltest du eine Pause machen.') }}{% endif %}
     </div>
     {% endif %}

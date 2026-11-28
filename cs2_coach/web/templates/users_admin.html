@@ -6,12 +6,12 @@
     {{ _('Jeder Mate meldet sich mit seinem Namen an und sieht seine eigenen Matches, Momente, Aim- und Positions-Profile. Seinen Steam-Sync, Benachrichtigungen und KI-Schlüssel trägt er selbst unter „Mein Konto“ ein – deine Schlüssel sieht er nicht. Demos und Demo-Caches werden geteilt.') }}
 </p>
 {% if not auth_on %}
-<div class="card elev-sm" style="margin-bottom:var(--space-4);border-left:3px solid #f87171;">
+<div class="card elev-sm" style="margin-bottom:var(--space-4);border: 1px solid color-mix(in srgb, var(--c-neg) 35%, transparent);">
     <b>{{ _('Kein Admin-Passwort gesetzt') }}</b> – {{ _('ohne Passwort ist die Anmeldung aus und Mates können sich nicht einloggen. Erst unter Einstellungen ein Passwort setzen.') }}
 </div>
 {% endif %}
 {% if pending %}
-<div class="card elev-sm" style="margin-bottom:var(--space-5);border-left:3px solid #fbbf24;">
+<div class="card elev-sm" style="margin-bottom:var(--space-5);border: 1px solid color-mix(in srgb, var(--c-undecided) 35%, transparent);">
     <span class="card-kicker">{{ _('Offene Registrierungen') }}</span>
     <table class="table" style="font-size:13px;margin-top:8px;"><tbody>
     {% for n, p in pending.items() %}

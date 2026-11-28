@@ -13,7 +13,7 @@
 {% set stale = exports|selectattr('version.needs_reanalysis')|list %}
 {% set incomplete = exports|rejectattr('version.needs_reanalysis')|selectattr('version.missing')|list %}
 {% if stale or incomplete %}
-<div class="card" style="margin-bottom: 16px; border-left: 2px solid var(--color-{{ 'red' if stale else 'yellow' }});">
+<div class="card" style="margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--color-{{ 'red' if stale else 'yellow' }}) 35%, transparent);">
     {% if stale %}
     <div style="margin-bottom: {{ '8px' if incomplete else '0' }};">
         <strong>{{ stale|length }}</strong> {{ _('Exports wurden mit einer aelteren Rechnung erzeugt und zeigen falsche Zahlen.') }}

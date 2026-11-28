@@ -21,7 +21,7 @@
     .bm-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-neutral-500); margin-top: 4px; }
 
     .bm-match {
-        margin-bottom: var(--space-4); border-left: 3px solid var(--color-neutral-700);
+        margin-bottom: var(--space-4); border: 1px solid var(--c-line2);
         padding: var(--space-4) !important;
     }
     .bm-match-head {
@@ -122,7 +122,7 @@
 
 <!-- Per-Match Bookmarks -->
 {% for m in bm.matches %}
-<div class="card elev-sm bm-match" style="border-left-color: {% if m.result == 'Sieg' %}#4ade80{% elif m.result == 'Niederlage' %}#f87171{% else %}#fbbf24{% endif %};">
+<div class="card elev-sm bm-match" style="border-color: color-mix(in srgb, {% if m.result == 'Sieg' %}var(--c-pos){% elif m.result == 'Niederlage' %}var(--c-neg){% else %}var(--c-undecided){% endif %} 35%, transparent);">
     <div class="bm-match-head">
         <div class="bm-match-title">{{ m.match_label }}</div>
         <span class="bm-match-result" style="background: {% if m.result == 'Sieg' %}rgba(74,222,128,0.15);color:#4ade80{% elif m.result == 'Niederlage' %}rgba(248,113,113,0.15);color:#f87171{% else %}rgba(251,191,36,0.15);color:#fbbf24{% endif %};">

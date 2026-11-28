@@ -5,7 +5,7 @@
    die Mission, mit dem evidence-Urteil aus training.current_plan.
 #}
 {% set p = d.premier %}
-{% set accent = p.color if p else '#9184d9' %}
+{% set accent = p.color if p else '#F5B941' %}
 <style>
     .pd-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: var(--space-3); }
     .pd-head h2 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
@@ -41,7 +41,7 @@
     .pd-last { border-radius: 14px; padding: var(--space-5); border: 1px solid var(--color-divider);
                background-color: var(--color-surface); background-repeat: no-repeat; background-position: right center; background-size: 55%; }
     .pd-last-title { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 8px; }
-    .pd-quote { border-left: 3px solid {{ accent }}; padding: 4px 0 4px 12px; color: var(--color-neutral-300);
+    .pd-quote { border-left: 1px solid var(--c-line2); padding: 4px 0 4px 12px; color: var(--c-tx2); font-style: italic;
                 font-size: 14px; line-height: 1.55; margin-top: var(--space-3); max-width: 600px; }
     .pd-rounds { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
     .pd-rd { width: 18px; height: 22px; border-radius: 3px; position: relative; border-bottom: 3px solid transparent; }

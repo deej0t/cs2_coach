@@ -9,7 +9,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
         --bg: #12131a; --surface: #1a1b26; --border: #2a2b3a;
-        --text: #e0e0ea; --muted: #6b6e82; --accent: #9184d9;
+        --text: #e0e0ea; --muted: #6b6e82; --accent: #5DA9F2;
         --green: #4ade80; --red: #f87171; --yellow: #fbbf24;
     }
     body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; }
@@ -71,7 +71,7 @@
     .sh-sb-table { width: 100%; font-size: 12px; border-collapse: collapse; }
     .sh-sb-table th { text-align: left; padding: 6px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); border-bottom: 1px solid var(--border); }
     .sh-sb-table td { padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,0.03); }
-    .sh-sb-table tr.sh-target td { font-weight: 600; background: rgba(145,132,217,0.06); }
+    .sh-sb-table tr.sh-target td { font-weight: 600; background: rgba(93,169,242,0.06); }
     .sh-sb-table .sh-sb-name { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     /* Footer */
@@ -272,10 +272,10 @@ function copyLink() {
             labels: ['Aim', 'Positioning', 'Utility', 'Opening', 'KAST', 'Impact'],
             datasets: [{
                 data: [hs, surv, util, opening, kast, adr],
-                backgroundColor: 'rgba(145, 132, 217, 0.15)',
-                borderColor: 'rgba(145, 132, 217, 0.8)',
+                backgroundColor: 'rgba(93, 169, 242, 0.15)',
+                borderColor: 'rgba(93, 169, 242, 0.8)',
                 borderWidth: 2,
-                pointBackgroundColor: '#9184d9',
+                pointBackgroundColor: '#5DA9F2',
                 pointRadius: 3,
             }]
         },

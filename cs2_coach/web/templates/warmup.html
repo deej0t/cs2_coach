@@ -13,8 +13,8 @@
         display: flex; align-items: center; gap: var(--space-5);
         padding: var(--space-5); margin-bottom: var(--space-5);
         border-radius: var(--radius-lg);
-        background: linear-gradient(135deg, rgba(145,132,217,0.08), rgba(99,102,241,0.05));
-        border: 1px solid rgba(145,132,217,0.2);
+        background: linear-gradient(135deg, rgba(93,169,242,0.08), rgba(99,102,241,0.05));
+        border: 1px solid rgba(93,169,242,0.2);
     }
     .wu-timer-wrap { text-align: center; flex-shrink: 0; }
     .wu-timer {
@@ -41,11 +41,11 @@
         display: flex; gap: 16px; padding: var(--space-4);
         border-radius: var(--radius-md); background: var(--color-surface);
         box-shadow: var(--shadow-sm); transition: opacity 0.3s;
-        border-left: 3px solid var(--color-neutral-700);
+        border: 1px solid var(--c-line2);
     }
-    .wu-card.severity-hoch { border-left-color: #f87171; }
-    .wu-card.severity-mittel { border-left-color: #fbbf24; }
-    .wu-card.severity-standard { border-left-color: var(--color-accent); }
+    .wu-card.severity-hoch { border-color: color-mix(in srgb, var(--c-neg) 35%, transparent); }
+    .wu-card.severity-mittel { border-color: color-mix(in srgb, var(--c-undecided) 35%, transparent); }
+    .wu-card.severity-standard { border-color: color-mix(in srgb, var(--color-accent) 35%, transparent); }
     .wu-card.done { opacity: 0.4; }
     .wu-card.done .wu-check { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
 

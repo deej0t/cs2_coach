@@ -1,0 +1,106 @@
+{# Zeitstrahl des Moment-Players: Sekunden relativ zum Moment, Duell-Band, Siegchance-Knick,
+   Hot-Ticks (moment_story.py) und Abspielkopf. Erwartet km/kmSeek/kmStop/kmRange/ktTurnAt aus
+   moment_theater.html (zur Laufzeit). Farben aus static/coach.css ueber uiColor(). #}
+{% import '_partials/ui.html' as ui with context %}
+<style>
+    #kt-tl { width: 100%; height: 72px; display: block; cursor: pointer; background: var(--c-s1); }
+    .kt-tl-legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 4px 12px 6px; background: var(--c-s1);
+                    font-size: 11px; color: var(--c-tx3); border-top: 1px solid var(--c-line); }
+    .kt-tl-legend span { display: inline-flex; align-items: center; gap: 5px; }
+</style>
+<canvas id="kt-tl"></canvas>
+<div class="kt-tl-legend">
+    <span>{{ ui.event_chip('sight', '◆') }} {{ _('Kontakt') }}</span>
+    <span>{{ ui.event_chip('shot', '◆') }} {{ _('dein Schuss') }}</span>
+    <span>{{ ui.event_chip('hit', '◆') }} {{ _('Treffer') }}</span>
+    <span>{{ ui.event_chip('nade', '●') }} {{ _('Utility') }}</span>
+    <span>{{ ui.event_chip('death', '▼') }} {{ _('Tod / Kill') }}</span>
+    <span><i style="display:inline-block;width:18px;height:8px;background:var(--c-neg-a);border-bottom:1px solid var(--c-neg);"></i> {{ _('Duell-Phase') }}</span>
+    <span style="margin-left:auto;">{{ _('Klick auf eine Raute springt hin · N/P') }}</span>
+</div>
+<script>
+// ── Zeitstrahl: Sekunden relativ zum Moment, Marker je Ereignis, Abspielkopf ──
+function ktTimeline() {
+    var cv = document.getElementById('kt-tl'), w = cv.clientWidth || 800, h = cv.clientHeight || 64;
+    if (cv.width !== w) cv.width = w;
+    if (cv.height !== h) cv.height = h;
+    var c = cv.getContext('2d'), r = kmRange(), L = 30, R = w - 10;
+    var X = function (t) { return L + (t - r.start) / Math.max(r.end - r.start, 1) * (R - L); };
+    c.clearRect(0, 0, w, h);
+    c.fillStyle = uiColor('s1', '#12151c'); c.fillRect(0, 0, w, h);
+    c.fillStyle = 'rgba(255,255,255,0.06)'; c.fillRect(L, 32, R - L, 30);
+    c.fillStyle = 'rgba(251,191,36,0.22)'; c.fillRect(L, 32, X(km.tick) - L, 30);
+    c.font = '10px ui-monospace, monospace'; c.fillStyle = uiColor('tx3', '#6b7280'); c.textAlign = 'center'; c.textBaseline = 'top';
+    for (var s = Math.ceil((r.start - r.focus) / 64); s <= (r.end - r.focus) / 64; s++) {
+        var x = X(r.focus + s * 64);
+        c.fillRect(x, 14, 1, s === 0 ? 48 : 4);
+        c.fillText((s > 0 ? '+' : '') + s + 's', x, 3);
+    }
+    km.events.forEach(function (e) {
+        var k = KT_KIND[e.kind] || KT_KIND.info, x = X(e.tick);
+        var row = { kill: 0, death: 0, frag: 0, sight: 1, enemy: 1, shot: 2, hit: 2, miss: 2, bad: 3, info: 3 }[e.kind] || 3;
+        c.fillStyle = k[1];
+        if (e.kind === 'kill' || e.kind === 'death' || e.kind === 'frag') { c.fillRect(x - 1, 32, 3, 30); }
+        else { c.beginPath(); c.arc(x, 37 + row * 7, 3, 0, 7); c.fill(); }
+    });
+    // Duell-Phase (erster Sichtkontakt bis Tod/Kill) als Band hinter der Spur
+    if (km.duel) {
+        c.fillStyle = 'rgba(248,113,113,0.10)'; c.fillRect(X(km.duel[0]), 32, Math.max(X(km.duel[1]) - X(km.duel[0]), 2), 30);
+        c.fillStyle = 'rgba(248,113,113,0.45)'; c.fillRect(X(km.duel[0]), 61, Math.max(X(km.duel[1]) - X(km.duel[0]), 2), 1);
+    }
+    // Siegchance-Knick am Moment (frisch aus /kontext)
+    if (km.knick && km.knick.tick != null) {
+        var kx = X(km.knick.tick), up = km.knick.delta > 0;
+        c.strokeStyle = up ? uiColor('pos', '#4ade80') : uiColor('neg', '#f87171'); c.lineWidth = 2; c.beginPath();
+        c.moveTo(L, up ? 58 : 36); c.lineTo(kx, up ? 58 : 36); c.lineTo(kx + 10, up ? 36 : 58); c.lineTo(R, up ? 36 : 58); c.stroke();
+    }
+    // Hot-Ticks ueber der Spur: Form je Typ, Groesse je Rang, aktueller weiss umrandet (Klick, N/P)
+    var cur = ktTurnAt(km.tick);
+    km.turns.forEach(function (t) {
+        var x = X(t.tick), sz = (t.rank || 1) * 1.5 + 2.5 + (t === cur ? 2 : 0), y = 23;
+        c.fillStyle = (t.tone === 'util' ? uiColor('util', '#c084fc') : KM_TONE[t.tone]) || uiColor('tx', '#e5e7eb');
+        c.beginPath();
+        if (t.type === 'death' || t.type === 'kill') { c.moveTo(x - sz, y - sz); c.lineTo(x + sz, y - sz); c.lineTo(x, y + sz); }
+        else if (/nade/.test(t.type || '')) c.arc(x, y, sz * 0.8, 0, 7);
+        else { c.moveTo(x, y - sz); c.lineTo(x + sz, y); c.lineTo(x, y + sz); c.lineTo(x - sz, y); }
+        c.closePath(); c.fill();
+        if (t === cur) { c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.stroke(); }
+    });
+    var px = X(km.tick);
+    c.fillStyle = uiColor('focus', '#fbbf24'); c.fillRect(px - 1, 30, 2, h - 30);
+}
+(function () {
+    var cv = document.getElementById('kt-tl'), drag = false;
+    function near(e) {
+        // Wendepunkt unter dem Mauszeiger (8 px Toleranz)
+        var b = cv.getBoundingClientRect(), r = kmRange(), best = null, bd = 9;
+        km.turns.forEach(function (t) {
+            var x = 30 + (t.tick - r.start) / Math.max(r.end - r.start, 1) * (b.width - 40);
+            var d = Math.abs(e.clientX - b.left - x);
+            if (d < bd) { bd = d; best = t; }
+        });
+        return best;
+    }
+    function at(e) {
+        if (!km.data) return;
+        var b = cv.getBoundingClientRect(), r = kmRange();
+        var f = (e.clientX - b.left - 30) / (b.width - 40);
+        kmSeek(r.start + Math.max(0, Math.min(1, f)) * (r.end - r.start));
+    }
+    cv.addEventListener('mousedown', function (e) {
+        if (!km.data) return;
+        kmStop();
+        var t = near(e);
+        if (t) { kmSeek(t.tick); return; }
+        drag = true; at(e);
+    });
+    cv.addEventListener('mousemove', function (e) {
+        if (!km.data || drag) return;
+        var t = near(e);
+        cv.title = t ? t.label : '';
+        cv.style.cursor = t ? 'pointer' : 'col-resize';
+    });
+    window.addEventListener('mousemove', function (e) { if (drag) at(e); });
+    window.addEventListener('mouseup', function () { drag = false; });
+})();
+</script>

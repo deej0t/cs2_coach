@@ -72,8 +72,8 @@
 
     .cl-insight {
         padding: var(--space-4); border-radius: var(--radius-md);
-        border-left: 3px solid var(--color-accent);
-        background: rgba(145,132,217,0.04); font-size: 13px;
+        border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+        background: rgba(93,169,242,0.04); font-size: 13px;
         color: var(--color-neutral-300); margin-bottom: var(--space-5);
     }
     .cl-insight strong { color: var(--color-text); }
@@ -193,7 +193,7 @@
         <span style="color:#4ade80;">{{ _('Beste Clutch-Matches') }}</span>
     </div>
     {% for m in cl.best_matches %}
-    <div class="cl-highlight" style="border-left:3px solid #4ade80;">
+    <div class="cl-highlight" style="border: 1px solid color-mix(in srgb, var(--c-pos) 35%, transparent);">
         <div>
             <strong>{{ m.map }}</strong> {{ m.score }}
             <span style="color:var(--color-neutral-500);margin-left:6px;font-size:11px;">{{ m.date }}</span>

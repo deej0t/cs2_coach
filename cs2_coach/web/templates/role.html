@@ -14,7 +14,7 @@
         padding: var(--space-5); margin-bottom: var(--space-5);
         border-radius: var(--radius-lg); box-shadow: var(--shadow-md);
         background: var(--color-surface);
-        border-left: 5px solid var(--color-accent);
+        border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
     }
     .rl-primary-icon {
         width: 72px; height: 72px; border-radius: 50%; flex-shrink: 0;
@@ -63,12 +63,12 @@
     }
     .rl-fit-positive { background: rgba(74,222,128,0.08); color: #4ade80; border: 1px solid rgba(74,222,128,0.15); }
     .rl-fit-warning { background: rgba(248,113,113,0.08); color: #f87171; border: 1px solid rgba(248,113,113,0.15); }
-    .rl-fit-info { background: rgba(145,132,217,0.08); color: #9184d9; border: 1px solid rgba(145,132,217,0.15); }
+    .rl-fit-info { background: rgba(93,169,242,0.08); color: #5DA9F2; border: 1px solid rgba(93,169,242,0.15); }
 
     .rl-train {
         padding: var(--space-5); border-radius: var(--radius-md);
         background: var(--color-surface); box-shadow: var(--shadow-sm);
-        border-left: 4px solid var(--color-accent); margin-bottom: var(--space-5);
+        border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent); margin-bottom: var(--space-5);
     }
     .rl-train h4 { margin: 0 0 8px; font-size: 15px; }
     .rl-train p { margin: 0; font-size: 13px; color: var(--color-neutral-400); line-height: 1.5; }
@@ -82,7 +82,7 @@
 
 {% set meta = r.roles[r.primary_role] %}
 <!-- Primary role hero -->
-<div class="rl-primary" style="border-left-color: {{ meta.color }};">
+<div class="rl-primary" style="border-color: color-mix(in srgb, {{ meta.color }} 35%, transparent);">
     <div class="rl-primary-icon" style="background: {{ meta.color }}20;">
         <i data-lucide="{{ meta.icon }}" style="width:36px;height:36px;color:{{ meta.color }};"></i>
     </div>
@@ -187,7 +187,7 @@
 
 <!-- Training recommendation -->
 <h3 style="margin-top: var(--space-5);">{{ _('Trainingsempfehlung fuer') }} {{ r.primary_role }}</h3>
-<div class="rl-train" style="border-left-color: {{ meta.color }};">
+<div class="rl-train" style="border-color: color-mix(in srgb, {{ meta.color }} 35%, transparent);">
     <h4 style="color: {{ meta.color }};">{{ _('Staerken') }}: {{ meta.strengths }}</h4>
     <p>{{ _('Trainiere') }}: {{ meta.train }}</p>
 </div>

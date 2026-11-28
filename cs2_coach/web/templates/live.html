@@ -49,7 +49,7 @@
     <div style="font-size: 11px; color: var(--color-neutral-500); margin-top: var(--space-3);">Aus deinen eigenen Würfen in den Demos - die häufigsten, nicht nachweislich die besten. Die Warnung im Match nennt die passende.</div>
 </div>
 {% if summary.goal %}
-<div class="card elev-sm" style="margin-bottom: var(--space-4); border-left: 3px solid var(--color-green);">
+<div class="card elev-sm" style="margin-bottom: var(--space-4); border: 1px solid color-mix(in srgb, var(--color-green) 35%, transparent);">
     <span class="card-kicker">Heute darauf achten (aus deinem Training)</span>
     <div style="font-size: 18px; font-weight: 700; margin-top: var(--space-2);">{{ summary.goal.label }}</div>
     <div style="font-size: 13px; color: var(--color-neutral-500);">Im Training zuletzt {{ summary.goal.before_k }} von {{ summary.goal.before_n }} Duellen ({{ summary.goal.pct }} %). Live nicht messbar - kommt nach dem Match aus der Demo.</div>

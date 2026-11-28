@@ -35,7 +35,7 @@
 {% set lean_costs = g.rows|selectattr('vs_lost')|selectattr('vs_lost.verdict', 'equalto', 'undecided')|selectattr('vs_lost.ci_low', 'gt', 0)|list %}
 
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--space-4);margin-bottom:var(--space-5);">
-    <div class="card elev-sm" style="border-left:3px solid {{ '#f87171' if worse else 'var(--color-neutral-600)' }};">
+    <div class="card elev-sm" style="border: 1px solid color-mix(in srgb, {{ 'var(--c-neg)' if worse else 'var(--c-line2)' }} 35%, transparent);">
         <span class="card-kicker">{{ _('Schlechter als die Lobby') }}</span>
         {% for r in worse %}
         <div style="margin-top:6px;"><b>{{ r.title }}</b>: {{ r.me }}{{ r.unit }} {{ _('gegen') }} {{ r.lobby }}{{ r.unit }}
@@ -46,7 +46,7 @@
             <span style="font-size:11px;color:var(--color-neutral-500);">(d={{ r.vs_lobby.effect }} [{{ r.vs_lobby.ci_low }} … {{ r.vs_lobby.ci_high }}])</span></div>
         {% endfor %}
     </div>
-    <div class="card elev-sm" style="border-left:3px solid {{ 'var(--color-green)' if better else 'var(--color-neutral-600)' }};">
+    <div class="card elev-sm" style="border: 1px solid color-mix(in srgb, {{ 'var(--color-green)' if better else 'var(--c-line2)' }} 35%, transparent);">
         <span class="card-kicker">{{ _('Besser als die Lobby') }}</span>
         {% for r in better %}
         <div style="margin-top:6px;"><b>{{ r.title }}</b>: {{ r.me }}{{ r.unit }} {{ _('gegen') }} {{ r.lobby }}{{ r.unit }}
@@ -57,7 +57,7 @@
             <span style="font-size:11px;color:var(--color-neutral-500);">(d={{ r.vs_lobby.effect }} [{{ r.vs_lobby.ci_low }} … {{ r.vs_lobby.ci_high }}])</span></div>
         {% endfor %}
     </div>
-    <div class="card elev-sm" style="border-left:3px solid {{ 'var(--color-yellow)' if costs else 'var(--color-neutral-600)' }};">
+    <div class="card elev-sm" style="border: 1px solid color-mix(in srgb, {{ 'var(--c-undecided)' if costs else 'var(--c-line2)' }} 35%, transparent);">
         <span class="card-kicker">{{ _('Hängt mit verlorenen Duellen zusammen') }}</span>
         {% for r in costs %}
         <div style="margin-top:6px;"><b>{{ r.title }}</b>: {{ _('gewonnen') }} {{ r.won }}{{ r.unit }}, {{ _('verloren') }} {{ r.lost }}{{ r.unit }}</div>

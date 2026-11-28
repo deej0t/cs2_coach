@@ -17,9 +17,9 @@
         font-family: var(--font-body); transition: all 0.15s;
     }
     .dg-tab:hover { border-color: var(--color-neutral-600); color: var(--color-text); }
-    .dg-tab.active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(145,132,217,0.1); }
+    .dg-tab.active { border-color: var(--color-accent); color: var(--color-accent); background: rgba(93,169,242,0.1); }
 
-    .dg-card { padding: var(--space-4) !important; margin-bottom: var(--space-4); border-left: 3px solid var(--color-neutral-700); }
+    .dg-card { padding: var(--space-4) !important; margin-bottom: var(--space-4); border: 1px solid var(--c-line2); }
     .dg-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
     .dg-card-title { font-size: 16px; font-weight: 600; }
     .dg-card-badge { font-size: 11px; padding: 3px 10px; border-radius: 10px; font-weight: 600; }
@@ -100,7 +100,7 @@
 <!-- ── Monthly Digests ── -->
 <div id="tab-monthly">
 {% for p in digest.periods %}
-<div class="card elev-sm dg-card" style="border-left-color: {% if p.win_rate >= 55 %}#4ade80{% elif p.win_rate >= 45 %}#fbbf24{% else %}#f87171{% endif %};">
+<div class="card elev-sm dg-card" style="border-color: color-mix(in srgb, {% if p.win_rate >= 55 %}var(--c-pos){% elif p.win_rate >= 45 %}var(--c-undecided){% else %}var(--c-neg){% endif %} 35%, transparent);">
     <div class="dg-card-head">
         <div>
             <div class="dg-card-title">{{ p.label }}</div>
@@ -200,7 +200,7 @@
 <!-- ── Weekly Digests ── -->
 <div id="tab-weekly" style="display:none;">
 {% for p in digest.weekly %}
-<div class="card elev-sm dg-card" style="border-left-color: {% if p.win_rate >= 55 %}#4ade80{% elif p.win_rate >= 45 %}#fbbf24{% else %}#f87171{% endif %};">
+<div class="card elev-sm dg-card" style="border-color: color-mix(in srgb, {% if p.win_rate >= 55 %}var(--c-pos){% elif p.win_rate >= 45 %}var(--c-undecided){% else %}var(--c-neg){% endif %} 35%, transparent);">
     <div class="dg-card-head">
         <div>
             <div class="dg-card-title">{{ p.label }}</div>

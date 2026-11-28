@@ -58,7 +58,7 @@
     .sc-log-info { color: var(--color-neutral-400); }
 
     .sc-result {
-        padding: var(--space-4) !important; border-left: 3px solid #4ade80;
+        padding: var(--space-4) !important; border: 1px solid color-mix(in srgb, var(--c-pos) 35%, transparent);
     }
     .sc-result-grid {
         display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -70,7 +70,7 @@
 
     .sc-info {
         padding: var(--space-4) !important; margin-bottom: var(--space-5);
-        border-left: 3px solid var(--color-accent);
+        border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
     }
     .sc-info h4 { margin: 0 0 8px; font-size: 14px; }
     .sc-info p { margin: 0 0 4px; font-size: 12px; color: var(--color-neutral-400); }
@@ -109,7 +109,7 @@
 </div>
 
 <!-- Tipp: Demos herunterladen -->
-<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-4); border-left: 3px solid var(--color-accent);">
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-4); border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
         <i data-lucide="lightbulb" style="width:16px;height:16px;color:var(--color-accent);"></i>
         <span style="font-size:14px;font-weight:600;">Empfohlen: Demo-Ordner + Folder-Watch</span>
@@ -138,7 +138,7 @@
 
 <!-- Auto-Sync Section -->
 {% set has_sync_config = config.get('steam_api_key') and config.get('cs2_auth_token') and config.get('steam_id') %}
-<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5); border-left: 3px solid {% if has_sync_config %}#4ade80{% else %}var(--color-neutral-700){% endif %};">
+<div class="card elev-sm" style="padding: var(--space-4); margin-bottom: var(--space-5); border: 1px solid color-mix(in srgb, {% if has_sync_config %}var(--c-pos){% else %}var(--c-line2){% endif %} 35%, transparent);">
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
         <i data-lucide="refresh-cw" style="width:18px;height:18px;color:{% if has_sync_config %}#4ade80{% else %}var(--color-neutral-500){% endif %};"></i>
         <div style="font-size: 15px; font-weight: 600;">Auto-Sync</div>
@@ -181,7 +181,7 @@
 </div>
 
 <!-- Steam Login Status Bar -->
-<div class="card elev-sm" style="padding: 12px var(--space-4); margin-bottom: var(--space-5); border-left: 3px solid var(--color-neutral-700);" id="steam-login-section">
+<div class="card elev-sm" style="padding: 12px var(--space-4); margin-bottom: var(--space-5); border: 1px solid var(--c-line2);" id="steam-login-section">
     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
         <i data-lucide="download" style="width:16px;height:16px;color:var(--color-accent);flex-shrink:0;"></i>
         <span style="font-size: 13px; font-weight: 600;">Demo-Download</span>

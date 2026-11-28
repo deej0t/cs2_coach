@@ -1,0 +1,67 @@
+{#- Shared UI building blocks (Designsystem v1). Import with
+      {% import '_partials/ui.html' as ui with context %}
+    verdict() is the ONLY place that maps evidence.py verdicts to badge + colour.
+    It shows what evidence.py decided and computes nothing itself. -#}
+
+{% macro verdict(v, matches_needed=None, negative_label=None) -%}
+{%- if v == 'solid_positive' -%}
+<span class="badge badge--pos">{{ _('belastbar') }}</span>
+{%- elif v == 'solid_negative' -%}
+<span class="badge badge--neg">{{ negative_label or _('belastbar negativ') }}</span>
+{%- elif v == 'solid_negligible' -%}
+<span class="badge badge--negligible">{{ _('belegt irrelevant') }}</span>
+{%- else -%}
+<span class="badge badge--undecided" title="{{ _('Der Bereich schliesst sowohl bedeutsame als auch vernachlaessigbare Werte ein.') }}">{{ _('unentschieden') }}</span>
+{%- if matches_needed %}<div style="font-size:10px;color:var(--c-tx3);margin-top:2px;">{{ _('ab ca.') }} {{ matches_needed }} {{ _('Matches') }}</div>{% endif -%}
+{%- endif -%}
+{%- endmacro %}
+
+{#- Effect with 95 % CI as a small forest bar; scale = |effect| that reaches the edge. -#}
+{% macro ci_bar(effect, lo, hi, v, scale=1.5) -%}
+{%- set cls = 'pos' if v == 'solid_positive' else ('neg' if v == 'solid_negative' else 'undecided') -%}
+{%- set f = 50 / scale -%}
+{%- set l = [0, [100, 50 + (lo|float) * f]|min]|max -%}
+{%- set r = [0, [100, 50 + (hi|float) * f]|min]|max -%}
+{%- set p = [0, [100, 50 + (effect|float) * f]|min]|max -%}
+<span class="ci-bar {{ cls }}" title="{{ effect }} [{{ lo }} … {{ hi }}]"><span class="ci" style="left:{{ l }}%;width:{{ [r - l, 1]|max }}%"></span><span class="pt" style="left:{{ p }}%"></span></span>
+{%- endmacro %}
+
+{% macro badge(text, tone=None, title=None) -%}
+<span class="badge{% if tone %} badge--{{ tone }}{% endif %}"{% if title %} title="{{ title }}"{% endif %}>{{ text }}</span>
+{%- endmacro %}
+
+{#- kind: loading | empty | weak (not solid) | error -#}
+{% macro state(kind, text) -%}
+<div class="state state--{{ kind }}" role="{{ 'alert' if kind == 'error' else 'status' }}">{{ text }}</div>
+{%- endmacro %}
+
+{#- Side from player_death.team_num (2 = T, 3 = CT) or 'T'/'CT'. -#}
+{% macro side(s) -%}
+{%- set k = 't' if s in (2, '2', 'T', 't') else 'ct' -%}
+<span class="side side--{{ k }}">{{ k|upper }}</span>
+{%- endmacro %}
+
+{#- One focus card per page: {% call ui.focus_card(_('Fokus'), title) %}body{% endcall %} -#}
+{% macro focus_card(kicker, title=None, focus=True) -%}
+<div class="focus-card{% if focus %} is-focus{% endif %}">
+    <div class="fc-kicker">{{ kicker }}</div>
+    {% if title %}<div class="fc-title">{{ title }}</div>{% endif %}
+    {{ caller() if caller else '' }}
+</div>
+{%- endmacro %}
+
+{#- Forest row: label · values · CI bar · effect · verdict (relevance_table, levers). -#}
+{% macro effect_row(label, values, effect, lo, hi, v, matches_needed=None, note=None) -%}
+<tr>
+    <td>{{ label }}{% if note %} {{ note }}{% endif %}</td>
+    <td style="color:var(--c-tx2);white-space:nowrap;">{{ values }}</td>
+    <td style="white-space:nowrap;">{{ ci_bar(effect, lo, hi, v) }}
+        <span class="mono" style="font-size:12px;color:var(--c-tx2);margin-left:6px;">{{ effect }} <span style="color:var(--c-tx3);">[{{ lo }} … {{ hi }}]</span></span></td>
+    <td style="text-align:right;white-space:nowrap;">{{ verdict(v, matches_needed) }}</td>
+</tr>
+{%- endmacro %}
+
+{#- Same mark in event list, timeline legend and 3D: kill|death|trade|smoke|flash|molly|nade|sight|info|bomb|me|shot|hit|miss -#}
+{% macro event_chip(kind, text=None) -%}
+<span class="chip-ev chip-ev--{{ kind }}">{{ text or kind|upper }}</span>
+{%- endmacro %}

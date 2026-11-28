@@ -22,14 +22,14 @@
     .pr-routine-time { font-size: 11px; font-weight: 600; color: var(--color-accent); margin-left: 6px; }
     .pr-routine-title { font-size: 13px; font-weight: 600; margin-top: 6px; }
     .pr-routine-desc { font-size: 11px; color: var(--color-neutral-500); margin-top: 2px; line-height: 1.4; }
-    .pr-routine-cmd { font-family: var(--font-mono, monospace); font-size: 10px; color: var(--color-accent); margin-top: 4px; background: rgba(145,132,217,0.06); padding: 2px 6px; border-radius: 3px; display: inline-block; cursor: pointer; }
-    .pr-routine-cmd:hover { background: rgba(145,132,217,0.12); }
+    .pr-routine-cmd { font-family: var(--font-mono, monospace); font-size: 10px; color: var(--color-accent); margin-top: 4px; background: rgba(93,169,242,0.06); padding: 2px 6px; border-radius: 3px; display: inline-block; cursor: pointer; }
+    .pr-routine-cmd:hover { background: rgba(93,169,242,0.12); }
 
     .pr-recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: var(--space-3); margin-bottom: var(--space-5); }
-    .pr-rec { padding: var(--space-3); background: var(--color-surface); border-radius: var(--radius-md); border-left: 3px solid var(--color-accent); }
-    .pr-rec.high { border-left-color: #f87171; }
-    .pr-rec.medium { border-left-color: #fbbf24; }
-    .pr-rec.low { border-left-color: var(--color-neutral-600); }
+    .pr-rec { padding: var(--space-3); background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent); }
+    .pr-rec.high { border-color: color-mix(in srgb, var(--c-neg) 35%, transparent); }
+    .pr-rec.medium { border-color: color-mix(in srgb, var(--c-undecided) 35%, transparent); }
+    .pr-rec.low { border-color: var(--c-line2); }
     .pr-rec-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .pr-rec-title { font-size: 13px; font-weight: 600; }
     .pr-rec-badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; padding: 1px 6px; border-radius: 8px; }
@@ -37,7 +37,7 @@
     .pr-rec-badge.medium { background: rgba(251,191,36,0.12); color: #fbbf24; }
     .pr-rec-badge.low { background: rgba(255,255,255,0.06); color: var(--color-neutral-500); }
     .pr-rec-desc { font-size: 11px; color: var(--color-neutral-400); line-height: 1.5; margin-bottom: 6px; }
-    .pr-rec-cmd { font-family: var(--font-mono, monospace); font-size: 10px; color: var(--color-accent); background: rgba(145,132,217,0.06); padding: 2px 6px; border-radius: 3px; cursor: pointer; }
+    .pr-rec-cmd { font-family: var(--font-mono, monospace); font-size: 10px; color: var(--color-accent); background: rgba(93,169,242,0.06); padding: 2px 6px; border-radius: 3px; cursor: pointer; }
 
     /* ── Mode tabs ── */
     .pr-mode-tabs { display: flex; gap: 2px; margin-bottom: var(--space-3); background: var(--color-bg); border-radius: var(--radius-sm); padding: 2px; overflow-x: auto; }
@@ -72,14 +72,14 @@
     .pr-spot-bar-inner { height: 100%; border-radius: 2px; background: #f87171; }
 
     .pr-pill-list { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: var(--space-2); }
-    .pr-wpn-pill { padding: 2px 8px; border-radius: 10px; font-size: 10px; background: rgba(145,132,217,0.1); color: var(--color-accent); border: 1px solid rgba(145,132,217,0.2); }
+    .pr-wpn-pill { padding: 2px 8px; border-radius: 10px; font-size: 10px; background: rgba(93,169,242,0.1); color: var(--color-accent); border: 1px solid rgba(93,169,242,0.2); }
     .pr-enemy-pill { padding: 2px 8px; border-radius: 10px; font-size: 10px; background: rgba(248,113,113,0.08); color: #f87171; border: 1px solid rgba(248,113,113,0.2); }
 
     .pr-cfg-preview { background: var(--color-bg); border: 1px solid var(--color-divider); border-radius: var(--radius-sm); padding: 12px; font-family: var(--font-mono, 'JetBrains Mono', monospace); font-size: 11px; line-height: 1.6; max-height: 350px; overflow-y: auto; white-space: pre; color: var(--color-neutral-400); }
 
     .pr-connect-box { margin-bottom: var(--space-5); padding: var(--space-4); background: var(--color-surface); border-radius: var(--radius-md); border: 1px solid var(--color-divider); }
     .pr-connect-cmd { font-family: var(--font-mono, monospace); font-size: 14px; padding: 8px 14px; background: var(--color-bg); border-radius: var(--radius-sm); color: var(--color-accent); cursor: pointer; display: inline-block; }
-    .pr-connect-cmd:hover { background: rgba(145,132,217,0.1); }
+    .pr-connect-cmd:hover { background: rgba(93,169,242,0.1); }
 
     .win { color: #4ade80; }
     .loss { color: #f87171; }
@@ -187,7 +187,7 @@
 <!-- AI result (replaces static after API call) -->
 <div id="ai-plan" style="display:none;">
     <!-- Analysis -->
-    <div id="ai-analysis" class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-4);border-left:3px solid var(--color-accent);">
+    <div id="ai-analysis" class="card elev-sm" style="padding:var(--space-4);margin-bottom:var(--space-4);border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);">
         <div style="font-size:12px;font-weight:600;margin-bottom:6px;">
             <i data-lucide="brain" style="width:13px;height:13px;vertical-align:middle;"></i> KI-Analyse
         </div>

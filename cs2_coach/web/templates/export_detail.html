@@ -19,11 +19,11 @@
     .ed-tl-row {
         display: grid; grid-template-columns: 42px 28px 1fr 50px; gap: 8px; align-items: center;
         padding: 4px 10px; border-radius: var(--radius-sm); font-size: 12px;
-        background: var(--color-surface); border-left: 2px solid transparent;
+        background: var(--color-surface); box-shadow: inset 0 -2px 0 transparent;
     }
-    .ed-tl-won { border-left-color: #4ade80; }
-    .ed-tl-lost { border-left-color: #f87171; }
-    .ed-tl-early { background: color-mix(in srgb, #f87171 6%, var(--color-surface)); }
+    .ed-tl-won { box-shadow: inset 0 -2px 0 var(--c-pos); }
+    .ed-tl-lost { box-shadow: inset 0 -2px 0 var(--c-neg); }
+    .ed-tl-early { background: color-mix(in srgb, var(--c-neg) 6%, var(--color-surface)); }
     .ed-tl-round { font-weight: 600; font-size: 11px; color: var(--color-neutral-400); }
     .ed-tl-side { font-size: 10px; font-weight: 600; letter-spacing: 0.05em; }
     .ed-tl-ct { color: #7eaadb; }
@@ -60,7 +60,7 @@
     .ed-rp-title { font-size: 13px; font-weight: 600; flex: 1; }
     .ed-rp-badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 3px; letter-spacing: 0.04em; text-transform: uppercase; }
     .ed-b-strong { background: rgba(74,222,128,0.12); color: #4ade80; }
-    .ed-b-ok { background: rgba(145,132,217,0.12); color: #9184d9; }
+    .ed-b-ok { background: rgba(93,169,242,0.12); color: #5DA9F2; }
     .ed-b-weak { background: rgba(248,113,113,0.12); color: #f87171; }
     .ed-b-info { background: rgba(251,191,36,0.12); color: #fbbf24; }
     .ed-rp-body {
@@ -75,8 +75,8 @@
     .ed-rp-body strong { color: var(--color-text); }
     .ed-rp-tip {
         display: block; margin: 8px 0; padding: 8px 12px;
-        background: rgba(145,132,217,0.06); border-left: 3px solid var(--color-accent);
-        border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 12px;
+        background: var(--c-info-a); border: 1px solid color-mix(in srgb, var(--c-info) 35%, transparent);
+        border-radius: var(--radius-md); font-size: 12px;
     }
     .ed-rp-verdict {
         padding: 16px; margin-top: var(--space-3); border-radius: var(--radius-md);
@@ -112,7 +112,7 @@
     .rh-bar { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: var(--space-3); }
     .rh-pill { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px; letter-spacing: 0.03em; }
     .rh-hero { background: rgba(74,222,128,0.15); color: #4ade80; }
-    .rh-impact { background: rgba(145,132,217,0.15); color: #9184d9; }
+    .rh-impact { background: rgba(93,169,242,0.15); color: #5DA9F2; }
     .rh-clutch { background: rgba(251,191,36,0.15); color: #fbbf24; }
     .rh-throw { background: rgba(248,113,113,0.15); color: #f87171; }
     .rh-invisible { background: rgba(248,113,113,0.10); color: #f8717199; }
@@ -139,7 +139,7 @@
     @keyframes rn-fade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
     .rn-header { display: flex; align-items: center; gap: 10px; margin-bottom: var(--space-3); }
     .rn-round-tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
-        background: rgba(145,132,217,0.15); color: var(--color-accent); }
+        background: rgba(93,169,242,0.15); color: var(--color-accent); }
     .rn-title { font-size: 14px; font-weight: 600; color: var(--color-text); flex: 1; }
     .rn-close { background: none; border: none; color: var(--color-neutral-500); cursor: pointer; font-size: 16px; padding: 2px 6px; }
     .rn-close:hover { color: var(--color-text); }
@@ -232,7 +232,7 @@
 <!-- Match Narration Panel -->
 <div id="mn-panel" class="rn-panel" style="margin-bottom:var(--space-5);">
     <div class="rn-header">
-        <span class="rn-round-tag" style="background:rgba(145,132,217,0.2);">
+        <span class="rn-round-tag" style="background:rgba(93,169,242,0.2);">
             <i data-lucide="sparkles" style="width:12px;height:12px;vertical-align:middle;"></i> Match
         </span>
         <span class="rn-title">{{ _('KI Match-Analyse') }} — {{ data.match.map }} {{ data.match.score_own }}:{{ data.match.score_enemy }}</span>
@@ -396,7 +396,7 @@
 {% if analysis and analysis.death_summary and analysis.death_summary.total > 0 %}
 {% set ds = analysis.death_summary %}
 {% set cats = ds.categories %}
-{% set cat_colors = {"Positioning": "#f87171", "Timing": "#fbbf24", "Aim": "#9184d9", "Utility": "#4ade80", "Numbers": "#7eaadb"} %}
+{% set cat_colors = {"Positioning": "#f87171", "Timing": "#fbbf24", "Aim": "#5DA9F2", "Utility": "#4ade80", "Numbers": "#7eaadb"} %}
 <div class="grid-2" style="margin-bottom:var(--space-5);">
     <div class="card elev-sm" style="padding:var(--space-4);">
         <div class="card-kicker" style="margin-bottom:12px;">
@@ -436,7 +436,7 @@
             </div>
         </div>
         {% if ds.worst %}
-        <div style="margin-top:12px;padding:8px 12px;background:rgba(248,113,113,0.06);border-left:3px solid {{ cat_colors.get(ds.worst, '#f87171') }};border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;color:var(--color-neutral-300);">
+        <div class="callout callout--neg" style="margin-top:12px;">
             <strong style="color:var(--color-text);">{{ _('Hauptproblem') }}: {{ ds.worst }}</strong> —
             {% if ds.worst == "Positioning" %}{{ _('Du stirbst zu oft ohne Impact. Arbeite an deinen Positionen und Trade-Moeglichkeiten.') }}
             {% elif ds.worst == "Timing" %}{{ _('Du peekst zu frueh oder zu aggressiv. Warte auf Utility-Support.') }}
@@ -459,8 +459,8 @@
                 <div style="font-family:var(--font-heading);font-size:24px;font-weight:700;color:#4ade80;">{{ hs.hero }}</div>
                 <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;letter-spacing:0.08em;">Hero (3K+)</div>
             </div>
-            <div style="text-align:center;padding:12px;background:rgba(145,132,217,0.06);border-radius:var(--radius-sm);">
-                <div style="font-family:var(--font-heading);font-size:24px;font-weight:700;color:#9184d9;">{{ hs.impact }}</div>
+            <div style="text-align:center;padding:12px;background:rgba(93,169,242,0.06);border-radius:var(--radius-sm);">
+                <div style="font-family:var(--font-heading);font-size:24px;font-weight:700;color:#5DA9F2;">{{ hs.impact }}</div>
                 <div style="font-size:10px;color:var(--color-neutral-500);text-transform:uppercase;letter-spacing:0.08em;">Impact</div>
             </div>
             <div style="text-align:center;padding:12px;background:rgba(248,113,113,0.06);border-radius:var(--radius-sm);">
@@ -475,14 +475,14 @@
         {% set impact_pct = ((hs.hero + hs.impact + hs.clutch) / hs.total_rounds * 100)|round(1) if hs.total_rounds > 0 else 0 %}
         {% set negative_pct = ((hs.throw + hs.invisible) / hs.total_rounds * 100)|round(1) if hs.total_rounds > 0 else 0 %}
         <div style="font-size:12px;color:var(--color-neutral-400);margin-bottom:8px;">
-            <strong style="color:#4ade80;">{{ impact_pct }}%</strong> {{ _('Impact-Runden') }} · <strong style="color:#f87171;">{{ negative_pct }}%</strong> {{ _('Negativ-Runden') }} · {{ hs.total_rounds }} {{ _('Runden gesamt') }}
+            <strong style="color:var(--c-pos);">{{ impact_pct }}%</strong> {{ _('Impact-Runden') }} · <strong style="color:var(--c-neg);">{{ negative_pct }}%</strong> {{ _('Negativ-Runden') }} · {{ hs.total_rounds }} {{ _('Runden gesamt') }}
         </div>
         {% if negative_pct > 30 %}
-        <div style="padding:8px 12px;background:rgba(248,113,113,0.06);border-left:3px solid #f87171;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;color:var(--color-neutral-300);">
+        <div class="callout callout--neg">
             <strong style="color:var(--color-text);">{{ _('Zu viele Negativ-Runden.') }}</strong> {{ _('Fokus auf Trade-Positionen und weniger Solo-Peeks.') }}
         </div>
         {% elif impact_pct > 35 %}
-        <div style="padding:8px 12px;background:rgba(74,222,128,0.06);border-left:3px solid #4ade80;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;color:var(--color-neutral-300);">
+        <div class="callout callout--pos">
             <strong style="color:var(--color-text);">{{ _('Starke Impact-Rate!') }}</strong> {{ _('Du hattest in vielen Runden entscheidenden Einfluss.') }}
         </div>
         {% endif %}
@@ -631,8 +631,8 @@
 
 <!-- ══════ Coach Report (rendered) ══════ -->
 {% if ai_report %}
-<div class="card elev-sm" style="margin-bottom: var(--space-4); border-left: 3px solid #9184d9;">
-    <span class="card-kicker">Nachbesprechung (KI, aus deinen Messwerten)</span>
+<div class="focus-card is-focus" style="margin-bottom: var(--space-4);">
+    <span class="fc-kicker">{{ _('Nachbesprechung (KI, aus deinen Messwerten)') }}</span>
     {% for para in ai_report.split('\n\n') %}<p style="margin: var(--space-2) 0 0; line-height: 1.55;">{{ para }}</p>{% endfor %}
 </div>
 {% endif %}
