@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import '_partials/ui.html' as ui with context %}
 {% block title %}CS2 Coach — Lineups{% endblock %}
 
 {% block content %}
@@ -15,17 +16,20 @@
     {% endfor %}
 </div>
 
-{% set colors = {'smoke': '#cbd5e1', 'flash': '#fbbf24', 'he': '#f87171', 'molotov': '#fb923c'} %}
+{# Violett = Utility (Designsystem); der Typ steckt in der Landeform, nicht in der Farbe #}
+{% set glyph = {'smoke': '●', 'flash': '✦', 'he': '◆', 'molotov': '▲'} %}
 <div style="display:flex; gap: var(--space-5); flex-wrap: wrap; align-items: flex-start;">
-    <svg viewBox="0 0 1024 1024" style="width: min(100%, 720px); background: #0b0d12; border-radius: 8px;">
+    <svg viewBox="0 0 1024 1024" style="width: min(100%, 720px); background: var(--c-bg); border-radius: 8px;">
         <image href="{{ url_for('static', filename='radars/' ~ short ~ '.png') }}" width="1024" height="1024"/>
         {% for l in lines %}
         <g opacity="{{ 1 if l.own else 0.55 }}">
             <title>{{ l.label }} · {{ l.title }}{% if l.style %} · {{ l.style }}{% endif %}</title>
-            <line x1="{{ l.x1 }}" y1="{{ l.y1 }}" x2="{{ l.x2 }}" y2="{{ l.y2 }}" stroke="{{ colors[l.type] }}"
+            <line x1="{{ l.x1 }}" y1="{{ l.y1 }}" x2="{{ l.x2 }}" y2="{{ l.y2 }}" stroke="var(--c-util)"
                   stroke-width="{{ 4 if l.own else 2 }}" {% if not l.own %}stroke-dasharray="6 5"{% endif %}/>
-            <circle cx="{{ l.x1 }}" cy="{{ l.y1 }}" r="{{ 7 if l.own else 4 }}" fill="{{ colors[l.type] }}"/>
-            <circle cx="{{ l.x2 }}" cy="{{ l.y2 }}" r="{{ 14 if l.own else 9 }}" fill="none" stroke="{{ colors[l.type] }}" stroke-width="3"/>
+            <circle cx="{{ l.x1 }}" cy="{{ l.y1 }}" r="{{ 7 if l.own else 4 }}" fill="var(--c-util)"/>
+            <circle cx="{{ l.x2 }}" cy="{{ l.y2 }}" r="{{ 15 if l.own else 10 }}" fill="var(--c-util-a)" stroke="var(--c-util)" stroke-width="2"/>
+            <text x="{{ l.x2 }}" y="{{ l.y2 }}" text-anchor="middle" dominant-baseline="central" font-size="{{ 15 if l.own else 10 }}"
+                  fill="var(--c-tx)">{{ glyph[l.type] }}</text>
         </g>
         {% endfor %}
     </svg>
@@ -33,12 +37,13 @@
     <div class="card elev-sm" style="min-width: 260px; flex: 1;">
         <span class="card-kicker">Team-Lineups auf {{ short }}</span>
         <p style="font-size: 12px; color: var(--color-neutral-500);">
-            {% for t, c in colors.items() %}<span style="color: {{ c }};">●</span> {{ labels[t] }}&nbsp; {% endfor %}
+            {% for t, g in glyph.items() %}<span style="color: var(--c-util);">{{ g }}</span> {{ labels[t] }}&nbsp; {% endfor %}
+            · <span style="color: var(--c-util);">━</span> eigene <span style="color: var(--c-util);">┅</span> aus Demos
         </p>
         {% for g in own %}
         <div style="display:flex; justify-content: space-between; align-items: center; padding: 6px 0; border-top: 1px solid var(--color-neutral-800);">
-            <span><span style="color: {{ colors[g.type] }};">●</span> <b>{{ g.name }}</b>
-                <span style="color: var(--color-neutral-500); font-size: 12px;">{{ g.side }} {{ labels[g.type] }}{% if g.by %} · von {{ g.by }}{% endif %}</span></span>
+            <span><span style="color: var(--c-util);">{{ glyph[g.type] }}</span> <b>{{ g.name }}</b>
+                <span style="color: var(--color-neutral-500); font-size: 12px;">{{ ui.side(g.side) if g.side in ('CT', 'T') else g.side }} {{ labels[g.type] }}{% if g.by %} · von {{ g.by }}{% endif %}</span></span>
             {% if g.deletable %}<form method="post" action="{{ url_for('lineups_page.delete') }}" onsubmit="return confirm('{{ g.name }} löschen?')">
                 <input type="hidden" name="map" value="{{ bsp }}"><input type="hidden" name="name" value="{{ g.name }}">
                 <button class="btn btn-ghost" style="padding: 2px 8px;">✕</button>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import '_partials/ui.html' as ui with context %}
 {% block title %}CS2 Coach — Duell-Training{% endblock %}
 
 {% block content %}
@@ -25,8 +26,8 @@
             <td>{% if r.mean_without is not none %}{{ '%.1f'|format(r.mean_without) if r.unit else '%.2f'|format(r.mean_without) }}{{ r.unit }}{% else %}–{% endif %} <span style="color: var(--color-neutral-500);">({{ r.n_without }})</span></td>
             <td>
             {% if not r.cmp %}<span style="color: var(--color-neutral-500);">zu wenig Matches (noch {{ r.missing }})</span>
-            {% elif r.cmp.verdict == 'solid_positive' %}<span style="color: var(--color-green);">messbar besser</span>
-            {% elif r.cmp.verdict == 'solid_negative' %}<span style="color: var(--color-red);">messbar schlechter</span>
+            {% elif r.cmp.verdict == 'solid_positive' %}{{ ui.badge('messbar besser', 'pos') }}
+            {% elif r.cmp.verdict == 'solid_negative' %}{{ ui.badge('messbar schlechter', 'neg') }}
             {% elif r.cmp.verdict == 'solid_negligible' %}kein Unterschied (belegt)
             {% else %}noch offen{% if r.cmp.n_needed %} (~{{ r.cmp.n_needed }} Matches){% endif %}{% endif %}
             </td>
@@ -37,8 +38,8 @@
 {% endif %}
 
 {% if running %}
-<div class="card elev-sm" style="margin-bottom: var(--space-5); border: 1px solid color-mix(in srgb, var(--color-green) 35%, transparent);">
-    <span class="card-kicker">Läuft gerade</span>
+<div class="focus-card is-focus" style="margin-bottom: var(--space-5);">
+    <span class="fc-kicker">Läuft gerade</span>
     <p style="margin: var(--space-2) 0 0; font-size: 14px;">
         {{ running.map }} · Duell {{ running.pos + 1 }} von {{ running.total }} ·
         {{ running.won }} von {{ running.played }} gewonnen
@@ -53,19 +54,10 @@
 </p></div>
 {% else %}
 
-<div style="display: flex; gap: var(--space-3); margin-bottom: var(--space-5); flex-wrap: wrap;">
-    <div class="card elev-sm" style="flex: 1; min-width: 140px; text-align: center;">
-        <div style="font-size: 26px; font-weight: 700;">{{ sessions|length }}</div>
-        <div class="card-kicker">Trainings</div>
-    </div>
-    <div class="card elev-sm" style="flex: 1; min-width: 140px; text-align: center;">
-        <div style="font-size: 26px; font-weight: 700;">{{ total }}</div>
-        <div class="card-kicker">Duelle gespielt</div>
-    </div>
-    <div class="card elev-sm" style="flex: 1; min-width: 140px; text-align: center;">
-        <div style="font-size: 26px; font-weight: 700;">{{ (won * 100 // total) if total else 0 }} %</div>
-        <div class="card-kicker">gewonnen ({{ won }})</div>
-    </div>
+<div class="stats" style="margin-bottom: var(--space-5);">
+    {{ ui.stat('Trainings', sessions|length) }}
+    {{ ui.stat('Duelle gespielt', total) }}
+    {{ ui.stat('gewonnen (' ~ won ~ ')', (won * 100 // total) if total else 0, ' %') }}
 </div>
 
 {% if by_mode %}
@@ -165,9 +157,9 @@
     <p style="margin: var(--space-3) 0 0; font-size: 13px;">
         <strong>Ziel:</strong> {{ s.goal.label }} · heute {{ s.goal_progress.k }}/{{ s.goal_progress.n }}
         ({{ s.goal_progress.pct }} %), vorher {{ s.goal_progress.before_pct }} % ·
-        {% if s.goal_progress.verdict == 'besser' %}<span style="color: var(--color-green);">messbar besser</span>
-        {% elif s.goal_progress.verdict == 'schlechter' %}<span style="color: var(--color-red);">messbar schlechter</span>
-        {% else %}<span style="color: var(--color-neutral-500);">noch kein belastbarer Unterschied</span>{% endif %}</p>
+        {% if s.goal_progress.verdict == 'besser' %}{{ ui.badge('messbar besser', 'pos') }}
+        {% elif s.goal_progress.verdict == 'schlechter' %}{{ ui.badge('messbar schlechter', 'neg') }}
+        {% else %}{{ ui.badge('noch kein belastbarer Unterschied', 'undecided') }}{% endif %}</p>
     {% endif %}
     {% if s.players and s.players|length > 1 %}
     <p style="margin: var(--space-3) 0 0; font-size: 13px;"><strong>Mitspieler:</strong>
@@ -176,7 +168,7 @@
     {% endfor %}</p>
     {% endif %}
     {% if s.fazit %}
-    <p style="margin: var(--space-3) 0 0; font-size: 13px; border: 1px solid color-mix(in srgb, var(--c-line2) 35%, transparent); padding-left: var(--space-3); color: var(--c-tx2);">
+    <p style="margin: var(--space-3) 0 0; font-size: 13px; border-left: 1px solid var(--c-line2); padding-left: var(--space-3); color: var(--c-tx2);">
         <strong>Fazit des Coaches:</strong> {{ s.fazit }}</p>
     {% endif %}
     <table class="table" style="width: 100%; margin-top: var(--space-3);">
@@ -188,7 +180,7 @@
             <td>{{ d.n }}</td><td>{{ d.source }}</td><td>{{ d.opponent }}</td><td>{{ weapon_label(d.weapon) }}</td>
             <td>{% if d.outcome == 'win' %}<span style="color: var(--color-green);">gewonnen</span>
                 {% elif d.outcome == 'loss' %}<span style="color: var(--color-red);">verloren</span>
-                {% else %}<span style="color: var(--color-yellow);">unentschieden</span>{% endif %}</td>
+                {% else %}<span style="color: var(--c-undecided);">unentschieden</span>{% endif %}</td>
             <td>{{ d.tries }}</td>
             <td>{% if d.seen_err is defined %}{{ '%.0f'|format(d.seen_err) }}°{% if d.seen_err >= 3 %}
                 <span style="color: var(--color-neutral-500);">{{ aim_side(d.dpitch or 0, d.dyaw or 0) }}</span>{% endif %}

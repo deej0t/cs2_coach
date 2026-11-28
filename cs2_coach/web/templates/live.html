@@ -6,11 +6,11 @@
     /* Warnung: ganzer Bildschirm blinkt - auf dem zweiten Monitor aus dem Augenwinkel sichtbar */
     #alarm { position: fixed; inset: 0; z-index: 9999; display: none; flex-direction: column;
              align-items: center; justify-content: center; text-align: center; cursor: pointer;
-             background: #facc15; color: #1a1a1a; animation: lv-blink .5s steps(2, start) infinite; }
+             background: var(--c-focus); color: var(--c-bg); animation: lv-pulse 1.1s ease-in-out 2; }
     #alarm.on { display: flex; }
     #alarm b { font-size: clamp(56px, 14vw, 160px); font-weight: 900; letter-spacing: -0.02em; line-height: 1; }
     #alarm small { font-size: clamp(18px, 3vw, 32px); font-weight: 700; margin-top: 16px; }
-    @keyframes lv-blink { 50% { background: #f97316; } }
+    @keyframes lv-pulse { 50% { background: color-mix(in srgb, var(--c-focus) 55%, var(--c-bg)); } }
     @media (prefers-reduced-motion: reduce) { #alarm { animation: none; } }
     /* Rundenstreifen: je Full Buy ein Feld */
     .lv-plan { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }

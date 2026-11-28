@@ -71,5 +71,5 @@ docker/                 compose, portainer stack, unraid template
 - Linke Farbbalken → `.callout--neg/pos/info/focus/util` (1px getönter Rahmen) bzw. `.focus-card` (eine pro Seite). Erledigt: Match-Seite (KI-Nachbesprechung = Fokus), /hebel, /coaching, Dashboard. Altes Violett #9184d9 überall → Info-Blau (Test verhindert Rückkehr).
 - Alle linken Farbbalken (25 Seiten) → 1px getönter Rahmen `color-mix(Ton 35 %)`; Mittelstufen (früher Gelb) = `--c-undecided` grau, Gelb/Amber nie als Urteil. Test `test_no_thick_left_colour_bars`.
 - `ui.round_strip` (Fläche = Ergebnis, Unterstrich = Seite CT/T; Live-Streifen nutzt dieselben `.rs`-Klassen per JS), `ui.stat` (Kennzahl-Kachel, Ton nur bei Bedeutung, `id` für Live-Updates), `_partials/mission_card.html` (Ring Amber, erwartet `g`).
-- Offen: Inline-`<style>` der Seiten, Storyline-Kompaktzeile (bräuchte Szenendaten außerhalb des Theaters), Training/Lineups (E5).
+- Offen: Inline-`<style>` der Seiten, Storyline-Kompaktzeile (bräuchte Szenendaten außerhalb des Theaters), Training/Lineups (E5) erledigt: Lineups nur Violett, Typ als Landeform (● Smoke ✦ Flash ◆ HE ▲ Molotov); Live-Alarm Amber mit 2 langsamen Pulsen statt Gelb/Orange-Blinken (reduced-motion statisch); Training mit ui.stat/badge/focus_card.
 
