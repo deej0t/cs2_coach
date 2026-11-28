@@ -243,6 +243,60 @@
     </div>
 </div>
 
+{% include "_partials/match_views.html" %}
+<style>
+    /* Lesereihenfolge: Fazit -> Zahlen -> Momente -> Runden -> Tode & Duelle -> Details */
+    .ed-nav { position: sticky; top: 56px; z-index: 50; display: flex; gap: 2px; overflow-x: auto; margin: 0 0 var(--space-5);
+              padding: 4px; border-radius: 10px; background: var(--c-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+              border: 1px solid var(--c-line2); }
+    .ed-nav a { flex: 0 0 auto; padding: 5px 12px; border-radius: 7px; font-size: 13px; color: var(--c-tx2); text-decoration: none; }
+    .ed-nav a:hover { color: var(--c-tx); background: var(--c-s3); }
+    .ed-nav a.on { color: var(--c-bg); background: var(--color-accent); font-weight: 600; }
+    .ed-sec { scroll-margin-top: 110px; margin-bottom: var(--space-8); }
+    .ed-sec-h { display: flex; align-items: baseline; gap: 10px; margin: 0 0 var(--space-3); padding-bottom: 6px; border-bottom: 1px solid var(--c-line2); }
+    .ed-sec-h h3 { margin: 0; font-size: 18px; font-weight: 600; }
+    .ed-sec-h span { font-size: 12px; color: var(--c-tx3); }
+    .ed-more > summary { list-style: none; cursor: pointer; padding: 10px 14px; border-radius: var(--radius-md);
+                         background: var(--c-s1); border: 1px solid var(--c-line2); color: var(--c-tx2); font-size: 13px; }
+    .ed-more[open] > summary { margin-bottom: var(--space-4); }
+</style>
+<nav class="ed-nav" id="ed-nav">
+    <a href="#fazit">{{ _('Fazit') }}</a><a href="#zahlen">{{ _('Zahlen') }}</a><a href="#momente">{{ _('Schlüsselmomente') }}</a>
+    <a href="#runden">{{ _('Runden') }}</a><a href="#tode">{{ _('Tode & Duelle') }}</a><a href="#details">{{ _('Details') }}</a>
+</nav>
+<script>
+// aktiver Abschnitt in der Navigation markieren
+(function () {
+    var links = document.querySelectorAll('#ed-nav a');
+    if (!window.IntersectionObserver) return;
+    var io = new IntersectionObserver(function (es) {
+        es.forEach(function (e) {
+            if (!e.isIntersecting) return;
+            links.forEach(function (a) { a.classList.toggle('on', a.getAttribute('href') === '#' + (e.target.id || 'momente')); });
+        });
+    }, { rootMargin: '-120px 0px -70% 0px' });
+    document.querySelectorAll('.ed-sec').forEach(function (s) { io.observe(s); });
+})();
+</script>
+<section class="ed-sec" id="fazit">
+<div class="ed-sec-h"><h3>{{ _('Fazit') }}</h3><span>{{ _('Nachbesprechung und Coach-Report') }}</span></div>
+{% if not ai_report and not data.report %}<div class="state state--empty">{{ _('Für dieses Match gibt es noch keine Nachbesprechung.') }}</div>{% endif %}
+<!-- ══════ Coach Report (rendered) ══════ -->
+{% if ai_report %}
+<div class="focus-card is-focus" style="margin-bottom: var(--space-4);">
+    <span class="fc-kicker">{{ _('Nachbesprechung (KI, aus deinen Messwerten)') }}</span>
+    {% for para in ai_report.split('\n\n') %}<p style="margin: var(--space-2) 0 0; line-height: 1.55;">{{ para }}</p>{% endfor %}
+</div>
+{% endif %}
+{% if data.report %}
+<div class="card-kicker" style="margin-bottom:8px;">{{ _('Coach-Report') }}</div>
+<div id="ed-report-rendered"></div>
+<div id="ed-report-raw" style="display:none;">{{ data.report }}</div>
+{% endif %}
+
+</section>
+<section class="ed-sec" id="zahlen">
+<div class="ed-sec-h"><h3>{{ _('Zahlen') }}</h3><span>{{ _('Kennzahlen und Vergleich mit deinen letzten Matches') }}</span></div>
 <!-- ══════ Stats overview ══════ -->
 {% macro trend_arrow(current, avg_key) %}
 {% if player_avg and player_avg.get(avg_key) %}
@@ -350,40 +404,10 @@
     </div>
 </div>
 
-{% include "_partials/match_views.html" %}
 {% include "_partials/match_compare.html" %}
-
-<!-- ══════ Duel Matrix ══════ -->
-{% if data.duel_matrix %}
-<div class="card elev-sm" style="margin-bottom:var(--space-5);padding:var(--space-3);">
-    <div class="card-kicker" style="margin-bottom:10px;">{{ _('Gegner-Duelle') }}</div>
-    <table class="table ed-duel" style="font-size:13px;">
-        <thead><tr><th>{{ _('Gegner') }}</th><th style="text-align:center;">Kills</th><th style="text-align:center;">Deaths</th><th style="text-align:center;">{{ _('Bilanz') }}</th><th>K/D</th><th style="text-align:center;">HS</th><th>{{ _('Waffen') }}</th></tr></thead>
-        <tbody>
-        {% for d in data.duel_matrix %}
-        <tr>
-            <td style="font-weight:500;">{{ d.name }}</td>
-            <td style="text-align:center;color:#3FD08F;">{{ d.kills }}</td>
-            <td style="text-align:center;color:#F2676C;">{{ d.deaths }}</td>
-            <td style="text-align:center;">
-                {% set tot = d.kills + d.deaths %}{% if tot > 0 %}
-                <div class="ed-duel-bar" style="margin:0 auto;">
-                    <div style="width:{{ (d.kills / tot * 100)|round }}%;background:#3FD08F;height:100%;"></div>
-                    <div style="width:{{ (d.deaths / tot * 100)|round }}%;background:#F2676C;height:100%;"></div>
-                </div>{% endif %}
-            </td>
-            <td><span class="{% if d.kd >= 1.5 %}sc-green{% elif d.kd >= 1.0 %}sc-yellow{% else %}sc-red{% endif %}" style="font-weight:600;">{{ d.kd }}</span></td>
-            <td style="text-align:center;">{{ d.hs_kills }}</td>
-            <td style="font-size:11px;color:var(--color-neutral-500);">{{ d.top_weapons|join(', ') }}</td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
-
-{% include "_partials/kill_map.html" %}
-
+</section>
+<section class="ed-sec">
+<div class="ed-sec-h"><h3>{{ _('Schlüsselmomente') }}</h3><span>{{ _('Woran es lag – Szene für Szene') }}</span></div>
 <!-- ══════ Schlüsselmomente: Szene im Breitbild mit Zeitstrahl ══════ -->
 <div class="card elev-sm" id="momente" style="margin-bottom:var(--space-5);padding:var(--space-3);overflow:visible;background:none;box-shadow:none;">
     <div class="card-kicker" style="margin-bottom:10px;">{{ _('Schlüsselmomente') }}
@@ -392,6 +416,126 @@
     {% include '_partials/moment_theater.html' %}
 </div>
 
+</section>
+<section class="ed-sec" id="runden">
+<div class="ed-sec-h"><h3>{{ _('Runden') }}</h3><span>{{ _('Verlauf und Wirtschaft') }}</span></div>
+<!-- ══════ Round Timeline ══════ -->
+{% if data.round_timeline %}
+{% set highlight_map = {} %}
+{% if analysis and analysis.highlights %}
+{% for h in analysis.highlights %}{% if highlight_map.update({h.round: h}) %}{% endif %}{% endfor %}
+{% endif %}
+<div class="card elev-sm" style="margin-bottom:var(--space-5);padding:var(--space-3);">
+    <div class="card-kicker" style="margin-bottom:8px;">{{ _('Runden-Timeline') }}</div>
+    <div class="ed-tl">
+        {% for r in data.round_timeline %}
+        {% if r.round == 13 %}<div class="ed-tl-ht">— {{ _('Seitenwechsel') }} —</div>{% endif %}
+        {% set hl = highlight_map.get(r.round) %}
+        <div class="ed-tl-row {% if r.won %}ed-tl-won{% else %}ed-tl-lost{% endif %} {% if r.died_early %}ed-tl-early{% endif %}">
+            <div class="ed-tl-round">R{{ r.round }}</div>
+            <div class="ed-tl-side {% if r.side == 'CT' %}ed-tl-ct{% else %}ed-tl-t{% endif %}">{{ r.side }}</div>
+            <div>
+                {% for e in r.events %}
+                    {% if e.type == 'kill' %}<span class="ed-tl-ev ed-tl-kill" title="{{ e.target }} ({{ e.weapon }})">✦ {{ e.target[:10] }}</span>
+                    {% elif e.type == 'death' %}<span class="ed-tl-ev ed-tl-death" title="{{ e.killer }} ({{ e.weapon }})">☠ {{ e.killer[:10] }}</span>
+                    {% elif e.type == 'bomb_plant' and e.is_self %}<span class="ed-tl-ev ed-tl-bomb">💣</span>
+                    {% elif e.type == 'bomb_defuse' and e.is_self %}<span class="ed-tl-ev ed-tl-bomb">🔧</span>
+                    {% endif %}
+                {% endfor %}
+                {% if hl and hl.tag != 'normal' %}
+                <span class="ed-tl-badge rh-{{ hl.tag }}">{{ hl.label }}</span>
+                {% endif %}
+            </div>
+            <div class="ed-tl-info" style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">
+                {% if r.player_kills >= 3 %}<span class="ed-tl-mk">{{ r.player_kills }}K</span>{% elif r.player_kills > 0 %}{{ r.player_kills }}K{% elif r.player_died %}0K{% endif %}
+                <button class="rn-btn" onclick="narrateRound({{ r.round }}, this)" title="{{ _('KI-Analyse dieser Runde') }}">KI</button>
+                {% if demo_path %}<button class="rn-btn" onclick="playRound({{ r.round }})" title="{{ _('Runde als 2D-Replay abspielen') }}">▶</button>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <!-- 2D-Replay -->
+    {% if demo_path %}
+    <div id="rp-panel" style="display:none;margin-top:var(--space-3);border-top:1px solid var(--color-divider);padding-top:var(--space-3);">
+        <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-2);">
+            <span id="rp-title" style="font-size:13px;font-weight:600;"></span>
+            <button class="btn btn-ghost" id="rp-play">❚❚</button>
+            <select id="rp-speed" class="input" style="width:auto;min-height:26px;padding:2px 8px;font-size:11px;">
+                <option value="0.5">0.5×</option>
+                <option value="1" selected>1×</option>
+                <option value="2">2×</option>
+            </select>
+            <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;user-select:none;">
+                <input type="checkbox" id="rp-util" checked style="accent-color:var(--color-accent);"> {{ _('Utility') }}
+            </label>
+            <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;user-select:none;">
+                <input type="checkbox" id="rp-names" checked style="accent-color:var(--color-accent);"> {{ _('Namen') }}
+            </label>
+            <input type="range" id="rp-seek" min="0" value="0" style="flex:1;min-width:140px;accent-color:var(--color-accent);">
+            <span id="rp-time" style="font-size:11px;color:var(--color-neutral-500);min-width:52px;"></span>
+            <button class="rn-close" onclick="closeReplay()">&times;</button>
+        </div>
+        <div style="position:relative;width:100%;max-width:560px;">
+            <canvas id="rp-canvas" width="600" height="600" style="width:100%;border-radius:var(--radius-md);background:var(--color-bg);"></canvas>
+            <div id="rp-tip" style="display:none;position:absolute;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-sm);padding:4px 8px;font-size:11px;pointer-events:none;white-space:nowrap;z-index:10;"></div>
+        </div>
+        <p style="font-size:11px;color:var(--color-neutral-600);margin-top:var(--space-2);">
+            <span id="rp-legend"></span>
+            {{ _('Rekonstruktion aus Positionsdaten, kein Spielvideo.') }}
+            <span style="color:#3FD08F;">●</span> {{ _('du') }}
+            <span style="color:#5DA9F2;">●</span> {{ _('Team') }}
+            <span style="color:#F2676C;">●</span> {{ _('Gegner') }}
+            — {{ _('blass = tot') }}.
+            {{ _('Granaten') }}: ☁ Smoke · 🔥 {{ _('Feuer') }} · ⚡ Flash · 💥 HE —
+            {{ _('sie erscheinen zum Zuendzeitpunkt und verschwinden, wenn sie auslaufen. Der Punkt unter dem Symbol zeigt in Teamfarbe, wer geworfen hat. Flaechen bei Smoke und Feuer sind Naeherungen.') }}
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- Narration panel -->
+    <div id="rn-panel" class="rn-panel">
+        <div class="rn-header">
+            <span id="rn-round-tag" class="rn-round-tag"></span>
+            <span class="rn-title">{{ _('KI-Runden-Analyse') }}</span>
+            <button class="rn-close" onclick="closeNarration()">&times;</button>
+        </div>
+        <div id="rn-body" class="rn-body">
+            <div class="rn-loading"><span class="rn-dot"></span> {{ _('Analyse wird generiert...') }}</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ══════ Economy ══════ -->
+{% if data.economy %}
+<div style="margin-bottom:var(--space-5);">
+    <div class="card-kicker" style="margin-bottom:8px;">{{ _('Wirtschafts-Performance') }}</div>
+    <div class="ed-econ">
+        {% set econ_order = [('pistol', _('Pistole'), '#a78bfa'), ('eco', 'Eco', '#F2676C'), ('force', 'Force', '#F5B941'), ('fullbuy', 'Fullbuy', '#3FD08F')] %}
+        {% for key, label, color in econ_order %}
+        {% set e = data.economy.get(key, {}) %}
+        {% if e %}
+        <div class="card elev-sm ed-econ-card" style="border-top-color:{{ color }};">
+            <div class="ed-econ-label">{{ label }}</div>
+            <div class="ed-econ-big {% if e.kd >= 1.2 %}sc-green{% elif e.kd >= 0.8 %}sc-yellow{% else %}sc-red{% endif %}">{{ e.kd }}</div>
+            <div class="ed-econ-sub">K/D {{ _('in') }} {{ e.rounds }} {{ _('Runden') }}</div>
+            <div style="margin-top:10px;">
+                <div class="ed-econ-row"><span style="color:var(--color-neutral-500);">ADR</span><span>{{ e.adr }}</span></div>
+                <div class="ed-econ-row"><span style="color:var(--color-neutral-500);">K / D</span><span>{{ e.kills }} / {{ e.deaths }}</span></div>
+                <div class="ed-econ-row"><span style="color:var(--color-neutral-500);">Win-Rate</span><span class="{% if e.win_rate >= 60 %}sc-green{% elif e.win_rate >= 40 %}sc-yellow{% else %}sc-red{% endif %}">{{ e.win_rate }}%</span></div>
+            </div>
+        </div>
+        {% else %}
+        <div class="card elev-sm ed-econ-card" style="opacity:0.4;"><div class="ed-econ-label">{{ label }}</div><div class="ed-econ-big" style="color:var(--color-neutral-600);">—</div><div class="ed-econ-sub">{{ _('Keine Runden') }}</div></div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+</section>
+<section class="ed-sec" id="tode">
+<div class="ed-sec-h"><h3>{{ _('Tode & Duelle') }}</h3><span>{{ _('Wie und gegen wen') }}</span></div>
 <!-- ══════ Death Analysis ══════ -->
 {% if analysis and analysis.death_summary and analysis.death_summary.total > 0 %}
 {% set ds = analysis.death_summary %}
@@ -515,133 +659,41 @@
 {% endif %}
 {% endif %}
 
-<!-- ══════ Round Timeline ══════ -->
-{% if data.round_timeline %}
-{% set highlight_map = {} %}
-{% if analysis and analysis.highlights %}
-{% for h in analysis.highlights %}{% if highlight_map.update({h.round: h}) %}{% endif %}{% endfor %}
-{% endif %}
+<!-- ══════ Duel Matrix ══════ -->
+{% if data.duel_matrix %}
 <div class="card elev-sm" style="margin-bottom:var(--space-5);padding:var(--space-3);">
-    <div class="card-kicker" style="margin-bottom:8px;">{{ _('Runden-Timeline') }}</div>
-    <div class="ed-tl">
-        {% for r in data.round_timeline %}
-        {% if r.round == 13 %}<div class="ed-tl-ht">— {{ _('Seitenwechsel') }} —</div>{% endif %}
-        {% set hl = highlight_map.get(r.round) %}
-        <div class="ed-tl-row {% if r.won %}ed-tl-won{% else %}ed-tl-lost{% endif %} {% if r.died_early %}ed-tl-early{% endif %}">
-            <div class="ed-tl-round">R{{ r.round }}</div>
-            <div class="ed-tl-side {% if r.side == 'CT' %}ed-tl-ct{% else %}ed-tl-t{% endif %}">{{ r.side }}</div>
-            <div>
-                {% for e in r.events %}
-                    {% if e.type == 'kill' %}<span class="ed-tl-ev ed-tl-kill" title="{{ e.target }} ({{ e.weapon }})">✦ {{ e.target[:10] }}</span>
-                    {% elif e.type == 'death' %}<span class="ed-tl-ev ed-tl-death" title="{{ e.killer }} ({{ e.weapon }})">☠ {{ e.killer[:10] }}</span>
-                    {% elif e.type == 'bomb_plant' and e.is_self %}<span class="ed-tl-ev ed-tl-bomb">💣</span>
-                    {% elif e.type == 'bomb_defuse' and e.is_self %}<span class="ed-tl-ev ed-tl-bomb">🔧</span>
-                    {% endif %}
-                {% endfor %}
-                {% if hl and hl.tag != 'normal' %}
-                <span class="ed-tl-badge rh-{{ hl.tag }}">{{ hl.label }}</span>
-                {% endif %}
-            </div>
-            <div class="ed-tl-info" style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">
-                {% if r.player_kills >= 3 %}<span class="ed-tl-mk">{{ r.player_kills }}K</span>{% elif r.player_kills > 0 %}{{ r.player_kills }}K{% elif r.player_died %}0K{% endif %}
-                <button class="rn-btn" onclick="narrateRound({{ r.round }}, this)" title="{{ _('KI-Analyse dieser Runde') }}">KI</button>
-                {% if demo_path %}<button class="rn-btn" onclick="playRound({{ r.round }})" title="{{ _('Runde als 2D-Replay abspielen') }}">▶</button>{% endif %}
-            </div>
-        </div>
+    <div class="card-kicker" style="margin-bottom:10px;">{{ _('Gegner-Duelle') }}</div>
+    <table class="table ed-duel" style="font-size:13px;">
+        <thead><tr><th>{{ _('Gegner') }}</th><th style="text-align:center;">Kills</th><th style="text-align:center;">Deaths</th><th style="text-align:center;">{{ _('Bilanz') }}</th><th>K/D</th><th style="text-align:center;">HS</th><th>{{ _('Waffen') }}</th></tr></thead>
+        <tbody>
+        {% for d in data.duel_matrix %}
+        <tr>
+            <td style="font-weight:500;">{{ d.name }}</td>
+            <td style="text-align:center;color:#3FD08F;">{{ d.kills }}</td>
+            <td style="text-align:center;color:#F2676C;">{{ d.deaths }}</td>
+            <td style="text-align:center;">
+                {% set tot = d.kills + d.deaths %}{% if tot > 0 %}
+                <div class="ed-duel-bar" style="margin:0 auto;">
+                    <div style="width:{{ (d.kills / tot * 100)|round }}%;background:#3FD08F;height:100%;"></div>
+                    <div style="width:{{ (d.deaths / tot * 100)|round }}%;background:#F2676C;height:100%;"></div>
+                </div>{% endif %}
+            </td>
+            <td><span class="{% if d.kd >= 1.5 %}sc-green{% elif d.kd >= 1.0 %}sc-yellow{% else %}sc-red{% endif %}" style="font-weight:600;">{{ d.kd }}</span></td>
+            <td style="text-align:center;">{{ d.hs_kills }}</td>
+            <td style="font-size:11px;color:var(--color-neutral-500);">{{ d.top_weapons|join(', ') }}</td>
+        </tr>
         {% endfor %}
-    </div>
-    <!-- 2D-Replay -->
-    {% if demo_path %}
-    <div id="rp-panel" style="display:none;margin-top:var(--space-3);border-top:1px solid var(--color-divider);padding-top:var(--space-3);">
-        <div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-2);">
-            <span id="rp-title" style="font-size:13px;font-weight:600;"></span>
-            <button class="btn btn-ghost" id="rp-play">❚❚</button>
-            <select id="rp-speed" class="input" style="width:auto;min-height:26px;padding:2px 8px;font-size:11px;">
-                <option value="0.5">0.5×</option>
-                <option value="1" selected>1×</option>
-                <option value="2">2×</option>
-            </select>
-            <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;user-select:none;">
-                <input type="checkbox" id="rp-util" checked style="accent-color:var(--color-accent);"> {{ _('Utility') }}
-            </label>
-            <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;user-select:none;">
-                <input type="checkbox" id="rp-names" checked style="accent-color:var(--color-accent);"> {{ _('Namen') }}
-            </label>
-            <input type="range" id="rp-seek" min="0" value="0" style="flex:1;min-width:140px;accent-color:var(--color-accent);">
-            <span id="rp-time" style="font-size:11px;color:var(--color-neutral-500);min-width:52px;"></span>
-            <button class="rn-close" onclick="closeReplay()">&times;</button>
-        </div>
-        <div style="position:relative;width:100%;max-width:560px;">
-            <canvas id="rp-canvas" width="600" height="600" style="width:100%;border-radius:var(--radius-md);background:var(--color-bg);"></canvas>
-            <div id="rp-tip" style="display:none;position:absolute;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-sm);padding:4px 8px;font-size:11px;pointer-events:none;white-space:nowrap;z-index:10;"></div>
-        </div>
-        <p style="font-size:11px;color:var(--color-neutral-600);margin-top:var(--space-2);">
-            <span id="rp-legend"></span>
-            {{ _('Rekonstruktion aus Positionsdaten, kein Spielvideo.') }}
-            <span style="color:#3FD08F;">●</span> {{ _('du') }}
-            <span style="color:#5DA9F2;">●</span> {{ _('Team') }}
-            <span style="color:#F2676C;">●</span> {{ _('Gegner') }}
-            — {{ _('blass = tot') }}.
-            {{ _('Granaten') }}: ☁ Smoke · 🔥 {{ _('Feuer') }} · ⚡ Flash · 💥 HE —
-            {{ _('sie erscheinen zum Zuendzeitpunkt und verschwinden, wenn sie auslaufen. Der Punkt unter dem Symbol zeigt in Teamfarbe, wer geworfen hat. Flaechen bei Smoke und Feuer sind Naeherungen.') }}
-        </p>
-    </div>
-    {% endif %}
-
-    <!-- Narration panel -->
-    <div id="rn-panel" class="rn-panel">
-        <div class="rn-header">
-            <span id="rn-round-tag" class="rn-round-tag"></span>
-            <span class="rn-title">{{ _('KI-Runden-Analyse') }}</span>
-            <button class="rn-close" onclick="closeNarration()">&times;</button>
-        </div>
-        <div id="rn-body" class="rn-body">
-            <div class="rn-loading"><span class="rn-dot"></span> {{ _('Analyse wird generiert...') }}</div>
-        </div>
-    </div>
+        </tbody>
+    </table>
 </div>
 {% endif %}
 
-<!-- ══════ Economy ══════ -->
-{% if data.economy %}
-<div style="margin-bottom:var(--space-5);">
-    <div class="card-kicker" style="margin-bottom:8px;">{{ _('Wirtschafts-Performance') }}</div>
-    <div class="ed-econ">
-        {% set econ_order = [('pistol', _('Pistole'), '#a78bfa'), ('eco', 'Eco', '#F2676C'), ('force', 'Force', '#F5B941'), ('fullbuy', 'Fullbuy', '#3FD08F')] %}
-        {% for key, label, color in econ_order %}
-        {% set e = data.economy.get(key, {}) %}
-        {% if e %}
-        <div class="card elev-sm ed-econ-card" style="border-top-color:{{ color }};">
-            <div class="ed-econ-label">{{ label }}</div>
-            <div class="ed-econ-big {% if e.kd >= 1.2 %}sc-green{% elif e.kd >= 0.8 %}sc-yellow{% else %}sc-red{% endif %}">{{ e.kd }}</div>
-            <div class="ed-econ-sub">K/D {{ _('in') }} {{ e.rounds }} {{ _('Runden') }}</div>
-            <div style="margin-top:10px;">
-                <div class="ed-econ-row"><span style="color:var(--color-neutral-500);">ADR</span><span>{{ e.adr }}</span></div>
-                <div class="ed-econ-row"><span style="color:var(--color-neutral-500);">K / D</span><span>{{ e.kills }} / {{ e.deaths }}</span></div>
-                <div class="ed-econ-row"><span style="color:var(--color-neutral-500);">Win-Rate</span><span class="{% if e.win_rate >= 60 %}sc-green{% elif e.win_rate >= 40 %}sc-yellow{% else %}sc-red{% endif %}">{{ e.win_rate }}%</span></div>
-            </div>
-        </div>
-        {% else %}
-        <div class="card elev-sm ed-econ-card" style="opacity:0.4;"><div class="ed-econ-label">{{ label }}</div><div class="ed-econ-big" style="color:var(--color-neutral-600);">—</div><div class="ed-econ-sub">{{ _('Keine Runden') }}</div></div>
-        {% endif %}
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
+{% include "_partials/kill_map.html" %}
 
-<!-- ══════ Coach Report (rendered) ══════ -->
-{% if ai_report %}
-<div class="focus-card is-focus" style="margin-bottom: var(--space-4);">
-    <span class="fc-kicker">{{ _('Nachbesprechung (KI, aus deinen Messwerten)') }}</span>
-    {% for para in ai_report.split('\n\n') %}<p style="margin: var(--space-2) 0 0; line-height: 1.55;">{{ para }}</p>{% endfor %}
-</div>
-{% endif %}
-{% if data.report %}
-<div class="card-kicker" style="margin-bottom:8px;">{{ _('Coach-Report') }}</div>
-<div id="ed-report-rendered"></div>
-<div id="ed-report-raw" style="display:none;">{{ data.report }}</div>
-{% endif %}
-
+</section>
+<section class="ed-sec" id="details">
+<div class="ed-sec-h"><h3>{{ _('Details') }}</h3></div>
+<details class="ed-more"><summary>{{ _('Scoreboard aller Spieler anzeigen') }}</summary>
 <!-- ══════ Scoreboard ══════ -->
 {% if data.scoreboard %}
 {% set target_team = p.get('team', '') %}
@@ -692,6 +744,8 @@
 {% endif %}
 
 <p style="margin-top:var(--space-6);color:var(--color-neutral-600);font-size:12px;">{{ _('Datei') }}: {{ filename }}</p>
+</details>
+</section>
 {% endblock %}
 
 {% block scripts %}
