@@ -1,0 +1,47 @@
+{# Match-Seite: Mission + "Was nimmst du mit?" (Fazit-Abschnitt). Erwartet ``ms`` = match_summary(data, filename),
+   ``filename`` und den ui-Import. Daten: cs2_coach/match_summary.py. #}
+<style>
+    .ms-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: var(--space-4); margin-bottom: var(--space-4); }
+    @media (max-width: 900px) { .ms-grid { grid-template-columns: 1fr; } }
+    .ms-big { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .ms-big small { font-size: 14px; color: var(--c-tx2); font-weight: 500; }
+    .ms-take { display: grid; grid-template-columns: 8px 1fr; gap: 10px; padding: 8px 0; border-top: 1px solid var(--c-line);
+               color: var(--c-tx); text-decoration: none; }
+    .ms-take:first-of-type { border-top: 0; }
+    .ms-take i { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--c-tx3); }
+    .ms-take.bad i { background: var(--c-neg); } .ms-take.good i { background: var(--c-pos); } .ms-take.focus i { background: var(--c-focus); }
+    .ms-take b { display: block; font-size: 14px; } .ms-take span { font-size: 12.5px; color: var(--c-tx2); }
+    a.ms-take:hover b { text-decoration: underline; }
+</style>
+{% if ms.mission or ms.take %}
+<div class="ms-grid">
+    {% set m = ms.mission %}
+    <div class="focus-card{% if m and m.ok == false %} is-focus{% endif %}">
+        <div class="fc-kicker">{{ _('Deine Mission') }}</div>
+        {% if m %}
+        <div class="fc-title">{{ _('Frühe Granate im Full Buy') }}</div>
+        <div class="ms-big">{{ m.k }}<small> / {{ m.n }} {{ _('Full Buys') }} · {{ m.pct }} %</small></div>
+        <div style="margin:4px 0 6px;">
+            {% if m.target is none %}{{ ui.badge(_('kein belastbares Ziel'), 'undecided') }}
+            {% elif m.ok %}{{ ui.badge(_('Ziel') ~ ' ' ~ (m.target|round|int) ~ ' % erreicht', 'pos') }}
+            {% else %}{{ ui.badge(_('Ziel') ~ ' ' ~ (m.target|round|int) ~ ' % verfehlt', 'neg') }}{% endif %}
+        </div>
+        <div class="rstrip">{% for c in m.rounds %}<span class="rs {{ 'rs--ok' if c.ok else 'rs--miss' }} rs--{{ c.side|lower }}" title="{{ _('Runde') }} {{ c.round }}">{{ '✓' if c.ok else '✕' }}</span>{% endfor %}</div>
+        <div class="rstrip-legend">✓ {{ _('Granate in den ersten 35 s') }} · ✕ {{ _('ohne') }} · {{ _('nur Full Buys, die du 35 s überlebt hast') }}</div>
+        {% else %}
+        <div style="color:var(--c-tx2);font-size:13px;">{{ _('Für dieses Match fehlen die Felder (älterer Export) oder es gab keinen gezählten Full Buy.') }}</div>
+        {% endif %}
+    </div>
+    <div class="card elev-sm">
+        <span class="card-kicker">{{ _('Was nimmst du mit?') }}</span>
+        {% for t in ms.take %}
+        {% if t.ref %}<a class="ms-take {{ t.tone }}" href="#momente?r={{ t.ref.round }}&t={{ t.ref.tick }}&k={{ t.ref.kind }}">
+        {% else %}<div class="ms-take {{ t.tone }}">{% endif %}
+            <i></i><div><b>{{ t.title }}</b>{% if t.text %}<span>{{ t.text }}</span>{% endif %}</div>
+        {% if t.ref %}</a>{% else %}</div>{% endif %}
+        {% else %}
+        <div style="color:var(--c-tx2);font-size:13px;margin-top:6px;">{{ _('Die Schlüsselmomente werden gerade berechnet - nach dem ersten Abspielen stehen hier die wichtigsten Szenen.') }}</div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}

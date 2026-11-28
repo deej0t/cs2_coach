@@ -279,6 +279,18 @@ def prewarm(cfg: dict, cfg_path: Path, filename: str, items: list[dict]) -> None
 def create_blueprint(load_config, config_path) -> Blueprint:
     bp = Blueprint("moments_page", __name__)
 
+    @bp.app_template_global("match_summary")
+    def match_summary_global(data: dict, filename: str = "") -> dict:
+        """Für die Match-Seite: Mission, Rundenstreifen, Seiten, "Was nimmst du mit?" - nie ein Fehler."""
+        from .. import match_summary as ms
+        try:
+            mis = ms.mission(data, ms.early_target(_export_dir(load_config())))
+            stories = indexed_stories(Path(config_path()), filename, 6) if filename else []
+            return {"mission": mis, "strip": ms.strip(data), "sides": ms.sides(data),
+                    "take": ms.takeaways(stories, mis)}
+        except Exception:  # noqa: BLE001 - Seite bleibt ohne Zusammenfassung nutzbar
+            return {"mission": None, "strip": [], "sides": [], "take": []}
+
     @bp.app_template_global("moment_stories")
     def moment_stories(filename: str, limit: int = 3) -> list[dict]:
         """Für Templates: gecachte Storylines eines Exports - nie eine Berechnung beim Seitenaufbau."""

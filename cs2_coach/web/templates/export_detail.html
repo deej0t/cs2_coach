@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}CS2 Coach — {{ data.match.map }} {{ data.match.score_own }}:{{ data.match.score_enemy }}{% endblock %}
 {% block container_class %}container-wide{% endblock %}
+{% import '_partials/ui.html' as ui with context %}
 
 {% block content %}
 <style>
@@ -170,6 +171,7 @@
     "Cache": "linear-gradient(135deg, #6b8e5a, #4a6b3a)",
 } %}
 
+{% set ms = match_summary(data, filename) %}
 <!-- ══════ Header ══════ -->
 <div class="ed-header" style="position:relative;overflow:hidden;padding:var(--space-5) var(--space-6);margin-bottom:var(--space-5);border-radius:var(--radius-lg);border:1px solid rgba(255,255,255,0.06);">
     <div style="position:absolute;inset:0;opacity:0.08;background:{{ ed_map_gradients.get(data.match.map, 'linear-gradient(135deg, #555, #333)') }};pointer-events:none;"></div>
@@ -197,9 +199,9 @@
     <!-- Main info row -->
     <div style="position:relative;z-index:1;display:flex;align-items:center;gap:var(--space-5);">
         <div style="flex:1;">
-            <h2 style="margin:0;font-size:24px;letter-spacing:-0.02em;">
+            <h2 style="margin:0;font-size:30px;letter-spacing:-0.02em;">
                 {{ data.match.map }}
-                <span class="{% if data.match.result == 'Sieg' %}win{% elif data.match.result == 'Niederlage' %}loss{% else %}draw{% endif %}" style="font-size:28px;font-weight:700;">
+                <span class="{% if data.match.result == 'Sieg' %}win{% elif data.match.result == 'Niederlage' %}loss{% else %}draw{% endif %}" style="font-size:38px;font-weight:800;margin-left:8px;">
                     {{ data.match.score_own }}:{{ data.match.score_enemy }}
                 </span>
             </h2>
@@ -227,6 +229,18 @@
         </div>
         {% endif %}
     </div>
+    {% if ms.strip %}
+    <div style="position:relative;z-index:1;margin-top:var(--space-4);display:flex;gap:var(--space-5);align-items:flex-end;flex-wrap:wrap;">
+        <div style="flex:1;min-width:260px;">{{ ui.round_strip(ms.strip) }}</div>
+        {% for sd in ms.sides %}
+        <div style="text-align:center;min-width:90px;">
+            <div>{{ ui.side(sd.side) }}</div>
+            <div class="mono" style="font-size:20px;font-weight:700;">{{ sd.won }}<span style="color:var(--c-tx3);font-size:13px;">/{{ sd.n }}</span></div>
+            {% if sd.kills is not none %}<div style="font-size:11px;color:var(--c-tx3);">{{ sd.kills }}K · {{ sd.deaths }}D</div>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 
 <!-- Match Narration Panel -->
@@ -279,8 +293,9 @@
 })();
 </script>
 <section class="ed-sec" id="fazit">
-<div class="ed-sec-h"><h3>{{ _('Fazit') }}</h3><span>{{ _('Nachbesprechung und Coach-Report') }}</span></div>
-{% if not ai_report and not data.report %}<div class="state state--empty">{{ _('Für dieses Match gibt es noch keine Nachbesprechung.') }}</div>{% endif %}
+<div class="ed-sec-h"><h3>{{ _('Fazit') }}</h3><span>{{ _('Mission, wichtigste Szenen, Nachbesprechung') }}</span></div>
+{% include '_partials/match_summary.html' %}
+{% if not ai_report and not data.report and not ms.take %}<div class="state state--empty">{{ _('Für dieses Match gibt es noch keine Nachbesprechung.') }}</div>{% endif %}
 <!-- ══════ Coach Report (rendered) ══════ -->
 {% if ai_report %}
 <div class="focus-card is-focus" style="margin-bottom: var(--space-4);">
@@ -352,6 +367,7 @@
 </div>
 
 <!-- Detail sections -->
+<details class="ed-more" style="margin-bottom:var(--space-5);"><summary>{{ _('Alle Kennzahlen – Kampf, Mechanik, Utility, Situationen') }}</summary>
 <div class="grid-2" style="margin-bottom:var(--space-5);">
     <div class="card elev-sm">
         <span class="card-kicker">{{ _('Kampf') }}</span>
@@ -403,6 +419,7 @@
         </tbody></table>
     </div>
 </div>
+</details>
 
 {% include "_partials/match_compare.html" %}
 </section>
