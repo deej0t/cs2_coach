@@ -39,11 +39,13 @@ function wfile(key, side) {
 }
 
 // Waffe so verpacken, dass ihr Knochen "weapon" auf dem Elternknochen sitzt (wpn bzw. Viewmodel)
-function weaponWrap(gltf) {
+function weaponWrap(gltf, anchor) {
     const sc = SkeletonUtils.clone(gltf.scene);
     sc.traverse(o => { if (o.isMesh) { o.frustumCulled = false; if (/legacy/.test(o.name)) o.visible = false; } });
     let wb = null;
-    sc.traverse(o => { if (o.name === 'weapon') wb = o; });
+    // anchor: grip point (ag1_hand_r = where the agent's right hand holds it); default: weapon bone
+    if (anchor) sc.traverse(o => { if (o.name === anchor) wb = o; });
+    if (!wb) sc.traverse(o => { if (o.name === 'weapon') wb = o; });
     sc.updateMatrixWorld(true);
     const wrap = new THREE.Group();
     wrap.matrixAutoUpdate = false;
@@ -98,7 +100,7 @@ class Figure {
             conv.add(body);
             this.root.add(conv);
             this.bones = {};
-            body.traverse(o => { if (['wpn', 'spine_1', 'spine_2', 'neck_0', 'head_0'].includes(o.name)) this.bones[o.name] = o; });
+            body.traverse(o => { if (['wpn', 'hand_R', 'spine_1', 'spine_2', 'neck_0', 'head_0'].includes(o.name)) this.bones[o.name] = o; });
             this.rest = {};
             ['spine_1', 'spine_2', 'neck_0'].forEach(n => { if (this.bones[n]) this.rest[n] = this.bones[n].quaternion.clone(); });
             this.mixer = new THREE.AnimationMixer(body);
@@ -130,8 +132,11 @@ class Figure {
         if (!f || !this.bones.wpn) return;
         load(f).then(g => {
             if (this.wkey !== key) return;
-            this.wobj = weaponWrap(g);
-            this.bones.wpn.add(this.wobj);
+            // grip into the right hand: the clips move hand_R, not wpn - otherwise the gun floats in front of it
+            let grip = false; g.scene.traverse(o => { if (o.name === 'ag1_hand_r') grip = true; });
+            const hand = grip && this.bones.hand_R;
+            this.wobj = weaponWrap(g, hand ? 'ag1_hand_r' : null);
+            (hand || this.bones.wpn).add(this.wobj);
         }).catch(() => {});
     }
 
