@@ -69,3 +69,16 @@ def test_no_thick_left_colour_bars():
     bad = [f"{p.name}: {m.group(0)}" for p in TPL.rglob("*.html") if not p.name.startswith("moment_")
            for m in re.finditer(r"border-left:\s*[2-9]px", p.read_text(encoding="utf-8"))]
     assert not bad, bad
+
+
+def test_round_strip_stat_and_mission_card(ui):
+    out = ui("{{ ui.round_strip(r) }}", r=[{"won": True, "side": "CT", "gap": False, "kills": 2, "title": "R1"},
+                                           {"won": False, "side": "T", "gap": True, "kills": 0, "title": "R2"}])
+    assert "rs--won rs--ct" in out and "rs--lost rs--t rs--gap" in out and "side--ct" in out
+    st = ui("{{ ui.stat('Ziel', 42, ' %', tone='focus', id='soll') }}")
+    assert 'id="soll"' in st and "stat--focus" in st and "42" in st
+    g = {"recent": 55.0, "fill": 80, "unit": "%", "target": 60.0, "label": "Frühe Granate", "early": True,
+         "checks": [{"ok": True, "map": "Mirage", "k": 4, "n": 6}], "hits": 1, "verdict": "solid_positive", "since": "1.11."}
+    html = ui("{% include '_partials/mission_card.html' %}", g=g)
+    assert "Deine Mission" in html and "var(--c-focus)" in html and "Mirage 4/6" in html
+    assert "Deine Mission" in ui("{% include '_partials/mission_card.html' %}", g=None)

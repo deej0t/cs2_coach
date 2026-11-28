@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import '_partials/ui.html' as ui with context %}
 {% block title %}CS2 Coach — Live{% endblock %}
 {% block content %}
 <style>
@@ -12,12 +13,6 @@
     @keyframes lv-blink { 50% { background: #f97316; } }
     @media (prefers-reduced-motion: reduce) { #alarm { animation: none; } }
     /* Rundenstreifen: je Full Buy ein Feld */
-    #strip { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: var(--space-3); min-height: 30px; }
-    #strip span { width: 28px; height: 28px; border-radius: 5px; display: flex; align-items: center; justify-content: center;
-                  font-size: 14px; font-weight: 800; }
-    #strip .ok { background: #22c55e; color: #052e14; } #strip .miss { background: #ef4444; color: #fff; }
-    #strip .open { background: var(--color-neutral-700); color: var(--color-text); }
-    #strip .dead { background: var(--color-neutral-800); color: var(--color-neutral-500); }
     .lv-plan { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
     .lv-plan h4 { margin: 0 0 6px; font-size: 13px; }
     .lv-nade { font-size: 14px; padding: 4px 0; border-bottom: 1px solid var(--color-divider); }
@@ -29,15 +24,12 @@
 <div class="card elev-sm" style="margin-bottom: var(--space-4); text-align: center;">
     <div id="hint" style="font-size: 26px; font-weight: 700; line-height: 1.3; min-height: 70px;">Warte auf ein Match …</div>
     <div id="meta" style="color: var(--color-neutral-500); font-size: 13px; margin-top: var(--space-2);"></div>
-    <div id="strip" title="Full Buys: grün = frühe Granate, rot = ohne, grau = läuft / vor 35 s gestorben"></div>
+    <div id="strip" class="rstrip rstrip--big" style="margin-top:var(--space-3);" title="Full Buys: grün = frühe Granate, rot = ohne, grau = läuft / vor 35 s gestorben"></div>
 </div>
-<div style="display: flex; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4);">
-    <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
-        <div id="early" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">Frühe Granate (Full Buys)</div></div>
-    <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
-        <div id="soll" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">Ziel (aus deinen Siegen)</div></div>
-    <div class="card elev-sm" style="flex: 1; min-width: 120px; text-align: center;">
-        <div id="thrown" style="font-size: 30px; font-weight: 700;">–</div><div class="card-kicker">Granaten (Halbzeit)</div></div>
+<div class="stats" style="margin-bottom: var(--space-4);">
+    {{ ui.stat('Frühe Granate (Full Buys)', tone='focus', id='early') }}
+    {{ ui.stat('Ziel (aus deinen Siegen)', id='soll') }}
+    {{ ui.stat('Granaten (Halbzeit)', id='thrown') }}
 </div>
 <div id="plan" class="card elev-sm" style="margin-bottom: var(--space-4); display: none;">
     <span class="card-kicker" id="plan-head">Match-Plan</span>
@@ -112,7 +104,7 @@ function renderPlan(p) {
 function renderStrip(rows) {
   const sym = {ok: '✓', miss: '✗', open: '…', dead: '–'};
   document.getElementById('strip').innerHTML = (rows || []).map(r =>
-    `<span class="${r.status}" title="Runde ${r.n}">${sym[r.status]}</span>`).join('');
+    `<span class="rs rs--${r.status}" title="Runde ${r.n}">${sym[r.status]}</span>`).join('');
 }
 document.getElementById('speak').onclick = () => { speak = !speak;
   document.getElementById('speak').textContent = speak ? '🔇 Ton aus' : '🔊 Ton & Ansagen an';

@@ -1,0 +1,51 @@
+{# Missions-Karte: Tagesziel mit Ring (Amber = deine Mission), Checks der letzten Matches und dem
+   evidence-Urteil aus training.current_plan. Erwartet ``g`` (dashboard d.goal) und ``_``. #}
+<style>
+    .pd-goal { border-radius: 14px; padding: var(--space-5); border: 1px solid var(--color-divider);
+               background: var(--color-surface); display: grid; grid-template-columns: 110px 1fr; gap: var(--space-4); align-items: center; }
+    .pd-check { border: 1px solid var(--color-divider); border-radius: 6px; padding: 2px 7px; font-size: 11px; margin: 0 4px 4px 0; display: inline-block; }
+    .pd-check.ok { border-color: color-mix(in srgb, var(--c-pos) 50%, transparent); color: var(--c-pos); }
+    .pd-steps { display: flex; gap: 4px; margin: 6px 0 2px; }
+    .pd-steps span { width: 14px; height: 6px; border-radius: 3px; background: var(--c-s3); }
+    .pd-steps span.on { background: var(--c-focus); }
+    @media (max-width: 500px) {
+        .pd-goal { padding: var(--space-4); grid-template-columns: 84px 1fr; gap: var(--space-3); }
+        .pd-goal svg { width: 84px; height: 84px; }
+    }
+</style>
+    <div class="pd-goal">
+        {% if g and g.recent is not none %}
+        <svg viewBox="0 0 110 110" width="110" height="110" role="img" aria-label="{{ g.fill }} {{ _('Prozent vom Ziel') }}">
+            <circle cx="55" cy="55" r="46" fill="none" stroke="var(--c-s3)" stroke-width="10"/>
+            <circle class="pd-ring" cx="55" cy="55" r="46" fill="none" stroke="var(--c-focus)" stroke-width="10" stroke-linecap="round"
+                    stroke-dasharray="{{ (289.0 * g.fill / 100)|round(1) }} 289" transform="rotate(-90 55 55)"/>
+            <text x="55" y="53" text-anchor="middle" font-size="22" font-weight="800" fill="var(--color-text)">{{ g.recent|round|int }}{{ '%' if g.unit == '%' else '' }}</text>
+            <text x="55" y="70" text-anchor="middle" font-size="10" fill="var(--color-neutral-500)">{{ _('Ziel') }} {{ g.target|round|int if g.unit == '%' else g.target }}{{ '%' if g.unit == '%' else '' }}</text>
+        </svg>
+        {% else %}<div></div>{% endif %}
+        <div>
+            <div class="pd-kicker">{{ _('Deine Mission') }}</div>
+            {% if g %}
+            <div style="font-size:17px;font-weight:700;margin:4px 0;">{{ g.label }}</div>
+            <div class="pd-meta">
+                {% if g.early %}{{ _('Im Full Buy eine Granate in den ersten 35 s.') }}<br>{% endif %}
+                {% if g.checks %}<b>{{ g.hits }} {{ _('von') }} {{ g.checks|length }}</b> {{ _('der letzten Matches am Ziel') }}{% endif %}
+            </div>
+            <div style="margin-top:6px;">
+                {% for c in g.checks %}<span class="pd-check {{ 'ok' if c.ok }}">{{ c.map }} {{ c.k }}/{{ c.n }}{{ ' ✓' if c.ok }}</span>{% endfor %}
+            </div>
+            <div class="pd-meta" style="margin-top:6px;font-size:12px;">
+                {% if g.verdict == 'solid_positive' %}<span class="up-t">✅ {{ _('Seit') }} {{ g.since }} {{ _('belastbar besser') }}</span>
+                {% elif g.verdict == 'solid_negative' %}<span class="down-t">⚠️ {{ _('Seit') }} {{ g.since }} {{ _('belastbar schlechter') }}</span>
+                {% elif g.verdict %}{{ _('Seit') }} {{ g.since }} {{ _('noch kein belastbarer Unterschied') }}
+                {% else %}
+                {{ _('Erste Auswertung nach') }} {{ g.min_after }} Matches · {{ _('noch') }} {{ g.left }}
+                <div class="pd-steps">{% for i in range(g.min_after) %}<span class="{{ 'on' if i < g.min_after - g.left }}"></span>{% endfor %}</div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="pd-meta" style="margin-top:4px;">{{ _('Gerade trennt keine Kennzahl deine Siege belastbar von den Niederlagen - deshalb keine Mission.') }}
+                <a href="{{ url_for('coaching') }}">{{ _('Empfehlungen') }}</a></div>
+            {% endif %}
+        </div>
+    </div>

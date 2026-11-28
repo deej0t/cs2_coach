@@ -390,4 +390,30 @@ details summary:hover { color: var(--color-accent); }
 .callout--info { background: var(--c-info-a); border-color: color-mix(in srgb, var(--c-info) 35%, transparent); }
 .callout--focus { background: var(--c-focus-a); border-color: color-mix(in srgb, var(--c-focus) 40%, transparent); }
 .callout--util { background: var(--c-util-a); border-color: color-mix(in srgb, var(--c-util) 35%, transparent); }
+/* Round strip (ui.round_strip, live strip): result as fill, side as underline (identity, not signal) */
+.rstrip { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
+.rs { width: 18px; height: 22px; border-radius: 3px; position: relative; background: var(--c-s3);
+      box-shadow: inset 0 -3px 0 transparent; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: var(--c-tx); }
+.rs--won, .rs--ok { background: color-mix(in srgb, var(--c-pos) 30%, transparent); }
+.rs--lost, .rs--miss { background: color-mix(in srgb, var(--c-neg) 22%, transparent); }
+.rs--open { background: var(--c-s3); } .rs--dead { background: var(--c-s2); color: var(--c-tx3); }
+.rs--ct { box-shadow: inset 0 -3px 0 var(--c-ct); } .rs--t { box-shadow: inset 0 -3px 0 var(--c-t); }
+.rs--gap { margin-right: 9px; }
+.rstrip--big { justify-content: center; gap: 4px; min-height: 30px; }
+.rstrip--big .rs { width: 28px; height: 28px; border-radius: 5px; font-size: 14px; font-weight: 800; }
+.rstrip-legend { font-size: 11px; color: var(--c-tx3); margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Stat tile (ui.stat): tone only for meaning - a plain measurement stays neutral */
+.stat { flex: 1; min-width: 120px; text-align: center; padding: 12px; border-radius: var(--radius-lg);
+        background: var(--c-s1); border: 1px solid var(--c-line2); }
+.stat-v { font-size: 30px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.stat-v small { font-size: 14px; color: var(--c-tx2); margin-left: 2px; }
+.stat-l { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--c-tx3); margin-top: 2px; }
+.stat-n { font-size: 11px; color: var(--c-tx3); margin-top: 4px; }
+.stat--pos .stat-v { color: var(--c-pos); } .stat--neg .stat-v { color: var(--c-neg); }
+.stat--focus { border-color: color-mix(in srgb, var(--c-focus) 40%, transparent); } .stat--focus .stat-v { color: var(--c-focus); }
+.stat--info .stat-v { color: var(--c-info); }
+.stats { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.up-t { color: var(--c-pos); } .down-t { color: var(--c-neg); }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }

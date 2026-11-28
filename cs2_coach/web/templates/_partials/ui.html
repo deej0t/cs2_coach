@@ -65,3 +65,20 @@
 {% macro event_chip(kind, text=None) -%}
 <span class="chip-ev chip-ev--{{ kind }}">{{ text or kind|upper }}</span>
 {%- endmacro %}
+
+{#- Round strip. rounds: [{won, side ('CT'/'T'), gap, kills, title}] (dashboard_focus m.rounds). -#}
+{% macro round_strip(rounds, legend=True) -%}
+<div class="rstrip">
+    {%- for r in rounds %}<span class="rs {{ 'rs--won' if r.won else 'rs--lost' }} rs--{{ (r.side or '')|lower }}{{ ' rs--gap' if r.gap }}" title="{{ r.title }}">{% if r.kills %}{{ r.kills }}{% endif %}</span>{% endfor -%}
+</div>
+{%- if legend %}<div class="rstrip-legend">{{ side('CT') }} {{ side('T') }} <span>{{ _('Fläche = Ergebnis · Zahl = deine Kills') }}</span></div>{% endif -%}
+{%- endmacro %}
+
+{#- Stat tile. tone only for meaning (pos/neg/focus/info); id lets live JS update the value. -#}
+{% macro stat(label, value='–', unit='', tone=None, note='', id=None) -%}
+<div class="stat{% if tone %} stat--{{ tone }}{% endif %}">
+    <div class="stat-v"{% if id %} id="{{ id }}"{% endif %}>{{ value }}{% if unit %}<small>{{ unit }}</small>{% endif %}</div>
+    <div class="stat-l">{{ label }}</div>
+    {% if note %}<div class="stat-n">{{ note }}</div>{% endif %}
+</div>
+{%- endmacro %}
