@@ -125,7 +125,7 @@
 <div class="card elev-sm bm-match" style="border-color: color-mix(in srgb, {% if m.result == 'Sieg' %}var(--c-pos){% elif m.result == 'Niederlage' %}var(--c-neg){% else %}var(--c-undecided){% endif %} 35%, transparent);">
     <div class="bm-match-head">
         <div class="bm-match-title">{{ m.match_label }}</div>
-        <span class="bm-match-result" style="background: {% if m.result == 'Sieg' %}rgba(74,222,128,0.15);color:#3FD08F{% elif m.result == 'Niederlage' %}rgba(248,113,113,0.15);color:#F2676C{% else %}rgba(251,191,36,0.15);color:#F5B941{% endif %};">
+        <span class="bm-match-result" style="background: {% if m.result == 'Sieg' %}rgba(74,222,128,0.15);color:#3FD08F{% elif m.result == 'Niederlage' %}rgba(248,113,113,0.15);color:#F2676C{% else %}rgba(132,141,158,0.15);color:#848D9E{% endif %};">
             {{ m.result }}
         </span>
         <span class="bm-match-meta">{{ m.date }}</span>
@@ -144,7 +144,7 @@
                 <i data-lucide="{{ b.icon }}" style="width:14px;height:14px;"></i>
             </div>
             <div class="bm-round">R{{ b.round }}</div>
-            <span class="bm-side" style="background: {% if b.side == 'CT' %}rgba(96,165,250,0.15);color:#5DA9F2{% else %}rgba(251,191,36,0.15);color:#F5B941{% endif %};">
+            <span class="bm-side" style="background: {% if b.side == 'CT' %}rgba(155,178,209,0.15);color:#9BB2D1{% else %}rgba(210,180,138,0.15);color:#D2B48A{% endif %};">
                 {{ b.side }}
             </span>
             <div style="flex: 1;">

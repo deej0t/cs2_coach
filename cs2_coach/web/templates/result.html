@@ -69,7 +69,7 @@
 
     /* color coding */
     .sc-green { color: #3FD08F; }
-    .sc-yellow { color: #F5B941; }
+    .sc-yellow { color: #848D9E; }
     .sc-red { color: #F2676C; }
     .sc-accent { color: var(--color-accent); }
     .sb-green { background: #3FD08F; }
@@ -369,7 +369,7 @@
         <div class="score-bar">
             <span class="score-bar-label"><abbr title="{{ _('Anteil der Schuesse im Stillstand — gutes Counter-Strafing bedeutet vor dem Schuss stehen bleiben') }}">Counter-Strafe</abbr></span>
             <div class="score-bar-track">
-                <div class="score-bar-fill" style="width: {{ stats.counter_strafe_score }}%; background: {% if stats.counter_strafe_score >= 90 %}#3FD08F{% elif stats.counter_strafe_score >= 80 %}#F5B941{% else %}#F2676C{% endif %};"></div>
+                <div class="score-bar-fill" style="width: {{ stats.counter_strafe_score }}%; background: {% if stats.counter_strafe_score >= 90 %}#3FD08F{% elif stats.counter_strafe_score >= 80 %}#848D9E{% else %}#F2676C{% endif %};"></div>
             </div>
             <span class="score-bar-value">{{ "%.0f"|format(stats.counter_strafe_score) }}%</span>
         </div>
@@ -378,7 +378,7 @@
             <span class="score-bar-label"><abbr title="{{ _('Crosshair Placement — Grad-Abweichung des Fadenkreuzes zur Gegnerposition 0.5s vor dem Kill. Niedriger = besser') }}">CP</abbr></span>
             <div class="score-bar-track">
                 {% set cp_pct = [100 - (stats.crosshair_placement_median / 40 * 100), 0]|max %}
-                <div class="score-bar-fill" style="width: {{ cp_pct }}%; background: {% if stats.crosshair_placement_median < 5 %}#3FD08F{% elif stats.crosshair_placement_median < 15 %}#F5B941{% else %}#F2676C{% endif %};"></div>
+                <div class="score-bar-fill" style="width: {{ cp_pct }}%; background: {% if stats.crosshair_placement_median < 5 %}#3FD08F{% elif stats.crosshair_placement_median < 15 %}#848D9E{% else %}#F2676C{% endif %};"></div>
             </div>
             <span class="score-bar-value">{{ "%.1f"|format(stats.crosshair_placement_median) }}°</span>
         </div>
@@ -474,7 +474,7 @@
             <div class="sb-cell">
                 {{ "%.2f"|format(p.kd_ratio) }}
                 {% set kd_w = [p.kd_ratio / 2.0 * 30, 30]|min %}
-                <span class="sb-kd-bar" style="width: {{ kd_w }}px; background: {% if p.kd_ratio >= 1.2 %}#3FD08F{% elif p.kd_ratio >= 0.9 %}#F5B941{% else %}#F2676C{% endif %};"></span>
+                <span class="sb-kd-bar" style="width: {{ kd_w }}px; background: {% if p.kd_ratio >= 1.2 %}#3FD08F{% elif p.kd_ratio >= 0.9 %}#848D9E{% else %}#F2676C{% endif %};"></span>
             </div>
         </div>
         {% endfor %}
@@ -500,7 +500,7 @@
             <div class="sb-cell">
                 {{ "%.2f"|format(p.kd_ratio) }}
                 {% set kd_w = [p.kd_ratio / 2.0 * 30, 30]|min %}
-                <span class="sb-kd-bar" style="width: {{ kd_w }}px; background: {% if p.kd_ratio >= 1.2 %}#3FD08F{% elif p.kd_ratio >= 0.9 %}#F5B941{% else %}#F2676C{% endif %};"></span>
+                <span class="sb-kd-bar" style="width: {{ kd_w }}px; background: {% if p.kd_ratio >= 1.2 %}#3FD08F{% elif p.kd_ratio >= 0.9 %}#848D9E{% else %}#F2676C{% endif %};"></span>
             </div>
         </div>
         {% endfor %}

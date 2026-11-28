@@ -82,3 +82,19 @@
     {% if note %}<div class="stat-n">{{ note }}</div>{% endif %}
 </div>
 {%- endmacro %}
+
+{#- Storyline in one line (Dashboard): verdict · trigger, links into the theater. stories = moment_stories(file). -#}
+{% macro story_lines(stories, file) -%}
+{%- if stories %}
+<div class="story-lines">
+    {%- for m in stories %}
+    <a class="story-line story-line--{{ m.tone }}" href="{{ url_for('view_export', filename=file) }}#momente?r={{ m.round }}&t={{ m.tick }}&k={{ m.kind }}">
+        <span class="sl-r mono">R{{ m.round }}</span>
+        <b>{{ m.verdict }}</b>
+        {% if m.trigger %}<span class="sl-t">{{ m.trigger }}</span>{% endif %}
+        <span class="sl-go">▶</span>
+    </a>
+    {%- endfor %}
+</div>
+{%- endif %}
+{%- endmacro %}

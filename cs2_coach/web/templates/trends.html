@@ -21,7 +21,7 @@
     .chart-card canvas { width: 100% !important; height: 200px !important; }
 
     .sc-green { color: #3FD08F; }
-    .sc-yellow { color: #F5B941; }
+    .sc-yellow { color: #848D9E; }
     .sc-red { color: #F2676C; }
 
     /* Map Stats */
@@ -52,12 +52,12 @@
 <div class="card-kicker" style="margin-bottom: 8px;">{{ _('Map-Performance') }}</div>
 <div class="map-grid">
     {% for m in map_stats %}
-    <div class="map-card card elev-sm" style="border-top-color: {% if m.win_rate >= 60 %}#3FD08F{% elif m.win_rate >= 40 %}#F5B941{% else %}#F2676C{% endif %};">
+    <div class="map-card card elev-sm" style="border-top-color: {% if m.win_rate >= 60 %}#3FD08F{% elif m.win_rate >= 40 %}#848D9E{% else %}#F2676C{% endif %};">
         <div class="map-card-bg" style="background-image: url('{{ url_for('static', filename='radars/' + m.map|lower + '.png') }}');"></div>
         <div class="map-card-name">{{ m.map }}</div>
         <div class="map-card-matches">{{ m.matches }} Match{{ 'es' if m.matches != 1 }} · {{ m.wins }}W {{ m.losses }}L{% if m.draws %} {{ m.draws }}D{% endif %}</div>
         <div class="map-wr-bar">
-            <div class="map-wr-fill" style="width: {{ m.win_rate }}%; background: {% if m.win_rate >= 60 %}#3FD08F{% elif m.win_rate >= 40 %}#F5B941{% else %}#F2676C{% endif %};"></div>
+            <div class="map-wr-fill" style="width: {{ m.win_rate }}%; background: {% if m.win_rate >= 60 %}#3FD08F{% elif m.win_rate >= 40 %}#848D9E{% else %}#F2676C{% endif %};"></div>
         </div>
         <div class="map-stat-row">
             <span class="map-stat-label">Win-Rate</span>

@@ -186,6 +186,47 @@ def _cache_file(cfg_path: Path, filename: str, round_num: int, tick: int, kind: 
     return Path(cfg_path).parent / CACHE_DIR / f"{key}.json.gz"
 
 
+def _index_file(cfg_path: Path, filename: str) -> Path:
+    key = hashlib.sha1(filename.encode()).hexdigest()[:24]
+    return Path(cfg_path).parent / CACHE_DIR / "index" / f"{key}.json"
+
+
+def _index_scene(cfg_path: Path, filename: str, round_num: int, tick: int, kind: str, scene: dict) -> None:
+    """Kurzfassung der Storyline je Export ablegen - das Dashboard liest nur diese Datei, rechnet nie."""
+    st = scene.get("story") or {}
+    if not st.get("verdict"):
+        return
+    path = _index_file(cfg_path, filename)
+    with _warm_lock:
+        try:
+            idx = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except (OSError, ValueError):
+            idx = {}
+        if idx.get("clip_version") != CLIP_VERSION:
+            idx = {"clip_version": CLIP_VERSION, "items": {}}
+        trig = st.get("trigger") or {}
+        idx["items"][f"{round_num}|{tick}|{kind}"] = {
+            "round": round_num, "tick": tick, "kind": kind, "verdict": st["verdict"], "tone": st.get("tone", "info"),
+            "trigger": trig.get("text", ""), "flow": len(st.get("flow") or [])}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(f".{threading.get_ident()}.tmp")
+        tmp.write_text(json.dumps(idx, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(path)
+
+
+def indexed_stories(cfg_path: Path, filename: str, limit: int = 3) -> list[dict]:
+    """Gecachte Storylines eines Exports (Tode zuerst, dann Runde). Alte/fehlende Indexe: leer."""
+    path = _index_file(cfg_path, filename)
+    try:
+        idx = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if idx.get("clip_version") != CLIP_VERSION:
+        return []
+    items = sorted((idx.get("items") or {}).values(), key=lambda m: (m.get("kind") != "death", m.get("round", 0)))
+    return items[:limit]
+
+
 def cached_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: int, kind: str) -> tuple[dict, int]:
     """Szene mit 3D aus dem Cache, sonst bauen und ablegen (nur Erfolge)."""
     path = _cache_file(cfg_path, filename, round_num, tick, kind)
@@ -195,7 +236,10 @@ def cached_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: 
     with lock:
         if path.exists():
             try:
-                return json.loads(gzip.decompress(path.read_bytes())), 200
+                scene = json.loads(gzip.decompress(path.read_bytes()))
+                if not _index_file(cfg_path, filename).exists():
+                    _index_scene(cfg_path, filename, round_num, tick, kind, scene)
+                return scene, 200
             except Exception:  # noqa: BLE001 - kaputte Datei: neu bauen
                 path.unlink(missing_ok=True)
         replay, status = build_clip(cfg, cfg_path, filename, round_num, tick, kind)
@@ -204,6 +248,10 @@ def cached_clip(cfg: dict, cfg_path: Path, filename: str, round_num: int, tick: 
             tmp = path.with_suffix(f".{threading.get_ident()}.tmp")
             tmp.write_bytes(gzip.compress(json.dumps(replay, separators=(",", ":")).encode(), 5))
             tmp.replace(path)
+            try:
+                _index_scene(cfg_path, filename, round_num, tick, kind, replay)
+            except Exception:  # noqa: BLE001 - Szene ist gecacht, nur die Kurzfassung fehlt
+                pass
         return replay, status
 
 
@@ -230,6 +278,13 @@ def prewarm(cfg: dict, cfg_path: Path, filename: str, items: list[dict]) -> None
 
 def create_blueprint(load_config, config_path) -> Blueprint:
     bp = Blueprint("moments_page", __name__)
+
+    @bp.app_template_global("moment_stories")
+    def moment_stories(filename: str, limit: int = 3) -> list[dict]:
+        """Für Templates: gecachte Storylines eines Exports - nie eine Berechnung beim Seitenaufbau."""
+        if not filename:
+            return []
+        return indexed_stories(Path(config_path()), filename, limit)
 
     def _moments_for(cfg: dict, data: dict) -> tuple[list, list, str]:
         """(teuerste Tode, wertvollste Kills, Fehlertext) eines Exports, mit Ueberschriften."""

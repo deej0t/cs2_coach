@@ -416,4 +416,14 @@ details summary:hover { color: var(--color-accent); }
 .stat--info .stat-v { color: var(--c-info); }
 .stats { display: flex; gap: var(--space-3); flex-wrap: wrap; }
 .up-t { color: var(--c-pos); } .down-t { color: var(--c-neg); }
+/* Storyline in one line (ui.story_lines) */
+.story-lines { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.story-line { display: grid; grid-template-columns: 34px auto minmax(0, 1fr) 14px; gap: 8px; align-items: baseline;
+              padding: 6px 10px; border-radius: var(--radius-md); background: var(--c-s2); border: 1px solid var(--c-line);
+              color: var(--c-tx); text-decoration: none; font-size: 13px; }
+.story-line:hover { border-color: var(--c-line2); background: var(--c-s3); }
+.story-line--bad b { color: var(--c-neg); } .story-line--good b { color: var(--c-pos); }
+.story-line .sl-r { color: var(--c-tx3); font-size: 11px; }
+.story-line .sl-t { color: var(--c-tx2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.story-line .sl-go { color: var(--c-tx3); font-size: 10px; }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }

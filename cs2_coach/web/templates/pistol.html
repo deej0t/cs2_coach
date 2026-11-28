@@ -120,7 +120,7 @@
     <div class="pl-side-card pl-side-ct">
         <div class="pl-side-title">
             <i data-lucide="shield" style="width:18px;height:18px;color:#5DA9F2;"></i>
-            <span style="color:#5DA9F2;">CT-Seite</span>
+            <span style="color:#9BB2D1;">CT-Seite</span>
             <span style="font-size:11px; color:var(--color-neutral-500); font-weight:400;">{{ p.ct.rounds }} Runden</span>
         </div>
         <div class="pl-side-stats">
@@ -137,7 +137,7 @@
     <div class="pl-side-card pl-side-t">
         <div class="pl-side-title">
             <i data-lucide="sword" style="width:18px;height:18px;color:#F5B941;"></i>
-            <span style="color:#F5B941;">T-Seite</span>
+            <span style="color:#D2B48A;">T-Seite</span>
             <span style="font-size:11px; color:var(--color-neutral-500); font-weight:400;">{{ p.t.rounds }} Runden</span>
         </div>
         <div class="pl-side-stats">
@@ -213,10 +213,10 @@
         {% if m.ct_rounds > 0 or m.t_rounds > 0 %}
         <div style="display:flex; gap:8px; margin-top:8px; font-size:11px;">
             {% if m.ct_rounds > 0 %}
-            <span style="color:#5DA9F2;">CT: {{ m.ct_wr }}%</span>
+            <span style="color:#9BB2D1;">CT: {{ m.ct_wr }}%</span>
             {% endif %}
             {% if m.t_rounds > 0 %}
-            <span style="color:#F5B941;">T: {{ m.t_wr }}%</span>
+            <span style="color:#D2B48A;">T: {{ m.t_wr }}%</span>
             {% endif %}
         </div>
         {% endif %}

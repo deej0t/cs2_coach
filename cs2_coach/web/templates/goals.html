@@ -10,7 +10,7 @@
 
 <style>
     .sc-green { color: #3FD08F; }
-    .sc-yellow { color: #F5B941; }
+    .sc-yellow { color: #848D9E; }
     .sc-red { color: #F2676C; }
 
     /* Goals */
@@ -118,7 +118,7 @@
         </div>
     </div>
     <div class="goal-bar">
-        <div class="goal-bar-fill" style="width: {{ g.pct }}%; background: {% if g.achieved %}#3FD08F{% elif g.pct >= 80 %}#F5B941{% else %}#5DA9F2{% endif %};"></div>
+        <div class="goal-bar-fill" style="width: {{ g.pct }}%; background: {% if g.achieved %}#3FD08F{% elif g.pct >= 80 %}#848D9E{% else %}#5DA9F2{% endif %};"></div>
     </div>
     <div class="goal-meta">
         <span>{{ _('Aktuell:') }} <span class="goal-current {% if g.achieved %}sc-green{% elif g.pct >= 80 %}sc-yellow{% else %}{% endif %}">{{ g.current }}</span></span>

@@ -152,7 +152,7 @@
             <td style="white-space:nowrap;font-size:12px;">
                 {% if r.vs_lost %}
                 {% set v = r.vs_lost.verdict %}
-                <span class="tag" style="border-color:{{ '#F5B941' if v in SOLID else 'var(--color-neutral-600)' }};color:{{ '#F5B941' if v in SOLID else 'var(--color-neutral-500)' }};">
+                <span class="badge {{ 'badge--info' if v in SOLID else ('badge--negligible' if v == 'solid_negligible' else 'badge--undecided') }}">
                     {{ _('trennt') if v in SOLID else (_('gleich') if v == 'solid_negligible' else (_('Tendenz') if r.vs_lost.ci_low > 0 or r.vs_lost.ci_high < 0 else _('unentschieden'))) }}</span>
                 <span style="color:var(--color-neutral-500);">d={{ r.vs_lost.effect }} [{{ r.vs_lost.ci_low }} … {{ r.vs_lost.ci_high }}]</span>
                 {% else %}<span style="color:var(--color-neutral-600);">{{ _('zu wenige') }}</span>{% endif %}

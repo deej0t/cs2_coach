@@ -179,6 +179,11 @@
         {{ ui.round_strip(m.rounds) }}
         {% endif %}
         {% if m.intro %}<div class="pd-quote">{{ m.intro }}</div>{% endif %}
+        {% set stories = moment_stories(m.file) if m.file else [] %}
+        {% if stories %}
+        <div class="pd-kicker" style="margin-top:var(--space-3);">{{ _('Schlüsselmomente – woran es lag') }}</div>
+        {{ ui.story_lines(stories, m.file) }}
+        {% endif %}
         <div style="margin-top:var(--space-3);font-size:13px;"><a href="{{ url_for('view_export', filename=m.file) }}">{{ _('Ganze Analyse') }} →</a></div>
     </div>
 

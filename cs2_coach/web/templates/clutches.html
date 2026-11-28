@@ -123,16 +123,16 @@
 
 <!-- Side split -->
 <div class="cl-sides">
-    <div class="cl-side-card" style="border-top: 3px solid #5DA9F2;">
-        <div class="cl-side-label" style="color:#5DA9F2;">{{ _('CT-Seite Clutches') }}</div>
+    <div class="cl-side-card" style="border-top: 3px solid #9BB2D1;">
+        <div class="cl-side-label" style="color:#9BB2D1;">{{ _('CT-Seite Clutches') }}</div>
         {% set ct = cl.by_side.CT %}
         <div class="cl-stat-val {% if ct.attempts > 0 and (ct.wins / ct.attempts * 100) >= 15 %}win{% endif %}" style="font-size:20px;">
             {{ ct.wins }}/{{ ct.attempts }}
         </div>
         <div class="cl-stat-lbl">{% if ct.attempts > 0 %}{{ (ct.wins / ct.attempts * 100)|round(1) }}%{% else %}—{% endif %}</div>
     </div>
-    <div class="cl-side-card" style="border-top: 3px solid #F5B941;">
-        <div class="cl-side-label" style="color:#F5B941;">{{ _('T-Seite Clutches') }}</div>
+    <div class="cl-side-card" style="border-top: 3px solid #D2B48A;">
+        <div class="cl-side-label" style="color:#D2B48A;">{{ _('T-Seite Clutches') }}</div>
         {% set t = cl.by_side.T %}
         <div class="cl-stat-val {% if t.attempts > 0 and (t.wins / t.attempts * 100) >= 15 %}win{% endif %}" style="font-size:20px;">
             {{ t.wins }}/{{ t.attempts }}

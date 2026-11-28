@@ -94,3 +94,10 @@ def test_old_palette_hexes_only_as_uicolor_fallback():
     assert not bad, bad[:10]
     sides = (TPL / "sides.html").read_text(encoding="utf-8")
     assert "#f59e0b" not in sides.lower() and "#5da9f2" not in sides.lower()
+
+
+def test_story_lines_link_into_theater(ui):
+    out = ui("{{ ui.story_lines(s, 'x_coach.json') }}",
+             s=[{"round": 7, "tick": 900, "kind": "death", "verdict": "Hauptgrund: Allein", "tone": "bad", "trigger": "t"}])
+    assert "story-line--bad" in out and "#momente?r=7&t=900&k=death" in out
+    assert ui("{{ ui.story_lines([], 'x') }}").strip() == ""

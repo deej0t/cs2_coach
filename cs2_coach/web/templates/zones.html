@@ -184,7 +184,7 @@
                             <div class="zn-kd-val {% if z.kd >= 1.2 %}win{% elif z.kd >= 0.9 %}draw{% else %}loss{% endif %}">{{ z.kd }}</div>
                             {% set kd_width = [z.kd / 3.0 * 100, 100]|min %}
                             <div class="zn-kd-track">
-                                <div class="zn-kd-fill" style="width: {{ kd_width|round }}%; background: {% if z.kd >= 1.2 %}#3FD08F{% elif z.kd >= 0.9 %}#F5B941{% else %}#F2676C{% endif %};"></div>
+                                <div class="zn-kd-fill" style="width: {{ kd_width|round }}%; background: {% if z.kd >= 1.2 %}#3FD08F{% elif z.kd >= 0.9 %}#848D9E{% else %}#F2676C{% endif %};"></div>
                             </div>
                         </div>
                     </td>

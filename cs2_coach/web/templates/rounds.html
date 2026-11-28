@@ -100,11 +100,11 @@
 <!-- Hero stats -->
 <div class="rv-hero">
     <div class="rv-card" style="border-top: 3px solid #5DA9F2;">
-        <div class="rv-val" style="color:#5DA9F2;">{{ rd.ct_wr }}%</div>
+        <div class="rv-val" style="color:#9BB2D1;">{{ rd.ct_wr }}%</div>
         <div class="rv-lbl">CT Win-Rate</div>
     </div>
     <div class="rv-card" style="border-top: 3px solid #F5B941;">
-        <div class="rv-val" style="color:#F5B941;">{{ rd.t_wr }}%</div>
+        <div class="rv-val" style="color:#D2B48A;">{{ rd.t_wr }}%</div>
         <div class="rv-lbl">T Win-Rate</div>
     </div>
     <div class="rv-card" style="border-top: 3px solid #3FD08F;">
@@ -124,13 +124,13 @@
 
 <!-- Side comparison -->
 <div class="rv-sides">
-    <div class="rv-side-card" style="border-top: 3px solid #5DA9F2;">
-        <div class="rv-side-label" style="color:#5DA9F2;">CT-Side</div>
+    <div class="rv-side-card" style="border-top: 3px solid #9BB2D1;">
+        <div class="rv-side-label" style="color:#9BB2D1;">CT-Side</div>
         <div class="rv-val {% if rd.ct_wr >= 55 %}win{% elif rd.ct_wr < 45 %}loss{% endif %}" style="font-size:20px;">{{ rd.ct_wr }}%</div>
         <div style="font-size:11px;color:var(--color-neutral-500);margin-top:4px;">{{ rd.ct_rounds.ct_won }}/{{ rd.ct_rounds.ct_total }} Runden</div>
     </div>
-    <div class="rv-side-card" style="border-top: 3px solid #F5B941;">
-        <div class="rv-side-label" style="color:#F5B941;">T-Side</div>
+    <div class="rv-side-card" style="border-top: 3px solid #D2B48A;">
+        <div class="rv-side-label" style="color:#D2B48A;">T-Side</div>
         <div class="rv-val {% if rd.t_wr >= 55 %}win{% elif rd.t_wr < 45 %}loss{% endif %}" style="font-size:20px;">{{ rd.t_wr }}%</div>
         <div style="font-size:11px;color:var(--color-neutral-500);margin-top:4px;">{{ rd.ct_rounds.t_won }}/{{ rd.ct_rounds.t_total }} Runden</div>
     </div>
@@ -235,7 +235,7 @@
                 <div class="rv-round-detail">
                     <div style="font-weight:600;{% if r.won %}color:#3FD08F;{% else %}color:#F2676C;{% endif %}">R{{ r.round }}</div>
                     <div>
-                        <span style="font-size:10px;font-weight:600;{% if r.side == 'CT' %}color:#5DA9F2;{% else %}color:#F5B941;{% endif %}">{{ r.side }}</span>
+                        <span style="font-size:10px;font-weight:600;{% if r.side == 'CT' %}color:#9BB2D1;{% else %}color:#D2B48A;{% endif %}">{{ r.side }}</span>
                     </div>
                     <div style="text-align:center;">
                         <span style="font-weight:600;">{{ r.score_own }}:{{ r.score_enemy }}</span>

@@ -65,3 +65,20 @@ def test_lobby_hidden_without_solid_verdict(monkeypatch):
     out = moment_story.lobby_line([{}], "1", d, "death")
     assert out["tone"] == "bad" and out["ci"] == [-0.6, -0.2] and "schlechter" in out["text"]
     assert moment_story.lobby_line([], "1", d, "death") is None
+
+
+def test_story_index_roundtrip(tmp_path, monkeypatch):
+    """Szene im Cache -> Kurzfassung im Index; Dashboard liest nur den Index, alte Versionen = leer."""
+    from cs2_coach.web import moments_page as mp
+    scene = {"map": "mirage", "story": {"verdict": "Hauptgrund: Nicht gesehen", "tone": "bad",
+                                        "trigger": {"text": "Bob sah dich zuerst."}, "flow": [{}]}}
+    monkeypatch.setattr(mp, "build_clip", lambda *a, **k: (scene, 200))
+    cfgp = tmp_path / "config.yaml"
+    assert mp.indexed_stories(cfgp, "a.json") == []
+    mp.cached_clip({}, cfgp, "a.json", 7, 900, "death")
+    mp.cached_clip({}, cfgp, "a.json", 3, 400, "kill")
+    out = mp.indexed_stories(cfgp, "a.json")
+    assert [(m["round"], m["kind"]) for m in out] == [(7, "death"), (3, "kill")]   # deaths first
+    assert out[0]["trigger"] == "Bob sah dich zuerst."
+    monkeypatch.setattr(mp, "CLIP_VERSION", mp.CLIP_VERSION + 1)
+    assert mp.indexed_stories(cfgp, "a.json") == []

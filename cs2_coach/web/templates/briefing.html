@@ -123,13 +123,13 @@
 
 <!-- Side split -->
 <div class="br-sides">
-    <div class="br-side-card" style="border-top: 3px solid {% if brief.ct_kd >= brief.t_kd %}#5DA9F2{% else %}var(--color-neutral-700){% endif %};">
-        <div class="br-side-label" style="color:#5DA9F2;">CT-Side</div>
+    <div class="br-side-card" style="border-top: 3px solid {% if brief.ct_kd >= brief.t_kd %}#9BB2D1{% else %}var(--color-neutral-700){% endif %};">
+        <div class="br-side-label" style="color:#9BB2D1;">CT-Side</div>
         <div class="br-side-kd {% if brief.ct_kd >= 1.2 %}win{% elif brief.ct_kd < 0.9 %}loss{% endif %}">{{ brief.ct_kd }}</div>
         <div style="font-size:11px;color:var(--color-neutral-500);">K/D</div>
     </div>
-    <div class="br-side-card" style="border-top: 3px solid {% if brief.t_kd >= brief.ct_kd %}#F5B941{% else %}var(--color-neutral-700){% endif %};">
-        <div class="br-side-label" style="color:#F5B941;">T-Side</div>
+    <div class="br-side-card" style="border-top: 3px solid {% if brief.t_kd >= brief.ct_kd %}#D2B48A{% else %}var(--color-neutral-700){% endif %};">
+        <div class="br-side-label" style="color:#D2B48A;">T-Side</div>
         <div class="br-side-kd {% if brief.t_kd >= 1.2 %}win{% elif brief.t_kd < 0.9 %}loss{% endif %}">{{ brief.t_kd }}</div>
         <div style="font-size:11px;color:var(--color-neutral-500);">K/D</div>
     </div>
